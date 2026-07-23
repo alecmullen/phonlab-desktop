@@ -1,6 +1,7 @@
 import numpy as np
 import sounddevice as sd
-from PyQt6.QtCore import pyqtSignal, QThread
+from PyQt6.QtCore import QThread, pyqtSignal
+
 
 class AudioPlayer(QThread):
     """Dedicated thread for audio playback"""
@@ -23,12 +24,9 @@ class AudioPlayer(QThread):
             
             if not self.should_stop:
                 self.finished.emit()
-        except Exception as e:
+        except RuntimeError as e:
             print(f"Audio playback error: {e}")
      
     def stop(self):
         self.should_stop = True
-        try:
-            sd.stop()
-        except:
-            pass
+        sd.stop()

@@ -1,11 +1,20 @@
 from pathlib import Path
 
-from PyQt6.QtWidgets import QMainWindow, QApplication, QWidget, QFileDialog, QToolBar, QSizePolicy, QTabWidget
-from PyQt6.QtGui import QIcon, QAction
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QMainWindow,
+    QSizePolicy,
+    QTabWidget,
+    QToolBar,
+    QWidget,
+)
 
 from ui.view.audio_view import AudioView
 from ui.viewmodel.audio_view_model import AudioViewModel
+
 
 class MainWindow(QMainWindow):
     def __init__(self, splash = None, *args, **kwargs):
@@ -34,7 +43,7 @@ class MainWindow(QMainWindow):
     def create_menus(self):
         """Create application menus"""
         mainMenu = self.menuBar()
-        style = self.style()
+        self.style()
         
         # File Menu
         fileMenu = mainMenu.addMenu('&File')
@@ -59,7 +68,7 @@ class MainWindow(QMainWindow):
         fileMenu.addAction(self.exit_action)
         
         # Edit Menu
-        editMenu = mainMenu.addMenu('&Edit')
+        mainMenu.addMenu('&Edit')
         
         # View Menu
         viewMenu = mainMenu.addMenu('&View')
@@ -161,7 +170,6 @@ class MainWindow(QMainWindow):
 
     def on_tab_changed(self, index):
         """Called when the active tab changes"""
-        pass
 
      # Delegate actions to current document
     def plot_wave(self):

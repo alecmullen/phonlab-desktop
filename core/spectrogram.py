@@ -1,7 +1,9 @@
 import warnings
+
 import librosa
 import numpy as np
-from PyQt6.QtCore import QThread, QMutexLocker, pyqtSignal
+from PyQt6.QtCore import QMutexLocker, QThread, pyqtSignal
+
 
 class SpectrogramWorker(QThread):
     """Worker thread for computing spectrogram asynchronously"""
@@ -62,9 +64,9 @@ class SpectrogramWorker(QThread):
             else:
                 self.compute_incremental()
                 
-        except Exception as e:
+        except RuntimeError as e:
             import traceback
-            self.error.emit(f"{str(e)}\n{traceback.format_exc()}")
+            self.error.emit(f"{e!s}\n{traceback.format_exc()}")
     
     def get_window(self, start_time, end_time):
         """Extract a time window from the computed spectrogram (thread-safe)"""
@@ -74,7 +76,7 @@ class SpectrogramWorker(QThread):
         
             # Thread-safe access
             if self.mmap_lock:
-                locker = QMutexLocker(self.mmap_lock)
+                QMutexLocker(self.mmap_lock)
         
             try:
                 # Find frame indices for the requested window
@@ -104,7 +106,7 @@ class SpectrogramWorker(QThread):
             
                 return ts_window, Sxx_window
             
-            except Exception as e:
+            except RuntimeError as e:
                 print(f"Error extracting window: {e}")
                 return None, None
         else:
@@ -133,7 +135,7 @@ class SpectrogramWorker(QThread):
             
                 return ts_window, Sxx_window
             
-            except Exception as e:
+            except ValueError as e:
                 print(f"Error extracting window from partial data: {e}")
                 return None, None
 
@@ -188,8 +190,9 @@ class SpectrogramWorker(QThread):
     
     def compute_with_mmap(self):
         """Compute spectrogram with memory-mapped file for very long audio"""
-        import tempfile
         import os
+        import tempfile
+
         from PyQt6.QtCore import QMutex
         
         # Initialize mutex for thread-safe access
@@ -219,7 +222,7 @@ class SpectrogramWorker(QThread):
                                      shape=(self.n_freqs, estimated_frames))
             self.ts_mmap = np.memmap(self.ts_file, dtype='float64', mode='w+',
                                     shape=(estimated_frames,))
-        except Exception as e:
+        except MemoryError as e:
             self.error.emit(f"Failed to create memory-mapped file: {e}")
             return
         
@@ -255,7 +258,7 @@ class SpectrogramWorker(QThread):
             n_frames_chunk = Sxx.shape[1]
             
             if frame_offset + n_frames_chunk > estimated_frames:
-                self.error.emit(f"Ran out of space in mmap")
+                self.error.emit("Ran out of space in mmap")
                 self.cleanup_mmap()
                 return
             
@@ -298,17 +301,11 @@ class SpectrogramWorker(QThread):
             self.ts_mmap = None
         
         if self.mmap_file and os.path.exists(self.mmap_file):
-            try:
-                os.remove(self.mmap_file)
-            except:
-                pass
+            os.remove(self.mmap_file)
             self.mmap_file = None
         
         if self.ts_file and os.path.exists(self.ts_file):
-            try:
-                os.remove(self.ts_file)
-            except:
-                pass
+            os.remove(self.ts_file)
             self.ts_file = None
     
     def stop(self):

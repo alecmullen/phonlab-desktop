@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
-from PyQt6.QtCore import QThread, QObject, pyqtSignal, pyqtSlot
+
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+
 
 class UseCaseWorker[T](QObject):
 
@@ -17,7 +19,8 @@ class UseCaseWorker[T](QObject):
             self.result.emit(result)
         except Exception as err:
             self.error.emit(err)
-
+            raise
+        
 class UseCase[T](ABC):
 
     @abstractmethod

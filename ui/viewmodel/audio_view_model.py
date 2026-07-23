@@ -1,18 +1,26 @@
-from dataclasses import dataclass, field, replace
-import numpy as np
-from core.usecase.load_audio import LoadAudio, AudioSignal
-from ui.model.audio_wave_model import AudioWaveModel, to_audio_wave_model
+from PyQt6.QtCore import pyqtSlot
+
+from core.usecase.load_audio import AudioSignal, LoadAudio
+from ui.model.audio_wave_model import to_audio_wave_model
 from ui.viewmodel.view_model import ViewModel
-    
+
+
 class AudioViewModel(ViewModel):
     def __init__(self):
         super().__init__()
-        self.audio_wave_model = AudioWaveModel()
 
     def load_audio(self, filepath: str):
         self.loadAudioTask = LoadAudio(filepath)
-        self.loadAudioTask(self.dispatch, self.on_error)
+        self.loadAudioTask(self.update_state, self.on_error)
 
     def update_state(self, entity):
+        state_change = None
         if isinstance(entity, AudioSignal): 
-            self.audio_wave_model = to_audio_wave_model(entity)
+            state_change = to_audio_wave_model(entity)
+
+        if state_change:
+            self.state_changed.emit(state_change)
+
+    @pyqtSlot(object)
+    def on_error(err):
+        print(err.message)

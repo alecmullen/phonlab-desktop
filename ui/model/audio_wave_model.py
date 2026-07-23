@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
+
 import numpy as np
 
 from core.entity.audio_signal import AudioSignal
 
 
 @dataclass
-class AudioWaveModel():
+class AudioWaveModel:
     y: np.ndarray = field(default_factory=lambda: np.zeros(0))
     fs: int = 0
     miny: float = 0.0

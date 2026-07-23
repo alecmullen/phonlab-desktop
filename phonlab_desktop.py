@@ -1,9 +1,9 @@
 import sys
+
 from PyQt6.QtWidgets import QApplication
 
-from ui.view.splash import ClickableSplash
 from ui.view.main_window import MainWindow
-from ui.view.splash import create_splash_pixmap
+from ui.view.splash import ClickableSplash, create_splash_pixmap
 
 if __name__ == "__main__":
     def run_app():

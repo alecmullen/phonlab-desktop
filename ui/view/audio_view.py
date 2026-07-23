@@ -1,13 +1,24 @@
 
 
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollBar, QProgressBar
-from PyQt6.QtCore import Qt, QEvent, QTimer
 import numpy as np
 import pyqtgraph as pg
 import sounddevice as sd
+from PyQt6.QtCore import QEvent, Qt, QTimer
+from PyQt6.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QScrollBar,
+    QVBoxLayout,
+    QWidget,
+)
+
 from core.audio_player import AudioPlayer
 from core.spectrogram import SpectrogramWorker
+from ui.model.audio_wave_model import AudioWaveModel
 from ui.viewmodel.audio_view_model import AudioViewModel
+
 
 class AudioView(QWidget):
     """A single audio document with its own waveform/spectrogram display"""
@@ -15,7 +26,7 @@ class AudioView(QWidget):
     def __init__(self, viewmodel: AudioViewModel, parent=None):
         super().__init__(parent)
         self.viewmodel = viewmodel
-        viewmodel.subscribe(self.on_state)
+        viewmodel.subscribe(self.on_state_change)
         
         pg.setConfigOption('background', 'w')
         pg.setConfigOption('foreground', 'k')
@@ -116,25 +127,24 @@ class AudioView(QWidget):
         self.start = 0
         self.end = 0
 
-    def on_state(self):
-        audio_wave_model = self.viewmodel.audio_wave_model
+    def on_state_change(self, model):
+        if isinstance(model, AudioWaveModel):
+            self.y = model.y
+            self.fs = model.fs
+            self.t = model.t
+            self.miny = model.miny
+            self.maxy = model.maxy
+            self.yrange = model.yrange
 
-        self.y = audio_wave_model.y
-        self.fs = audio_wave_model.fs
-        self.t = audio_wave_model.t
-        self.miny = audio_wave_model.miny
-        self.maxy = audio_wave_model.maxy
-        self.yrange = audio_wave_model.yrange
-
-        if self.y is not None:
-            self.load_spectrogram()
+            self.load_spectrogram(model.y, model.fs)
+            self.update_audio_wave_view(model)
 
     def load_audio(self, filename):
         """Load an audio file into this document"""
     
         self.viewmodel.load_audio(filename)
 
-    def load_spectrogram(self):
+    def load_spectrogram(self, y, fs):
         # Start asynchronous spectrogram computation
         self.message_label.setText("Computing spectrogram...")  # Changed from self.parent()
         duration = len(self.y) / self.fs
@@ -153,19 +163,20 @@ class AudioView(QWidget):
         self.spec_worker.finished.connect(self.on_spectrogram_ready)
         self.spec_worker.error.connect(self.on_spectrogram_error)
         self.spec_worker.start()
-        
+
+    def update_audio_wave_view(self, audio_wave: AudioWaveModel):
         self.selStart = self.selEnd = None  # selection start and end in seconds
         self.start = 0                      # visible window start and end in samples
-        if len(self.y) > 10 * self.fs:
-            self.end = 10 * self.fs         # the first 10 seconds of audio
+        if len(audio_wave.y) > 10 * audio_wave.fs:
+            self.end = 10 * audio_wave.fs         # the first 10 seconds of audio
         else:
-            self.end = len(self.y) - 1
+            self.end = len(audio_wave.y) - 1
         window_size = self.end-self.start
-        self.slider.setRange(0, len(self.y) - window_size -1)
+        self.slider.setRange(0, len(audio_wave.y) - window_size -1)
         self.slider.setValue(0)
         self.slider.setPageStep(window_size)  # one second per page step
-        self.slider.setSingleStep(int(0.05 * self.fs))  # 10 milliseconds per single step
-        self.plot_wave()
+        self.slider.setSingleStep(int(0.05 * audio_wave.fs))  # 10 milliseconds per single step
+        self.plot_wave(audio_wave)
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -179,7 +190,7 @@ class AudioView(QWidget):
         self.v_line_wave = None
         self.v_line_spec = None
 
-    def create_wave_plot(self, row, col, rowspan=1):
+    def create_wave_plot(self, row, col, audio_wave: AudioWaveModel, rowspan=1):
         """Create a waveform plot at the specified position"""
         s = self.start
         e = self.end
@@ -193,16 +204,16 @@ class AudioView(QWidget):
         wave_plot.vb.rbScaleBox.hide()
         wave_plot.vb.setMouseMode(pg.ViewBox.RectMode)
 
-        y_max = max(abs(self.miny), abs(self.maxy))
+        y_max = max(abs(audio_wave.miny), abs(audio_wave.maxy))
         wave_plot.setYRange(-y_max, y_max, padding=0.05)
         wave_plot.vb.setLimits(yMin=-y_max, yMax=y_max)
         wave_plot.vb.setLimits(xMin=0, xMax=self.t[-1])
         wave_plot.enableAutoRange(axis='y', enable=False)
         
-        wave_curve = wave_plot.plot(self.t[s:e], self.y[s:e], pen='b')
+        wave_curve = wave_plot.plot(self.t[s:e], audio_wave.y[s:e], pen='b')
         
         selection_region = pg.LinearRegionItem(
-            values=[s / self.fs, s / self.fs],
+            values=[s / audio_wave.fs, s / audio_wave.fs],
             brush=pg.mkBrush(0, 100, 200, 30),
             movable=False,
             bounds=[0, self.t[-1]]
@@ -220,16 +231,16 @@ class AudioView(QWidget):
         scene = self.graphics_widget.scene()
         scene.sigMouseMoved.connect(self.on_mouse_moved)
         
-    def plot_wave(self):
+    def plot_wave(self, audio_wave: AudioWaveModel):
         """Display waveform only"""
         self.plot_type = 1
         self.clear_plots()
 
-        dur = (self.end - self.start) / self.fs
-        totdur = len(self.y) / self.fs
+        dur = (self.end - self.start) / audio_wave.fs
+        totdur = len(audio_wave.y) / audio_wave.fs
         
         self.wave_plot, self.wave_curve, self.selection_region_wave, self.v_line_wave = \
-            self.create_wave_plot(row=0, col=0)
+            self.create_wave_plot(0, 0, audio_wave)
         
         self.wave_plot.setLabel('bottom', 'Time', units='s')
         self.wave_plot.getAxis('bottom').setStyle(showValues=True)
@@ -455,8 +466,7 @@ class AudioView(QWidget):
         size = self.end - self.start
         center = self.start + int(size / 2)
         newsize = int(size / factor)
-        if newsize < 50:
-            newsize = 50
+        newsize = max(newsize, 50)
         self.start = center - int(newsize / 2)
         self.end = self.start + newsize
         self.update_slider_page_step()
@@ -559,13 +569,7 @@ class AudioView(QWidget):
         winStart = self.start / self.fs
         winEnd = self.end / self.fs
         
-        if self.selStart is None:
-            box_left = winStart
-            xrange = 0
-        elif winEnd < self.selStart:
-            box_left = winStart
-            xrange = 0
-        elif winStart > self.selEnd:
+        if self.selStart is None or winEnd < self.selStart or winStart > self.selEnd:
             box_left = winStart
             xrange = 0
         elif winEnd < self.selEnd and winStart > self.selStart:
@@ -645,17 +649,14 @@ class AudioView(QWidget):
             return
     
         # Determine which plot the mouse is over
-        active_plot = None
         status_msg = ""
     
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(pos):
-            active_plot = self.wave_plot
             mouse_point = self.wave_plot.vb.mapSceneToView(pos)
             x = mouse_point.x()
             status_msg = f"Cursor time: {x:.3f}s"
         
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(pos):
-            active_plot = self.spec_plot
             mouse_point = self.spec_plot.vb.mapSceneToView(pos)
             x = mouse_point.x()
             y = mouse_point.y()
@@ -789,7 +790,6 @@ class AudioView(QWidget):
                     #else:
                     #    scroll_fraction = -scroll_x * 0.1
                     #    self.scroll_by_fraction(scroll_fraction)
-                    pass
                     return True
 
                 elif abs(scroll_y) > 0:              # vertical motion
@@ -869,8 +869,8 @@ class AudioView(QWidget):
         mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
         x = mouse_point.x()
 
-        if clicked_plot == self.wave_plot or clicked_plot == self.spec_plot:
-            if ((self.selEnd is not None) and (self.selStart is not None) and
+        if (clicked_plot == self.wave_plot or clicked_plot == self.spec_plot) \
+            and ((self.selEnd is not None) and (self.selStart is not None) and
                 x < self.selEnd and x > self.selStart):
                 self.zoom_to_selection()
 
@@ -896,7 +896,7 @@ class AudioView(QWidget):
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
-            scene_pos,e = self.pending_single_click
+            scene_pos,_ = self.pending_single_click
 
             modifiers = QApplication.keyboardModifiers()
             shift_pressed = modifiers == Qt.KeyboardModifier.ShiftModifier
@@ -958,10 +958,7 @@ class AudioView(QWidget):
             self.audio_player.wait()
             self.on_playback_finished()
         elif self.is_playing:
-            try:
-                sd.stop()
-            except:
-                pass
+            sd.stop()
             self.on_playback_finished()
         
     def on_playback_finished(self):

@@ -1,6 +1,7 @@
-from PyQt6.QtGui import QPixmap, QPainter, QFont
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QPainter, QPixmap
 from PyQt6.QtWidgets import QSplashScreen
+
 
 class ClickableSplash(QSplashScreen):
     """Splash screen that opens file dialog when clicked"""
