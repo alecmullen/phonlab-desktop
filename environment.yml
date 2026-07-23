@@ -1,0 +1,14 @@
+name: phonlab_desktop
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - numpy=2.4
+  - pip
+  - scipy
+  - pyqt6
+  - pyqtgraph
+  - pip:
+    - git+https://github.com/phonetics-projects/phonlab.git
+    - sounddevice
