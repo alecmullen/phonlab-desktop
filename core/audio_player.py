@@ -20,7 +20,6 @@ class AudioPlayer(QThread):
             else:
                 padded_audio = self.audio_data
             sd.play(padded_audio, self.sample_rate, blocking=False, latency='high')
-            sd.wait()
             
             if not self.should_stop:
                 self.finished.emit()

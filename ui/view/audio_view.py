@@ -7,7 +7,7 @@ import pyqtgraph as pg
 import sounddevice as sd
 from core.audio_player import AudioPlayer
 from core.spectrogram import SpectrogramWorker
-from ui.viewmodel.audio_view_model import AudioViewModel, AudioViewState
+from ui.viewmodel.audio_view_model import AudioViewModel
 
 class AudioView(QWidget):
     """A single audio document with its own waveform/spectrogram display"""
@@ -116,13 +116,15 @@ class AudioView(QWidget):
         self.start = 0
         self.end = 0
 
-    def on_state(self, state: AudioViewState):
-        self.y = state.y
-        self.fs = state.fs
-        self.t = state.t
-        self.miny = state.miny
-        self.maxy = state.maxy
-        self.yrange = state.yrange
+    def on_state(self):
+        audio_wave_model = self.viewmodel.audio_wave_model
+
+        self.y = audio_wave_model.y
+        self.fs = audio_wave_model.fs
+        self.t = audio_wave_model.t
+        self.miny = audio_wave_model.miny
+        self.maxy = audio_wave_model.maxy
+        self.yrange = audio_wave_model.yrange
 
         if self.y is not None:
             self.load_spectrogram()
