@@ -24,7 +24,7 @@ class UseCaseWorker[T](QObject):
 class UseCase[T](ABC):
 
     @abstractmethod
-    def invoke() -> T:
+    def invoke(self) -> T:
         pass
 
     def __call__(self, on_success, on_error):
@@ -41,3 +41,10 @@ class UseCase[T](ABC):
         self.thread.finished.connect(self.thread.deleteLater)
 
         self.thread.start()
+
+    def quit(self):
+        try:
+            self.thread.quit()
+            self.worker.deleteLater()
+        except RuntimeError:
+            return

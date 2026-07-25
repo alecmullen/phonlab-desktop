@@ -6,7 +6,7 @@ from core.entity.audio_signal import AudioSignal
 
 
 @dataclass
-class AudioWaveModel:
+class AudioWaveState:
     y: np.ndarray = field(default_factory=lambda: np.zeros(0))
     fs: int = 0
     miny: float = 0.0
@@ -14,11 +14,11 @@ class AudioWaveModel:
     yrange: float = 0.0
     t: np.ndarray = field(default_factory=lambda: np.zeros(0))
 
-def to_audio_wave_model(audio_signal: AudioSignal) -> AudioWaveModel:
+def to_audio_wave_state(audio_signal: AudioSignal) -> AudioWaveState:
     y, fs = audio_signal.y, audio_signal.fs
     miny = np.min(y)
     maxy = np.max(y)
     yrange = maxy - miny
     t = np.arange(len(y)) / fs
 
-    return AudioWaveModel(y, fs, miny, maxy, yrange, t)
+    return AudioWaveState(y, fs, miny, maxy, yrange, t)

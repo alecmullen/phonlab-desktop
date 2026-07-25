@@ -15,8 +15,9 @@ from PyQt6.QtWidgets import (
 )
 
 from core.audio_player import AudioPlayer
-from core.spectrogram import SpectrogramWorker
-from ui.model.audio_wave_model import AudioWaveModel
+from ui.state.audio_wave_state import AudioWaveState
+from ui.state.sgram_state import SpectrogramState
+from ui.view.spectrogram_plot import SpectrogramPlot
 from ui.viewmodel.audio_view_model import AudioViewModel
 
 
@@ -128,7 +129,7 @@ class AudioView(QWidget):
         self.end = 0
 
     def on_state_change(self, model):
-        if isinstance(model, AudioWaveModel):
+        if isinstance(model, AudioWaveState):
             self.y = model.y
             self.fs = model.fs
             self.t = model.t
@@ -136,8 +137,13 @@ class AudioView(QWidget):
             self.maxy = model.maxy
             self.yrange = model.yrange
 
-            self.load_spectrogram(model.y, model.fs)
             self.update_audio_wave_view(model)
+            self.load_spectrogram(model.y, model.fs)
+        elif isinstance(model, SpectrogramState):
+            if self.spec_plot is not None:
+                self.spec_plot.populate_spectrogram(
+                    self.viewmodel.sgram_state, self.gray_cutoff
+                )
 
     def load_audio(self, filename):
         """Load an audio file into this document"""
@@ -145,26 +151,29 @@ class AudioView(QWidget):
         self.viewmodel.load_audio(filename)
 
     def load_spectrogram(self, y, fs):
-        # Start asynchronous spectrogram computation
-        self.message_label.setText("Computing spectrogram...")  # Changed from self.parent()
-        duration = len(self.y) / self.fs
-        if duration > 60:  # longer than xx seconds 
-            chunk_duration = 10.0  # process spectrogram in longer chunks
-        else:
-            chunk_duration = 5.0
-    
-        window_size = 0.008
-        step_size = 0.001
-        order = 13
-    
-        self.spec_worker = SpectrogramWorker(self.y, self.fs, window_size, step_size,
-                                             order, chunk_duration)
-        self.spec_worker.progress.connect(self.on_spectrogram_progress)
-        self.spec_worker.finished.connect(self.on_spectrogram_ready)
-        self.spec_worker.error.connect(self.on_spectrogram_error)
-        self.spec_worker.start()
+        # # Start asynchronous spectrogram computation
+        # self.message_label.setText("Computing spectrogram...")  # Changed from self.parent()
+        # duration = len(self.y) / self.fs
+        # if duration > 60:  # longer than xx seconds
+        #     chunk_duration = 10.0  # process spectrogram in longer chunks
+        # else:
+        #     chunk_duration = 5.0
+        #
+        # window_size = 0.008
+        # step_size = 0.001
+        # order = 13
+        #
+        # self.spec_worker = SpectrogramWorker(self.y, self.fs, window_size, step_size,
+        #                                      order, chunk_duration)
+        # self.spec_worker.progress.connect(self.on_spectrogram_progress)
+        # self.spec_worker.finished.connect(self.on_spectrogram_ready)
+        # self.spec_worker.error.connect(self.on_spectrogram_error)
+        # self.spec_worker.start()
 
-    def update_audio_wave_view(self, audio_wave: AudioWaveModel):
+        print(len(y), self.start, self.end)
+        self.viewmodel.compute_sgram(y[self.start: self.end], self.fs, len(y) / self.fs)
+
+    def update_audio_wave_view(self, audio_wave: AudioWaveState):
         self.selStart = self.selEnd = None  # selection start and end in seconds
         self.start = 0                      # visible window start and end in samples
         if len(audio_wave.y) > 10 * audio_wave.fs:
@@ -190,7 +199,7 @@ class AudioView(QWidget):
         self.v_line_wave = None
         self.v_line_spec = None
 
-    def create_wave_plot(self, row, col, audio_wave: AudioWaveModel, rowspan=1):
+    def create_wave_plot(self, row, col, audio_wave: AudioWaveState, rowspan=1):
         """Create a waveform plot at the specified position"""
         s = self.start
         e = self.end
@@ -231,7 +240,7 @@ class AudioView(QWidget):
         scene = self.graphics_widget.scene()
         scene.sigMouseMoved.connect(self.on_mouse_moved)
         
-    def plot_wave(self, audio_wave: AudioWaveModel):
+    def plot_wave(self, audio_wave: AudioWaveState):
         """Display waveform only"""
         self.plot_type = 1
         self.clear_plots()
@@ -253,118 +262,27 @@ class AudioView(QWidget):
         """Display waveform and spectrogram"""
         self.plot_type = 2
         self.clear_plots()
-        
-        dur = (self.end - self.start) / self.fs
-        totdur = len(self.y) / self.fs
     
         self.wave_plot, self.wave_curve, self.selection_region_wave, self.v_line_wave = \
-            self.create_wave_plot(row=0, col=0)
+            self.create_wave_plot(row=0, col=0, audio_wave=self.viewmodel.audio_wave_state)
     
         self.wave_plot.getAxis('bottom').setStyle(showValues=False)
-    
-        self.spec_plot = self.graphics_widget.addPlot(row=1, col=0)
-        self.spec_plot.setLabel('left', 'Frequency', units='Hz')
-        self.spec_plot.setLabel('bottom', 'Time', units='s')
-        self.spec_plot.showGrid(x=True, y=True, alpha=0.3)
-    
-        self.spec_plot.vb.setMouseEnabled(x=False, y=False)
-        self.spec_plot.vb.rbScaleBox.hide()
-        self.spec_plot.vb.setLimits(xMin=0, xMax=self.t[-1])
-    
-        if self.freqs is not None:
-            self.spec_plot.vb.setLimits(yMin=0, yMax=self.freqs[-1])
-            self.spec_plot.setYRange(self.freqs[0], self.freqs[-1])
-            self.spec_plot.getAxis('left').enableAutoSIPrefix(False)
-    
-        self.spec_img = pg.ImageItem()
-        self.spec_plot.addItem(self.spec_img)
 
-        lut = pg.colormap.get('CET-L1').getLookupTable(nPts=256)[::-1]
-        self.spec_img.setLookupTable(lut)
-    
-        self.selection_region_spec = pg.LinearRegionItem(
-            values=[self.start / self.fs, self.start / self.fs],
-            brush=pg.mkBrush(0, 100, 200, 50),
-            movable=False,
-            bounds=[0, self.t[-1]]
-        )
-        self.selection_region_spec.setZValue(10)
-        self.spec_plot.addItem(self.selection_region_spec)
-        self.selection_region_spec.setVisible(False)
-    
-        self.v_line_spec = pg.InfiniteLine(angle=90, movable=False, pen='r')
-        self.spec_plot.addItem(self.v_line_spec, ignoreBounds=True)
+        self.wave_plot.getAxis('left').setWidth(60)
+
+        self.spec_plot = SpectrogramPlot()
+        self.graphics_widget.addItem(self.spec_plot, row=1, col=0)
+        self.plot_spectrogram(self.viewmodel.sgram_state)
+        self.spec_plot.show()
 
         self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
         self.graphics_widget.ci.layout.setRowStretchFactor(1, 2)
-    
-        self.wave_plot.getAxis('left').setWidth(60)
-        self.spec_plot.getAxis('left').setWidth(60)
-    
-        self.spec_plot.setXLink(self.wave_plot)
-    
+
         self.connect_plot_signals()
         self.update_selection_box()
-    
-        if dur > 5.0:
-            self.message_label.setText("Zoom to a chunk of 5 seconds or shorter to see spectrogram")
-            return
-    
-        if self.freqs is None:
-            self.message_label.setText("Spectrogram hasn't started computing, please wait...")
-            return
-    
-        if self.t[self.start] > self.max_time_computed:
-            self.message_label.setText(f"Spectrogram not yet computed for this time range (computed up to {self.max_time_computed:.2f}s)")
-            return
-    
-    
-        self.populate_spectrogram()
 
-        # Update message
-        if self.sgram_partial and not self.sgram_ready:
-            self.message_label.setText(f"Showing partial spectrogram (still computing)... Duration shown {dur:.3f} seconds")
-        else:
-            self.message_label.setText(f"Duration shown {dur:.3f} seconds, out of {totdur:.3f} seconds")
-
-
-    def populate_spectrogram(self):
-        """Fill the spectrogram image with data"""
-        if self.spec_img is None or self.freqs is None:
-            return False
-        
-        s = self.start
-        e = self.end
-    
-        if self.spec_worker and (self.using_mmap or self.sgram_partial):
-            ts_window, Sxx_window = self.spec_worker.get_window(self.t[s], self.t[e])
-        
-            if ts_window is not None and Sxx_window is not None:
-                ts = ts_window
-                spec_data = Sxx_window
-            else:
-                ts, spec_data = self._extract_spectrogram_window(s, e)
-                if ts is None:
-                    return False
-        else:  # get data from finished spectrogram buffers 
-            ts, spec_data = self._extract_spectrogram_window(s, e)
-            if ts is None:
-                return False
-                    
-        vmin = np.min(spec_data) + (np.max(spec_data) - np.min(spec_data)) * self.gray_cutoff
-        self.spec_img.setImage(spec_data.T, autoLevels=False, levels=(vmin, np.max(spec_data)))
-    
-        time_start = ts[0]
-        time_end = ts[-1]
-        freq_start = self.freqs[0]
-        freq_end = self.freqs[-1]
-        
-        rect = pg.QtCore.QRectF(time_start, freq_start, 
-                                time_end - time_start, 
-                                freq_end - freq_start)
-        self.spec_img.setRect(rect)
-        
-        return True
+    def plot_spectrogram(self, sgram: SpectrogramState):
+        self.spec_plot.plot_spectrogram(sgram, self.wave_plot, self.gray_cutoff)
 
     def _extract_spectrogram_window(self, s, e):
         """Extract a window from the finished spectrogram data"""
@@ -601,7 +519,7 @@ class AudioView(QWidget):
     def update_plots(self):
         s = self.start
         e = self.end
-        dur = (e - s) / self.fs
+        # dur = (e - s) / self.fs
         self.slider.setValue(s)
 
         if self.wave_plot:
@@ -609,37 +527,37 @@ class AudioView(QWidget):
             self.wave_plot.setXRange(self.t[s], self.t[e], padding=0)
     
         if self.plot_type == 2 and self.spec_plot is not None:
-            if dur > 5.0:
-                self.message_label.setText("Zoom to a chunk of 5 seconds or shorter to see spectrogram")
-                if self.spec_img:
-                    self.spec_img.clear()
-                self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
-                self.update_selection_box()
-                return
+            # if dur > 5.0:
+            #     self.message_label.setText("Zoom to a chunk of 5 seconds or shorter to see spectrogram")
+            #     if self.spec_img:
+            #         self.spec_img.clear()
+            #     self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
+            #     self.update_selection_box()
+            #     return
+            #
+            # if self.freqs is None:
+            #     self.message_label.setText("Spectrogram is still computing, please wait...")
+            #     if self.spec_img:
+            #         self.spec_img.clear()
+            #     self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
+            #     self.update_selection_box()
+            #     return
+            #
+            # if self.t[s] > self.max_time_computed:
+            #     self.message_label.setText(f"Spectrogram not yet computed for this time range (computed up to {self.max_time_computed:.2f}s)")
+            #     if self.spec_img:
+            #         self.spec_img.clear()
+            #     self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
+            #     self.update_selection_box()
+            #     return
         
-            if self.freqs is None:
-                self.message_label.setText("Spectrogram is still computing, please wait...")
-                if self.spec_img:
-                    self.spec_img.clear()
-                self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
-                self.update_selection_box()
-                return
+            self.viewmodel.compute_sgram(self.y[s:e], self.fs, len(self.y) / self.fs)
         
-            if self.t[s] > self.max_time_computed:
-                self.message_label.setText(f"Spectrogram not yet computed for this time range (computed up to {self.max_time_computed:.2f}s)")
-                if self.spec_img:
-                    self.spec_img.clear()
-                self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
-                self.update_selection_box()
-                return
-        
-            success = self.populate_spectrogram()
-        
-            if not success:
-                self.message_label.setText("Unable to display spectrogram for this region")
-                if self.spec_img:
-                    self.spec_img.clear()
-        
+            # if not success:
+            #     self.message_label.setText("Unable to display spectrogram for this region")
+            #     if self.spec_img:
+            #         self.spec_img.clear()
+            #
             self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
             
         self.update_selection_box()
