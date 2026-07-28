@@ -5,6 +5,6 @@ import numpy as np
 
 @dataclass
 class AudioSignal:
-    y: np.ndarray
+    x: np.ndarray
     fs: int
     

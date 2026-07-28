@@ -7,5 +7,5 @@ import numpy as np
 class Spectrogram:
     t: np.ndarray
     f: np.ndarray
-    Sxx: np.ndarray
+    sxx: np.ndarray
     

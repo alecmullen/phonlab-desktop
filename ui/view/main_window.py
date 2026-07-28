@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.view.audio_view import AudioView
-from ui.viewmodel.audio_view_model import AudioViewModel
+from ui.view_model.audio_view_model import AudioViewModel
 
 
 class MainWindow(QMainWindow):

@@ -12,7 +12,7 @@ class LoadAudio(UseCase):
 
     def invoke(self) -> AudioSignal:
         original_x, original_fs = phon.loadsig(self.filename)
-        y, fs = phon.prep_audio(original_x, original_fs, target_fs=16000, scale=True, pre=0.94, add_tiny_noise=True)
+        x, fs = phon.prep_audio(original_x, original_fs, target_fs=16000, scale=True, pre=0.94, add_tiny_noise=True)
 
-        return AudioSignal(y, fs)
+        return AudioSignal(x, fs)
     

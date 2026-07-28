@@ -9,9 +9,9 @@ from core.entity.spectrogram import Spectrogram
 class SpectrogramState:
     t: np.ndarray
     f: np.ndarray
-    Sxx: np.ndarray
+    sxx: np.ndarray
     duration: float
     total_duration: float
 
-def to_spectrogram_model(sgram: Spectrogram, duration: float, total_duration: float):
-    return SpectrogramState(sgram.t, sgram.f, sgram.Sxx, duration, total_duration)
+def to_spectrogram_model(sgram: Spectrogram, start: float, duration: float, total_duration: float):
+    return SpectrogramState(np.add(sgram.t, start), sgram.f, sgram.sxx, duration, total_duration)

@@ -1,88 +1,56 @@
 import numpy as np
 import pyqtgraph as pg
+from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
 from ui.state.sgram_state import SpectrogramState
 
 
 class SpectrogramPlot(pg.PlotItem):
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, linked_plot: pg.PlotItem | None = None):
         super().__init__(parent)
 
-    def plot_spectrogram(self, sgram: SpectrogramState, linked_plot: pg.PlotWidget, gray_cutoff: float):
-        self.setLabel("left", "Frequency", units="Hz")
-        self.setLabel("bottom", "Time", units="s")
-        self.showGrid(x=True, y=True, alpha=0.3)
-
-        self.vb.setMouseEnabled(x=False, y=False)
-        self.vb.rbScaleBox.hide()
-        self.vb.setLimits(xMin=0, xMax=sgram.t[-1])
-
-        self.vb.setLimits(yMin=0, yMax=sgram.f[-1])
-        self.setYRange(sgram.f[0], sgram.f[-1])
+        self.setLabel("left", self.tr("Frequency"), units="Hz")
         self.getAxis("left").enableAutoSIPrefix(False)
+        self.getAxis("left").setWidth(60)
+
+        self.setLabel("bottom", self.tr("Time"), units="s")
+        self.getAxis("bottom").enableAutoSIPrefix(False)
+
+        self.showGrid(x=True, y=True, alpha=0.3)
+        self.setMouseEnabled(x=False, y=False)
+        self.getViewBox().rbScaleBox.hide()
 
         self.spec_img = pg.ImageItem()
         self.addItem(self.spec_img)
-
         lut = pg.colormap.get("CET-L1").getLookupTable(nPts=256)[::-1]
         self.spec_img.setLookupTable(lut)
 
-        selection_region_spec = pg.LinearRegionItem(
+        self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen="r")
+        self.addItem(self.cursor_line, ignoreBounds=True)
+
+        self.selection_region = pg.LinearRegionItem(
             values=[0, 0],
             brush=pg.mkBrush(0, 100, 200, 50),
             movable=False,
-            bounds=[0, sgram.t[-1]],
         )
-        selection_region_spec.setZValue(10)
-        self.addItem(selection_region_spec)
-        selection_region_spec.setVisible(False)
-
-        v_line_spec = pg.InfiniteLine(angle=90, movable=False, pen="r")
-        self.addItem(v_line_spec, ignoreBounds=True)
-
-        self.getAxis("left").setWidth(60)
+        self.selection_region.setZValue(10)
+        self.addItem(self.selection_region)
+        self.selection_region.setVisible(False)
 
         self.setXLink(linked_plot)
-        #
-        # if sgram.duration > 5.0:
-        #     self.message_label.setText(
-        #         "Zoom to a chunk of 5 seconds or shorter to see spectrogram"
-        #     )
-        #     return
-        #
-        # if self.freqs is None:
-        #     self.message_label.setText(
-        #         "Spectrogram hasn't started computing, please wait..."
-        #     )
-        #     return
 
-        # if sgram.t[self.start] > self.max_time_computed:
-        #     self.message_label.setText(
-        #         f"Spectrogram not yet computed for this time range (computed up to {self.max_time_computed:.2f}s)"
-        #     )
-        #     return
-
-        self.populate_spectrogram(sgram, gray_cutoff)
-
-        # # Update message
-        # if self.sgram_partial and not self.sgram_ready:
-        #     self.message_label.setText(
-        #         f"Showing partial spectrogram (still computing)... Duration shown {sgram.duration:.3f} seconds"
-        #     )
-        # else:
-        #     self.message_label.setText(
-        #         f"Duration shown {sgram.duration:.3f} seconds, out of {sgram.total_duration:.3f} seconds"
-        #     )
-
-    def populate_spectrogram(self, sgram: SpectrogramState, gray_cutoff):
+    def populate_spectrogram(self, sgram: SpectrogramState, gray_cutoff: float):
         """Fill the spectrogram image with data"""
 
+        self.vb.setLimits(yMin=0, yMax=sgram.f[-1])
+        self.setYRange(sgram.f[0], sgram.f[-1])
+
         vmin = (
-            np.min(sgram.Sxx) + (np.max(sgram.Sxx) - np.min(sgram.Sxx)) * gray_cutoff
+                np.min(sgram.sxx) + (np.max(sgram.sxx) - np.min(sgram.sxx)) * gray_cutoff
         )
         self.spec_img.setImage(
-            sgram.Sxx.T, autoLevels=False, levels=(vmin, np.max(sgram.Sxx))
+            sgram.sxx.T, autoLevels=False, levels=(vmin, np.max(sgram.sxx))
         )
 
         time_start = sgram.t[0]
@@ -96,3 +64,18 @@ class SpectrogramPlot(pg.PlotItem):
         self.spec_img.setRect(rect)
 
         return True
+
+    @pyqtSlot(float)
+    def on_mouse_moved(self, x: float):
+        self.cursor_line.setPos(x)
+        
+    def update_selection_region(self, box_left: float, xrange: float):
+        if xrange > 0:
+            self.selection_region.setRegion([box_left, box_left + xrange])
+            self.selection_region.setVisible(True)
+        else:
+            self.selection_region.setVisible(False)
+    
+    def clear(self):
+        if self.spec_img:
+            self.spec_img.clear()
