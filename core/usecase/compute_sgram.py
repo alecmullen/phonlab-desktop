@@ -7,7 +7,7 @@ from core.usecase.use_case import UseCase
 class ComputeSpectrogram(UseCase):
 
     def __init__(self, x, fs, window_size=0.008, step_size=0.002, order=9):
-        super().__init__()
+        super().__init__("compute_sgram")
         self.x = x
         self.fs = fs
         self.window_size = window_size

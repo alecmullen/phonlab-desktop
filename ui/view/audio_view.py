@@ -1,8 +1,6 @@
 
 
-import numpy as np
 import pyqtgraph as pg
-import sounddevice as sd
 from PyQt6.QtCore import QEvent, Qt, QTimer
 from PyQt6.QtWidgets import (
     QApplication,
@@ -14,9 +12,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.audio_player import AudioPlayer
 from ui.state.audio_wave_state import AudioWaveState
+from ui.state.select_state import SelectState
 from ui.state.sgram_state import SpectrogramState
+from ui.state.zoom_to_selection import ZoomToSelection
 from ui.view.audio_wave_plot import AudioWavePlot
 from ui.view.spectrogram_plot import SpectrogramPlot
 from ui.view_model.audio_view_model import AudioViewModel
@@ -82,20 +81,13 @@ class AudioView(QWidget):
         self.original_audio = None
         self.original_fs = None
         self.filename = None
-        
-        # selection time values in seconds
-        self.selStart = None
-        self.selEnd = None
-        self.selAnchor = None
-        self.mark = None
 
         # variables for audio playback
         self.audio_player = None
-        self.is_playing = False
 
         # mouse interaction state
         self.ButtonDown = False
-        self.init_drag = 0
+        self.is_dragging = False
         self.pan_mode = False 
         self.pan_start_x = None
         self.pan_start_view = None  
@@ -132,11 +124,16 @@ class AudioView(QWidget):
             self.maxy = model.max_x
             self.yrange = model.x_range
 
-            self.update_audio_wave_view(model)
+            self.load_audio_wave_view(model)
             self.load_spectrogram(model.x, model.fs)
         elif isinstance(model, SpectrogramState):
             if self.spec_plot is not None:
                 self.spec_plot.populate_spectrogram(model, self.gray_cutoff)
+        elif isinstance(model, SelectState):
+            if model.is_selected:
+                self.update_selection_box(model)
+        elif isinstance(model, ZoomToSelection):
+            self.zoom_to_selection(model)
 
     def load_audio(self, filename):
         """Load an audio file into this document"""
@@ -144,29 +141,10 @@ class AudioView(QWidget):
         self.view_model.load_audio(filename)
 
     def load_spectrogram(self, y, fs):
-        # # Start asynchronous spectrogram computation
-        # self.message_label.setText("Computing spectrogram...")  # Changed from self.parent()
-        # duration = len(self.y) / self.fs
-        # if duration > 60:  # longer than xx seconds
-        #     chunk_duration = 10.0  # process spectrogram in longer chunks
-        # else:
-        #     chunk_duration = 5.0
-        #
-        # window_size = 0.008
-        # step_size = 0.001
-        # order = 13
-        #
-        # self.spec_worker = SpectrogramWorker(self.y, self.fs, window_size, step_size,
-        #                                      order, chunk_duration)
-        # self.spec_worker.progress.connect(self.on_spectrogram_progress)
-        # self.spec_worker.finished.connect(self.on_spectrogram_ready)
-        # self.spec_worker.error.connect(self.on_spectrogram_error)
-        # self.spec_worker.start()
-
         self.view_model.compute_sgram(y[self.start: self.end], self.fs, self.start / self.fs, len(y) / self.fs)
 
-    def update_audio_wave_view(self, audio_wave: AudioWaveState):
-        self.selStart = self.selEnd = None  # selection start and end in seconds
+    def load_audio_wave_view(self, audio_wave: AudioWaveState):
+        self.view_model.remove_selection()
         self.start = 0                      # visible window start and end in samples
         if len(audio_wave.x) > 10 * audio_wave.fs:
             self.end = 10 * audio_wave.fs         # the first 10 seconds of audio
@@ -207,8 +185,11 @@ class AudioView(QWidget):
         scene = self.graphics_widget.scene()
         scene.sigMouseMoved.connect(self.on_mouse_moved)
         
-    def plot_wave(self, audio_wave: AudioWaveState):
+    def plot_wave(self, audio_wave: AudioWaveState | None = None):
         """Display waveform only"""
+        if audio_wave is None:
+            audio_wave = self.view_model.audio_wave_state
+
         self.plot_type = 1
         self.clear_plots()
 
@@ -217,12 +198,12 @@ class AudioView(QWidget):
         
         self.wave_plot = self.create_wave_plot(0, 0, audio_wave)
         
-        self.wave_plot.setLabel('bottom', 'Time', units='s')
+        self.wave_plot.setLabel('bottom', self.tr('Time'), units='s')
         self.wave_plot.getAxis('bottom').setStyle(showValues=True)
         
         self.connect_plot_signals()
-        self.update_selection_box()
-        self.message_label.setText(f"Duration shown {dur:.3f} seconds, out of {totdur:.3f} seconds")
+        self.update_selection_box(self.view_model.select_state)
+        self.message_label.setText(self.tr(f"Duration shown {dur:.3f} seconds, out of {totdur:.3f} seconds"))
 
     def plot_wave_sgram(self):
         """Display waveform and spectrogram"""
@@ -244,63 +225,21 @@ class AudioView(QWidget):
         self.graphics_widget.ci.layout.setRowStretchFactor(1, 2)
 
         self.connect_plot_signals()
-        self.update_selection_box()
+        self.update_selection_box(self.view_model.select_state)
 
     def plot_spectrogram(self, sgram: SpectrogramState):
 
         if sgram.duration > 5.0:
             self.message_label.setText(
-                "Zoom to a chunk of 5 seconds or shorter to see spectrogram"
+                self.tr("Zoom to a chunk of 5 seconds or shorter to see spectrogram")
             )
             return
 
-        # if self.freqs is None:
-        #     self.message_label.setText(
-        #         "Spectrogram hasn't started computing, please wait..."
-        #     )
-        #     return
-        #
-        # if sgram.t[self.start] > self.max_time_computed:
-        #     self.message_label.setText(
-        #         f"Spectrogram not yet computed for this time range (computed up to {self.max_time_computed:.2f}s)"
-        #     )
-        #     return
-
         self.spec_plot.populate_spectrogram(sgram, self.gray_cutoff)
 
-        # # Update message
-        # if self.sgram_partial and not self.sgram_ready:
-        #     self.message_label.setText(
-        #         f"Showing partial spectrogram (still computing)... Duration shown {sgram.duration:.3f} seconds"
-        #     )
-        # else:
-        #     self.message_label.setText(
-        #         f"Duration shown {sgram.duration:.3f} seconds, out of {sgram.total_duration:.3f} seconds"
-        #     )
-
-    def _extract_spectrogram_window(self, s, e):
-        """Extract a window from the finished spectrogram data"""
-        if self.ts is None or self.Sxx is None:
-            return None, None
-    
-        if len(self.ts) == 0 or self.Sxx.shape[1] == 0:
-            return None, None
-    
-        sfr = np.abs(self.ts - self.t[s]).argmin()
-    
-        max_computed_time = self.ts[-1]
-        if self.t[e] > max_computed_time:
-            efr = len(self.ts) - 1
-        else:
-            efr = np.abs(self.ts - self.t[e]).argmin()
-    
-        if sfr >= efr:
-            efr = min(sfr + 1, len(self.ts) - 1)
-    
-        ts = self.ts[sfr:efr+1]
-        spec_data = self.Sxx[:, sfr:efr+1]
-    
-        return ts, spec_data
+        self.message_label.setText(
+            self.tr(f"Duration shown {sgram.duration:.3f} seconds, out of {sgram.total_duration:.3f} seconds")
+        )
 
     def update_wave_y_range(self):
         """Update the y-axis range of the waveform plot based on scale factor"""
@@ -384,14 +323,12 @@ class AudioView(QWidget):
         self.update_slider_page_step()
         self.update_plots()
 
-    def zoom_to_selection(self):
-        if (self.selEnd is not None) and (self.selStart is not None):
-            self.start = int(self.selStart * self.fs)
-            self.end = int(self.selEnd * self.fs)
-            self.selStart = None
-            self.selEnd = None
-            self.update_slider_page_step()
-            self.update_plots()
+    def zoom_to_selection(self, state: ZoomToSelection):
+        self.start = int(state.sel_start * self.fs)
+        self.end = int(state.sel_end * self.fs)
+        self.view_model.remove_selection()
+        self.update_slider_page_step()
+        self.update_plots()
 
     def show_all(self):
         self.start = 0
@@ -423,7 +360,7 @@ class AudioView(QWidget):
         
     def recenter_on_selection(self):
         """Center the view window on the selected region without changing zoom level"""
-        if self.selStart is None or self.selEnd is None:
+        if not self.view_model.select_state.is_selected:
             self.message_label.setText("No selection to center on")
             return
     
@@ -431,8 +368,8 @@ class AudioView(QWidget):
             return
     
         # Calculate the center of the selection in samples
-        sel_start_samples = int(self.selStart * self.fs)
-        sel_end_samples = int(self.selEnd * self.fs)
+        sel_start_samples = int(self.view_model.select_state.sel_start * self.fs)
+        sel_end_samples = int(self.view_model.select_state.sel_end * self.fs)
         sel_center_samples = (sel_start_samples + sel_end_samples) // 2
     
         # Calculate current window size (to maintain zoom level)
@@ -468,27 +405,26 @@ class AudioView(QWidget):
             
         mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
         x = mouse_point.x()
-   
-        if (self.selEnd is not None) and (self.selStart is not None) and x < self.selEnd and x > self.selStart:
-            s = int(self.selStart * self.fs)
-            e = int(self.selEnd * self.fs)
+
+        select_state = self.view_model.select_state
+        if select_state.is_selected and select_state.sel_start < x < select_state.sel_end:
+            s = int(select_state.sel_start * self.fs)
+            e = int(select_state.sel_end * self.fs)
             self.play_audio(s, e)
         else:
             self.play_audio(self.start, self.end)
                         
 
-    def update_selection_box(self):
-        if self.selStart is None:
-            box_left = self.start / self.fs
-            xrange = 0
-        else:
-            box_left = self.selStart
-            xrange = self.selEnd - self.selStart
+    def update_selection_box(self, select_state: SelectState):
+        box_left = select_state.sel_start
+        xrange = select_state.sel_end - select_state.sel_start
 
         if self.spec_plot and self.plot_type == 2:
             self.spec_plot.update_selection_region(box_left, xrange)
         if self.wave_plot:
             self.wave_plot.update_selection_region(box_left, xrange)
+
+        self.message_label.setText(select_state.sel_message)
 
     def update_plots(self):
         s = self.start
@@ -499,87 +435,39 @@ class AudioView(QWidget):
         if self.wave_plot:
             self.wave_plot.update_wave(self.t[s:e], self.y[s:e], self.t[e])
 
-        if self.plot_type == 2 and self.spec_plot is not None:
-            if dur > 5.0:
-                self.message_label.setText("Zoom to a chunk of 5 seconds or shorter to see spectrogram")
+        if dur > 5.0:
+            if self.plot_type == 2 and self.spec_plot is not None:
+                self.message_label.setText(self.tr("Zoom to a chunk of 5 seconds or shorter to see spectrogram"))
                 self.spec_plot.clear()
-                self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
-                self.update_selection_box()
-                return
-            #
-            # if self.freqs is None:
-            #     self.message_label.setText("Spectrogram is still computing, please wait...")
-            #     if self.spec_img:
-            #         self.spec_img.clear()
-            #     self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
-            #     self.update_selection_box()
-            #     return
-            #
-            # if self.t[s] > self.max_time_computed:
-            #     self.message_label.setText(f"Spectrogram not yet computed for this time range (computed up to {self.max_time_computed:.2f}s)")
-            #     if self.spec_img:
-            #         self.spec_img.clear()
-            #     self.spec_plot.setXRange(self.t[s], self.t[e], padding=0)
-            #     self.update_selection_box()
-            #     return
-        
+        else:
             self.view_model.compute_sgram(self.y[s:e], self.fs, s / self.fs, len(self.y) / self.fs)
-        
-            # if not success:
-            #     self.message_label.setText("Unable to display spectrogram for this region")
-            #     if self.spec_img:
-            #         self.spec_img.clear()
-            #
 
-        self.update_selection_box()
+        self.update_selection_box(self.view_model.select_state)
 
     def on_mouse_moved(self, pos):
-        if self.is_playing:
-            return
-    
         # Determine which plot the mouse is over
-        status_msg = ""
-    
+
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(pos):
             mouse_point = self.wave_plot.vb.mapSceneToView(pos)
             x = mouse_point.x()
-            status_msg = f"Cursor time: {x:.3f}s"
+            status_msg = self.tr("Cursor time: {:.3f}s").format(x)
         
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(pos):
             mouse_point = self.spec_plot.vb.mapSceneToView(pos)
             x = mouse_point.x()
             y = mouse_point.y()
-            status_msg = f"Cursor time: {x:.3f}s, frequency: {y:.0f} Hz"
-    
+            status_msg = self.tr("Cursor time: {:.3f}s, frequency: {:.0f} Hz").format(x, y)
+
         else:
             return  # Mouse not over any plot
-    
-        # Update vertical line positions (for both plots)
-        if self.wave_plot:
-            self.wave_plot.on_mouse_moved(x)
-        if self.spec_plot:
-            self.spec_plot.on_mouse_moved(x)
 
         # Handle mouse interactions (same for both plots)
         if self.ButtonDown:
-            if self.init_drag > 0:
-                # Start selection
-                self.init_drag = -1
-                self.selStart = self.selEnd = self.selAnchor = x
-            elif self.init_drag == -1:
-                # Continue selection - update bounds
-                if x > self.selEnd:
-                    self.selStart = self.selAnchor
-                    self.selEnd = min(x, self.end / self.fs)
-                elif self.selEnd > x > self.selStart:
-                    self.selEnd = x
-                elif x < self.selStart:
-                    self.selStart = max(x, 0.0)
-                    self.selEnd = self.selAnchor
-            
-                dur = self.selEnd - self.selStart
-                self.update_selection_box()
-                status_msg = f"Select: {self.selStart:.3f} to {self.selEnd:.3f} ({dur:.3f}s)"
+            if not self.is_dragging:
+                self.view_model.start_selection(x)
+            else:
+                self.view_model.continue_selection(x)
+            self.is_dragging = True
                 
         # Update status message
         self.message_label.setText(status_msg)
@@ -616,8 +504,6 @@ class AudioView(QWidget):
                     return True
                 
             elif event.type() == QEvent.Type.Wheel:
-                if self.is_playing:
-                    return True
 
                 angle_x = event.angleDelta().x()
                 angle_y = event.angleDelta().x()
@@ -728,11 +614,7 @@ class AudioView(QWidget):
         if not clicked_plot:
             return
 
-        mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
-        x = mouse_point.x()
-
         self.ButtonDown = True
-        self.init_drag = x
 
     def handle_double_click(self, scene_pos):
         """Handle double-click"""
@@ -740,9 +622,8 @@ class AudioView(QWidget):
             self.click_timer.stop()
             self.click_timer = None
             self.pending_single_click = None
-    
+
         self.ButtonDown = False
-        self.init_drag = 0
 
         clicked_plot = None
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
@@ -756,22 +637,18 @@ class AudioView(QWidget):
         mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
         x = mouse_point.x()
 
-        if (clicked_plot == self.wave_plot or clicked_plot == self.spec_plot) \
-            and ((self.selEnd is not None) and (self.selStart is not None) and
-                x < self.selEnd and x > self.selStart):
-                self.zoom_to_selection()
+        if clicked_plot == self.wave_plot or clicked_plot == self.spec_plot:
+            self.view_model.zoom_if_in_selection(x)
 
     def handle_mouse_release(self, scene_pos, event):
         """Handle left mouse button release"""
         if self.ButtonDown:
             self.ButtonDown = False
 
-            if self.init_drag == -1:
-                self.init_drag = 0
-                self.update_selection_box()
-                if self.selStart and self.selEnd and self.selStart != self.selEnd:
-                    self.play_audio(int(self.selStart * self.fs), int(self.selEnd * self.fs))
-            elif self.init_drag > 0:
+            if self.is_dragging:
+                self.is_dragging = False
+                self.view_model.play_selected_audio()
+            else:
                 self.pending_single_click = (scene_pos, event)
                 if self.click_timer is not None:
                     self.click_timer.stop()
@@ -779,7 +656,6 @@ class AudioView(QWidget):
                 self.click_timer.setSingleShot(True)
                 self.click_timer.timeout.connect(self.handle_single_click)
                 self.click_timer.start(250)
-                self.init_drag = 0
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
@@ -806,109 +682,26 @@ class AudioView(QWidget):
             
         if not clicked_plot:
             return
-        
-        mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
-        x = mouse_point.x()
 
-        self.selStart = None  # clear the selection
-        self.selEnd = None
-        self.update_selection_box()
-
-        self.mark = x         # remember where this click occurred
-                
+        self.view_model.remove_selection()
         
     def handle_right_click(self, scene_pos):
          pass
 
     def play_audio(self, s, e):
         """Play audio in a separate thread"""
-        if self.audio_player and self.audio_player.isRunning():
-            self.audio_player.stop()
-            self.audio_player.wait()
-
-        # stop mouse processing to make playback smoother
-        self.graphics_widget.setMouseTracking(False)
-        self.graphics_widget.viewport().setEnabled(False)
-        self.graphics_widget.setCursor(Qt.CursorShape.WaitCursor)
-    
-        self.is_playing = True
-        
         audio_segment = self.y[s:e]
-        self.audio_player = AudioPlayer(audio_segment, self.fs)
-        self.audio_player.finished.connect(self.on_playback_finished)
-        self.audio_player.start()
+        self.view_model.play_audio(audio_segment, self.fs)
 
     def stop_audio(self):
         """Stop audio playback"""
-        if self.audio_player and self.audio_player.isRunning():
-            self.audio_player.stop()
-            self.audio_player.wait()
-            self.on_playback_finished()
-        elif self.is_playing:
-            sd.stop()
-            self.on_playback_finished()
-        
-    def on_playback_finished(self):
-        """Called when audio playback completes"""
-        self.is_playing = False
-        self.graphics_widget.setMouseTracking(True)
-        self.graphics_widget.viewport().setEnabled(True)
-        self.graphics_widget.setCursor(Qt.CursorShape.ArrowCursor)
+        self.view_model.stop_audio()
 
     def play_visible(self):
         """Play the audio currently visible in the viewport"""
         if self.y is not None and self.fs is not None:
             self.play_audio(self.start, self.end)
 
-    def on_spectrogram_progress(self, percent, max_time_computed, freqs):
-        """Called periodically as spectrogram is computed"""
-        self.sgram_partial = True
-        self.max_time_computed = max_time_computed
-        self.freqs = freqs
-        
-        if self.spec_worker:
-            self.using_mmap = self.spec_worker.use_mmap
-            
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(percent)
-        self.message_label.setText(f"Computing spectrogram... {percent}% (up to {max_time_computed:.1f}s)")
-    
-        if self.plot_type == 2:
-            dur = (self.end - self.start) / self.fs
-            if dur <= 5.0 and self.t[self.start] <= max_time_computed:
-                self.update_plots()
-
-    def on_spectrogram_ready(self, ts, freqs, Sxx):
-        """Called when spectrogram computation is complete"""
-        self.ts = ts
-        self.freqs = freqs
-        self.Sxx = Sxx
-        self.sgram_ready = True
-        self.sgram_partial = False
-        self.using_mmap = False
-        self.max_time_computed = ts[-1]
-        
-        self.progress_bar.setVisible(False)
-        self.message_label.setText("Spectrogram ready!")
-
-        if self.plot_type == 2:
-            dur = (self.end - self.start) / self.fs
-            if dur <= 5.0:
-                self.update_plots()
-            
-    def on_spectrogram_error(self, error_msg):
-        """Called when spectrogram computation fails"""
-        self.message_label.setText(f"Error computing spectrogram: {error_msg}")
-
     def cleanup(self):
         """Clean up resources when closing document"""
-        if self.audio_player and self.audio_player.isRunning():
-            self.audio_player.stop()
-            self.audio_player.wait()
-        
-        if self.spec_worker and self.spec_worker.isRunning():
-            self.spec_worker.stop()
-            self.spec_worker.wait(5000)
-            if self.spec_worker.isRunning():
-                self.spec_worker.terminate()
-                self.spec_worker.wait()
+        self.view_model.close_threads()
