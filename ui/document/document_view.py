@@ -10,14 +10,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.state.audio_wave_state import AudioWaveState
-from ui.state.document_window_state import DocumentWindowState
-from ui.state.select_state import SelectState
-from ui.state.sgram_state import SpectrogramState
-from ui.state.status_message_state import StatusMessageState
-from ui.view.audio_wave_plot import AudioWavePlot
-from ui.view.spectrogram_plot import SpectrogramPlot
-from ui.view_model.document_view_model import DocumentViewModel
+from ui.document.state.audio_wave_state import AudioWaveState
+from ui.document.state.document_window_state import DocumentWindowState
+from ui.document.state.select_state import SelectState
+from ui.document.state.sgram_state import SpectrogramState
+from ui.document.state.status_message_state import StatusMessageState
+from ui.document.component.audio_wave_plot import AudioWavePlot
+from ui.document.component.spectrogram_plot import SpectrogramPlot
+from ui.document.document_view_model import DocumentViewModel
 
 
 class DocumentView(QWidget):

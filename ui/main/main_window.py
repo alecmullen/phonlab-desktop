@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.view.document_view import DocumentView
-from ui.view_model.document_view_model import DocumentViewModel
+from ui.document.document_view import DocumentView
+from ui.document.document_view_model import DocumentViewModel
 
 
 class MainWindow(QMainWindow):

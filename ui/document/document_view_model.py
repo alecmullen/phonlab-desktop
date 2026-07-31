@@ -7,12 +7,12 @@ from core.entity.spectrogram import Spectrogram
 from core.usecase.compute_sgram import ComputeSpectrogram
 from core.usecase.load_audio import AudioSignal, LoadAudio
 from core.usecase.play_audio import PlayAudio
-from ui.state.audio_wave_state import AudioWaveState, to_audio_wave_state
-from ui.state.document_window_state import DocumentWindowState
-from ui.state.select_state import SelectState
-from ui.state.sgram_state import SpectrogramState, to_spectrogram_model
-from ui.state.status_message_state import StatusMessageState
-from ui.view_model.view_model import ViewModel
+from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
+from ui.document.state.document_window_state import DocumentWindowState
+from ui.document.state.select_state import SelectState
+from ui.document.state.sgram_state import SpectrogramState, to_spectrogram_model
+from ui.document.state.status_message_state import StatusMessageState
+from ui.base.view_model import ViewModel
 
 
 class DocumentViewModel(ViewModel):

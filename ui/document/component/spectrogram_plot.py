@@ -3,7 +3,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
-from ui.state.sgram_state import SpectrogramState
+from ui.document.state.sgram_state import SpectrogramState
 
 
 class SpectrogramPlot(pg.PlotItem):
