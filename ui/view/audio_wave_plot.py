@@ -38,6 +38,7 @@ class AudioWavePlot(pg.PlotItem):
         self.enableAutoRange(axis="y", enable=False)
         
         self.wave_curve = self.plot(t[start:end], x[start:end], pen = "b")
+        self.setXRange(t[start], t[end], padding=0)
 
     def update_wave(self, t: np.ndarray, x: np.ndarray, tmax: float):
         self.wave_curve.setData(t, x)

@@ -42,7 +42,7 @@ class SpectrogramPlot(pg.PlotItem):
 
     def populate_spectrogram(self, sgram: SpectrogramState, gray_cutoff: float):
         """Fill the spectrogram image with data"""
-
+        
         self.vb.setLimits(yMin=0, yMax=sgram.f[-1])
         self.setYRange(sgram.f[0], sgram.f[-1])
 

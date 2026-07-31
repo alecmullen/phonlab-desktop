@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.view.audio_view import AudioView
-from ui.view_model.audio_view_model import AudioViewModel
+from ui.view.document_view import DocumentView
+from ui.view_model.document_view_model import DocumentViewModel
 
 
 class MainWindow(QMainWindow):
@@ -129,7 +129,7 @@ class MainWindow(QMainWindow):
     def get_current_document(self):
         """Get the currently active AudioView"""
         current_widget = self.tab_widget.currentWidget()
-        if isinstance(current_widget, AudioView):
+        if isinstance(current_widget, DocumentView):
             return current_widget
         return None
 
@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
                 self.splash = None
                 
             # Create new document
-            doc = AudioView(AudioViewModel())
+            doc = DocumentView(DocumentViewModel())
                         
             # Add tab with shortened filename
             tab_name = Path(filename).name
@@ -158,7 +158,7 @@ class MainWindow(QMainWindow):
     def close_tab(self, index):
         """Close a tab"""
         widget = self.tab_widget.widget(index)
-        if isinstance(widget, AudioView):
+        if isinstance(widget, DocumentView):
             widget.cleanup()
         self.tab_widget.removeTab(index)
 
@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
         # Clean up all open documents
         for i in range(self.tab_widget.count()):
             widget = self.tab_widget.widget(i)
-            if isinstance(widget, AudioView):
+            if isinstance(widget, DocumentView):
                 widget.cleanup()
         
         self.close()
@@ -236,7 +236,7 @@ class MainWindow(QMainWindow):
         # Clean up all open documents
         for i in range(self.tab_widget.count()):
             widget = self.tab_widget.widget(i)
-            if isinstance(widget, AudioView):
+            if isinstance(widget, DocumentView):
                 widget.cleanup()
         
         event.accept()

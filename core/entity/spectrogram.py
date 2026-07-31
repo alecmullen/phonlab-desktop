@@ -8,4 +8,3 @@ class Spectrogram:
     t: np.ndarray
     f: np.ndarray
     sxx: np.ndarray
-    

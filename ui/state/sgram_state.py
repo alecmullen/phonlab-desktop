@@ -10,8 +10,7 @@ class SpectrogramState:
     t: np.ndarray = field(default_factory=lambda: np.zeros(0))
     f: np.ndarray = field(default_factory=lambda: np.zeros(0))
     sxx: np.ndarray = field(default_factory=lambda: np.zeros(0))
-    duration: float = 0.0
-    total_duration: float = 0.0
+    is_showing: bool = False
 
-def to_spectrogram_model(sgram: Spectrogram, start: float, duration: float, total_duration: float):
-    return SpectrogramState(np.add(sgram.t, start), sgram.f, sgram.sxx, duration, total_duration)
+def to_spectrogram_model(spectrogram: Spectrogram, start: float):
+    return SpectrogramState(np.add(spectrogram.t, start), spectrogram.f, spectrogram.sxx, is_showing=True)
