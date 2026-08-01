@@ -47,14 +47,14 @@ class SpectrogramPlot(pg.PlotItem):
         self.setYRange(sgram.f[0], sgram.f[-1])
 
         vmin = (
-                np.min(sgram.sxx) + (np.max(sgram.sxx) - np.min(sgram.sxx)) * gray_cutoff
+                np.min(sgram.sxx_window) + (np.max(sgram.sxx_window) - np.min(sgram.sxx_window)) * gray_cutoff
         )
         self.spec_img.setImage(
-            sgram.sxx.T, autoLevels=False, levels=(vmin, np.max(sgram.sxx))
+            sgram.sxx_window.T, autoLevels=False, levels=(vmin, np.max(sgram.sxx_window))
         )
 
-        time_start = sgram.t[0]
-        time_end = sgram.t[-1]
+        time_start = sgram.t_window[0]
+        time_end = sgram.t_window[-1]
         freq_start = sgram.f[0]
         freq_end = sgram.f[-1]
 

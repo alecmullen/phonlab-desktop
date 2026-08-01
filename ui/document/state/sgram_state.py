@@ -5,12 +5,19 @@ import numpy as np
 from core.entity.spectrogram import Spectrogram
 
 
-@dataclass
+@dataclass(frozen=True)
 class SpectrogramState:
-    t: np.ndarray = field(default_factory=lambda: np.zeros(0))
     f: np.ndarray = field(default_factory=lambda: np.zeros(0))
-    sxx: np.ndarray = field(default_factory=lambda: np.zeros(0))
-    is_showing: bool = False
 
-def to_spectrogram_model(spectrogram: Spectrogram, start: float):
-    return SpectrogramState(np.add(spectrogram.t, start), spectrogram.f, spectrogram.sxx, is_showing=True)
+    t_window: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    sxx_window: np.ndarray = field(default_factory=lambda: np.zeros(0))
+
+    start_buffer: int = 0
+    end_buffer: int = 0
+    t_buffer: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    sxx_buffer: np.ndarray = field(default_factory=lambda: np.zeros(0))
+
+    t_mmap: np.memmap | None = None
+    sxx_mmap: np.memmap | None = None
+
+    is_showing: bool = False

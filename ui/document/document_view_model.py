@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+import numpy as np
 import sounddevice as sd
 from PyQt6.QtCore import QTimer, pyqtSlot
 
@@ -10,10 +11,11 @@ from core.usecase.play_audio import PlayAudio
 from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.select_state import SelectState
-from ui.document.state.sgram_state import SpectrogramState, to_spectrogram_model
+from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
 from ui.base.view_model import ViewModel
 
+BUFFER_SIZE = 4800000
 
 class DocumentViewModel(ViewModel):
     
@@ -53,19 +55,55 @@ class DocumentViewModel(ViewModel):
     def compute_spectrogram(self):
         x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
         start, end = self.document_window_state.start, self.document_window_state.end
-        duration = (end - start) / fs
 
-        if duration > 5.0:
-            self.sgram_state = SpectrogramState()
+        # duration = (end - start) / fs
+
+        # if duration > 5.0:
+        #     self.sgram_state = SpectrogramState()
+        #     self.state_changed.emit(self.sgram_state)
+        #     return
+
+        self.load_spectrogram_window(x, fs, start, end)
+
+        self.load_spectrogram_buffer(x, fs, start, end)
+
+    def load_spectrogram_window(self, x: np.ndarray, fs: int, start: int, end: int):
+        buffer_start, buffer_end = self.sgram_state.start_buffer, self.sgram_state.end_buffer
+
+        if start > buffer_start and end < buffer_end:
+            sfr = np.abs(self.sgram_state.t_buffer - self.audio_wave_state.t[start]).argmin()
+            efr = np.abs(self.sgram_state.t_buffer - self.audio_wave_state.t[end]).argmin()
+
+            t_window = self.sgram_state.t_buffer[sfr:efr]
+            sxx_window = self.sgram_state.sxx_buffer[:,sfr:efr]
+
+            self.sgram_state = replace(self.sgram_state, t_window=t_window, sxx_window=sxx_window)
             self.state_changed.emit(self.sgram_state)
-            return
+        else:
+            pyqtSlot(object)
+            def on_success(sgram: Spectrogram):
+                self.sgram_state = replace(self.sgram_state, t_window=sgram.t + (start / fs), sxx_window=sgram.sxx, f=sgram.f, is_showing=True)
+                self.state_changed.emit(self.sgram_state)
 
-        @pyqtSlot(object)
+            use_case = ComputeSpectrogram(x[start:end], fs)
+            self.launch_use_case(use_case, on_success, self.on_error)
+
+    def load_spectrogram_buffer(self, x, fs, start, end):
+        buffer_start = max(0, start - (BUFFER_SIZE // 2))
+        buffer_end = min(len(x) - 1, start + (BUFFER_SIZE // 2))
+
+        pyqtSlot(object)
         def on_success(sgram: Spectrogram):
-            self.sgram_state = to_spectrogram_model(sgram, start / fs)
-            self.state_changed.emit(self.sgram_state)
+            self.sgram_state = replace(self.sgram_state, 
+                t_buffer=sgram.t + (buffer_start / fs),
+                sxx_buffer=sgram.sxx,
+                f=sgram.f,
+                start_buffer=buffer_start,
+                end_buffer=buffer_end
+            )
+            #self.state_changed.emit(self.sgram_state)
 
-        use_case = ComputeSpectrogram(x[start:end], fs)
+        use_case = ComputeSpectrogram(x[buffer_start:buffer_end], fs)
         self.launch_use_case(use_case, on_success, self.on_error)
 
     def play_audio(self, x, fs):
