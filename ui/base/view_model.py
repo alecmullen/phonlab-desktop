@@ -2,8 +2,8 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from core.task.job import Job
-from core.task.task_worker import TaskManager
+from core.job.job import Job
+from core.job.job_manager import JobManager
 from core.usecase.use_case import UseCase
 
 
@@ -13,24 +13,26 @@ class ViewModel(QObject):
 
     def __init__(self):
         super().__init__()
-        self.tasks: dict[str, TaskManager] = {}
+        self.job_managers: dict[str, JobManager] = {}
 
     def subscribe(self, slot: Callable):
         self.state_changed.connect(slot)
         
-    def launch_use_case(self, key: str, use_case: UseCase, on_success: Callable, on_error: Callable):
-        if key in self.tasks:
-            self.tasks[key].queue_job(Job(use_case.invoke, on_success, on_error))
+    def launch_use_case(self, key: str, use_case: UseCase, on_success: Callable, on_error: Callable, only_once: bool = False):
+        if key in self.job_managers:
+            if only_once:
+                return
+            self.job_managers[key].queue_job(Job(use_case, on_success, on_error))
         else:
-            self.tasks[key] = TaskManager()
-            self.tasks[key](Job(use_case.invoke, on_success, on_error))
+            self.job_managers[key] = JobManager()
+            self.job_managers[key](Job(use_case, on_success, on_error))
             
             @pyqtSlot()
             def on_finished():
-                del self.tasks[key]
+                del self.job_managers[key]
 
-            self.tasks[key].signals.finished.connect(on_finished)
+            self.job_managers[key].signals.finished.connect(on_finished)
 
     def close_threads(self):
-        for key in self.tasks:
-            self.tasks[key].quit()
+        for key in self.job_managers:
+            self.job_managers[key].quit()

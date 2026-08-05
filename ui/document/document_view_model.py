@@ -1,23 +1,22 @@
 from dataclasses import replace
 
-from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
 import numpy as np
+import phonlab as phon
 import sounddevice as sd
 from PyQt6.QtCore import QTimer, pyqtSlot
-import phonlab as phon
 
 from core.entity.spectrogram import Spectrogram
 from core.usecase.compute_sgram import ComputeSpectrogram
+from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.usecase.load_audio import AudioSignal, LoadAudio
 from core.usecase.play_audio import PlayAudio
+from ui.base.view_model import ViewModel
 from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
-from ui.base.view_model import ViewModel
 
-BUFFER_SIZE = 4800000
 
 class DocumentViewModel(ViewModel):
     
@@ -58,34 +57,11 @@ class DocumentViewModel(ViewModel):
         x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        # duration = (end - start) / fs
-
-        # if duration > 5.0:
-        #     self.sgram_state = SpectrogramState()
-        #     self.state_changed.emit(self.sgram_state)
-        #     return
-
         self.load_spectrogram_window(x, fs, start, end)
-
-        self.load_spectrogram_buffer(x, fs, start, end)
-
         self.load_spectrogram_mmap(x, fs)
 
     def load_spectrogram_window(self, x: np.ndarray, fs: int, start: int, end: int):
-        buffer_start, buffer_end = self.sgram_state.start_buffer, self.sgram_state.end_buffer
-
-        if start >= buffer_start and end <= buffer_end:
-            sfr = np.abs(self.sgram_state.t_buffer - self.audio_wave_state.t[start]).argmin()
-            efr = np.abs(self.sgram_state.t_buffer - self.audio_wave_state.t[end]).argmin()
-
-            t_window = self.sgram_state.t_buffer[sfr:efr]
-            sxx_window = self.sgram_state.sxx_buffer[:,sfr:efr]
-
-            self.sgram_state = replace(self.sgram_state, t_window=t_window, sxx_window=sxx_window)
-            self.state_changed.emit(self.sgram_state)
-        elif self.sgram_state.sxx_mmap is not None and self.sgram_state.t_mmap is not None:
-            print("used mmap for window")
-
+        if self.sgram_state.sxx_mmap is not None and self.sgram_state.t_mmap is not None and self.sgram_state.samples_computed > end:
             frames_computed = self.sgram_state.frames_computed
             sfr = np.abs(self.sgram_state.t_mmap[:frames_computed] - self.audio_wave_state.t[start]).argmin()
             efr = np.abs(self.sgram_state.t_mmap[:frames_computed] - self.audio_wave_state.t[end]).argmin()
@@ -96,46 +72,35 @@ class DocumentViewModel(ViewModel):
             self.sgram_state = replace(self.sgram_state, t_window=t_window, sxx_window=sxx_window)
             self.state_changed.emit(self.sgram_state)
         else:
-            t, f, sxx = phon.compute_sgram(x[start:end], fs, 0.008, 0.002, 9)
+            t, f, sxx = phon.compute_sgram(x[start:end], fs, 0.008, 0.003, 8)
 
             self.sgram_state = replace(self.sgram_state, t_window=t + (start / fs), sxx_window=sxx, f=f, is_showing=True)
             self.state_changed.emit(self.sgram_state)
 
-            # @pyqtSlot(object)
-            # def on_success(sgram: Spectrogram):
-            #     self.sgram_state = replace(self.sgram_state, t_window=sgram.t + (start / fs), sxx_window=sgram.sxx, f=sgram.f, is_showing=True)
-            #     self.state_changed.emit(self.sgram_state)
+            @pyqtSlot(object)
+            def on_success(sgram: Spectrogram):
+                self.sgram_state = replace(self.sgram_state, t_window=sgram.t + (start / fs), sxx_window=sgram.sxx, f=sgram.f, is_showing=True)
+                self.state_changed.emit(self.sgram_state)
 
-            # use_case = ComputeSpectrogram(x[start:end], fs)
-            # self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
-
-    def load_spectrogram_buffer(self, x, fs, start, end):
-        buffer_start = max(0, start - (BUFFER_SIZE // 2))
-        buffer_end = min(len(x) - 1, start + (BUFFER_SIZE // 2))
-
-        @pyqtSlot(object)
-        def on_success(sgram: Spectrogram):
-            self.sgram_state = replace(self.sgram_state, 
-                t_buffer=sgram.t + (buffer_start / fs),
-                sxx_buffer=sgram.sxx,
-                f=sgram.f,
-                start_buffer=buffer_start,
-                end_buffer=buffer_end
-            )
-            #self.state_changed.emit(self.sgram_state)
-
-        use_case = ComputeSpectrogram(x[buffer_start:buffer_end], fs)
-        self.launch_use_case("sgram_buffer", use_case, on_success, self.on_error)
+            use_case = ComputeSpectrogram(x[start:end], fs)
+            self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
 
     def load_spectrogram_mmap(self, x, fs):
-        @pyqtSlot(object)
-        def on_success(sgram: tuple[np.memmap, np.memmap]):
-            sxx_mmap, t_mmap, frames_per_sec, frames_computed = sgram
-            self.sgram_state = replace(self.sgram_state, sxx_mmap=sxx_mmap, t_mmap=t_mmap, frames_per_sec=frames_per_sec, frames_computed=frames_computed)
-        use_case = ComputeSpectrogramMmap(x, fs)
-        self.launch_use_case("sgram_mmap", use_case, on_success, self.on_error)
+        if self.sgram_state.sxx_mmap is None or self.sgram_state.t_mmap is None:
+            @pyqtSlot(object)
+            def on_success(sgram: tuple[np.memmap, np.memmap]):
+                sxx_mmap, t_mmap, frames_per_sec, frames_computed, samples_computed = sgram
+                self.sgram_state = replace(self.sgram_state,
+                    sxx_mmap=sxx_mmap,
+                    t_mmap=t_mmap,
+                    frames_per_sec=frames_per_sec,
+                    frames_computed=frames_computed,
+                    samples_computed=samples_computed
+                )
+            use_case = ComputeSpectrogramMmap(x, fs)
+            self.launch_use_case("sgram_mmap", use_case, on_success, self.on_error, only_once=True)
 
-    def play_audio(self, x, fs):
+    def play_audio(self, x: np.ndarray, fs: int):
         if self.is_audio_playing:
             self.stop_audio()
 

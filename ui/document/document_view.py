@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import QEvent, Qt, QTimer
+from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSlot
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -10,14 +10,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui.document.component.audio_wave_plot import AudioWavePlot
+from ui.document.component.spectrogram_plot import SpectrogramPlot
+from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_wave_state import AudioWaveState
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
-from ui.document.component.audio_wave_plot import AudioWavePlot
-from ui.document.component.spectrogram_plot import SpectrogramPlot
-from ui.document.document_view_model import DocumentViewModel
 
 
 class DocumentView(QWidget):
@@ -48,7 +48,15 @@ class DocumentView(QWidget):
 
         # ------ Slider ---------
         self.slider = QScrollBar(Qt.Orientation.Horizontal, self)
-        self.slider.valueChanged.connect(self.view_model.move_start)
+
+        self.slider_throttle = QTimer()
+        self.slider_throttle.setInterval(15)
+        self.slider_throttle.setSingleShot(True)
+        self.slider_throttle.timeout.connect(self.move_start)
+
+        self.pending_slider_value: int = 0
+        self.slider.valueChanged.connect(self.on_slider_move)
+
 
         # ------- Bottom bar -------------
         bottom_bar = QWidget()
@@ -186,6 +194,16 @@ class DocumentView(QWidget):
             y_max = max(abs(min_x), abs(max_x))
             scaled_max = y_max / self.wave_y_scale
             self.wave_plot.setYRange(-scaled_max, scaled_max, padding=0)
+
+    @pyqtSlot(int)
+    def on_slider_move(self, value: int):
+        if not self.slider_throttle.isActive():
+            self.slider_throttle.start()
+        self.pending_slider_value = value
+
+    @pyqtSlot()
+    def move_start(self):
+        self.view_model.move_start(self.pending_slider_value)
             
     def reset_slider(self, fs: int):
         self.slider.setMinimum(0)
