@@ -7,7 +7,6 @@ from core.usecase.use_case import UseCase
 class LoadAudio(UseCase):
 
     def __init__(self, filename):
-        super().__init__("load_audio")
         self.filename = filename
 
     def invoke(self) -> AudioSignal:

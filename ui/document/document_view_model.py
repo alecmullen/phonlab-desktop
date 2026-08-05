@@ -1,8 +1,10 @@
 from dataclasses import replace
 
+from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
 import numpy as np
 import sounddevice as sd
 from PyQt6.QtCore import QTimer, pyqtSlot
+import phonlab as phon
 
 from core.entity.spectrogram import Spectrogram
 from core.usecase.compute_sgram import ComputeSpectrogram
@@ -50,7 +52,7 @@ class DocumentViewModel(ViewModel):
             self.state_changed.emit(StatusMessageState(msg))
 
         use_case = LoadAudio(filepath)
-        self.launch_use_case(use_case, on_success, self.on_error)
+        self.launch_use_case("load_audio", use_case, on_success, self.on_error)
 
     def compute_spectrogram(self):
         x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
@@ -67,10 +69,12 @@ class DocumentViewModel(ViewModel):
 
         self.load_spectrogram_buffer(x, fs, start, end)
 
+        self.load_spectrogram_mmap(x, fs)
+
     def load_spectrogram_window(self, x: np.ndarray, fs: int, start: int, end: int):
         buffer_start, buffer_end = self.sgram_state.start_buffer, self.sgram_state.end_buffer
 
-        if start > buffer_start and end < buffer_end:
+        if start >= buffer_start and end <= buffer_end:
             sfr = np.abs(self.sgram_state.t_buffer - self.audio_wave_state.t[start]).argmin()
             efr = np.abs(self.sgram_state.t_buffer - self.audio_wave_state.t[end]).argmin()
 
@@ -79,20 +83,37 @@ class DocumentViewModel(ViewModel):
 
             self.sgram_state = replace(self.sgram_state, t_window=t_window, sxx_window=sxx_window)
             self.state_changed.emit(self.sgram_state)
-        else:
-            pyqtSlot(object)
-            def on_success(sgram: Spectrogram):
-                self.sgram_state = replace(self.sgram_state, t_window=sgram.t + (start / fs), sxx_window=sgram.sxx, f=sgram.f, is_showing=True)
-                self.state_changed.emit(self.sgram_state)
+        elif self.sgram_state.sxx_mmap is not None and self.sgram_state.t_mmap is not None:
+            print("used mmap for window")
 
-            use_case = ComputeSpectrogram(x[start:end], fs)
-            self.launch_use_case(use_case, on_success, self.on_error)
+            frames_computed = self.sgram_state.frames_computed
+            sfr = np.abs(self.sgram_state.t_mmap[:frames_computed] - self.audio_wave_state.t[start]).argmin()
+            efr = np.abs(self.sgram_state.t_mmap[:frames_computed] - self.audio_wave_state.t[end]).argmin()
+
+            t_window = np.array(self.sgram_state.t_mmap[sfr:efr])
+            sxx_window = np.array(self.sgram_state.sxx_mmap[:,sfr:efr])
+
+            self.sgram_state = replace(self.sgram_state, t_window=t_window, sxx_window=sxx_window)
+            self.state_changed.emit(self.sgram_state)
+        else:
+            t, f, sxx = phon.compute_sgram(x[start:end], fs, 0.008, 0.002, 9)
+
+            self.sgram_state = replace(self.sgram_state, t_window=t + (start / fs), sxx_window=sxx, f=f, is_showing=True)
+            self.state_changed.emit(self.sgram_state)
+
+            # @pyqtSlot(object)
+            # def on_success(sgram: Spectrogram):
+            #     self.sgram_state = replace(self.sgram_state, t_window=sgram.t + (start / fs), sxx_window=sgram.sxx, f=sgram.f, is_showing=True)
+            #     self.state_changed.emit(self.sgram_state)
+
+            # use_case = ComputeSpectrogram(x[start:end], fs)
+            # self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
 
     def load_spectrogram_buffer(self, x, fs, start, end):
         buffer_start = max(0, start - (BUFFER_SIZE // 2))
         buffer_end = min(len(x) - 1, start + (BUFFER_SIZE // 2))
 
-        pyqtSlot(object)
+        @pyqtSlot(object)
         def on_success(sgram: Spectrogram):
             self.sgram_state = replace(self.sgram_state, 
                 t_buffer=sgram.t + (buffer_start / fs),
@@ -104,7 +125,15 @@ class DocumentViewModel(ViewModel):
             #self.state_changed.emit(self.sgram_state)
 
         use_case = ComputeSpectrogram(x[buffer_start:buffer_end], fs)
-        self.launch_use_case(use_case, on_success, self.on_error)
+        self.launch_use_case("sgram_buffer", use_case, on_success, self.on_error)
+
+    def load_spectrogram_mmap(self, x, fs):
+        @pyqtSlot(object)
+        def on_success(sgram: tuple[np.memmap, np.memmap]):
+            sxx_mmap, t_mmap, frames_per_sec, frames_computed = sgram
+            self.sgram_state = replace(self.sgram_state, sxx_mmap=sxx_mmap, t_mmap=t_mmap, frames_per_sec=frames_per_sec, frames_computed=frames_computed)
+        use_case = ComputeSpectrogramMmap(x, fs)
+        self.launch_use_case("sgram_mmap", use_case, on_success, self.on_error)
 
     def play_audio(self, x, fs):
         if self.is_audio_playing:
@@ -116,7 +145,7 @@ class DocumentViewModel(ViewModel):
 
         use_case = PlayAudio(x, fs)
         self.is_audio_playing = True
-        self.launch_use_case(use_case, on_success, self.on_error)
+        self.launch_use_case("play_audio", use_case, on_success, self.on_error)
 
     def stop_audio(self):
         sd.stop()

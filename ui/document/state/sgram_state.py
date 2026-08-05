@@ -19,5 +19,7 @@ class SpectrogramState:
 
     t_mmap: np.memmap | None = None
     sxx_mmap: np.memmap | None = None
+    frames_per_sec: float = 0.0
+    frames_computed: int = 0
 
     is_showing: bool = False

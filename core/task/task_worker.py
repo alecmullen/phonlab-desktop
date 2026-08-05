@@ -48,7 +48,7 @@ class TaskWorkerSlots(QObject):
         
 class TaskManager:
     
-    thread_pool = QThreadPool()
+    thread_pool = QThreadPool.globalInstance()
 
     def __init__(self):
         self.signals = TaskManagerSignals()

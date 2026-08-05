@@ -7,7 +7,6 @@ from core.usecase.use_case import UseCase
 class PlayAudio(UseCase):
     
     def __init__(self, audio_data, sample_rate):
-        super().__init__("play_audio")
         self.audio_data = audio_data
         self.sample_rate = sample_rate
 
