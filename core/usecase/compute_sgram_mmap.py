@@ -19,7 +19,7 @@ class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
 
     def invoke(self):
         try:
-            Sxx_mmap, ts_mmap, frames_per_sec, estimated_frames = self.init_mmap()
+            self.sxx_mmap, self.ts_mmap, frames_per_sec, estimated_frames = self.init_mmap()
             
             chunk_samples = int(self.chunk_duration * self.fs)            
             frame_offset = 0
@@ -39,11 +39,11 @@ class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
 
                 n_frames_chunk = sxx.shape[1]
 
-                Sxx_mmap[:, frame_offset:frame_offset + n_frames_chunk] = sxx
-                ts_mmap[frame_offset:frame_offset + n_frames_chunk] = ts
+                self.sxx_mmap[:, frame_offset:frame_offset + n_frames_chunk] = sxx
+                self.ts_mmap[frame_offset:frame_offset + n_frames_chunk] = ts
                 frame_offset += n_frames_chunk
 
-                yield Sxx_mmap, ts_mmap, frames_per_sec, frame_offset, end
+                yield self.sxx_mmap, self.ts_mmap, frames_per_sec, frame_offset, end
         except Exception as e:
             self.error.emit(f"Error during spectrogram computation: {e}")
             self.stop()
@@ -75,11 +75,13 @@ class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
         return Sxx_mmap, ts_mmap, frames_per_sec, estimated_frames
 
     def stop(self):
-        if self.Sxx_mmap is not None:
-            del self.Sxx_mmap
-            self.Sxx_mmap = None
+        if self.sxx_mmap is not None:
+            self.sxx_mmap.close()
+            del self.sxx_mmap
+            self.sxx_mmap = None
         
         if self.ts_mmap is not None:
+            self.ts_mmap.close()
             del self.ts_mmap
             self.ts_mmap = None
         

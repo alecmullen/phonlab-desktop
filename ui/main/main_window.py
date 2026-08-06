@@ -21,7 +21,6 @@ class MainWindow(QMainWindow):
         super().__init__(*args, **kwargs)
 
         self.setWindowTitle("Phonlab")
-        #self.move(40, 40)
         self.resize(1200, 800)
         
         self.filters = 'Sound files (*.wav)'
@@ -48,22 +47,22 @@ class MainWindow(QMainWindow):
         # File Menu
         fileMenu = mainMenu.addMenu('&File')
         
-        self.open_action = QAction(QIcon.fromTheme('document-open'), '&Open', self)
-        self.open_action.setStatusTip('Open a sound file')
+        self.open_action = QAction(QIcon.fromTheme('document-open'), self.tr('&Open'), self)
+        self.open_action.setStatusTip(self.tr('Open a sound file'))
         self.open_action.setShortcut('Ctrl+O')
         self.open_action.triggered.connect(self.open_file)
         fileMenu.addAction(self.open_action)
         
-        self.close_action = QAction(QIcon.fromTheme('window-close'), '&Close', self)
-        self.close_action.setStatusTip('Close current file')
+        self.close_action = QAction(QIcon.fromTheme('window-close'), self.tr('&Close'), self)
+        self.close_action.setStatusTip(self.tr('Close current file'))
         self.close_action.setShortcut('Ctrl-W')
         self.close_action.triggered.connect(self.close_current_tab)
         fileMenu.addAction(self.close_action)
         
         fileMenu.addSeparator()
       
-        self.exit_action = QAction(QIcon.fromTheme('application-exit'), '&Quit', self)
-        self.exit_action.setStatusTip('Terminate the program')
+        self.exit_action = QAction(QIcon.fromTheme('application-exit'), self.tr('&Quit'), self)
+        self.exit_action.setStatusTip(self.tr('Terminate the program'))
         self.exit_action.triggered.connect(self.quit_app)
         fileMenu.addAction(self.exit_action)
         
@@ -73,26 +72,26 @@ class MainWindow(QMainWindow):
         # View Menu
         viewMenu = mainMenu.addMenu('&View')
         
-        self.waveview_action = QAction(QIcon.fromTheme('audio-x-generic'), '&Wave', self)
-        self.waveview_action.setStatusTip('View audio waveform')
+        self.waveview_action = QAction(QIcon.fromTheme('audio-x-generic'), self.tr('&Wave'), self)
+        self.waveview_action.setStatusTip(self.tr('View audio waveform'))
         self.waveview_action.setShortcut('Ctrl+1')
         self.waveview_action.triggered.connect(self.plot_wave)
         viewMenu.addAction(self.waveview_action)
         
-        self.sgramview_action = QAction(QIcon.fromTheme('view-media-visualization'), '&Spectrogram', self)
-        self.sgramview_action.setStatusTip('View waveform and spectrogram')
+        self.sgramview_action = QAction(QIcon.fromTheme('view-media-visualization'), self.tr('&Spectrogram'), self)
+        self.sgramview_action.setStatusTip(self.tr('View waveform and spectrogram'))
         self.sgramview_action.setShortcut('Ctrl+2')
         self.sgramview_action.triggered.connect(self.plot_wave_sgram)
         viewMenu.addAction(self.sgramview_action)
         
-        self.viewall_action = QAction(QIcon.fromTheme('view-fullscreen'), 'View &All', self)
-        self.viewall_action.setStatusTip('Zoom out to see the whole file')
+        self.viewall_action = QAction(QIcon.fromTheme('view-fullscreen'), self.tr('View &All'), self)
+        self.viewall_action.setStatusTip(self.tr('Zoom out to see the whole file'))
         self.viewall_action.setShortcut('Ctrl+A')
         self.viewall_action.triggered.connect(self.show_all)
         viewMenu.addAction(self.viewall_action)
 
-        self.recenter_action = QAction(QIcon.fromTheme('mail-send'), 'Re-center', self)
-        self.recenter_action.setStatusTip('Center view on selection')
+        self.recenter_action = QAction(QIcon.fromTheme('mail-send'), self.tr('Re-center'), self)
+        self.recenter_action.setStatusTip(self.tr('Center view on selection'))
         self.recenter_action.triggered.connect(self.recenter_on_selection)
         viewMenu.addAction(self.recenter_action)
         
@@ -111,13 +110,13 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.recenter_action)
 
         toolbar.addSeparator()
-        self.play_action = QAction(QIcon.fromTheme('media-playback-start'), '&Play', self)
-        self.play_action.setStatusTip('Play visible audio')
+        self.play_action = QAction(QIcon.fromTheme('media-playback-start'), self.tr('&Play'), self)
+        self.play_action.setStatusTip(self.tr('Play visible audio'))
         self.play_action.triggered.connect(self.play_visible)
         toolbar.addAction(self.play_action)
 
-        self.stop_action = QAction(QIcon.fromTheme('media-playback-stop'), '&Stop', self)
-        self.stop_action.setStatusTip('Stop audio playback')
+        self.stop_action = QAction(QIcon.fromTheme('media-playback-stop'), self.tr('&Stop'), self)
+        self.stop_action.setStatusTip(self.tr('Stop audio playback'))
         self.stop_action.triggered.connect(self.stop_audio)
         toolbar.addAction(self.stop_action)
 
