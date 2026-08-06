@@ -187,6 +187,8 @@ class DocumentView(QWidget):
         self.update_selection_box(self.view_model.select_state)
 
     def plot_spectrogram(self, sgram: SpectrogramState):
+        if self.spec_plot is None:
+            return
         if not sgram.is_showing:
             self.spec_plot.display_window_too_big()
         else:
@@ -256,7 +258,7 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
-        mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
+        mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
 
         select_state = self.view_model.select_state
@@ -303,7 +305,7 @@ class DocumentView(QWidget):
             status_msg = self.tr("Cursor time: {:.3f}s").format(x)
 
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(pos):
-            mouse_point = self.spec_plot.vb.mapSceneToView(pos)
+            mouse_point = self.spec_plot.getViewBox().mapSceneToView(pos)
             x = mouse_point.x()
             y = mouse_point.y()
             status_msg = self.tr("Cursor time: {:.3f}s, frequency: {:.0f} Hz").format(
@@ -472,7 +474,7 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
-        mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
+        mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
 
         if clicked_plot == self.wave_plot or clicked_plot == self.spec_plot:

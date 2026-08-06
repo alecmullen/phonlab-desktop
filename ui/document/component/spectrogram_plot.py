@@ -20,7 +20,7 @@ class SpectrogramPlot(pg.PlotItem):
         self.getAxis("bottom").enableAutoSIPrefix(False)
 
         self.showGrid(x=True, y=True, alpha=0.3)
-        self.setMouseEnabled(x=False, y=False)
+        self.getViewBox().setMouseEnabled(x=False, y=False)
         self.getViewBox().rbScaleBox.hide()
 
         self.spec_img = pg.ImageItem()
@@ -40,7 +40,7 @@ class SpectrogramPlot(pg.PlotItem):
         self.addItem(self.selection_region)
         self.selection_region.setVisible(False)
 
-        self.setXLink(linked_plot)
+        self.getViewBox().setXLink(linked_plot)
 
         self.center_text_item = pg.TextItem(
             self.tr("Zoom to a chunk of 10 seconds or shorter to see spectrogram"),
@@ -55,8 +55,8 @@ class SpectrogramPlot(pg.PlotItem):
 
         self.center_text_item.setVisible(False)
 
-        self.vb.setLimits(yMin=0, yMax=sgram.f[-1])
-        self.setYRange(sgram.f[0], sgram.f[-1])
+        self.getViewBox().setLimits(yMin=0, yMax=sgram.f[-1])
+        self.getViewBox().setYRange(sgram.f[0], sgram.f[-1])
 
         vmin = (
             np.min(sgram.sxx_window)
@@ -95,7 +95,7 @@ class SpectrogramPlot(pg.PlotItem):
         if self.spec_img:
             self.spec_img.clear()
 
-        x_range, y_range = self.vb.viewRange()
+        x_range, y_range = self.getViewBox().viewRange()
         center_x = (x_range[0] + x_range[1]) / 2.0
         center_y = (y_range[0] + y_range[1]) / 2.0
 

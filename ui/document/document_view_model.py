@@ -6,6 +6,7 @@ import sounddevice as sd
 from PyQt6.QtCore import QTimer, pyqtSlot
 
 from core.entity.spectrogram import Spectrogram
+from core.entity.spectrogram_mmap import SpectrogramMmap
 from core.usecase.compute_sgram import ComputeSpectrogram
 from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.usecase.load_audio import AudioSignal, LoadAudio
@@ -124,17 +125,14 @@ class DocumentViewModel(ViewModel):
         if self.sgram_state.sxx_mmap is None or self.sgram_state.t_mmap is None:
 
             @pyqtSlot(object)
-            def on_success(sgram: tuple[np.memmap, np.memmap]):
-                sxx_mmap, t_mmap, frames_per_sec, frames_computed, samples_computed = (
-                    sgram
-                )
+            def on_success(sgram: SpectrogramMmap):
                 self.sgram_state = replace(
                     self.sgram_state,
-                    sxx_mmap=sxx_mmap,
-                    t_mmap=t_mmap,
-                    frames_per_sec=frames_per_sec,
-                    frames_computed=frames_computed,
-                    samples_computed=samples_computed,
+                    sxx_mmap=sgram.sxx_mmap,
+                    t_mmap=sgram.t_mmap,
+                    frames_per_sec=sgram.frames_per_sec,
+                    frames_computed=sgram.frames_computed,
+                    samples_computed=sgram.samples_computed,
                 )
 
             use_case = ComputeSpectrogramMmap(x, fs)

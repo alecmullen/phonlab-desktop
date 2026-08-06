@@ -4,10 +4,11 @@ import tempfile
 import numpy as np
 import phonlab as phon
 
+from core.entity.spectrogram_mmap import SpectrogramMmap
 from core.usecase.use_case import UseCase
 
 
-class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
+class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
     def __init__(
         self,
         x: np.ndarray,
@@ -26,7 +27,7 @@ class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
 
     def invoke(self):
         try:
-            self.sxx_mmap, self.ts_mmap, frames_per_sec, estimated_frames = (
+            self.sxx_mmap, self.t_mmap, frames_per_sec, estimated_frames = (
                 self.init_mmap()
             )
 
@@ -44,21 +45,25 @@ class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
                 ts = ts + (start / self.fs)
 
                 if frame_offset > estimated_frames:
-                    self.error.emit("Ran out of space in mmap")
                     self.stop()
-                    return
+                    raise RuntimeError("Ran out of space in mmap")
 
                 n_frames_chunk = sxx.shape[1]
 
                 self.sxx_mmap[:, frame_offset : frame_offset + n_frames_chunk] = sxx
-                self.ts_mmap[frame_offset : frame_offset + n_frames_chunk] = ts
+                self.t_mmap[frame_offset : frame_offset + n_frames_chunk] = ts
                 frame_offset += n_frames_chunk
 
-                yield self.sxx_mmap, self.ts_mmap, frames_per_sec, frame_offset, end
+                yield SpectrogramMmap(
+                    t_mmap=self.t_mmap,
+                    sxx_mmap=self.sxx_mmap,
+                    frames_per_sec=frames_per_sec,
+                    frames_computed=frame_offset,
+                    samples_computed=end,
+                )
         except Exception as e:
-            self.error.emit(f"Error during spectrogram computation: {e}")
             self.stop()
-            raise
+            raise RuntimeError(f"Error during spectrogram computation: {e}") from e
 
     def init_mmap(self):
         test_samples = min(len(self.x), self.fs)
@@ -78,7 +83,7 @@ class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
         ts_file = os.path.join(temp_dir, f"spectrogram_ts_{id(self)}.dat")
 
         try:
-            Sxx_mmap = np.memmap(
+            sxx_mmap = np.memmap(
                 mmap_file, dtype="float32", mode="w+", shape=(n_freqs, estimated_frames)
             )
             ts_mmap = np.memmap(
@@ -87,7 +92,7 @@ class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
         except MemoryError as e:
             raise MemoryError(f"Failed to create memory-mapped file: {e}") from e
 
-        return Sxx_mmap, ts_mmap, frames_per_sec, estimated_frames
+        return sxx_mmap, ts_mmap, frames_per_sec, estimated_frames
 
     def stop(self):
         if self.sxx_mmap is not None:
@@ -95,10 +100,10 @@ class ComputeSpectrogramMmap(UseCase[tuple[np.memmap, np.memmap, float]]):
             del self.sxx_mmap
             self.sxx_mmap = None
 
-        if self.ts_mmap is not None:
-            self.ts_mmap.close()
-            del self.ts_mmap
-            self.ts_mmap = None
+        if self.t_mmap is not None:
+            self.t_mmap.close()
+            del self.t_mmap
+            self.t_mmap = None
 
         if self.mmap_file and os.path.exists(self.mmap_file):
             os.remove(self.mmap_file)
