@@ -4,7 +4,6 @@ from core.job.job import Job
 
 
 class JobWorker(QRunnable):
-
     def __init__(self, job: Job):
         super().__init__()
         self.slots = JobWorkerSlots(self)
@@ -37,10 +36,12 @@ class JobWorker(QRunnable):
                 self.signals.finished.emit()
                 break
 
+
 class JobWorkerSignals(QObject):
     result = pyqtSignal(object)
     error = pyqtSignal(Exception)
     finished = pyqtSignal()
+
 
 class JobWorkerSlots(QObject):
     def __init__(self, job_worker: JobWorker):

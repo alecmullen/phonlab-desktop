@@ -7,7 +7,9 @@ from ui.document.state.sgram_state import SpectrogramState
 
 
 class SpectrogramPlot(pg.PlotItem):
-    def __init__(self, parent: QWidget | None = None, linked_plot: pg.PlotItem | None = None):
+    def __init__(
+        self, parent: QWidget | None = None, linked_plot: pg.PlotItem | None = None
+    ):
         super().__init__(parent)
 
         self.setLabel("left", self.tr("Frequency"), units="Hz")
@@ -40,17 +42,30 @@ class SpectrogramPlot(pg.PlotItem):
 
         self.setXLink(linked_plot)
 
+        self.center_text_item = pg.TextItem(
+            self.tr("Zoom to a chunk of 10 seconds or shorter to see spectrogram"),
+            anchor=(0.5, 0.5),
+        )
+        self.center_text_item.setFont(pg.Qt.QtGui.QFont("Arial", 32))
+        self.center_text_item.setVisible(False)
+        self.addItem(self.center_text_item)
+
     def populate_spectrogram(self, sgram: SpectrogramState, gray_cutoff: float):
         """Fill the spectrogram image with data"""
-        
+
+        self.center_text_item.setVisible(False)
+
         self.vb.setLimits(yMin=0, yMax=sgram.f[-1])
         self.setYRange(sgram.f[0], sgram.f[-1])
 
         vmin = (
-                np.min(sgram.sxx_window) + (np.max(sgram.sxx_window) - np.min(sgram.sxx_window)) * gray_cutoff
+            np.min(sgram.sxx_window)
+            + (np.max(sgram.sxx_window) - np.min(sgram.sxx_window)) * gray_cutoff
         )
         self.spec_img.setImage(
-            sgram.sxx_window.T, autoLevels=False, levels=(vmin, np.max(sgram.sxx_window))
+            sgram.sxx_window.T,
+            autoLevels=False,
+            levels=(vmin, np.max(sgram.sxx_window)),
         )
 
         time_start = sgram.t_window[0]
@@ -68,14 +83,21 @@ class SpectrogramPlot(pg.PlotItem):
     @pyqtSlot(float)
     def on_mouse_moved(self, x: float):
         self.cursor_line.setPos(x)
-        
+
     def update_selection_region(self, box_left: float, xrange: float):
         if xrange > 0:
             self.selection_region.setRegion([box_left, box_left + xrange])
             self.selection_region.setVisible(True)
         else:
             self.selection_region.setVisible(False)
-    
-    def clear(self):
+
+    def display_window_too_big(self):
         if self.spec_img:
             self.spec_img.clear()
+
+        x_range, y_range = self.vb.viewRange()
+        center_x = (x_range[0] + x_range[1]) / 2.0
+        center_y = (y_range[0] + y_range[1]) / 2.0
+
+        self.center_text_item.setPos(center_x, center_y)
+        self.center_text_item.setVisible(True)

@@ -29,15 +29,23 @@ class AudioWavePlot(pg.PlotItem):
 
         self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen="r")
         self.addItem(self.cursor_line, ignoreBounds=True)
-        
-    def plot_wave(self, t: np.ndarray, x: np.ndarray, start: int, end: int, max_x: float, min_x: float):
+
+    def plot_wave(
+        self,
+        t: np.ndarray,
+        x: np.ndarray,
+        start: int,
+        end: int,
+        max_x: float,
+        min_x: float,
+    ):
         limit = max(abs(min_x), abs(max_x))
         self.setYRange(-limit, limit, padding=0.05)
         self.vb.setLimits(yMin=-limit, yMax=limit)
         self.vb.setLimits(xMin=0, xMax=t[-1])
         self.enableAutoRange(axis="y", enable=False)
-        
-        self.wave_curve = self.plot(t[start:end], x[start:end], pen = "b")
+
+        self.wave_curve = self.plot(t[start:end], x[start:end], pen="b")
         self.setXRange(t[start], t[end], padding=0)
 
     def update_wave(self, t: np.ndarray, x: np.ndarray, tmax: float):

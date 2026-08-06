@@ -8,7 +8,6 @@ from core.usecase.use_case import UseCase
 
 
 class ViewModel(QObject):
-
     state_changed = pyqtSignal(object)
 
     def __init__(self):
@@ -17,8 +16,15 @@ class ViewModel(QObject):
 
     def subscribe(self, slot: Callable):
         self.state_changed.connect(slot)
-        
-    def launch_use_case(self, key: str, use_case: UseCase, on_success: Callable, on_error: Callable, only_once: bool = False):
+
+    def launch_use_case(
+        self,
+        key: str,
+        use_case: UseCase,
+        on_success: Callable,
+        on_error: Callable,
+        only_once: bool = False,
+    ):
         if key in self.job_managers:
             if only_once:
                 return
@@ -26,7 +32,7 @@ class ViewModel(QObject):
         else:
             self.job_managers[key] = JobManager()
             self.job_managers[key](Job(use_case, on_success, on_error))
-            
+
             @pyqtSlot()
             def on_finished():
                 del self.job_managers[key]

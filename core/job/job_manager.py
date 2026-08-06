@@ -5,7 +5,6 @@ from core.job.job_worker import JobWorker
 
 
 class JobManager:
-    
     thread_pool: QThreadPool = QThreadPool.globalInstance()
 
     def __init__(self):
@@ -26,6 +25,7 @@ class JobManager:
     def quit(self):
         self.signals.job.emit(None)
         self.signals.should_stop.emit()
+
 
 class JobManagerSignals(QObject):
     job = pyqtSignal(object)

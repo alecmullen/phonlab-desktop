@@ -14,6 +14,7 @@ class AudioWaveState:
     x_range: float = 0.0
     t: np.ndarray = field(default_factory=lambda: np.zeros(0))
 
+
 def to_audio_wave_state(audio_signal: AudioSignal) -> AudioWaveState:
     x, fs = audio_signal.x, audio_signal.fs
     min_x = np.min(x)

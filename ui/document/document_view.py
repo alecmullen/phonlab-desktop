@@ -22,14 +22,14 @@ from ui.document.state.status_message_state import StatusMessageState
 
 class DocumentView(QWidget):
     """A single audio document with its own waveform/spectrogram display"""
-    
+
     def __init__(self, view_model: DocumentViewModel, parent=None):
         super().__init__(parent)
         self.view_model = view_model
         view_model.subscribe(self.on_state_change)
 
-        pg.setConfigOption('background', 'w')
-        pg.setConfigOption('foreground', 'k')
+        pg.setConfigOption("background", "w")
+        pg.setConfigOption("foreground", "k")
 
         # Set up PyQtGraph
         pg.setConfigOptions(antialias=True)
@@ -57,11 +57,10 @@ class DocumentView(QWidget):
         self.pending_slider_value: int = 0
         self.slider.valueChanged.connect(self.on_slider_move)
 
-
         # ------- Bottom bar -------------
         bottom_bar = QWidget()
         bottom_layout = QHBoxLayout(bottom_bar)
-        bottom_layout.setContentsMargins(0,0,0,0)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(0)
 
         self.message_label = QLabel("")
@@ -128,20 +127,25 @@ class DocumentView(QWidget):
 
     def create_wave_plot(self, row, col, audio_wave: AudioWaveState, rowspan=1):
         """Create a waveform plot at the specified position"""
-        start, end = self.view_model.document_window_state.start, self.view_model.document_window_state.end
+        start, end = (
+            self.view_model.document_window_state.start,
+            self.view_model.document_window_state.end,
+        )
 
         wave_plot = AudioWavePlot()
         self.graphics_widget.addItem(wave_plot, row=row, col=col, rowspan=rowspan)
-        
-        wave_plot.plot_wave(audio_wave.t, audio_wave.x, start, end, audio_wave.max_x, audio_wave.min_x)
-        
+
+        wave_plot.plot_wave(
+            audio_wave.t, audio_wave.x, start, end, audio_wave.max_x, audio_wave.min_x
+        )
+
         return wave_plot
-    
+
     def connect_plot_signals(self):
         """Connect mouse signals to all plots"""
         scene = self.graphics_widget.scene()
         scene.sigMouseMoved.connect(self.on_mouse_moved)
-        
+
     def plot_wave(self, audio_wave: AudioWaveState | None = None):
         """Display waveform only"""
         if audio_wave is None:
@@ -149,12 +153,12 @@ class DocumentView(QWidget):
 
         self.plot_type = 1
         self.clear_plots()
-        
+
         self.wave_plot = self.create_wave_plot(0, 0, audio_wave)
-        
-        self.wave_plot.setLabel('bottom', self.tr('Time'), units='s')
-        self.wave_plot.getAxis('bottom').setStyle(showValues=True)
-        
+
+        self.wave_plot.setLabel("bottom", self.tr("Time"), units="s")
+        self.wave_plot.getAxis("bottom").setStyle(showValues=True)
+
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
 
@@ -162,12 +166,14 @@ class DocumentView(QWidget):
         """Display waveform and spectrogram"""
         self.plot_type = 2
         self.clear_plots()
-    
-        self.wave_plot = self.create_wave_plot(row=0, col=0, audio_wave=self.view_model.audio_wave_state)
-    
-        self.wave_plot.getAxis('bottom').setStyle(showValues=False)
 
-        self.wave_plot.getAxis('left').setWidth(60)
+        self.wave_plot = self.create_wave_plot(
+            row=0, col=0, audio_wave=self.view_model.audio_wave_state
+        )
+
+        self.wave_plot.getAxis("bottom").setStyle(showValues=False)
+
+        self.wave_plot.getAxis("left").setWidth(60)
 
         self.spec_plot = SpectrogramPlot(linked_plot=self.wave_plot)
         self.graphics_widget.addItem(self.spec_plot, row=1, col=0)
@@ -182,14 +188,16 @@ class DocumentView(QWidget):
 
     def plot_spectrogram(self, sgram: SpectrogramState):
         if not sgram.is_showing:
-            self.spec_plot.clear()
-            self.message_label.setText(self.tr("Zoom to a chunk of 5 seconds or shorter to see spectrogram"))
+            self.spec_plot.display_window_too_big()
         else:
             self.spec_plot.populate_spectrogram(sgram, self.gray_cutoff)
 
     def update_wave_y_range(self):
         """Update the y-axis range of the waveform plot based on scale factor"""
-        max_x, min_x = self.view_model.audio_wave_state.max_x, self.view_model.audio_wave_state.min_x
+        max_x, min_x = (
+            self.view_model.audio_wave_state.max_x,
+            self.view_model.audio_wave_state.min_x,
+        )
         if self.wave_plot:
             y_max = max(abs(min_x), abs(max_x))
             scaled_max = y_max / self.wave_y_scale
@@ -204,7 +212,7 @@ class DocumentView(QWidget):
     @pyqtSlot()
     def move_start(self):
         self.view_model.move_start(self.pending_slider_value)
-            
+
     def reset_slider(self, fs: int):
         self.slider.setMinimum(0)
         self.slider.setValue(0)
@@ -225,38 +233,40 @@ class DocumentView(QWidget):
     def advance(self):
         self.view_model.advance()
 
-    def zoom_out(self, factor: float=2):
+    def zoom_out(self, factor: float = 2):
         self.view_model.zoom_out(factor)
 
-    def zoom_in(self, factor: float=2):
+    def zoom_in(self, factor: float = 2):
         self.view_model.zoom_in(factor)
 
     def show_all(self):
         self.view_model.show_all()
-        
+
     def recenter_on_selection(self):
         """Center the view window on the selected region without changing zoom level"""
         self.view_model.center_on_selection()
-    
-    def play_window_or_selection(self, scene_pos):         
+
+    def play_window_or_selection(self, scene_pos):
         clicked_plot = None
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.wave_plot
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.spec_plot
-            
+
         if not clicked_plot:
             return
-            
+
         mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
         x = mouse_point.x()
 
         select_state = self.view_model.select_state
-        if select_state.is_selected and select_state.sel_start < x < select_state.sel_end:
+        if (
+            select_state.is_selected
+            and select_state.sel_start < x < select_state.sel_end
+        ):
             self.view_model.play_selected_audio()
         else:
             self.view_model.play_visible_audio()
-                        
 
     def update_selection_box(self, select_state: SelectState):
         if select_state.is_selected:
@@ -269,7 +279,7 @@ class DocumentView(QWidget):
             self.spec_plot.update_selection_region(box_left, xrange)
         if self.wave_plot:
             self.wave_plot.update_selection_region(box_left, xrange)
-        
+
     def update_document_window(self, doc_window: DocumentWindowState):
         start, end = doc_window.start, doc_window.end
         t, x = self.view_model.audio_wave_state.t, self.view_model.audio_wave_state.x
@@ -291,12 +301,14 @@ class DocumentView(QWidget):
             mouse_point = self.wave_plot.vb.mapSceneToView(pos)
             x = mouse_point.x()
             status_msg = self.tr("Cursor time: {:.3f}s").format(x)
-        
+
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(pos):
             mouse_point = self.spec_plot.vb.mapSceneToView(pos)
             x = mouse_point.x()
             y = mouse_point.y()
-            status_msg = self.tr("Cursor time: {:.3f}s, frequency: {:.0f} Hz").format(x, y)
+            status_msg = self.tr("Cursor time: {:.3f}s, frequency: {:.0f} Hz").format(
+                x, y
+            )
 
         else:
             return  # Mouse not over any plot
@@ -308,7 +320,7 @@ class DocumentView(QWidget):
             else:
                 self.view_model.continue_selection(x)
             self.is_dragging = True
-                
+
         # Update status message
         self.message_label.setText(status_msg)
 
@@ -330,82 +342,87 @@ class DocumentView(QWidget):
                     scene_pos = self.graphics_widget.mapToScene(event.pos())
                     self.handle_mouse_press(scene_pos, event)
                     return True
-                
+
             elif event.type() == QEvent.Type.MouseButtonRelease:
                 if event.button() == Qt.MouseButton.LeftButton:
                     scene_pos = self.graphics_widget.mapToScene(event.pos())
                     self.handle_mouse_release(scene_pos, event)
                     return True
-                
+
             elif event.type() == QEvent.Type.MouseButtonPress:
                 if event.button() == Qt.MouseButton.RightButton:
                     scene_pos = self.graphics_widget.mapToScene(event.pos())
                     self.handle_right_click(scene_pos)
                     return True
-                
-            elif event.type() == QEvent.Type.Wheel:
 
+            elif event.type() == QEvent.Type.Wheel:
                 angle_x = event.angleDelta().x()
-                angle_y = event.angleDelta().x()
+                angle_y = event.angleDelta().y()
                 pixel_x = event.pixelDelta().x()
-                pixel_y = event.pixelDelta().x()
-            
+                pixel_y = event.pixelDelta().y()
+
                 modifiers = QApplication.keyboardModifiers()
-            
-                if abs(pixel_x) > 0 or abs(pixel_y) > 0:   # trackpad ??
+
+                if abs(pixel_x) > 0 or abs(pixel_y) > 0:  # trackpad ??
                     scroll_x = pixel_x
                     scroll_y = pixel_y
                     is_trackpad = True
-                else:                                      # mouse wheel/magic mouse??
+                else:  # mouse wheel/magic mouse??
                     scroll_x = angle_x / 120.0
                     scroll_y = angle_y / 120.0
                     is_trackpad = False
 
                 if modifiers == Qt.KeyboardModifier.ControlModifier:
-                    mouse_pos = event.position() if hasattr(event, 'position') else event.pos()
+                    mouse_pos = (
+                        event.position() if hasattr(event, "position") else event.pos()
+                    )
                     scene_pos = self.graphics_widget.mapToScene(mouse_pos.toPoint())
-                
+
                     over_wave = False
                     over_spec = False
-                
-                    if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
+
+                    if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(
+                        scene_pos
+                    ):
                         over_wave = True
-                    elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
+                    elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
+                        scene_pos
+                    ):
                         over_spec = True
-                
+
                     delta = scroll_y
-                
+
                     if over_wave:
                         if delta > 0:
                             self.wave_y_scale *= 1.05
                         else:
                             self.wave_y_scale *= 0.95
-                    
+
                         self.wave_y_scale = max(0.1, min(10.0, self.wave_y_scale))
                         self.update_wave_y_range()
-                
-                    elif over_spec:   # adjust gray scale
+
+                    elif over_spec:  # adjust gray scale
                         if is_trackpad:
                             adjustment = delta * 0.0005
                         else:
                             adjustment = delta * 0.01
-                    
+
                         self.gray_cutoff += adjustment
                         self.gray_cutoff = max(0.0, min(0.7, self.gray_cutoff))
                         self.update_grayscale()
-                
+
                     return True
-                
-                if abs(scroll_x) > abs(scroll_y):    # horizontal motion
-                    #if is_trackpad:    
+
+                if abs(scroll_x) > abs(scroll_y):  # horizontal motion
+                    # if is_trackpad:
                     #    scroll_fraction = -scroll_x * 0.002
                     #    self.scroll_by_fraction(scroll_fraction)
-                    #else:
+                    # else:
                     #    scroll_fraction = -scroll_x * 0.1
                     #    self.scroll_by_fraction(scroll_fraction)
                     return True
 
-                elif abs(scroll_y) > 0:              # vertical motion
+                elif abs(scroll_y) > 0:  # vertical motion
                     # shift vertical scroll motion
                     if modifiers == Qt.KeyboardModifier.ShiftModifier:
                         if scroll_y > 0:
@@ -418,10 +435,10 @@ class DocumentView(QWidget):
                             scroll_fraction = -scroll_y * 0.002
                         else:
                             scroll_fraction = -scroll_y * 0.1
-                    
+
                         self.view_model.move_start_by_fraction(scroll_fraction)
                         return True
-    
+
         return super().eventFilter(obj, event)
 
     def handle_mouse_press(self, scene_pos, event):
@@ -431,7 +448,7 @@ class DocumentView(QWidget):
             clicked_plot = self.wave_plot
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.spec_plot
-    
+
         if not clicked_plot:
             return
 
@@ -451,10 +468,10 @@ class DocumentView(QWidget):
             clicked_plot = self.wave_plot
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.spec_plot
-            
+
         if not clicked_plot:
             return
-            
+
         mouse_point = clicked_plot.vb.mapSceneToView(scene_pos)
         x = mouse_point.x()
 
@@ -480,34 +497,34 @@ class DocumentView(QWidget):
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
-            scene_pos,_ = self.pending_single_click
+            scene_pos, _ = self.pending_single_click
 
             modifiers = QApplication.keyboardModifiers()
             shift_pressed = modifiers == Qt.KeyboardModifier.ShiftModifier
-    
+
             if shift_pressed:
                 self.set_mark(scene_pos)
             else:
                 self.play_window_or_selection(scene_pos)
-                     
+
         self.pending_single_click = None
         self.click_timer = None
 
     def set_mark(self, scene_pos):
-        
+
         clicked_plot = None
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.wave_plot
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.spec_plot
-            
+
         if not clicked_plot:
             return
 
         self.view_model.remove_selection()
-        
+
     def handle_right_click(self, scene_pos):
-         pass
+        pass
 
     def stop_audio(self):
         """Stop audio playback"""

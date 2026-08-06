@@ -7,4 +7,3 @@ import numpy as np
 class AudioSignal:
     x: np.ndarray
     fs: int
-    
