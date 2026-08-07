@@ -70,7 +70,6 @@ def prep_audio(x, fs, target_fs=32000, pre = 0, scale = True,
         print(f'the new sampling rate is: {fs}')
 
     """
-        
     if target_fs == None:
         target_fs = fs
         x2 = x

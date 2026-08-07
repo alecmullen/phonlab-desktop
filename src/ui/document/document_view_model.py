@@ -1,10 +1,10 @@
 from dataclasses import replace
 
 import numpy as np
-import phonlab as phon
 import sounddevice as sd
 from PyQt6.QtCore import QTimer, pyqtSlot
 
+import phonlab as phon
 from core.entity.spectrogram import Spectrogram
 from core.entity.spectrogram_mmap import SpectrogramMmap
 from core.usecase.compute_sgram import ComputeSpectrogram

@@ -69,7 +69,6 @@ def loadsig(path, chansel=[], offset=0.0, duration=None, fs=None, dtype=np.float
 
         
     """
-
     y, fs = librosa.load(
         path, sr=fs, mono=False, offset=offset, duration=duration, dtype=dtype
     )

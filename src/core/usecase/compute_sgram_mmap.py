@@ -2,8 +2,8 @@ import os
 import tempfile
 
 import numpy as np
-import phonlab as phon
 
+import phonlab as phon
 from core.entity.spectrogram_mmap import SpectrogramMmap
 from core.usecase.use_case import UseCase
 
@@ -96,12 +96,10 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
 
     def stop(self):
         if self.sxx_mmap is not None:
-            self.sxx_mmap.close()
             del self.sxx_mmap
             self.sxx_mmap = None
 
         if self.t_mmap is not None:
-            self.t_mmap.close()
             del self.t_mmap
             self.t_mmap = None
 

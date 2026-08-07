@@ -1,0 +1,7 @@
+numpy==2.4
+scipy==1.11
+pyqt6==6.11
+pyqt6-sip==13.12
+pyqtgraph==0.14
+sounddevice==0.5.5
+librosa==0.11
