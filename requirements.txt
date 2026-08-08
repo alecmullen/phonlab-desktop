@@ -1,5 +1,5 @@
 numpy==2.4
-scipy==1.11
+scipy==1.15
 pyqt6==6.11
 pyqt6-sip==13.12
 pyqtgraph==0.14
