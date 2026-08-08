@@ -13,7 +13,7 @@ jobs:
           spec: 'src/phonlab_desktop.py'
           requirements: 'requirements.txt'
           upload_exe_with_name: 'Phonlab'
-          options: --name "Phonlab", --windowed,
+          options: --name "Phonlab Mac", --windowed, --one-file
 
   pyinstaller-build-windows:
     runs-on: windows-latest
@@ -25,7 +25,7 @@ jobs:
           spec: 'src/phonlab_desktop.py'
           requirements: 'requirements.txt'
           upload_exe_with_name: 'Phonlab'
-          options: --name "Phonlab", --windowed,
+          options: --name "Phonlab Windows", --windowed, --one-file
 
   pyinstaller-build-linux:
     runs-on: ubuntu-latest
@@ -37,5 +37,5 @@ jobs:
           spec: 'src/phonlab_desktop.py'
           requirements: 'requirements.txt'
           upload_exe_with_name: 'Phonlab'
-          options: --name "Phonlab", --windowed,
+          options: --name "Phonlab Linux", --windowed, --one-file
           
