@@ -20,7 +20,7 @@ jobs:
       - name: Install LLVMLite
         run: |
           brew install llvm@15
-          export CMAKE_PREFIX_PATH="/usr/local/opt/llvm@15"
+          echo "CMAKE_PREFIX_PATH=/usr/local/opt/llvm@15" >> $GITHUB_ENV
       - name: Create Executable
         uses: sayyid5416/pyinstaller@v1
         with:
