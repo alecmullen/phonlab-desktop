@@ -17,6 +17,10 @@ jobs:
   pyinstaller-build-mac-intel:
     runs-on: macos-15-intel
     steps:
+      - name: Install LLVMLite
+        run: |
+          brew install llvm@15
+          export LLVM_CONFIG=$(brew --prefix llvm@15)/bin/llvm-config
       - name: Create Executable
         uses: sayyid5416/pyinstaller@v1
         with:
