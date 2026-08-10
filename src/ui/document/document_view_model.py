@@ -205,7 +205,7 @@ class DocumentViewModel(ViewModel):
         if x_pos >= self.select_state.sel_anchor:
             sel_start = self.select_state.sel_anchor
             sel_end = min(x_pos, self.audio_wave_state.t[-1])
-        elif x_pos < self.select_state.sel_start:
+        elif x_pos < self.select_state.sel_anchor:
             sel_start = max(x_pos, 0.0)
             sel_end = self.select_state.sel_anchor
 
