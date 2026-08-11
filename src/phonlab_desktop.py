@@ -17,9 +17,8 @@ if __name__ == "__main__":
         splash = ClickableSplash(splash_pix, mainWin)
         mainWin.splash = splash
 
-        splash.show()
-        app.processEvents()
         mainWin.show()
+        splash.show()
 
         # Optionally open a file if provided as command line argument
         if len(sys.argv) > 1:
