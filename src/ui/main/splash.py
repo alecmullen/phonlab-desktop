@@ -7,8 +7,9 @@ class ClickableSplash(QSplashScreen):
     """Splash screen that opens file dialog when clicked"""
 
     def __init__(self, pixmap, main_window):
-        super().__init__(pixmap, Qt.WindowType.WindowStaysOnTopHint)
+        super().__init__(pixmap)
         self.main_window = main_window
+        self.raise_()
 
     def mousePressEvent(self, event):
         """Open file dialog when splash is clicked"""
