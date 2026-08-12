@@ -9,13 +9,23 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Create Executable
+        id: create-executable
         uses: sayyid5416/pyinstaller@v1
         with:
           python_ver: '3.12.10'
           spec: 'src/phonlab_desktop.py'
           requirements: 'requirements.txt'
-          upload_exe_with_name: 'Phonlab Mac (Apple Silicon)'
           options: --onefile, --name "Phonlab", --windowed
+      - name: Create Installer
+        run: |
+          chmod +x ./script/create-phonlab-dmg.sh
+          ./script/create-phonlab-dmg.sh ${{steps.create-executable.outputs.executable_path}} Phonlab-Installer.dmg
+        shell: bash
+      - name: (Upload) Executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phonlab Mac (Apple Silicon)
+          path: Phonlab-Installer.dmg
 
   pyinstaller-build-mac-intel:
     runs-on: macos-15-intel
