@@ -15,11 +15,11 @@ jobs:
           python_ver: '3.12.10'
           spec: 'src/phonlab_desktop.py'
           requirements: 'requirements.txt'
-          options: --onefile, --name "Phonlab", --windowed
+          options: --name "Phonlab", --windowed
       - name: Create Installer
         run: |
           chmod +x ./script/create-phonlab-dmg.sh
-          ./script/create-phonlab-dmg.sh ${{steps.create-executable.outputs.executable_path}} Phonlab-Installer.dmg
+          ./script/create-phonlab-dmg.sh ${{steps.create-executable.outputs.executable_path}}/Phonlab.app Phonlab-Installer.dmg
         shell: bash
       - name: (Upload) Executable
         uses: actions/upload-artifact@v4
@@ -30,18 +30,28 @@ jobs:
   pyinstaller-build-mac-intel:
     runs-on: macos-15-intel
     steps:
-      - name: Install LLVMLite
+      - name: Install llvm
         run: |
           brew install llvm@22
           echo "CMAKE_PREFIX_PATH=/usr/local/opt/llvm@22" >> $GITHUB_ENV
       - name: Create Executable
+        id: create-executable
         uses: sayyid5416/pyinstaller@v1
         with:
           python_ver: '3.12.10'
           spec: 'src/phonlab_desktop.py'
           requirements: 'requirements.txt'
-          upload_exe_with_name: 'Phonlab Mac (Intel)'
-          options: --onefile, --name "Phonlab", --windowed
+          options: --name "Phonlab", --windowed
+      - name: Create Installer
+        run: |
+          chmod +x ./script/create-phonlab-dmg.sh
+          ./script/create-phonlab-dmg.sh ${{steps.create-executable.outputs.executable_path}}/Phonlab.app Phonlab-Installer.dmg
+        shell: bash
+      - name: (Upload) Executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phonlab Mac (Intel)
+          path: Phonlab-Installer.dmg
 
   pyinstaller-build-windows-dir:
     runs-on: windows-latest
