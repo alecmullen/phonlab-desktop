@@ -25,15 +25,16 @@ uv venv --python 3.12 .venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
-For Windows, replace `source .venv/bin/activate` with `.venv\Scripts\activate`
-### venv + pip
+  - *If on Windows*: replace `source .venv/bin/activate` with `.venv\Scripts\activate`
+
+### Without conda or uv
 Make sure python 3.12 is installed on your machine first (Use the [3.12.10 installer](https://www.python.org/downloads/release/python-31210/)).
 ```
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
-For Windows, replace `source .venv/bin/activate` with `.venv\Scripts\activate`
+  - *If on Windows*: replace `source .venv/bin/activate` with `.venv\Scripts\activate`
 
 ## Running the GUI
 From the project directory:
@@ -41,7 +42,7 @@ From the project directory:
 python src/phonlab_desktop.py
 ```
 ## Using the App
-When the app loads, click on the white tool card and select a `.wav` file from your computer to load. Once the audio is processed, you will see the waveform. Click 'Spectrogram' to see the spectrogram view along side it.
+Once the app starts up, click on the popup card and select a `.wav` file from your computer to load. Once the audio is processed, you will see the waveform. Click 'Spectrogram' to see the spectrogram view along side it.
 
 ### Commands
 
