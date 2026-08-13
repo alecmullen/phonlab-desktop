@@ -78,10 +78,18 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Create Executable
+        id: create-executable
         uses: sayyid5416/pyinstaller@v1
         with:
           python_ver: '3.12.10'
           spec: 'src/phonlab_desktop.py'
           requirements: 'requirements.txt'
-          upload_exe_with_name: 'Phonlab Linux (x86)'
           options: --name "Phonlab", --windowed
+      - name: Create tarball
+        run: |
+          tar -czvf phonlab.tar.gz  ${{steps.create-executable.outputs.executable_path}}/Phonlab
+      - name: Upload Tarball Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phonlab Debian x64
+          path: phonlab.tar.gz
