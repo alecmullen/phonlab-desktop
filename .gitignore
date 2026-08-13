@@ -6,3 +6,5 @@ dist/
 .DS_Store
 phonlab_desktop.spec
 .venv/
+**.dmg
+**.spec
