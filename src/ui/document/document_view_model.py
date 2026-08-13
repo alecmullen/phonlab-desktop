@@ -224,13 +224,15 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.select_state)
 
     def zoom_if_in_selection(self, x_pos: float):
-        fs = self.audio_wave_state.fs
+        x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
+        max_end = len(x) - 1
         sel_start, sel_end = self.select_state.sel_start, self.select_state.sel_end
         if sel_end > x_pos > sel_start:
             start = int(sel_start * fs)
             end = int(sel_end * fs)
+            window_length = end - start
             self.document_window_state = replace(
-                self.document_window_state, start=start, end=end
+                self.document_window_state, start=start, end=end, max_start=max_end - window_length
             )
             self.state_changed.emit(self.document_window_state)
 
@@ -263,9 +265,10 @@ class DocumentViewModel(ViewModel):
         new_end = center + int(new_size / 2)
         new_end = min(new_end, max_end)
         new_start = max(0, new_end - new_size)
+        window_length = new_end - new_start
 
         self.document_window_state = replace(
-            self.document_window_state, start=new_start, end=new_end
+            self.document_window_state, start=new_start, end=new_end, max_start=(max_end - window_length)
         )
         self.state_changed.emit(self.document_window_state)
 
@@ -279,8 +282,11 @@ class DocumentViewModel(ViewModel):
         new_end = center + int(new_size / 2)
         new_start = new_end - new_size
 
+        max_end = len(self.audio_wave_state.x) - 1
+        window_length = new_end - new_start
+
         self.document_window_state = replace(
-            self.document_window_state, start=new_start, end=new_end
+            self.document_window_state, start=new_start, end=new_end, max_start=(max_end - window_length)
         )
         self.state_changed.emit(self.document_window_state)
 
