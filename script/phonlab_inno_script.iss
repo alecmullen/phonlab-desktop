@@ -7,8 +7,8 @@
 #define MyAppPublisher "Alec Mullen"
 #define MyAppURL "github.com/alecmullen/phonlab-desktop"
 #define MyAppExeName "Phonlab.exe"
-#define MyAppExePath ".\dist\Phonlab\Phonlab.exe"
-#define MySourceDirPath ".\dist\Phonlab\*"
+#define MyAppExePath "..\dist\Phonlab\Phonlab.exe"
+#define MySourceDirPath "..\dist\Phonlab\*"
 #define DoubleAmp(Value) StringChange(Value, "&", "&&")
 #define EscapeConstArgument(Value) StringChange(StringChange(StringChange(Value, "%", "%25"), ",", "%2c"), "}", "%7d")
 
