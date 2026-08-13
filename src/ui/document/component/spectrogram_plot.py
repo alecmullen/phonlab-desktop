@@ -3,6 +3,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
+from res.constants import MAX_SGRAM_LENGTH
 from ui.document.state.sgram_state import SpectrogramState
 
 
@@ -43,7 +44,7 @@ class SpectrogramPlot(pg.PlotItem):
         self.getViewBox().setXLink(linked_plot)
 
         self.center_text_item = pg.TextItem(
-            self.tr("Zoom to a chunk of 10 seconds or shorter to see spectrogram"),
+            self.tr("Zoom to a chunk of {} seconds or shorter to see spectrogram").format(MAX_SGRAM_LENGTH),
             anchor=(0.5, 0.5),
         )
         self.center_text_item.setFont(pg.Qt.QtGui.QFont("Arial", 32))

@@ -11,6 +11,7 @@ from core.usecase.compute_sgram import ComputeSpectrogram
 from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.usecase.load_audio import AudioSignal, LoadAudio
 from core.usecase.play_audio import PlayAudio
+from res.constants import MAX_SGRAM_LENGTH
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
 from ui.document.state.document_window_state import DocumentWindowState
@@ -39,7 +40,7 @@ class DocumentViewModel(ViewModel):
             self.state_changed.emit(self.audio_wave_state)
 
             signal_end = len(audio_signal.x) - 1
-            window_end = min(signal_end, 10 * audio_signal.fs)
+            window_end = min(signal_end, MAX_SGRAM_LENGTH * audio_signal.fs)
             self.document_window_state = replace(
                 self.document_window_state,
                 start=0,
@@ -62,7 +63,7 @@ class DocumentViewModel(ViewModel):
         x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        if (end - start) / fs > 10.0:
+        if (end - start) / fs > MAX_SGRAM_LENGTH:
             self.sgram_state = replace(self.sgram_state, is_showing=False)
             self.state_changed.emit(self.sgram_state)
             return
