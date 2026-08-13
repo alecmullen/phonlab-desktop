@@ -87,7 +87,7 @@ jobs:
           options: --name "Phonlab", --windowed
       - name: Create tarball
         run: |
-          tar -czvf phonlab.tar.gz  ${{steps.create-executable.outputs.executable_path}}/Phonlab
+          tar -czvf phonlab.tar.gz  -C ${{steps.create-executable.outputs.executable_path}}/Phonlab .
       - name: Upload Tarball Artifact
         uses: actions/upload-artifact@v4
         with:
