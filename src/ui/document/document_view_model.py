@@ -15,6 +15,7 @@ from res.constants import MAX_SGRAM_LENGTH
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
 from ui.document.state.document_window_state import DocumentWindowState
+from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
@@ -28,8 +29,13 @@ class DocumentViewModel(ViewModel):
         self.is_audio_playing = False
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
+        self.plot_layout_state: PlotLayoutState = PlotLayoutState()
 
         self.click_timer: QTimer | None = None
+
+    def show_spectrogram(self, show: bool):
+        self.plot_layout_state = replace(self.plot_layout_state, is_spectrogram=show)
+        self.state_changed.emit(self.plot_layout_state)
 
     def load_audio(self, filepath: str):
         @pyqtSlot(object)
