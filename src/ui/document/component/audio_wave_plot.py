@@ -6,7 +6,7 @@ from pyqtgraph import PlotDataItem
 
 
 class AudioWavePlot(pg.PlotItem):
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, is_bottom_plot: bool = False):
         super().__init__(parent)
 
         self.wave_curve: PlotDataItem | None = None
@@ -14,6 +14,12 @@ class AudioWavePlot(pg.PlotItem):
         self.setLabel("left", self.tr("Amplitude"))
         self.showGrid(x=True, y=True, alpha=0.3)
         self.getAxis("left").enableAutoSIPrefix(False)
+
+        if is_bottom_plot:
+            self.setLabel("bottom", self.tr("Time"), units="s")
+            self.getAxis("bottom").enableAutoSIPrefix(False)
+        else:
+            self.getAxis("bottom").setStyle(showValues=False)
 
         self.vb.setMouseEnabled(x=False, y=False)
         self.vb.rbScaleBox.hide()

@@ -49,7 +49,7 @@ def loadsig(path, chansel=[], offset=0.0, duration=None, fs=None, dtype=np.float
         left, right, fs = loadsig('stereo.wav', chansel=[0,1])
         print(fs)
         plt.plot(left);
-        
+
     To load a one channel (mono) file, you can do this:
 
     .. code-block:: Python
@@ -67,7 +67,7 @@ def loadsig(path, chansel=[], offset=0.0, duration=None, fs=None, dtype=np.float
         print(len(chans))      # the number of channels
         plt.plot(chans[-1])    # plot the last of the channels
 
-        
+
     """
     y, fs = librosa.load(
         path, sr=fs, mono=False, offset=offset, duration=duration, dtype=dtype
@@ -76,4 +76,4 @@ def loadsig(path, chansel=[], offset=0.0, duration=None, fs=None, dtype=np.float
         y = np.expand_dims(y, axis=0)
     if chansel == []:
         chansel = np.arange(y.shape[0], dtype=np.int16)
-    return [ *list(y[chansel, :]), fs ]
+    return [*list(y[chansel, :]), fs]

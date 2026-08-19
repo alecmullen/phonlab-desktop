@@ -92,7 +92,14 @@ class MainWindow(QMainWindow):
         self.sgramview_action.setStatusTip(self.tr("View waveform and spectrogram"))
         self.sgramview_action.setShortcut("Ctrl+2")
         self.sgramview_action.triggered.connect(self.plot_wave_sgram)
-        viewMenu.addAction(self.sgramview_action)
+
+        self.annotationview_action = QAction(
+            QIcon.fromTheme("view-media-visualization"), self.tr("&Annotation"), self
+        )
+        self.annotationview_action.setStatusTip(self.tr("View annotations"))
+        self.annotationview_action.setShortcut("Ctrl+3")
+        self.annotationview_action.triggered.connect(self.plot_annotations)
+        viewMenu.addAction(self.annotationview_action)
 
         self.viewall_action = QAction(
             QIcon.fromTheme("view-fullscreen"), self.tr("View &All"), self
@@ -197,6 +204,11 @@ class MainWindow(QMainWindow):
         doc = self.get_current_document()
         if doc:
             doc.show_spectrogram(True)
+
+    def plot_annotations(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.show_annotations(True)
 
     def show_all(self):
         doc = self.get_current_document()

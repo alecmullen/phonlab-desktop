@@ -2,21 +2,29 @@ import numpy as np
 from scipy.signal import resample_poly
 
 
-def prep_audio(x, fs, target_fs=32000, pre = 0, scale = True, 
-               add_tiny_noise = True, outtype = "float", pad_to = 0.0,
-               quiet = False):
-    """ Prepare an array of audio waveform samples for acoustic analysis. 
-    
+def prep_audio(
+    x,
+    fs,
+    target_fs=32000,
+    pre=0,
+    scale=True,
+    add_tiny_noise=True,
+    outtype="float",
+    pad_to=0.0,
+    quiet=False,
+):
+    """Prepare an array of audio waveform samples for acoustic analysis.
+
     Parameters
     ==========
         x : array
-            a one-dimensional numpy array with audio samples in it. 
+            a one-dimensional numpy array with audio samples in it.
 
         fs : int
             The sampling rate of the sound in **x**.
-    
+
         target_fs : int, default=32000
-            The desired sampling rate of the audio samples that will be returned by the function.  
+            The desired sampling rate of the audio samples that will be returned by the function.
             Set **target_fs = None** if you don't want to change the sampling rate.
 
         pre : float, default = 0
@@ -29,7 +37,7 @@ def prep_audio(x, fs, target_fs=32000, pre = 0, scale = True,
             add a tiny bit of noise to the audio to avoid problematic waveforms with many samples at zero amplitude.
 
         pad_to: float, default = 0.0
-            add samples so duration is a multiple of `pad_to`. For example, if the duration is 1.99 seconds 
+            add samples so duration is a multiple of `pad_to`. For example, if the duration is 1.99 seconds
             and `pad_to` is 0.1 then the signal will be padded to 2.0 seconds
 
         outtype : string {"float", "int"), default = "float"
@@ -40,8 +48,8 @@ def prep_audio(x, fs, target_fs=32000, pre = 0, scale = True,
     Returns
     =======
         y : ndarray
-            a 1D numpy array with audio samples 
-        
+            a 1D numpy array with audio samples
+
         fs : int
             the sampling rate of the audio in **y**.
 
@@ -51,7 +59,7 @@ def prep_audio(x, fs, target_fs=32000, pre = 0, scale = True,
 
     Example
     =======
-    Open a sound file and prepare it for acoustic analysis.  By default, prep_audio() will 
+    Open a sound file and prepare it for acoustic analysis.  By default, prep_audio() will
     resample the audio to a sampling rate of 32000, and scale the waveform to use the full range.
     In this example, we have also asked the function to apply a preemphasis factor of 1 (about 6dB/octave).
 
@@ -74,33 +82,40 @@ def prep_audio(x, fs, target_fs=32000, pre = 0, scale = True,
         target_fs = fs
         x2 = x
     else:  # resample to 'target_fs' samples per second
-        if target_fs==fs:
+        if target_fs == fs:
             x2 = x
         else:
-            if not quiet: 
-                print(f'Prep Audio: Resampling from {fs} to {target_fs}')
-            cd = np.gcd(fs,target_fs)   # common denominator   
-            x2 = resample_poly(x,up=target_fs/cd, down=fs/cd)
-        
-    
-        #resample_ratio = target_fs/fs
-        #new_size = int(len(x) * resample_ratio)  # size of the resampled version
-        #x2 = resample(x,new_size)  # now sampled at desired sampling freq
-        
-        
-    if (np.max(x2) + np.min(x2)) < 0:  x2 = -x2   #  set the polarity of the signal
-    if (pre > 0): y = np.append(x2[0], x2[1:] - pre * x2[:-1])  # apply pre-emphasis
-    else: y = x2
-    if scale: y = y/np.max(y) * 0.9  # scale to about full range
-    if add_tiny_noise:  y = y + ((np.random.rand(len(y)) - 0.5) * 0.00001)
-    if pad_to > 0: 
-        # check whether any extra are needed
-        extra_time = pad_to - ((len(y)/target_fs) % pad_to)
-        extra_samples = int(extra_time * target_fs)
-        y = np.concatenate((y,(np.random.rand(extra_samples) - 0.5) * 0.00001))
-        if not quiet:
-            print(f"Prep Audio: Padding signal to {pad_to} sec, which involves adding {extra_samples} extra samples.")
-    if outtype == "int":  y = np.rint(np.iinfo(np.int16).max * y).astype(np.int16)
-    if outtype == "int16":  y = np.rint(np.iinfo(np.int16).max * y).astype(np.int16)
+            if not quiet:
+                print(f"Prep Audio: Resampling from {fs} to {target_fs}")
+            cd = np.gcd(fs, target_fs)  # common denominator
+            x2 = resample_poly(x, up=target_fs / cd, down=fs / cd)
 
-    return y,target_fs
+        # resample_ratio = target_fs/fs
+        # new_size = int(len(x) * resample_ratio)  # size of the resampled version
+        # x2 = resample(x,new_size)  # now sampled at desired sampling freq
+
+    if (np.max(x2) + np.min(x2)) < 0:
+        x2 = -x2  #  set the polarity of the signal
+    if pre > 0:
+        y = np.append(x2[0], x2[1:] - pre * x2[:-1])  # apply pre-emphasis
+    else:
+        y = x2
+    if scale:
+        y = y / np.max(y) * 0.9  # scale to about full range
+    if add_tiny_noise:
+        y = y + ((np.random.rand(len(y)) - 0.5) * 0.00001)
+    if pad_to > 0:
+        # check whether any extra are needed
+        extra_time = pad_to - ((len(y) / target_fs) % pad_to)
+        extra_samples = int(extra_time * target_fs)
+        y = np.concatenate((y, (np.random.rand(extra_samples) - 0.5) * 0.00001))
+        if not quiet:
+            print(
+                f"Prep Audio: Padding signal to {pad_to} sec, which involves adding {extra_samples} extra samples."
+            )
+    if outtype == "int":
+        y = np.rint(np.iinfo(np.int16).max * y).astype(np.int16)
+    if outtype == "int16":
+        y = np.rint(np.iinfo(np.int16).max * y).astype(np.int16)
+
+    return y, target_fs

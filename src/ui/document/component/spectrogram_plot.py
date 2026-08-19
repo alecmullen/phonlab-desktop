@@ -9,7 +9,10 @@ from ui.document.state.sgram_state import SpectrogramState
 
 class SpectrogramPlot(pg.PlotItem):
     def __init__(
-        self, parent: QWidget | None = None, linked_plot: pg.PlotItem | None = None
+        self,
+        parent: QWidget | None = None,
+        linked_plot: pg.PlotItem | None = None,
+        is_bottom_plot: bool = False,
     ):
         super().__init__(parent)
 
@@ -17,8 +20,11 @@ class SpectrogramPlot(pg.PlotItem):
         self.getAxis("left").enableAutoSIPrefix(False)
         self.getAxis("left").setWidth(60)
 
-        self.setLabel("bottom", self.tr("Time"), units="s")
-        self.getAxis("bottom").enableAutoSIPrefix(False)
+        if is_bottom_plot:
+            self.setLabel("bottom", self.tr("Time"), units="s")
+            self.getAxis("bottom").enableAutoSIPrefix(False)
+        else:
+            self.getAxis("bottom").setStyle(showValues=False)
 
         self.showGrid(x=True, y=True, alpha=0.3)
         self.getViewBox().setMouseEnabled(x=False, y=False)
@@ -44,7 +50,9 @@ class SpectrogramPlot(pg.PlotItem):
         self.getViewBox().setXLink(linked_plot)
 
         self.center_text_item = pg.TextItem(
-            self.tr("Zoom to a chunk of {} seconds or shorter to see spectrogram").format(MAX_SGRAM_LENGTH),
+            self.tr(
+                "Zoom to a chunk of {} seconds or shorter to see spectrogram"
+            ).format(MAX_SGRAM_LENGTH),
             anchor=(0.5, 0.5),
         )
         self.center_text_item.setFont(pg.Qt.QtGui.QFont("Arial", 32))

@@ -84,7 +84,10 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
 
         try:
             sxx_mmap = np.memmap(
-                self.mmap_file, dtype="float32", mode="w+", shape=(n_freqs, estimated_frames)
+                self.mmap_file,
+                dtype="float32",
+                mode="w+",
+                shape=(n_freqs, estimated_frames),
             )
             ts_mmap = np.memmap(
                 self.ts_file, dtype="float64", mode="w+", shape=(estimated_frames,)

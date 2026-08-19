@@ -15,7 +15,7 @@ from res.constants import MAX_SGRAM_LENGTH
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
 from ui.document.state.document_window_state import DocumentWindowState
-from ui.document.state.plot_layout_state import PlotLayoutState
+from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
@@ -34,7 +34,24 @@ class DocumentViewModel(ViewModel):
         self.click_timer: QTimer | None = None
 
     def show_spectrogram(self, show: bool):
-        self.plot_layout_state = replace(self.plot_layout_state, is_spectrogram=show)
+        plots = self.plot_layout_state.plots.copy()
+        if show:
+            plots.add(PlotType.SPECTROGRAM)
+        else:
+            plots.remove(PlotType.SPECTROGRAM)
+
+        self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
+        self.state_changed.emit(self.plot_layout_state)
+
+    def show_annotations(self, show: bool):
+        plots = self.plot_layout_state.plots.copy()
+        plots.remove(PlotType.ANNOTATION)
+        if show:
+            plots.add(PlotType.ANNOTATION)
+        else:
+            plots.remove(PlotType.ANNOTATION)
+
+        self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
         self.state_changed.emit(self.plot_layout_state)
 
     def load_audio(self, filepath: str):
@@ -239,7 +256,10 @@ class DocumentViewModel(ViewModel):
             end = int(sel_end * fs)
             window_length = end - start
             self.document_window_state = replace(
-                self.document_window_state, start=start, end=end, max_start=max_end - window_length
+                self.document_window_state,
+                start=start,
+                end=end,
+                max_start=max_end - window_length,
             )
             self.state_changed.emit(self.document_window_state)
 
@@ -275,7 +295,10 @@ class DocumentViewModel(ViewModel):
         window_length = new_end - new_start
 
         self.document_window_state = replace(
-            self.document_window_state, start=new_start, end=new_end, max_start=(max_end - window_length)
+            self.document_window_state,
+            start=new_start,
+            end=new_end,
+            max_start=(max_end - window_length),
         )
         self.state_changed.emit(self.document_window_state)
 
@@ -293,7 +316,10 @@ class DocumentViewModel(ViewModel):
         window_length = new_end - new_start
 
         self.document_window_state = replace(
-            self.document_window_state, start=new_start, end=new_end, max_start=(max_end - window_length)
+            self.document_window_state,
+            start=new_start,
+            end=new_end,
+            max_start=(max_end - window_length),
         )
         self.state_changed.emit(self.document_window_state)
 
