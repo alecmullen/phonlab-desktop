@@ -42,11 +42,7 @@ class DocumentView(QWidget):
         # Initialize plot items (will be created in plot methods)
         self.wave_plot = None
         self.spec_plot = None
-
-        # Selection variables
-        self.selection_region_wave = None
-        self.selection_region_spec = None
-
+        
         # ------ Slider ---------
         self.slider = QScrollBar(Qt.Orientation.Horizontal, self)
 
