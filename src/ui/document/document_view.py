@@ -10,12 +10,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui.annotation.annotation_plot import AnnotationPlot
 from ui.document.component.audio_wave_plot import AudioWavePlot
 from ui.document.component.spectrogram_plot import SpectrogramPlot
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_wave_state import AudioWaveState
 from ui.document.state.document_window_state import DocumentWindowState
-from ui.document.state.plot_layout_state import PlotLayoutState
+from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
@@ -105,7 +106,7 @@ class DocumentView(QWidget):
         elif isinstance(model, StatusMessageState):
             self.message_label.setText(model.message)
         elif isinstance(model, PlotLayoutState):
-            self.update_plot_layout(model, self.view_model.audio_wave_state)
+            self.update_plot_layout(model)
 
     def load_audio(self, filename):
         """Load an audio file into this document"""
@@ -113,7 +114,7 @@ class DocumentView(QWidget):
 
     def load_audio_wave_view(self, audio_wave: AudioWaveState):
         self.reset_slider(audio_wave.fs)
-        self.update_plot_layout(self.view_model.plot_layout_state, audio_wave)
+        self.update_plot_layout(self.view_model.plot_layout_state)
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -126,15 +127,21 @@ class DocumentView(QWidget):
         self.selection_region_wave = None
         self.selection_region_spec = None
 
-    def create_wave_plot(self, row, col, audio_wave: AudioWaveState, rowspan=1):
+    def create_wave_plot(
+        self,
+        row: int,
+        col: int,
+        audio_wave: AudioWaveState,
+        is_bottom_plot: bool = False,
+    ):
         """Create a waveform plot at the specified position"""
         start, end = (
             self.view_model.document_window_state.start,
             self.view_model.document_window_state.end,
         )
 
-        wave_plot = AudioWavePlot()
-        self.graphics_widget.addItem(wave_plot, row=row, col=col, rowspan=rowspan)
+        wave_plot = AudioWavePlot(is_bottom_plot=is_bottom_plot)
+        self.graphics_widget.addItem(wave_plot, row=row, col=col)
 
         wave_plot.plot_wave(
             audio_wave.t, audio_wave.x, start, end, audio_wave.max_x, audio_wave.min_x
@@ -150,28 +157,44 @@ class DocumentView(QWidget):
     def show_spectrogram(self, show: bool):
         self.view_model.show_spectrogram(show)
 
-    def update_plot_layout(self, layout_state: PlotLayoutState, audio_wave: AudioWaveState):
+    def update_plot_layout(self, layout_state: PlotLayoutState):
         self.clear_plots()
 
-        self.wave_plot = self.create_wave_plot(0, 0, audio_wave)
+        ordered_plots = sorted(layout_state.plots, key=lambda type: type.value)
+        for i, plot_type in enumerate(ordered_plots):
+            is_bottom = i == len(ordered_plots) - 1
+            self.add_plot(i, plot_type, is_bottom)
 
-        if layout_state.is_spectrogram:
-            self.wave_plot.getAxis("bottom").setStyle(showValues=False)
-            self.wave_plot.getAxis("left").setWidth(60)
-    
-            self.spec_plot = SpectrogramPlot(linked_plot=self.wave_plot)
-            self.graphics_widget.addItem(self.spec_plot, row=1, col=0)
-            self.plot_spectrogram(self.view_model.sgram_state)
-            self.spec_plot.show()
-
+        if len(layout_state.plots) == 2:
             self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
             self.graphics_widget.ci.layout.setRowStretchFactor(1, 2)
-        else:
-            self.wave_plot.setLabel("bottom", self.tr("Time"), units="s")
-            self.wave_plot.getAxis("bottom").setStyle(showValues=True)
+        elif len(layout_state.plots) == 3:
+            self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
+            self.graphics_widget.ci.layout.setRowStretchFactor(1, 1)
+            self.graphics_widget.ci.layout.setRowStretchFactor(2, 1)
 
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
+
+    def add_plot(self, row: int, plot_type: PlotType, is_bottom: False):
+        if plot_type == PlotType.WAVEFORM:
+            self.wave_plot = self.create_wave_plot(
+                row, 0, self.view_model.audio_wave_state, is_bottom_plot=is_bottom
+            )
+        elif plot_type == PlotType.SPECTROGRAM:
+            self.spec_plot = SpectrogramPlot(
+                linked_plot=self.wave_plot, is_bottom_plot=is_bottom
+            )
+            self.graphics_widget.addItem(self.spec_plot, row=row, col=0)
+            self.plot_spectrogram(self.view_model.sgram_state)
+            self.spec_plot.show()
+        elif plot_type == PlotType.ANNOTATION:
+            self.annot_plot = AnnotationPlot(
+                linked_plot=self.wave_plot, is_bottom_plot=is_bottom
+            )
+            self.graphics_widget.addItem(self.annot_plot, row=row, col=0)
+            self.annot_plot.populate(self.view_model.annotation_state)
+            self.annot_plot.show()
 
     def plot_spectrogram(self, sgram: SpectrogramState):
         if self.spec_plot is None:
@@ -180,6 +203,9 @@ class DocumentView(QWidget):
             self.spec_plot.display_window_too_big()
         else:
             self.spec_plot.populate_spectrogram(sgram, self.gray_cutoff)
+
+    def show_annotations(self, show: bool):
+        self.view_model.show_annotations(show)
 
     def update_wave_y_range(self):
         """Update the y-axis range of the waveform plot based on scale factor"""
