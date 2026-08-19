@@ -10,7 +10,7 @@ from core.usecase.compute_sgram import ComputeSpectrogram
 from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.view_model import ViewModel
-from ui.spectrogram.sgram_state import SpectrogramState
+from ui.spectrogram.spectrogram_state import SpectrogramState
 
 
 class SpectrogramViewModel(ViewModel):

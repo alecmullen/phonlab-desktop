@@ -4,7 +4,7 @@ from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
-from ui.spectrogram.sgram_state import SpectrogramState
+from ui.spectrogram.spectrogram_state import SpectrogramState
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 
 
