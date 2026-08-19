@@ -4,17 +4,22 @@ from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
-from ui.document.state.sgram_state import SpectrogramState
+from ui.spectrogram.sgram_state import SpectrogramState
+from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 
 
 class SpectrogramPlot(pg.PlotItem):
     def __init__(
         self,
         parent: QWidget | None = None,
+        view_model: SpectrogramViewModel = None,
         linked_plot: pg.PlotItem | None = None,
         is_bottom_plot: bool = False,
     ):
         super().__init__(parent)
+
+        self.view_model = view_model
+        self.view_model.subscribe(self.on_state_change)
 
         self.setLabel("left", self.tr("Frequency"), units="Hz")
         self.getAxis("left").enableAutoSIPrefix(False)
@@ -49,28 +54,41 @@ class SpectrogramPlot(pg.PlotItem):
 
         self.getViewBox().setXLink(linked_plot)
 
-        self.center_text_item = pg.TextItem(
+        self.center_label = pg.LabelItem(
             self.tr(
                 "Zoom to a chunk of {} seconds or shorter to see spectrogram"
             ).format(MAX_SGRAM_LENGTH),
-            anchor=(0.5, 0.5),
+            size="32pt",
+            color="#A0A0A0",
         )
-        self.center_text_item.setFont(pg.Qt.QtGui.QFont("Arial", 32))
-        self.center_text_item.setVisible(False)
-        self.addItem(self.center_text_item)
+        self.center_label.setVisible(False)
+        self.center_label.setParentItem(self.getViewBox())
+        self.center_label.anchor(itemPos=(0.5, 0.5), parentPos=(0.5, 0.5))
 
-    def populate_spectrogram(self, sgram: SpectrogramState, gray_cutoff: float):
+        self.plot_spectrogram(self.view_model.sgram_state)
+
+    @pyqtSlot(object)
+    def on_state_change(self, model):
+        if isinstance(model, SpectrogramState):
+            self.plot_spectrogram(model)
+
+    def plot_spectrogram(self, sgram: SpectrogramState):
+        if not sgram.is_showing:
+            self.display_window_too_big()
+        else:
+            self.populate_spectrogram(sgram)
+
+    def populate_spectrogram(self, sgram: SpectrogramState):
         """Fill the spectrogram image with data"""
 
-        self.center_text_item.setVisible(False)
+        self.center_label.setVisible(False)
 
         self.getViewBox().setLimits(yMin=0, yMax=sgram.f[-1])
         self.getViewBox().setYRange(sgram.f[0], sgram.f[-1])
 
-        vmin = (
-            np.min(sgram.sxx_window)
-            + (np.max(sgram.sxx_window) - np.min(sgram.sxx_window)) * gray_cutoff
-        )
+        min, max = np.min(sgram.sxx_window), np.max(sgram.sxx_window)
+        vmin = min + (max - min) * sgram.gray_cutoff
+
         self.spec_img.setImage(
             sgram.sxx_window.T,
             autoLevels=False,
@@ -104,9 +122,12 @@ class SpectrogramPlot(pg.PlotItem):
         if self.spec_img:
             self.spec_img.clear()
 
-        x_range, y_range = self.getViewBox().viewRange()
-        center_x = (x_range[0] + x_range[1]) / 2.0
-        center_y = (y_range[0] + y_range[1]) / 2.0
+        self.center_label.setVisible(True)
 
-        self.center_text_item.setPos(center_x, center_y)
-        self.center_text_item.setVisible(True)
+    def adjust_gray_scale(self, is_trackpad: bool, delta: float):
+        if is_trackpad:
+            adjustment = delta * 0.0005
+        else:
+            adjustment = delta * 0.01
+
+        self.view_model.adjust_gray_scale(adjustment)

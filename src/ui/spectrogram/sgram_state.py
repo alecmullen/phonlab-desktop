@@ -17,3 +17,5 @@ class SpectrogramState:
     samples_computed: int = 0
 
     is_showing: bool = False
+
+    gray_cutoff: float = 0.55

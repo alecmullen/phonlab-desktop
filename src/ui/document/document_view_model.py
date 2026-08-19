@@ -2,36 +2,33 @@ from dataclasses import replace
 
 import numpy as np
 import sounddevice as sd
-from PyQt6.QtCore import QTimer, pyqtSlot
+from PyQt6.QtCore import pyqtSlot
 
-import phonlab as phon
-from core.entity.spectrogram import Spectrogram
-from core.entity.spectrogram_mmap import SpectrogramMmap
-from core.usecase.compute_sgram import ComputeSpectrogram
-from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.usecase.load_audio import AudioSignal, LoadAudio
 from core.usecase.play_audio import PlayAudio
-from res.constants import MAX_SGRAM_LENGTH
+from res.constants import DEFAULT_WINDOW_LENGTH
 from ui.base.view_model import ViewModel
-from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
+from ui.document.state.audio_signal_state import AudioSignalState, to_audio_signal_state
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
-from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
+from ui.waveform.audio_wave_view_model import AudioWaveViewModel
+from ui.waveform.state.audio_wave_state import to_audio_wave_state
 
 
 class DocumentViewModel(ViewModel):
     def __init__(self):
         super().__init__()
-        self.audio_wave_state: AudioWaveState = AudioWaveState()
-        self.sgram_state: SpectrogramState = SpectrogramState()
+        self.audio_signal_state: AudioSignalState = AudioSignalState()
         self.is_audio_playing = False
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
 
-        self.click_timer: QTimer | None = None
+        self.audio_wave_view_model = AudioWaveViewModel()
+        self.spectrogram_view_model = SpectrogramViewModel()
 
     def show_spectrogram(self, show: bool):
         plots = self.plot_layout_state.plots.copy()
@@ -59,18 +56,18 @@ class DocumentViewModel(ViewModel):
         def on_success(audio_signal: AudioSignal):
             self.remove_selection()
 
-            self.audio_wave_state = to_audio_wave_state(audio_signal)
-            self.state_changed.emit(self.audio_wave_state)
+            self.audio_signal_state = to_audio_signal_state(audio_signal)
+            self.state_changed.emit(self.audio_signal_state)
 
             signal_end = len(audio_signal.x) - 1
-            window_end = min(signal_end, MAX_SGRAM_LENGTH * audio_signal.fs)
+            window_end = min(signal_end, DEFAULT_WINDOW_LENGTH * audio_signal.fs)
             self.document_window_state = replace(
                 self.document_window_state,
                 start=0,
                 end=window_end,
                 max_start=(signal_end - window_end),
             )
-            self.state_changed.emit(self.document_window_state)
+            self.update_document_window(self.document_window_state)
 
             msg = self.tr(
                 "Duration shown {:.3f} seconds, out of {:.3f} seconds"
@@ -83,86 +80,19 @@ class DocumentViewModel(ViewModel):
         self.launch_use_case("load_audio", use_case, on_success, self.on_error)
 
     def compute_spectrogram(self):
-        x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
+        x, t, fs = (
+            self.audio_signal_state.x,
+            self.audio_signal_state.t,
+            self.audio_signal_state.fs,
+        )
         start, end = self.document_window_state.start, self.document_window_state.end
+        self.spectrogram_view_model.compute_spectrogram(x, t, fs, start, end)
 
-        if (end - start) / fs > MAX_SGRAM_LENGTH:
-            self.sgram_state = replace(self.sgram_state, is_showing=False)
-            self.state_changed.emit(self.sgram_state)
-            return
-
-        self.load_spectrogram_window(x, fs, start, end)
-        self.load_spectrogram_mmap(x, fs)
-
-    def load_spectrogram_window(self, x: np.ndarray, fs: int, start: int, end: int):
-        if (
-            self.sgram_state.sxx_mmap is not None
-            and self.sgram_state.t_mmap is not None
-            and self.sgram_state.samples_computed > end
-        ):
-            frames_computed = self.sgram_state.frames_computed
-            sfr = np.abs(
-                self.sgram_state.t_mmap[:frames_computed]
-                - self.audio_wave_state.t[start]
-            ).argmin()
-            efr = np.abs(
-                self.sgram_state.t_mmap[:frames_computed] - self.audio_wave_state.t[end]
-            ).argmin()
-
-            t_window = np.array(self.sgram_state.t_mmap[sfr:efr])
-            sxx_window = np.array(self.sgram_state.sxx_mmap[:, sfr:efr])
-
-            self.sgram_state = replace(
-                self.sgram_state,
-                t_window=t_window,
-                sxx_window=sxx_window,
-                is_showing=True,
-            )
-            self.state_changed.emit(self.sgram_state)
-        else:
-            t, f, sxx = phon.compute_sgram(x[start:end], fs, 0.008, 0.003, 8)
-
-            self.sgram_state = replace(
-                self.sgram_state,
-                t_window=t + (start / fs),
-                sxx_window=sxx,
-                f=f,
-                is_showing=True,
-            )
-            self.state_changed.emit(self.sgram_state)
-
-            @pyqtSlot(object)
-            def on_success(sgram: Spectrogram):
-                self.sgram_state = replace(
-                    self.sgram_state,
-                    t_window=sgram.t + (start / fs),
-                    sxx_window=sgram.sxx,
-                    f=sgram.f,
-                    is_showing=True,
-                )
-                self.state_changed.emit(self.sgram_state)
-
-            use_case = ComputeSpectrogram(x[start:end], fs)
-            self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
-
-    def load_spectrogram_mmap(self, x, fs):
-        if self.sgram_state.sxx_mmap is None or self.sgram_state.t_mmap is None:
-
-            @pyqtSlot(object)
-            def on_success(sgram: SpectrogramMmap):
-                self.sgram_state = replace(
-                    self.sgram_state,
-                    sxx_mmap=sgram.sxx_mmap,
-                    t_mmap=sgram.t_mmap,
-                    frames_per_sec=sgram.frames_per_sec,
-                    frames_computed=sgram.frames_computed,
-                    samples_computed=sgram.samples_computed,
-                )
-
-            use_case = ComputeSpectrogramMmap(x, fs)
-            self.launch_use_case(
-                "sgram_mmap", use_case, on_success, self.on_error, only_once=True
-            )
+    def update_audio_waveform(self):
+        start, end = self.document_window_state.start, self.document_window_state.end
+        self.audio_wave_view_model.set_wave_state(
+            to_audio_wave_state(self.audio_signal_state, start, end)
+        )
 
     def play_audio(self, x: np.ndarray, fs: int):
         if self.is_audio_playing:
@@ -178,6 +108,13 @@ class DocumentViewModel(ViewModel):
 
     def stop_audio(self):
         sd.stop()
+
+    def update_document_window(self, document_window_state: DocumentWindowState):
+        self.document_window_state = document_window_state
+        self.state_changed.emit(self.document_window_state)
+
+        self.compute_spectrogram()
+        self.update_audio_waveform()
 
     def go_back(self):
         window_size = self.document_window_state.end - self.document_window_state.start
@@ -198,7 +135,7 @@ class DocumentViewModel(ViewModel):
         start = self.document_window_state.start
         end = self.document_window_state.end
         window_size = end - start
-        max_end = len(self.audio_wave_state.x) - 1
+        max_end = len(self.audio_signal_state.x) - 1
 
         if new_start < start:
             new_start = max(0, new_start)
@@ -210,7 +147,7 @@ class DocumentViewModel(ViewModel):
         self.document_window_state = replace(
             self.document_window_state, start=new_start, end=new_end
         )
-        self.state_changed.emit(self.document_window_state)
+        self.update_document_window(self.document_window_state)
 
     def start_selection(self, x_pos: float):
         self.select_state = replace(
@@ -228,7 +165,7 @@ class DocumentViewModel(ViewModel):
 
         if x_pos >= self.select_state.sel_anchor:
             sel_start = self.select_state.sel_anchor
-            sel_end = min(x_pos, self.audio_wave_state.t[-1])
+            sel_end = min(x_pos, self.audio_signal_state.t[-1])
         elif x_pos < self.select_state.sel_anchor:
             sel_start = max(x_pos, 0.0)
             sel_end = self.select_state.sel_anchor
@@ -248,7 +185,7 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.select_state)
 
     def zoom_if_in_selection(self, x_pos: float):
-        x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
+        x, fs = self.audio_signal_state.x, self.audio_signal_state.fs
         max_end = len(x) - 1
         sel_start, sel_end = self.select_state.sel_start, self.select_state.sel_end
         if sel_end > x_pos > sel_start:
@@ -272,8 +209,10 @@ class DocumentViewModel(ViewModel):
             return
 
         # Calculate the center of the selection in samples
-        sel_start_samples = int(self.select_state.sel_start * self.audio_wave_state.fs)
-        sel_end_samples = int(self.select_state.sel_end * self.audio_wave_state.fs)
+        sel_start_samples = int(
+            self.select_state.sel_start * self.audio_signal_state.fs
+        )
+        sel_end_samples = int(self.select_state.sel_end * self.audio_signal_state.fs)
         sel_center_samples = (sel_start_samples + sel_end_samples) // 2
 
         # Calculate new window bounds centered on selection
@@ -287,7 +226,7 @@ class DocumentViewModel(ViewModel):
 
         center = start + int((end - start) / 2)
         new_size = int((end - start) * factor)
-        max_end = len(self.audio_wave_state.x) - 1
+        max_end = len(self.audio_signal_state.x) - 1
 
         new_end = center + int(new_size / 2)
         new_end = min(new_end, max_end)
@@ -300,7 +239,7 @@ class DocumentViewModel(ViewModel):
             end=new_end,
             max_start=(max_end - window_length),
         )
-        self.state_changed.emit(self.document_window_state)
+        self.update_document_window(self.document_window_state)
 
     def zoom_in(self, factor: float = 2):
         start, end = self.document_window_state.start, self.document_window_state.end
@@ -312,7 +251,7 @@ class DocumentViewModel(ViewModel):
         new_end = center + int(new_size / 2)
         new_start = new_end - new_size
 
-        max_end = len(self.audio_wave_state.x) - 1
+        max_end = len(self.audio_signal_state.x) - 1
         window_length = new_end - new_start
 
         self.document_window_state = replace(
@@ -321,27 +260,27 @@ class DocumentViewModel(ViewModel):
             end=new_end,
             max_start=(max_end - window_length),
         )
-        self.state_changed.emit(self.document_window_state)
+        self.update_document_window(self.document_window_state)
 
     def show_all(self):
-        end = len(self.audio_wave_state.x) - 1
+        end = len(self.audio_signal_state.x) - 1
         self.document_window_state = DocumentWindowState(start=0, end=end)
-        self.state_changed.emit(self.document_window_state)
+        self.update_document_window(self.document_window_state)
 
     def play_selected_audio(self):
-        start = int(self.select_state.sel_start * self.audio_wave_state.fs)
-        end = int(self.select_state.sel_end * self.audio_wave_state.fs)
+        start = int(self.select_state.sel_start * self.audio_signal_state.fs)
+        end = int(self.select_state.sel_end * self.audio_signal_state.fs)
 
         if start != end:
-            section = self.audio_wave_state.x[start:end]
-            self.play_audio(section, self.audio_wave_state.fs)
+            section = self.audio_signal_state.x[start:end]
+            self.play_audio(section, self.audio_signal_state.fs)
 
     def play_visible_audio(self):
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        if len(self.audio_wave_state.x) > 0:
-            section = self.audio_wave_state.x[start:end]
-            self.play_audio(section, self.audio_wave_state.fs)
+        if len(self.audio_signal_state.x) > 0:
+            section = self.audio_signal_state.x[start:end]
+            self.play_audio(section, self.audio_signal_state.fs)
 
     @pyqtSlot(object)
     def on_error(self, err):
