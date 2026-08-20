@@ -7,6 +7,7 @@ from PyQt6.QtCore import pyqtSlot
 from core.usecase.load_audio import AudioSignal, LoadAudio
 from core.usecase.play_audio import PlayAudio
 from res.constants import DEFAULT_WINDOW_LENGTH
+from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_signal_state import AudioSignalState, to_audio_signal_state
 from ui.document.state.document_window_state import DocumentWindowState
@@ -29,6 +30,7 @@ class DocumentViewModel(ViewModel):
 
         self.audio_wave_view_model = AudioWaveViewModel()
         self.spectrogram_view_model = SpectrogramViewModel()
+        self.annotation_view_model = AnnotationViewModel()
 
     def show_spectrogram(self, show: bool):
         plots = self.plot_layout_state.plots.copy()
@@ -42,7 +44,6 @@ class DocumentViewModel(ViewModel):
 
     def show_annotations(self, show: bool):
         plots = self.plot_layout_state.plots.copy()
-        plots.remove(PlotType.ANNOTATION)
         if show:
             plots.add(PlotType.ANNOTATION)
         else:
