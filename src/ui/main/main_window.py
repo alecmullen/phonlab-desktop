@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         self.sgramview_action.setStatusTip(self.tr("View waveform and spectrogram"))
         self.sgramview_action.setShortcut("Ctrl+2")
         self.sgramview_action.triggered.connect(self.plot_wave_sgram)
+        viewMenu.addAction(self.sgramview_action)
 
         self.annotationview_action = QAction(
             QIcon.fromTheme("view-media-visualization"), self.tr("&Annotation"), self
@@ -126,6 +127,7 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction(self.waveview_action)
         toolbar.addAction(self.sgramview_action)
+        toolbar.addAction(self.annotationview_action)
         toolbar.addAction(self.viewall_action)
         toolbar.addAction(self.recenter_action)
 

@@ -42,7 +42,7 @@ class DocumentView(QWidget):
         # Initialize plot items (will be created in plot methods)
         self.wave_plot = None
         self.spec_plot = None
-        
+
         # ------ Slider ---------
         self.slider = QScrollBar(Qt.Orientation.Horizontal, self)
 
@@ -158,10 +158,11 @@ class DocumentView(QWidget):
             self.spec_plot.show()
         elif plot_type == PlotType.ANNOTATION:
             self.annot_plot = AnnotationPlot(
-                linked_plot=self.wave_plot, is_bottom_plot=is_bottom
+                view_model=self.view_model.annotation_view_model,
+                linked_plot=self.wave_plot,
+                is_bottom_plot=is_bottom
             )
             self.graphics_widget.addItem(self.annot_plot, row=row, col=0)
-            self.annot_plot.populate(self.view_model.annotation_state)
             self.annot_plot.show()
 
     def show_annotations(self, show: bool):
