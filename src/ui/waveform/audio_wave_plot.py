@@ -25,6 +25,7 @@ class AudioWavePlot(pg.PlotItem):
         self.setLabel("left", self.tr("Amplitude"))
         self.showGrid(x=True, y=True, alpha=0.3)
         self.getAxis("left").enableAutoSIPrefix(False)
+        self.getAxis("left").setWidth(60)
 
         if is_bottom_plot:
             self.setLabel("bottom", self.tr("Time"), units="s")

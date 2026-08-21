@@ -18,7 +18,7 @@ FAKE_ANNOTATION_STATE = AnnotationState(
     },
     [
         AnnotationTypeState(
-            "utterance",
+            "utter",
             [
                 AnnotationLabelState(0, 8, "fake note")
             ],
@@ -31,7 +31,7 @@ FAKE_ANNOTATION_STATE = AnnotationState(
             ],
         ),
         AnnotationTypeState(
-            "phoneme",
+            "phon",
             [
                 AnnotationLabelState(0, 1, "f"),
                 AnnotationLabelState(1, 2, "æ"),
