@@ -10,12 +10,12 @@ class AudioWaveViewModel(ViewModel):
         self.audio_wave_state = AudioWaveState()
 
     def update_wave_y_range(self, delta: float):
-        if delta > 0:
+        if delta < 0:
             y_scale = 1.05 * self.audio_wave_scale_state.y_scale
         else:
             y_scale = 0.95 * self.audio_wave_scale_state.y_scale
 
-        y_scale = max(0.1, min(10.0, y_scale))
+        y_scale = max(1.0, min(10.0, y_scale))
 
         min_x, max_x = self.audio_wave_state.max_x, self.audio_wave_state.min_x
         y_max = max(abs(min_x), abs(max_x))

@@ -1,4 +1,5 @@
 import pyqtgraph as pg
+from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
 from ui.annotation.annotation_state import AnnotationState
@@ -30,7 +31,14 @@ class AnnotationPlot(pg.PlotItem):
         else:
             self.getAxis("bottom").setStyle(showValues=False)
 
+        self.nodes: list[Node] = []
+        self.labels: list[Label] = []
         self.populate(self.view_model.annotation_state)
+
+        self.dragging_node: Node = None
+
+    def connect_plot_signals(self):
+        self.scene().sigMouseMoved.connect(self.on_mouse_moved)
 
     def show_time_axis(self, show: bool):
         if show:
@@ -56,6 +64,7 @@ class AnnotationPlot(pg.PlotItem):
                 width = (x_e - x_s)
                 label_item = Label((width, label_height), label.label)
                 label_item.setPos(center_x, center_y)
+                self.labels.append(label_item)
                 self.addItem(label_item)
 
                 node_extents[label.e_node].add(i)
@@ -63,5 +72,28 @@ class AnnotationPlot(pg.PlotItem):
 
         for node in nodes:
             node = Node(nodes[node], sorted(node_extents[node]))
+            self.nodes.append(node)
             self.addItem(node)
-            
+
+    def handle_mouse_press(self, event):
+        for node in self.nodes:
+            child_pos = node.mapFromScene(event.position())
+            if node.contains(child_pos):
+                self.dragging_node = node
+                event.accept()
+                return True
+        return False
+
+    def handle_mouse_release(self, event):
+        if self.dragging_node is not None:
+            self.dragging_node = None
+            event.accept()
+            return True
+        return False
+
+    @pyqtSlot(object)
+    def on_mouse_moved(self, pos):
+        if self.dragging_node is not None:
+            x = self.getViewBox().mapSceneToView(pos).x()
+            y = self.dragging_node.y()
+            self.dragging_node.setPos(x, y)

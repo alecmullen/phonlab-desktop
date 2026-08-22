@@ -107,8 +107,9 @@ class SpectrogramPlot(pg.PlotItem):
 
         return True
 
-    @pyqtSlot(float)
-    def on_mouse_moved(self, x: float):
+    @pyqtSlot(object)
+    def on_mouse_moved(self, pos):
+        x = self.getViewBox().mapSceneToView(pos).x()
         self.cursor_line.setPos(x)
 
     def update_selection_region(self, box_left: float, xrange: float):

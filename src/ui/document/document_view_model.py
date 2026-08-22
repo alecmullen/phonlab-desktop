@@ -32,21 +32,31 @@ class DocumentViewModel(ViewModel):
         self.spectrogram_view_model = SpectrogramViewModel()
         self.annotation_view_model = AnnotationViewModel()
 
-    def show_spectrogram(self, show: bool):
+    def toggle_wave(self):
         plots = self.plot_layout_state.plots.copy()
-        if show:
+        if PlotType.WAVEFORM not in plots:
+            plots.add(PlotType.WAVEFORM)
+        elif len(plots) > 1:
+            plots.remove(PlotType.WAVEFORM)
+
+        self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
+        self.state_changed.emit(self.plot_layout_state)
+
+    def toggle_spectrogram(self):
+        plots = self.plot_layout_state.plots.copy()
+        if PlotType.SPECTROGRAM not in plots:
             plots.add(PlotType.SPECTROGRAM)
-        else:
+        elif len(plots) > 1:
             plots.remove(PlotType.SPECTROGRAM)
 
         self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
         self.state_changed.emit(self.plot_layout_state)
 
-    def show_annotations(self, show: bool):
+    def toggle_annotations(self):
         plots = self.plot_layout_state.plots.copy()
-        if show:
+        if PlotType.ANNOTATION not in plots:
             plots.add(PlotType.ANNOTATION)
-        else:
+        elif len(plots) > 1:
             plots.remove(PlotType.ANNOTATION)
 
         self.plot_layout_state = replace(self.plot_layout_state, plots=plots)

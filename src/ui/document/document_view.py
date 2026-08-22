@@ -117,9 +117,19 @@ class DocumentView(QWidget):
         """Connect mouse signals to all plots"""
         scene = self.graphics_widget.scene()
         scene.sigMouseMoved.connect(self.on_mouse_moved)
+        if self.wave_plot is not None:
+            scene.sigMouseMoved.connect(self.wave_plot.on_mouse_moved)
+        if self.spec_plot is not None:
+            scene.sigMouseMoved.connect(self.spec_plot.on_mouse_moved)
 
-    def show_spectrogram(self, show: bool):
-        self.view_model.show_spectrogram(show)
+    def toggle_wave(self):
+        self.view_model.toggle_wave()
+
+    def toggle_spectrogram(self):
+        self.view_model.toggle_spectrogram()
+
+    def toggle_annotations(self):
+        self.view_model.toggle_annotations()
 
     def update_plot_layout(self, layout_state: PlotLayoutState):
         self.clear_plots()
@@ -163,10 +173,8 @@ class DocumentView(QWidget):
                 is_bottom_plot=is_bottom
             )
             self.graphics_widget.addItem(self.annot_plot, row=row, col=0)
+            self.annot_plot.connect_plot_signals()
             self.annot_plot.show()
-
-    def show_annotations(self, show: bool):
-        self.view_model.show_annotations(show)
 
     @pyqtSlot(int)
     def on_slider_move(self, value: int):
@@ -298,8 +306,7 @@ class DocumentView(QWidget):
                     return True
 
             elif event.type() == QEvent.Type.Wheel:
-                self.handle_scroll(event)
-                return True
+                return self.handle_scroll(event)
         return super().eventFilter(obj, event)
 
     def handle_mouse_press(self, event):
@@ -311,8 +318,12 @@ class DocumentView(QWidget):
             clicked_plot = self.wave_plot
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.spec_plot
+        elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(scene_pos):
+            handled = self.annot_plot.handle_mouse_press(event)
+            if not handled:
+                clicked_plot = self.annot_plot
 
-        if not clicked_plot:
+        if clicked_plot is None:
             return
 
         self.mouse_pressed = True
@@ -361,6 +372,9 @@ class DocumentView(QWidget):
                 self.click_timer.setSingleShot(True)
                 self.click_timer.timeout.connect(self.handle_single_click)
                 self.click_timer.start(250)
+        else:
+            if self.annot_plot is not None:
+                self.annot_plot.handle_mouse_release(event)
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
