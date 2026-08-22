@@ -62,6 +62,7 @@ class AudioWavePlot(pg.PlotItem):
                 self.update_wave(model)
             else:
                 self.plot_wave(model)
+                self.is_initialized = True
         if isinstance(model, AudioWaveScaleState):
             self.update_y_range(model.scaled_y_max)
 
@@ -92,8 +93,9 @@ class AudioWavePlot(pg.PlotItem):
     def update_y_range(self, scaled_y_max: float):
         self.setYRange(-scaled_y_max, scaled_y_max, padding=0)
 
-    @pyqtSlot(float)
-    def on_mouse_moved(self, x: float):
+    @pyqtSlot(object)
+    def on_mouse_moved(self, pos):
+        x = self.getViewBox().mapSceneToView(pos).x()
         self.cursor_line.setPos(x)
 
     def clear(self):

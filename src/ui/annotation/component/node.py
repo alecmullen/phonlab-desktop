@@ -1,6 +1,9 @@
 import pyqtgraph as pg
-from pyqtgraph import QtCore, QtGui
+from PyQt6.QtCore import QRectF, Qt, pyqtSlot
+from PyQt6.QtGui import QPainter, QPainterPath, QPicture
 
+V_MARGIN = 0.05
+H_MARGIN = 0.075
 
 class Node(pg.GraphicsObject):
     def __init__(self, x: float, ys: list[float]):
@@ -8,40 +11,41 @@ class Node(pg.GraphicsObject):
         self.x = x
         self.ys = ys
 
-        y_last = ys[0]
-        circle = pg.PlotDataItem([x], [y_last], symbol="o", symbolPen="b")
+        self.setPos(x, ys[0])
+
+        circle = pg.PlotDataItem([0], [0], symbol="o", symbolPen="b")
         circle.setParentItem(self)
 
-        self.pic = QtGui.QPicture()
+        self.pic = QPicture()
         self._generate_picture()
 
     def _generate_picture(self):
         self.prepareGeometryChange()
-        painter = QtGui.QPainter(self.pic)
+        painter = QPainter(self.pic)
 
-        solid_path = QtGui.QPainterPath()
-        dotted_path = QtGui.QPainterPath()
+        solid_path = QPainterPath()
+        dotted_path = QPainterPath()
         started = False
-        for y in self.ys:
+        for y in [y - self.ys[0] for y in self.ys]:
             if started and solid_path.currentPosition().y() != y:
-                dotted_path.moveTo(self.x, solid_path.currentPosition().y())
-                dotted_path.lineTo(self.x, y)
-            solid_path.moveTo(self.x, y)
-            solid_path.lineTo(self.x, y+1)
+                dotted_path.moveTo(0, solid_path.currentPosition().y())
+                dotted_path.lineTo(0, y)
+            solid_path.moveTo(0, y)
+            solid_path.lineTo(0, y+1)
 
             started = True
 
         pen = pg.mkPen(color="b", width=3)
-        pen.setCapStyle(QtCore.Qt.PenCapStyle.FlatCap)
-        pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
 
         painter.setPen(pen)
         painter.drawPath(solid_path)
 
         pen = pg.mkPen("b", width=3)
-        pen.setStyle(QtCore.Qt.PenStyle.DotLine)
+        pen.setStyle(Qt.PenStyle.DotLine)
         pen.setDashPattern([1, 4])
-        pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
 
         painter.setPen(pen)
         painter.drawPath(dotted_path)
@@ -52,5 +56,6 @@ class Node(pg.GraphicsObject):
         p.drawPicture(0, 0, self.pic)
         
     def boundingRect(self):
-        return QtCore.QRectF(self.pic.boundingRect())
+        return QRectF(-H_MARGIN, -V_MARGIN, 2 * H_MARGIN, self.ys[-1] - self.ys[0] + 1 + 2 * V_MARGIN)
+
                     
