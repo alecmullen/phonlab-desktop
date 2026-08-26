@@ -71,10 +71,10 @@ class AnnotationPlot(pg.PlotItem):
         node_extents = {node: set() for node in nodes}
         for i, type in enumerate(types):
             for label in type.labels:
-                if nodes[label.e_node] < start or nodes[label.s_node] > end:
-                    return
-                x_e = max(start, nodes[label.e_node])
-                x_s = min(end, nodes[label.s_node])
+                if nodes[label.e_node] <= start or nodes[label.s_node] >= end:
+                    continue
+                x_s = max(start, nodes[label.s_node])
+                x_e = min(end, nodes[label.e_node])
 
                 center_x = (x_e - x_s) / 2 + x_s
                 center_y = i + 0.5
@@ -88,7 +88,7 @@ class AnnotationPlot(pg.PlotItem):
                 node_extents[label.s_node].add(i)
 
         for node in nodes:
-            if start < nodes[node] < end:
+            if start <= nodes[node] <= end:
                 node_view = NodeView(nodes[node], sorted(node_extents[node]))
                 self.node_views[node] = node_view
                 self.addItem(node_view)
