@@ -170,7 +170,7 @@ class DocumentView(QWidget):
             self.annot_plot = AnnotationPlot(
                 view_model=self.view_model.annotation_view_model,
                 linked_plot=self.wave_plot,
-                is_bottom_plot=is_bottom
+                is_bottom_plot=is_bottom,
             )
             self.graphics_widget.addItem(self.annot_plot, row=row, col=0)
             self.annot_plot.connect_plot_signals()
@@ -318,7 +318,9 @@ class DocumentView(QWidget):
             clicked_plot = self.wave_plot
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.spec_plot
-        elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(scene_pos):
+        elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
+            scene_pos
+        ):
             handled = self.annot_plot.handle_mouse_press(event)
             if not handled:
                 clicked_plot = self.annot_plot

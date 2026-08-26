@@ -11,7 +11,12 @@ from ui.main.splash import ClickableSplash, create_splash_pixmap
 logger = logging.getLogger(__name__)
 
 try:
-    example_audio = importlib.resources.files('phonlab') / 'data' / 'example_audio' / 'two_plus_two.wav'
+    example_audio = (
+        importlib.resources.files("phonlab")
+        / "data"
+        / "example_audio"
+        / "two_plus_two.wav"
+    )
     librosa.load(example_audio)
 except FileNotFoundError:
     logger.exception("Example file not found. Librosa JIT functions not pre-compiled.")

@@ -1,9 +1,9 @@
 from dataclasses import replace
 
 import numpy as np
+import phonlab as phon
 from PyQt6.QtCore import pyqtSlot
 
-import phonlab as phon
 from core.entity.spectrogram import Spectrogram
 from core.entity.spectrogram_mmap import SpectrogramMmap
 from core.usecase.compute_sgram import ComputeSpectrogram

@@ -16,14 +16,14 @@ class LabelView(pg.GraphicsObject):
 
         self.pic = QtGui.QPicture()
         self._generate_picture()
-        
+
     def _generate_picture(self):
         width, height = self.size
 
         painter = QtGui.QPainter(self.pic)
         painter.setPen(QtCore.Qt.PenStyle.NoPen)
         painter.setBrush(pg.mkBrush(0, 0, 0, 20))
-        painter.drawRect(QtCore.QRectF(-width/2, -height/2, width, height))
+        painter.drawRect(QtCore.QRectF(-width / 2, -height / 2, width, height))
         painter.end()
 
     def paint(self, p, opt, widget):
@@ -31,4 +31,4 @@ class LabelView(pg.GraphicsObject):
 
     def boundingRect(self):
         width, height = self.size
-        return QtCore.QRectF(-width/2, -height/2, width, height)
+        return QtCore.QRectF(-width / 2, -height / 2, width, height)

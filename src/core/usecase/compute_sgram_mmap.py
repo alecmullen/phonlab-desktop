@@ -2,8 +2,8 @@ import os
 import tempfile
 
 import numpy as np
-
 import phonlab as phon
+
 from core.entity.spectrogram_mmap import SpectrogramMmap
 from core.usecase.use_case import UseCase
 

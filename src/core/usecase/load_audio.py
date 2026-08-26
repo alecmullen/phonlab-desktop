@@ -1,4 +1,5 @@
 import phonlab as phon
+
 from core.entity.audio_signal import AudioSignal
 from core.usecase.use_case import UseCase
 

@@ -19,9 +19,7 @@ FAKE_ANNOTATION_STATE = AnnotationState(
     [
         AnnotationTypeState(
             "utter",
-            [
-                AnnotationLabelState(0, 8, "fake note")
-            ],
+            [AnnotationLabelState(0, 8, "fake note")],
         ),
         AnnotationTypeState(
             "word",
@@ -41,7 +39,7 @@ FAKE_ANNOTATION_STATE = AnnotationState(
                 AnnotationLabelState(5, 6, "ow"),
                 AnnotationLabelState(6, 7, "t"),
                 AnnotationLabelState(7, 8, ""),
-            ]
+            ],
         ),
-    ]
+    ],
 )

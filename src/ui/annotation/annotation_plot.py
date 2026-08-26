@@ -6,7 +6,6 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
-from ui.document.state.annotation_state import AnnotationState
 
 
 class AnnotationPlot(pg.PlotItem):
@@ -15,7 +14,7 @@ class AnnotationPlot(pg.PlotItem):
         parent: QWidget | None = None,
         view_model: AnnotationViewModel = None,
         linked_plot: pg.PlotItem | None = None,
-        is_bottom_plot: bool = False
+        is_bottom_plot: bool = False,
     ):
         super().__init__(parent)
 
@@ -25,7 +24,9 @@ class AnnotationPlot(pg.PlotItem):
         self.getViewBox().setXLink(linked_plot)
         self.getAxis("left").setWidth(60)
 
-        self.getViewBox().setFlag(self.getViewBox().GraphicsItemFlag.ItemClipsChildrenToShape, False)
+        self.getViewBox().setFlag(
+            self.getViewBox().GraphicsItemFlag.ItemClipsChildrenToShape, False
+        )
 
         if is_bottom_plot:
             self.setLabel("bottom", self.tr("Time"), units="s")
@@ -62,10 +63,12 @@ class AnnotationPlot(pg.PlotItem):
         end = window_state.end
 
         self.setYRange(-0.1, len(types), padding=0)
-        self.getAxis("left").setTicks([[(i, type.type) for i, type in enumerate(types)]])
+        self.getAxis("left").setTicks(
+            [[(i, type.type) for i, type in enumerate(types)]]
+        )
         label_height = self.getViewBox().viewRect().height() / (1.2 * len(types))
 
-        node_extents = { node: set() for node in nodes }
+        node_extents = {node: set() for node in nodes}
         for i, type in enumerate(types):
             for label in type.labels:
                 if nodes[label.e_node] < start or nodes[label.s_node] > end:
@@ -75,7 +78,7 @@ class AnnotationPlot(pg.PlotItem):
 
                 center_x = (x_e - x_s) / 2 + x_s
                 center_y = i + 0.5
-                width = (x_e - x_s)
+                width = x_e - x_s
                 label_item = LabelView((width, label_height), label.label)
                 label_item.setPos(center_x, center_y)
                 self.label_views.append(label_item)
