@@ -196,12 +196,12 @@ class MainWindow(QMainWindow):
     def plot_wave(self):
         doc = self.get_current_document()
         if doc:
-            doc.plot_wave()
+            doc.show_spectrogram(False)
 
     def plot_wave_sgram(self):
         doc = self.get_current_document()
         if doc:
-            doc.plot_wave_sgram()
+            doc.show_spectrogram(True)
 
     def show_all(self):
         doc = self.get_current_document()

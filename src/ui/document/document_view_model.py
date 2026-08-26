@@ -18,6 +18,7 @@ from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_sta
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.playback_state import PlaybackState
+from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
@@ -35,6 +36,7 @@ class DocumentViewModel(ViewModel):
         self.is_audio_playing = False
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
+        self.plot_layout_state: PlotLayoutState = PlotLayoutState()
 
         self.click_timer: QTimer | None = None
 
@@ -53,7 +55,6 @@ class DocumentViewModel(ViewModel):
         # a long recording). is_preview tracks which one this callback is
         # currently handling.
         is_preview = [True]
-
         @pyqtSlot(object)
         def on_success(audio_document: AudioDocument):
             preview = is_preview[0]
@@ -107,6 +108,11 @@ class DocumentViewModel(ViewModel):
             primary_channel=options.primary_channel,
         )
         self.launch_use_case("load_audio", use_case, on_success, self.on_error)
+
+
+    def show_spectrogram(self, show: bool):
+        self.plot_layout_state = replace(self.plot_layout_state, is_spectrogram=show)
+        self.state_changed.emit(self.plot_layout_state)
 
     def compute_spectrogram(self):
         x, fs = self.audio_wave_state.x, self.audio_wave_state.fs

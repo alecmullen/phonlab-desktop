@@ -17,6 +17,7 @@ from ui.document.state.audio_wave_state import AudioWaveState
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.playback_state import PlaybackState
+from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
@@ -83,8 +84,6 @@ class DocumentView(QWidget):
         layout.addWidget(bottom_bar)
         self.setLayout(layout)
 
-        self.plot_type = 1
-
         # mouse interaction state
         self.mouse_pressed = False
         self.is_dragging = False
@@ -111,6 +110,8 @@ class DocumentView(QWidget):
             self.update_playback_cursor(model)
         elif isinstance(model, LoadProgressState):
             self.update_load_progress(model)
+        elif isinstance(model, PlotLayoutState):
+            self.update_plot_layout(model, self.view_model.audio_wave_state)
 
     def load_audio(self, filename, options):
         """Load an audio file into this document"""
@@ -118,7 +119,7 @@ class DocumentView(QWidget):
 
     def load_audio_wave_view(self, audio_wave: AudioWaveState):
         self.reset_slider(audio_wave.fs)
-        self.plot_wave(audio_wave)
+        self.update_plot_layout(self.view_model.plot_layout_state, audio_wave)
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -152,42 +153,28 @@ class DocumentView(QWidget):
         scene = self.graphics_widget.scene()
         scene.sigMouseMoved.connect(self.on_mouse_moved)
 
-    def plot_wave(self, audio_wave: AudioWaveState | None = None):
-        """Display waveform only"""
-        if audio_wave is None:
-            audio_wave = self.view_model.audio_wave_state
+    def show_spectrogram(self, show: bool):
+        self.view_model.show_spectrogram(show)
 
-        self.plot_type = 1
+    def update_plot_layout(self, layout_state: PlotLayoutState, audio_wave: AudioWaveState):
         self.clear_plots()
 
         self.wave_plot = self.create_wave_plot(0, 0, audio_wave)
 
-        self.wave_plot.setLabel("bottom", self.tr("Time"), units="s")
-        self.wave_plot.getAxis("bottom").setStyle(showValues=True)
+        if layout_state.is_spectrogram:
+            self.wave_plot.getAxis("bottom").setStyle(showValues=False)
+            self.wave_plot.getAxis("left").setWidth(60)
+    
+            self.spec_plot = SpectrogramPlot(linked_plot=self.wave_plot)
+            self.graphics_widget.addItem(self.spec_plot, row=1, col=0)
+            self.plot_spectrogram(self.view_model.sgram_state)
+            self.spec_plot.show()
 
-        self.connect_plot_signals()
-        self.update_selection_box(self.view_model.select_state)
-
-    def plot_wave_sgram(self):
-        """Display waveform and spectrogram"""
-        self.plot_type = 2
-        self.clear_plots()
-
-        self.wave_plot = self.create_wave_plot(
-            row=0, col=0, audio_wave=self.view_model.audio_wave_state
-        )
-
-        self.wave_plot.getAxis("bottom").setStyle(showValues=False)
-
-        self.wave_plot.getAxis("left").setWidth(60)
-
-        self.spec_plot = SpectrogramPlot(linked_plot=self.wave_plot)
-        self.graphics_widget.addItem(self.spec_plot, row=1, col=0)
-        self.plot_spectrogram(self.view_model.sgram_state)
-        self.spec_plot.show()
-
-        self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
-        self.graphics_widget.ci.layout.setRowStretchFactor(1, 2)
+            self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
+            self.graphics_widget.ci.layout.setRowStretchFactor(1, 2)
+        else:
+            self.wave_plot.setLabel("bottom", self.tr("Time"), units="s")
+            self.wave_plot.getAxis("bottom").setStyle(showValues=True)
 
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
@@ -283,9 +270,9 @@ class DocumentView(QWidget):
         else:
             box_left = xrange = 0
 
-        if self.spec_plot and self.plot_type == 2:
+        if self.spec_plot is not None:
             self.spec_plot.update_selection_region(box_left, xrange)
-        if self.wave_plot:
+        if self.wave_plot is not None:
             self.wave_plot.update_selection_region(box_left, xrange)
 
     def update_playback_cursor(self, playback: PlaybackState):
