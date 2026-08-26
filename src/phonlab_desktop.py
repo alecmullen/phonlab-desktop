@@ -14,7 +14,7 @@ try:
     example_audio = importlib.resources.files('phonlab') / 'data' / 'example_audio' / 'two_plus_two.wav'
     librosa.load(example_audio)
 except FileNotFoundError:
-    logger.exception("Example file not found. Librosa JIT funcitons not pre-compiled.")
+    logger.exception("Example file not found. Librosa JIT functions not pre-compiled.")
 
 if __name__ == "__main__":
 
