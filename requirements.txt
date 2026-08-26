@@ -6,3 +6,4 @@ pyqtgraph==0.14
 sounddevice==0.5.5
 librosa==0.11
 numba
+phonlab @ git+https://github.com/phonetics-projects/phonlab.git
