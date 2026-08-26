@@ -3,7 +3,7 @@ from PyQt6.QtGui import QFont
 from pyqtgraph.Qt import QtCore, QtGui
 
 
-class Label(pg.GraphicsObject):
+class LabelView(pg.GraphicsObject):
     def __init__(self, size: tuple, label: str):
         super().__init__()
         self.size = size

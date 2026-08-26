@@ -5,7 +5,7 @@ from PyQt6.QtGui import QPainter, QPainterPath, QPicture
 V_MARGIN = 0.05
 H_MARGIN = 0.075
 
-class Node(pg.GraphicsObject):
+class NodeView(pg.GraphicsObject):
     def __init__(self, x: float, ys: list[float]):
         super().__init__()
         self.x = x
@@ -13,7 +13,8 @@ class Node(pg.GraphicsObject):
 
         self.setPos(x, ys[0])
 
-        circle = pg.PlotDataItem([0], [0], symbol="o", symbolPen="b")
+        
+        circle = pg.PlotDataItem([0], [0], symbol="o", symbolPen="b", symbolSize=8)
         circle.setParentItem(self)
 
         self.pic = QPicture()

@@ -4,8 +4,8 @@ from PyQt6.QtWidgets import QWidget
 
 from ui.annotation.annotation_state import AnnotationState
 from ui.annotation.annotation_view_model import AnnotationViewModel
-from ui.annotation.component.label import Label
-from ui.annotation.component.node import Node
+from ui.annotation.component.label_view import LabelView
+from ui.annotation.component.node_view import NodeView
 
 
 class AnnotationPlot(pg.PlotItem):
@@ -19,6 +19,7 @@ class AnnotationPlot(pg.PlotItem):
         super().__init__(parent)
 
         self.view_model = view_model
+        self.view_model.subscribe(self.on_state_change)
 
         self.getViewBox().setXLink(linked_plot)
         self.getAxis("left").setWidth(60)
@@ -31,11 +32,16 @@ class AnnotationPlot(pg.PlotItem):
         else:
             self.getAxis("bottom").setStyle(showValues=False)
 
-        self.nodes: list[Node] = []
-        self.labels: list[Label] = []
+        self.node_views: dict[int, NodeView] = {}
+        self.label_views: list[LabelView] = []
         self.populate(self.view_model.annotation_state)
 
-        self.dragging_node: Node = None
+        self.dragging_node: int = None
+
+    @pyqtSlot(object)
+    def on_state_change(self, model):
+        if isinstance(model, AnnotationState):
+            self.populate(model)
 
     def connect_plot_signals(self):
         self.scene().sigMouseMoved.connect(self.on_mouse_moved)
@@ -46,6 +52,7 @@ class AnnotationPlot(pg.PlotItem):
             self.getAxis("bottom").enableAutoSIPrefix(False)
 
     def populate(self, annotation_state: AnnotationState):
+        self.clear()
         nodes = annotation_state.nodes
         types = annotation_state.types
 
@@ -62,23 +69,23 @@ class AnnotationPlot(pg.PlotItem):
                 center_x = (x_e - x_s) / 2 + x_s
                 center_y = i + 0.5
                 width = (x_e - x_s)
-                label_item = Label((width, label_height), label.label)
+                label_item = LabelView((width, label_height), label.label)
                 label_item.setPos(center_x, center_y)
-                self.labels.append(label_item)
+                self.label_views.append(label_item)
                 self.addItem(label_item)
 
                 node_extents[label.e_node].add(i)
                 node_extents[label.s_node].add(i)
 
         for node in nodes:
-            node = Node(nodes[node], sorted(node_extents[node]))
-            self.nodes.append(node)
-            self.addItem(node)
+            node_view = NodeView(nodes[node], sorted(node_extents[node]))
+            self.node_views[node] = node_view
+            self.addItem(node_view)
 
     def handle_mouse_press(self, event):
-        for node in self.nodes:
-            child_pos = node.mapFromScene(event.position())
-            if node.contains(child_pos):
+        for node, node_view in self.node_views.items():
+            child_pos = node_view.mapFromScene(event.position())
+            if node_view.contains(child_pos):
                 self.dragging_node = node
                 event.accept()
                 return True
@@ -95,5 +102,4 @@ class AnnotationPlot(pg.PlotItem):
     def on_mouse_moved(self, pos):
         if self.dragging_node is not None:
             x = self.getViewBox().mapSceneToView(pos).x()
-            y = self.dragging_node.y()
-            self.dragging_node.setPos(x, y)
+            self.view_model.change_node_state(self.dragging_node, x)
