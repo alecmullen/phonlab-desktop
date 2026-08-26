@@ -6,9 +6,12 @@ from PyQt6.QtCore import pyqtSlot
 
 from core.usecase.load_audio import AudioSignal, LoadAudio
 from core.usecase.play_audio import PlayAudio
+from mock.mock_entity import FAKE_ANNOTATION_STATE
 from res.constants import DEFAULT_WINDOW_LENGTH
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.base.view_model import ViewModel
+from ui.document.state.annotation_state import AnnotationState
 from ui.document.state.audio_signal_state import AudioSignalState, to_audio_signal_state
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
@@ -27,6 +30,7 @@ class DocumentViewModel(ViewModel):
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
+        self.annotation_state: AnnotationState = FAKE_ANNOTATION_STATE
 
         self.audio_wave_view_model = AudioWaveViewModel()
         self.spectrogram_view_model = SpectrogramViewModel()
@@ -87,6 +91,8 @@ class DocumentViewModel(ViewModel):
             )
             self.state_changed.emit(StatusMessageState(msg))
 
+            self.update_annotation_state()
+
         use_case = LoadAudio(filepath)
         self.launch_use_case("load_audio", use_case, on_success, self.on_error)
 
@@ -104,6 +110,12 @@ class DocumentViewModel(ViewModel):
         self.audio_wave_view_model.set_wave_state(
             to_audio_wave_state(self.audio_signal_state, start, end)
         )
+
+    def update_annotation_state(self):
+        start, end = self.document_window_state.start, self.document_window_state.end
+        fs = self.audio_signal_state.fs
+        state = AnnotationWindowState(self.annotation_state, start / fs, end / fs)
+        self.annotation_view_model.set_annotation_state(state)
 
     def play_audio(self, x: np.ndarray, fs: int):
         if self.is_audio_playing:
@@ -126,6 +138,7 @@ class DocumentViewModel(ViewModel):
 
         self.compute_spectrogram()
         self.update_audio_waveform()
+        self.update_annotation_state()
 
     def go_back(self):
         window_size = self.document_window_state.end - self.document_window_state.start

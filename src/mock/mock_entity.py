@@ -1,4 +1,4 @@
-from ui.annotation.annotation_state import (
+from ui.document.state.annotation_state import (
     AnnotationLabelState,
     AnnotationState,
     AnnotationTypeState,

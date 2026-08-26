@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -16,5 +16,5 @@ class AnnotationTypeState:
 
 @dataclass(frozen=True)
 class AnnotationState:
-    nodes: dict[int, float]
-    types: list[AnnotationTypeState]
+    nodes: dict[int, float] = field(default_factory=dict)
+    types: list[AnnotationTypeState] = field(default_factory=list)
