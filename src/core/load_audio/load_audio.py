@@ -1,7 +1,7 @@
 import phonlab as phon
-from core.entity.audio_document import AudioDocument
-from core.entity.audio_signal import AudioSignal
-from core.usecase.use_case import UseCase
+from core.base.use_case import UseCase
+from core.load_audio.entity.audio_document import AudioDocument
+from core.load_audio.entity.audio_signal import AudioSignal
 from res.constants import MAX_SGRAM_LENGTH
 
 

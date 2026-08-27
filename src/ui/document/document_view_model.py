@@ -4,15 +4,15 @@ import numpy as np
 from PyQt6.QtCore import QTimer, pyqtSlot
 
 import phonlab as phon
-from core.entity.audio_document import AudioDocument
-from core.entity.audio_open_options import AudioOpenOptions
-from core.entity.playback_poll import PlaybackPoll
-from core.entity.spectrogram import Spectrogram
-from core.entity.spectrogram_mmap import SpectrogramMmap
-from core.usecase.compute_sgram import ComputeSpectrogram
-from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
-from core.usecase.load_audio import LoadAudio
-from core.usecase.play_audio import PlayAudio
+from core.load_audio.entity.audio_document import AudioDocument
+from core.load_audio.entity.audio_open_options import AudioOpenOptions
+from core.load_audio.load_audio import LoadAudio
+from core.play_audio.audio_player import AudioPlayer
+from core.play_audio.entity.playback_poll import PlaybackPoll
+from core.spectrogram.compute_sgram import ComputeSpectrogram
+from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
+from core.spectrogram.entity.spectrogram import Spectrogram
+from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
@@ -40,6 +40,8 @@ class DocumentViewModel(ViewModel):
         self.playback_state = PlaybackState()
 
         self.click_timer: QTimer | None = None
+
+        self.audio_player = AudioPlayer()
 
     def load_audio(self, filepath: str, options: AudioOpenOptions):
         # LoadAudio yields twice: a fast preview of the first window, then
@@ -192,7 +194,7 @@ class DocumentViewModel(ViewModel):
         self.stop_audio()
 
         @pyqtSlot(object)
-        def on_success(playback_poll: PlaybackPoll):
+        def on_poll(playback_poll: PlaybackPoll):
             high_latency = playback_poll.latency > LATENCY_WARNING_THRESHOLD_S
 
             if high_latency and not self.playback_state.high_latency:
@@ -201,16 +203,17 @@ class DocumentViewModel(ViewModel):
                 ).format(playback_poll.latency  * 1000)
                 self.state_changed.emit(StatusMessageState(msg))
 
-            self.state_changed.emit(PlaybackState(playback_poll.is_playing, playback_poll.current_time, high_latency))
+            self.playback_state = PlaybackState(playback_poll.is_playing, playback_poll.current_time, high_latency)
+            self.state_changed.emit(self.playback_state)
 
-        use_case = PlayAudio(x, fs, start / self.audio_wave_state.fs)
-        self.launch_use_case("play_audio", use_case, on_success, self.on_error)
+        self.audio_player.playback_poll.connect(on_poll)
+        self.audio_player.play(x, fs, start / self.audio_wave_state.fs)
 
     def stop_audio(self):
-        self.close_thread("play_audio")
-        self.state_changed.emit(PlaybackState(is_playing=False))     
+        self.audio_player.stop()
 
     def close_threads(self):
+        self.audio_player.stop()
         super().close_threads()
 
     def go_back(self):
