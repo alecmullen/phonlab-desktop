@@ -24,7 +24,6 @@ from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
 
-PLAYBACK_CURSOR_POLL_MS = 33
 LATENCY_WARNING_THRESHOLD_S = 0.1  # audacity's own reference for "robust" latency
 
 
