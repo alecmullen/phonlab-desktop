@@ -4,14 +4,15 @@ import numpy as np
 from PyQt6.QtCore import QTimer, pyqtSlot
 
 import phonlab as phon
-from core.audio_player import AudioPlayer
 from core.entity.audio_document import AudioDocument
 from core.entity.audio_open_options import AudioOpenOptions
+from core.entity.playback_poll import PlaybackPoll
 from core.entity.spectrogram import Spectrogram
 from core.entity.spectrogram_mmap import SpectrogramMmap
 from core.usecase.compute_sgram import ComputeSpectrogram
 from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.usecase.load_audio import LoadAudio
+from core.usecase.play_audio import PlayAudio
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
@@ -37,17 +38,9 @@ class DocumentViewModel(ViewModel):
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
+        self.playback_state = PlaybackState()
 
         self.click_timer: QTimer | None = None
-
-        self.audio_player = AudioPlayer(self)
-        self.audio_player.playback_finished.connect(self._on_playback_finished)
-        self.audio_player.playback_error.connect(self._on_playback_error)
-        self.audio_player.stream_latency.connect(self._on_stream_latency)
-
-        self.playback_cursor_timer = QTimer(self)
-        self.playback_cursor_timer.setInterval(PLAYBACK_CURSOR_POLL_MS)
-        self.playback_cursor_timer.timeout.connect(self._poll_playback_cursor)
 
     def load_audio(self, filepath: str, options: AudioOpenOptions):
         # LoadAudio yields twice: a fast preview of the first window, then
@@ -196,45 +189,27 @@ class DocumentViewModel(ViewModel):
                 "sgram_mmap", use_case, on_success, self.on_error, only_once=True
             )
 
-    def play_audio(self, x: np.ndarray, fs: int, start_sample: int = 0):
-        self.is_audio_playing = True
-        self.audio_player.play(x, fs, start_sample=start_sample)
-        self.playback_cursor_timer.start()
+    def play_audio(self, x: np.ndarray, fs: int, start: int):
+        self.stop_audio()
+
+        @pyqtSlot(object)
+        def on_success(playback_poll: PlaybackPoll):
+            high_latency = playback_poll.latency > LATENCY_WARNING_THRESHOLD_S
+
+            if high_latency and not self.playback_state.high_latency:
+                msg = self.tr(
+                    "System audio latency is a little long ({:.0f} ms). Consider using a different audio device."
+                ).format(playback_poll.latency  * 1000)
+                self.state_changed.emit(StatusMessageState(msg))
+
+            self.state_changed.emit(PlaybackState(playback_poll.is_playing, playback_poll.current_time, high_latency))
+
+        use_case = PlayAudio(x, fs, start / self.audio_wave_state.fs)
+        self.launch_use_case("play_audio", use_case, on_success, self.on_error)
 
     def stop_audio(self):
-        self.audio_player.stop()
-        self.is_audio_playing = False
-        self.playback_cursor_timer.stop()
-        self.state_changed.emit(PlaybackState(is_playing=False))
-
-    @pyqtSlot()
-    def _on_playback_finished(self):
-        self.is_audio_playing = False
-        self.playback_cursor_timer.stop()
-        self.state_changed.emit(PlaybackState(is_playing=False))
-
-    @pyqtSlot(str)
-    def _on_playback_error(self, err: str):
-        self.is_audio_playing = False
-        self.playback_cursor_timer.stop()
-        self.state_changed.emit(PlaybackState(is_playing=False))
-        self.on_error(err)
-
-    @pyqtSlot(float)
-    def _on_stream_latency(self, latency: float):
-        if latency > LATENCY_WARNING_THRESHOLD_S:
-            msg = self.tr(
-                "System audio latency is a little long ({:.0f} ms). Consider using a different audio device."
-            ).format(latency * 1000)
-            self.state_changed.emit(StatusMessageState(msg))
-
-    @pyqtSlot()
-    def _poll_playback_cursor(self):
-        if not self.audio_player.is_playing:
-            return
-        self.state_changed.emit(
-            PlaybackState(is_playing=True, position=self.audio_player.current_time)
-        )
+        self.close_thread("play_audio")
+        self.state_changed.emit(PlaybackState(is_playing=False))     
 
     def close_threads(self):
         self.playback_cursor_timer.stop()
@@ -387,14 +362,14 @@ class DocumentViewModel(ViewModel):
 
         if start != end:
             section = self.audio_wave_state.x[start:end]
-            self.play_audio(section, self.audio_wave_state.fs, start_sample=start)
+            self.play_audio(section, self.audio_wave_state.fs, start=start)
 
     def play_visible_audio(self):
         start, end = self.document_window_state.start, self.document_window_state.end
 
         if len(self.audio_wave_state.x) > 0:
             section = self.audio_wave_state.x[start:end]
-            self.play_audio(section, self.audio_wave_state.fs, start_sample=start)
+            self.play_audio(section, self.audio_wave_state.fs, start=start)
 
     @pyqtSlot(object)
     def on_error(self, err):

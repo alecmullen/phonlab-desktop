@@ -42,3 +42,7 @@ class ViewModel(QObject):
     def close_threads(self):
         for key in self.job_managers:
             self.job_managers[key].quit()
+
+    def close_thread(self, key):
+        if key in self.job_managers:
+            self.job_managers[key].quit()
