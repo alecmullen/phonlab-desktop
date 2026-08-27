@@ -63,8 +63,9 @@ class PlayAudio(UseCase[PlaybackPoll]):
     
                 if not self._should_stop:
                     time.sleep(stream.latency)
-    
+
                 self._is_playing = False
+                yield PlaybackPoll(self._get_current_time(), self._latency, self._is_playing)
 
         except RuntimeError as e:
             print(f"Audio playback error: {e}")
