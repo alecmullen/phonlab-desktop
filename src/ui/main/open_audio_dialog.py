@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.entity.audio_open_options import AudioOpenOptions
+from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from res.constants import SAMPLE_RATE_OPTIONS
 
 CHANNEL_MODE_MONO = "mono"
