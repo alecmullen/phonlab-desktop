@@ -6,6 +6,7 @@ from PyQt6.QtCore import QTimer, pyqtSlot
 import phonlab as phon
 from core.load_audio.entity.audio_document import AudioDocument
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
+from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
@@ -31,6 +32,7 @@ class DocumentViewModel(ViewModel):
     def __init__(self):
         super().__init__()
         self.audio_wave_state: AudioWaveState = AudioWaveState()
+        self.raw_wave_state: AudioWaveState = AudioWaveState()
         self.audio_document: AudioDocument | None = None
         self.sgram_state: SpectrogramState = SpectrogramState()
         self.is_audio_playing = False
@@ -57,10 +59,21 @@ class DocumentViewModel(ViewModel):
             self.audio_document = audio_document
             audio_signal = audio_document.channels[audio_document.primary_channel]
 
+            if audio_document.original_channels is not None:
+                raw_signal = AudioSignal(
+                    audio_document.original_channels[audio_document.primary_channel],
+                    audio_document.original_fs,
+                )
+            else:
+                # Preview yield: the unprocessed file hasn't been read yet,
+                # so fall back to the prepped preview signal for display.
+                raw_signal = audio_signal
+
             if preview:
                 self.remove_selection()
 
             self.audio_wave_state = to_audio_wave_state(audio_signal)
+            self.raw_wave_state = to_audio_wave_state(raw_signal)
             self.state_changed.emit(self.audio_wave_state)
 
             signal_end = len(audio_signal.x) - 1

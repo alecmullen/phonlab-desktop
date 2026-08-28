@@ -111,7 +111,7 @@ class DocumentView(QWidget):
         elif isinstance(model, LoadProgressState):
             self.update_load_progress(model)
         elif isinstance(model, PlotLayoutState):
-            self.update_plot_layout(model, self.view_model.audio_wave_state)
+            self.update_plot_layout(model, self.view_model.raw_wave_state)
 
     def load_audio(self, filename, options):
         """Load an audio file into this document"""
@@ -119,7 +119,22 @@ class DocumentView(QWidget):
 
     def load_audio_wave_view(self, audio_wave: AudioWaveState):
         self.reset_slider(audio_wave.fs)
-        self.update_plot_layout(self.view_model.plot_layout_state, audio_wave)
+        self.update_plot_layout(self.view_model.plot_layout_state, self.view_model.raw_wave_state)
+
+    def _raw_window_bounds(self, start: int, end: int) -> tuple[int, int]:
+        """Convert a [start, end) sample range from the processed audio's
+        sample rate (used for scrolling/selection/spectrogram) into the
+        equivalent sample indices in the raw display audio, which may have
+        a different sample rate."""
+        proc_fs = self.view_model.audio_wave_state.fs
+        raw_wave = self.view_model.raw_wave_state
+        raw_len = len(raw_wave.x)
+        if proc_fs == 0 or raw_wave.fs == 0 or raw_len == 0:
+            return start, end
+        ratio = raw_wave.fs / proc_fs
+        raw_start = min(max(round(start * ratio), 0), raw_len - 1)
+        raw_end = min(max(round(end * ratio), 0), raw_len - 1)
+        return raw_start, raw_end
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -132,18 +147,19 @@ class DocumentView(QWidget):
         self.selection_region_wave = None
         self.selection_region_spec = None
 
-    def create_wave_plot(self, row, col, audio_wave: AudioWaveState, rowspan=1):
+    def create_wave_plot(self, row, col, raw_wave: AudioWaveState, rowspan=1):
         """Create a waveform plot at the specified position"""
         start, end = (
             self.view_model.document_window_state.start,
             self.view_model.document_window_state.end,
         )
+        raw_start, raw_end = self._raw_window_bounds(start, end)
 
         wave_plot = AudioWavePlot()
         self.graphics_widget.addItem(wave_plot, row=row, col=col, rowspan=rowspan)
 
         wave_plot.plot_wave(
-            audio_wave.t, audio_wave.x, start, end, audio_wave.max_x, audio_wave.min_x
+            raw_wave.t, raw_wave.x, raw_start, raw_end, raw_wave.max_x, raw_wave.min_x
         )
 
         return wave_plot
@@ -156,10 +172,10 @@ class DocumentView(QWidget):
     def show_spectrogram(self, show: bool):
         self.view_model.show_spectrogram(show)
 
-    def update_plot_layout(self, layout_state: PlotLayoutState, audio_wave: AudioWaveState):
+    def update_plot_layout(self, layout_state: PlotLayoutState, raw_wave: AudioWaveState):
         self.clear_plots()
 
-        self.wave_plot = self.create_wave_plot(0, 0, audio_wave)
+        self.wave_plot = self.create_wave_plot(0, 0, raw_wave)
 
         if layout_state.is_spectrogram:
             self.wave_plot.getAxis("bottom").setStyle(showValues=False)
@@ -190,8 +206,8 @@ class DocumentView(QWidget):
     def update_wave_y_range(self):
         """Update the y-axis range of the waveform plot based on scale factor"""
         max_x, min_x = (
-            self.view_model.audio_wave_state.max_x,
-            self.view_model.audio_wave_state.min_x,
+            self.view_model.raw_wave_state.max_x,
+            self.view_model.raw_wave_state.min_x,
         )
         if self.wave_plot:
             y_max = max(abs(min_x), abs(max_x))
@@ -292,11 +308,14 @@ class DocumentView(QWidget):
 
     def update_document_window(self, doc_window: DocumentWindowState):
         start, end = doc_window.start, doc_window.end
-        t, x = self.view_model.audio_wave_state.t, self.view_model.audio_wave_state.x
         self.slider.setValue(start)
 
         if self.wave_plot:
-            self.wave_plot.update_wave(t[start:end], x[start:end], t[end])
+            raw_start, raw_end = self._raw_window_bounds(start, end)
+            raw_t, raw_x = self.view_model.raw_wave_state.t, self.view_model.raw_wave_state.x
+            self.wave_plot.update_wave(
+                raw_t[raw_start:raw_end], raw_x[raw_start:raw_end], raw_t[raw_end]
+            )
 
         self.view_model.compute_spectrogram()
         self.update_slider_page_step(doc_window)
