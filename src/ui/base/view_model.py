@@ -30,19 +30,31 @@ class ViewModel(QObject):
                 return
             self.job_managers[key].queue_job(Job(use_case, on_success, on_error))
         else:
-            self.job_managers[key] = JobManager()
-            self.job_managers[key](Job(use_case, on_success, on_error))
+            manager = JobManager()
+            self.job_managers[key] = manager
+            manager(Job(use_case, on_success, on_error))
 
             @pyqtSlot()
             def on_finished():
-                del self.job_managers[key]
+                # Only remove our own entry: close_thread() may already have
+                # evicted it (and a newer manager may since have taken the
+                # key), and a stopped worker can still emit `finished` after
+                # that happens.
+                if self.job_managers.get(key) is manager:
+                    del self.job_managers[key]
 
-            self.job_managers[key].signals.finished.connect(on_finished)
+            manager.signals.finished.connect(on_finished)
 
     def close_threads(self):
         for key in self.job_managers:
             self.job_managers[key].quit()
 
     def close_thread(self, key):
-        if key in self.job_managers:
-            self.job_managers[key].quit()
+        # Evict immediately rather than waiting for the async `finished`
+        # signal, so a launch_use_case() call for the same key right after
+        # this (e.g. to recompute against a just-replaced buffer) starts a
+        # fresh job instead of being silently dropped by `only_once`, or
+        # queued onto the worker we just asked to stop.
+        manager = self.job_managers.pop(key, None)
+        if manager is not None:
+            manager.quit()

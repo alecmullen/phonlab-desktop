@@ -2,6 +2,7 @@ import phonlab as phon
 from core.base.use_case import UseCase
 from core.load_audio.entity.audio_document import AudioDocument
 from core.load_audio.entity.audio_signal import AudioSignal
+from core.load_audio.prep_channel import prep_channel
 from res.constants import MAX_SGRAM_LENGTH
 
 
@@ -23,15 +24,7 @@ class LoadAudio(UseCase[AudioDocument]):
     def _prep_channels(self, raw_channels, fs) -> dict[int, AudioSignal]:
         channels = {}
         for idx, raw in zip(self.retained_channels, raw_channels):
-            x, prepped_fs = phon.prep_audio(
-                raw,
-                fs,
-                target_fs=self.target_fs,
-                scale=True,
-                pre=0.94,
-                add_tiny_noise=True,
-            )
-            channels[idx] = AudioSignal(x, prepped_fs)
+            channels[idx] = prep_channel(raw, fs, self.target_fs)
         return channels
 
     def invoke(self):
