@@ -1,23 +1,31 @@
+import threading
 import time
 
 import numpy as np
 import sounddevice as sd
-from PyQt6.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QRunnable, pyqtSignal
 
 from core.play_audio.entity.latency_info import LatencyInfo
 
 
 class AudioThread(QRunnable):
 
-    TARGET_CHUNK_MS = 20 
+    TARGET_CHUNK_MS = 20
 
     def __init__(self, audio_data: np.ndarray, fs: int):
         super().__init__()
 
         self.signals = AudioThreadSignals()
-        self.slots = AudioThreadSlots(self)
 
         self._should_stop = False
+
+        # Set once this thread's OutputStream has been fully closed, so
+        # callers can wait for PortAudio to be quiescent before another
+        # AudioThread touches the global PortAudio session (sd._terminate/
+        # _initialize below). Without this, a new thread can re-init
+        # PortAudio while a previous thread's stream is still shutting
+        # down, which crashes with PortAudioError -9986 (paInternalError).
+        self.done_event = threading.Event()
 
         self._audio_data = audio_data
         self._fs = fs
@@ -53,6 +61,8 @@ class AudioThread(QRunnable):
         except Exception as e:
             self.signals.error.emit(str(e))
             raise
+        finally:
+            self.done_event.set()
     
     def _open_stream(self, samplerate: int, channels: int) -> sd.OutputStream:
         """Open an OutputStream, falling back to a more conservative latency
@@ -79,13 +89,3 @@ class AudioThreadSignals(QObject):
     finished = pyqtSignal()
     error = pyqtSignal(str)
     latency = pyqtSignal(object)
-
-class AudioThreadSlots(QObject):
-    def __init__(self, audio_thread: AudioThread):
-        super().__init__()
-        self._audio_thread = audio_thread
-
-    @pyqtSlot()
-    def stop(self):
-        self._audio_thread.stop()
-            
