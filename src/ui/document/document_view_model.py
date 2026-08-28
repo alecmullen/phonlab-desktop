@@ -371,3 +371,7 @@ class DocumentViewModel(ViewModel):
     @pyqtSlot(object)
     def on_error(self, err):
         print(err)
+
+    def close_threads(self):
+        self.audio_player.stop()
+        return super().close_threads()

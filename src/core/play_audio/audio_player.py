@@ -1,4 +1,3 @@
-import threading
 import time
 
 import numpy as np
@@ -20,36 +19,35 @@ class AudioPlayer(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._stop_event = threading.Event()
-        self._thread: threading.Thread | None = None
 
         self._start_time = 0.0
-        self._audible_start_time = float("inf")
+        self._audible_start_time: float | None = None
         self._audio_length_time = 0.0
         self._latency = 0.0
+        self._audio_thread: AudioThread | None = None
 
         self.poll_timer = QTimer(self)
         self.poll_timer.setInterval(self.PLAYBACK_POLL_MS)
         self.poll_timer.timeout.connect(self._poll_playback)
 
     def _get_current_time(self) -> float:
-        current_time = max(0.0, time.monotonic() - self._audible_start_time)
-        current_time = min(current_time, self._audio_length_time)
+        if self._audible_start_time is None:
+            current_time = 0.0
+        else:
+            current_time = max(0.0, time.monotonic() - self._audible_start_time)
+            current_time = min(current_time, self._audio_length_time)
         return current_time + self._start_time
-
-    def _is_playing(self) -> bool:
-        return self._thread is not None and self._thread.is_alive()
 
     def play(self, audio_data: np.ndarray, fs: int, start_time: float):
         """Play audio using whatever the current default output device is."""
         self.stop() 
-        self._stop_event.clear()
 
         self._start_time = start_time
-        self._audible_start_time = float("inf")
+        self._audible_start_time = None
         self._audio_length_time = len(audio_data) / fs
 
         audio_thread = AudioThread(audio_data, fs)
+        self._audio_thread = audio_thread
 
         audio_thread.signals.finished.connect(self._on_thread_finished)
         audio_thread.signals.error.connect(self._on_error)
@@ -66,7 +64,7 @@ class AudioPlayer(QObject):
 
     @pyqtSlot()
     def _on_thread_finished(self):
-        self.playback_poll.emit(PlaybackPoll(self._get_current_time(), self._latency, False))
+        self.playback_poll.emit(PlaybackPoll(0.0, self._latency, False))
         self.poll_timer.stop()
 
     @pyqtSlot(object)
