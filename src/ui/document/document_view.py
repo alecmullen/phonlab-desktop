@@ -13,9 +13,11 @@ from PyQt6.QtWidgets import (
 from ui.document.component.audio_wave_plot import AudioWavePlot
 from ui.document.component.spectrogram_plot import SpectrogramPlot
 from ui.document.document_view_model import DocumentViewModel
+from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.state.audio_wave_state import AudioWaveState
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
+from ui.document.state.mark_state import MarkState
 from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
@@ -112,6 +114,8 @@ class DocumentView(QWidget):
             self.update_load_progress(model)
         elif isinstance(model, PlotLayoutState):
             self.update_plot_layout(model, self.view_model.raw_wave_state)
+        elif isinstance(model, MarkState):
+            self.update_mark(model)
 
     def load_audio(self, filename, options):
         """Load an audio file into this document"""
@@ -143,6 +147,11 @@ class DocumentView(QWidget):
         if self.wave_plot:
             self.wave_plot.clear()
             self.wave_plot = None
+
+        # graphics_widget.clear() above already tore the spectrogram plot
+        # item out of the scene; null the reference here too so mouse-hit
+        # tests elsewhere don't touch a deleted PyQtGraph item.
+        self.spec_plot = None
 
         self.selection_region_wave = None
         self.selection_region_spec = None
@@ -194,6 +203,7 @@ class DocumentView(QWidget):
 
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
+        self.update_mark(self.view_model.mark_state)
 
     def plot_spectrogram(self, sgram: SpectrogramState):
         if self.spec_plot is None:
@@ -290,6 +300,12 @@ class DocumentView(QWidget):
             self.spec_plot.update_selection_region(box_left, xrange)
         if self.wave_plot is not None:
             self.wave_plot.update_selection_region(box_left, xrange)
+
+    def update_mark(self, mark: MarkState):
+        if self.spec_plot is not None:
+            self.spec_plot.set_mark_position(mark.position, mark.is_set)
+        if self.wave_plot is not None:
+            self.wave_plot.set_mark_position(mark.position, mark.is_set)
 
     def update_playback_cursor(self, playback: PlaybackState):
         if self.wave_plot:
@@ -525,7 +541,12 @@ class DocumentView(QWidget):
                 self.is_dragging = False
                 self.view_model.play_selected_audio()
             else:
-                self.pending_single_click = (scene_pos, event)
+                # Capture the modifier state now, at the actual click, not
+                # 250ms later when the single-click timer fires below — the
+                # user may well have released Shift by then, which would
+                # silently misplace the mark or skip it.
+                shift_pressed = event.modifiers() == Qt.KeyboardModifier.ShiftModifier
+                self.pending_single_click = (scene_pos, shift_pressed)
                 if self.click_timer is not None:
                     self.click_timer.stop()
                 self.click_timer = QTimer()
@@ -535,10 +556,7 @@ class DocumentView(QWidget):
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
-            scene_pos, _ = self.pending_single_click
-
-            modifiers = QApplication.keyboardModifiers()
-            shift_pressed = modifiers == Qt.KeyboardModifier.ShiftModifier
+            scene_pos, shift_pressed = self.pending_single_click
 
             if shift_pressed:
                 self.set_mark(scene_pos)
@@ -549,7 +567,8 @@ class DocumentView(QWidget):
         self.click_timer = None
 
     def set_mark(self, scene_pos):
-
+        """Shift+Click: place a persistent mark at this time, used as the
+        paste insertion point (and available for future uses)."""
         clicked_plot = None
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.wave_plot
@@ -559,7 +578,9 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
-        self.view_model.remove_selection()
+        mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
+        x = mouse_point.x()
+        self.view_model.set_mark(x)
 
     def handle_right_click(self, scene_pos):
         pass
@@ -571,6 +592,21 @@ class DocumentView(QWidget):
     def play_visible(self):
         """Play the audio currently visible in the viewport"""
         self.view_model.play_visible_audio()
+
+    def copy_selection(self) -> AudioSignal | None:
+        return self.view_model.copy_selection()
+
+    def cut_selection(self) -> AudioSignal | None:
+        return self.view_model.cut_selection()
+
+    def paste_at_cursor(self, clip: AudioSignal):
+        self.view_model.paste_at_mark(clip)
+
+    def undo(self):
+        self.view_model.undo()
+
+    def redo(self):
+        self.view_model.redo()
 
     def cleanup(self):
         """Clean up resources when closing document"""

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtGui import QAction, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.open_audio_dialog import OpenAudioDialog
@@ -26,6 +27,7 @@ class MainWindow(QMainWindow):
 
         self.filters = "Sound files (*.wav)"
         self.splash = splash
+        self.clipboard: AudioSignal | None = None
 
         # Create tab widget
         self.tab_widget = QTabWidget()
@@ -60,7 +62,7 @@ class MainWindow(QMainWindow):
             QIcon.fromTheme("window-close"), self.tr("&Close"), self
         )
         self.close_action.setStatusTip(self.tr("Close current file"))
-        self.close_action.setShortcut("Ctrl-W")
+        self.close_action.setShortcut("Ctrl+W")
         self.close_action.triggered.connect(self.close_current_tab)
         fileMenu.addAction(self.close_action)
 
@@ -74,7 +76,39 @@ class MainWindow(QMainWindow):
         fileMenu.addAction(self.exit_action)
 
         # Edit Menu
-        mainMenu.addMenu("&Edit")
+        editMenu = mainMenu.addMenu("&Edit")
+
+        self.undo_action = QAction(self.tr("&Undo"), self)
+        self.undo_action.setStatusTip(self.tr("Undo the last cut or paste"))
+        self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        self.undo_action.triggered.connect(self.undo)
+        editMenu.addAction(self.undo_action)
+
+        self.redo_action = QAction(self.tr("&Redo"), self)
+        self.redo_action.setStatusTip(self.tr("Redo the last undone cut or paste"))
+        self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        self.redo_action.triggered.connect(self.redo)
+        editMenu.addAction(self.redo_action)
+
+        editMenu.addSeparator()
+
+        self.cut_action = QAction(self.tr("Cu&t"), self)
+        self.cut_action.setStatusTip(self.tr("Cut the selected audio"))
+        self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
+        self.cut_action.triggered.connect(self.cut_selection)
+        editMenu.addAction(self.cut_action)
+
+        self.copy_action = QAction(self.tr("&Copy"), self)
+        self.copy_action.setStatusTip(self.tr("Copy the selected audio"))
+        self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
+        self.copy_action.triggered.connect(self.copy_selection)
+        editMenu.addAction(self.copy_action)
+
+        self.paste_action = QAction(self.tr("&Paste"), self)
+        self.paste_action.setStatusTip(self.tr("Paste audio at the mark"))
+        self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
+        self.paste_action.triggered.connect(self.paste_at_cursor)
+        editMenu.addAction(self.paste_action)
 
         # View Menu
         viewMenu = mainMenu.addMenu("&View")
@@ -176,6 +210,20 @@ class MainWindow(QMainWindow):
             # Load the audio file
             doc.load_audio(filename, options)
 
+    def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
+        """Open a new tab containing the just-copied/cut samples, without
+        stealing focus from source_doc — an immediate Ctrl+Z after Cut
+        should undo the cut, not land on the empty history of the new tab."""
+        doc = DocumentView(DocumentViewModel())
+
+        source_index = self.tab_widget.indexOf(source_doc)
+        source_name = Path(self.tab_widget.tabText(source_index)).stem
+        tab_name = f"{source_name} (copy)"
+        self.tab_widget.addTab(doc, tab_name)
+
+        target_fs = source_doc.view_model.audio_wave_state.fs
+        doc.view_model.load_from_samples(clip.x, clip.fs, target_fs)
+
     def close_tab(self, index):
         """Close a tab"""
         widget = self.tab_widget.widget(index)
@@ -223,6 +271,37 @@ class MainWindow(QMainWindow):
         doc = self.get_current_document()
         if doc:
             doc.recenter_on_selection()
+
+    def copy_selection(self):
+        doc = self.get_current_document()
+        if doc:
+            clip = doc.copy_selection()
+            if clip is not None:
+                self.clipboard = clip
+                self._open_clip_tab(doc, clip)
+
+    def cut_selection(self):
+        doc = self.get_current_document()
+        if doc:
+            clip = doc.cut_selection()
+            if clip is not None:
+                self.clipboard = clip
+                self._open_clip_tab(doc, clip)
+
+    def paste_at_cursor(self):
+        doc = self.get_current_document()
+        if doc and self.clipboard is not None:
+            doc.paste_at_cursor(self.clipboard)
+
+    def undo(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.undo()
+
+    def redo(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.redo()
 
     def keyPressEvent(self, event):
         """Forward keyboard events to current document"""

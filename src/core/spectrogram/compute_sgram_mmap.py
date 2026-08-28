@@ -24,6 +24,10 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         self.step_size = step_size
         self.order = order
         self.chunk_duration = chunk_duration
+        self.sxx_mmap = None
+        self.t_mmap = None
+        self.mmap_file = None
+        self.ts_file = None
 
     def invoke(self):
         try:
@@ -81,6 +85,8 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         temp_dir = tempfile.gettempdir()
         mmap_file = os.path.join(temp_dir, f"spectrogram_{id(self)}.dat")
         ts_file = os.path.join(temp_dir, f"spectrogram_ts_{id(self)}.dat")
+        self.mmap_file = mmap_file
+        self.ts_file = ts_file
 
         try:
             sxx_mmap = np.memmap(

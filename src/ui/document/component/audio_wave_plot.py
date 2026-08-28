@@ -1,5 +1,6 @@
 import numpy as np
 import pyqtgraph as pg
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 from pyqtgraph import PlotDataItem
 
@@ -29,6 +30,14 @@ class AudioWavePlot(pg.PlotItem):
         self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen(color="r",width=2))
         self.addItem(self.cursor_line, ignoreBounds=True)
         self.cursor_line.setVisible(False)
+
+        self.mark_line = pg.InfiniteLine(
+            angle=90,
+            movable=False,
+            pen=pg.mkPen(color="g", width=2, style=Qt.PenStyle.DashLine),
+        )
+        self.addItem(self.mark_line, ignoreBounds=True)
+        self.mark_line.setVisible(False)
 
     def plot_wave(
         self,
@@ -64,6 +73,10 @@ class AudioWavePlot(pg.PlotItem):
     def set_cursor_position(self, x: float, visible: bool):
         self.cursor_line.setPos(x)
         self.cursor_line.setVisible(visible)
+
+    def set_mark_position(self, x: float, visible: bool):
+        self.mark_line.setPos(x)
+        self.mark_line.setVisible(visible)
 
     def clear(self):
         self.wave_curve = None
