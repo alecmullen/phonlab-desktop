@@ -17,8 +17,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import phonlab as phon
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
-from res.constants import SAMPLE_RATE_OPTIONS
+from res.constants import MAX_SGRAM_LENGTH
 
 CHANNEL_MODE_MONO = "mono"
 CHANNEL_MODE_STEREO = "stereo"
@@ -35,15 +36,47 @@ def _channel_label(index: int, native_channels: int) -> str:
     return f"Channel {index + 1}"
 
 
+def _mono_options() -> AudioOpenOptions:
+    return AudioOpenOptions(
+        target_fs=DEFAULT_SAMPLE_RATE,
+        channel_mode=CHANNEL_MODE_MONO,
+        retained_channels=[0],
+        primary_channel=0,
+    )
+
+
 class OpenAudioDialog(QDialog):
-    """Lets the user pick channel mode, sample rate, and primary channel
-    for a file about to be opened, after reporting its native format."""
+    """Lets the user pick channel mode and primary channel for a file about
+    to be opened, after reporting its native format. Skipped for
+    single-channel files, and for stereo files whose two channels turn out
+    to be duplicates of each other (those are opened as mono automatically,
+    using the left channel)."""
 
     @staticmethod
     def get_options(filename: str, parent=None) -> AudioOpenOptions | None:
         dlg = OpenAudioDialog(filename, parent)
         if not dlg.is_valid:
             return None
+
+        if dlg.native_channels <= 1:
+            return _mono_options()
+
+        if dlg.native_channels == 2:
+            chan_a, chan_b, _fs = phon.loadsig(
+                filename, chansel=[0, 1], duration=MAX_SGRAM_LENGTH
+            )
+            if phon.channels_are_duplicates(chan_a, chan_b):
+                QMessageBox.warning(
+                    parent,
+                    dlg.tr("Duplicate channels"),
+                    dlg.tr(
+                        "the channels of this audio file appear to be "
+                        "duplicates of the same audio - we will treat it as "
+                        "a mono audio file."
+                    ),
+                )
+                return _mono_options()
+
         if dlg.exec() == QDialog.DialogCode.Accepted:
             return dlg.build_options()
         return None
@@ -120,13 +153,9 @@ class OpenAudioDialog(QDialog):
         else:
             self.mono_radio.setChecked(True)
 
-        # ------- Sample rate / primary channel -------
+        # ------- Primary channel -------
         options_layout = QFormLayout()
         options_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        self.sample_rate_combo = QComboBox()
-        self._populate_sample_rates()
-        options_layout.addRow(self.tr("Sample rate:"), self.sample_rate_combo)
 
         self.primary_channel_combo = QComboBox()
         options_layout.addRow(self.tr("Primary channel:"), self.primary_channel_combo)
@@ -147,18 +176,6 @@ class OpenAudioDialog(QDialog):
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
-
-    def _populate_sample_rates(self):
-        rates = sorted(set(SAMPLE_RATE_OPTIONS) | {self.native_fs})
-        default_index = 0
-        for rate in rates:
-            label = f"{rate} Hz"
-            if rate == self.native_fs:
-                label += self.tr(" (native)")
-            if rate == DEFAULT_SAMPLE_RATE:
-                default_index = self.sample_rate_combo.count()
-            self.sample_rate_combo.addItem(label, rate)
-        self.sample_rate_combo.setCurrentIndex(default_index)
 
     def _current_channel_mode(self) -> str:
         if self.multichannel_radio.isChecked():
@@ -188,7 +205,6 @@ class OpenAudioDialog(QDialog):
             self.primary_channel_combo.setCurrentIndex(candidates.index(previous_channel))
 
     def build_options(self) -> AudioOpenOptions:
-        target_fs = self.sample_rate_combo.currentData()
         channel_mode = self._current_channel_mode()
         primary_channel = self.primary_channel_combo.currentData()
 
@@ -198,7 +214,7 @@ class OpenAudioDialog(QDialog):
             retained_channels = self._retained_channels_for_mode(channel_mode)
 
         return AudioOpenOptions(
-            target_fs=target_fs,
+            target_fs=DEFAULT_SAMPLE_RATE,
             channel_mode=channel_mode,
             retained_channels=retained_channels,
             primary_channel=primary_channel,
