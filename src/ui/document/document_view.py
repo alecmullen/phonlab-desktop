@@ -33,6 +33,11 @@ class DocumentView(QWidget):
         self.view_model = view_model
         view_model.subscribe(self.on_state_change)
 
+        # Name of the file this document (or the clip it was cut/copied
+        # from) ultimately originates from, set by MainWindow. Used to
+        # build "CLIP n: <source>" names for clip tabs.
+        self.origin_name: str | None = None
+
         pg.setConfigOption("background", "w")
         pg.setConfigOption("foreground", "k")
 

@@ -7,6 +7,10 @@ from PyQt6.QtCore import QTimer, pyqtSlot
 from core.edit_audio.entity.edit_command import EditCommand
 from core.edit_audio.load_audio_from_samples import LoadAudioFromSamples
 from core.edit_audio.resample import resample_signal
+from core.edit_audio.zero_crossing import (
+    nearest_zero_crossing,
+    nearest_zero_crossing_boundary,
+)
 from core.load_audio.entity.audio_document import AudioDocument
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -14,11 +18,12 @@ from core.load_audio.load_audio import LoadAudio
 from core.load_audio.prep_channel import prep_channel
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
+from core.settings.app_settings import settings
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
-from res.constants import MAX_SGRAM_LENGTH, MAX_UNDO_HISTORY
+from res.constants import MAX_SGRAM_LENGTH, MAX_UNDO_HISTORY, ZERO_CROSSING_SEARCH_MS
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
 from ui.document.state.document_window_state import DocumentWindowState
@@ -491,6 +496,9 @@ class DocumentViewModel(ViewModel):
             self.undo_stack.pop(0)
         self.redo_stack.clear()
 
+    def _zero_crossing_search_radius(self, raw_fs: int) -> int:
+        return int(ZERO_CROSSING_SEARCH_MS / 1000 * raw_fs)
+
     def _selected_raw_range(self, no_selection_message: str) -> tuple[int, int] | None:
         """Validate the current selection and return it as raw-buffer
         sample indices, or emit a status message and return None. Checked
@@ -506,6 +514,20 @@ class DocumentViewModel(ViewModel):
         if raw_end <= raw_start:
             self.state_changed.emit(StatusMessageState(no_selection_message))
             return None
+
+        if settings.cut_and_paste_at_zero_crossings:
+            raw_x = self.raw_wave_state.x
+            radius = self._zero_crossing_search_radius(raw_fs)
+            snapped_start = nearest_zero_crossing(raw_x, raw_start, radius)
+            # raw_end is an exclusive boundary (can legitimately equal
+            # len(raw_x)); snap it as one, not as a plain sample index.
+            snapped_end = nearest_zero_crossing_boundary(raw_x, raw_end, radius)
+            # Only use the snapped bounds if they still form a valid,
+            # nonempty range — a very short selection could snap both
+            # edges to the same (or an inverted) crossing.
+            if snapped_end > snapped_start:
+                raw_start, raw_end = snapped_start, snapped_end
+
         return raw_start, raw_end
 
     def copy_selection(self) -> AudioSignal | None:
@@ -542,6 +564,14 @@ class DocumentViewModel(ViewModel):
         raw_fs = self.raw_wave_state.fs
         clip_x = resample_signal(clip.x, clip.fs, raw_fs) if clip.fs != raw_fs else clip.x
         raw_position = int(np.clip(position_seconds * raw_fs, 0, len(self.raw_wave_state.x)))
+
+        if settings.cut_and_paste_at_zero_crossings:
+            radius = self._zero_crossing_search_radius(raw_fs)
+            # raw_position is an insertion point, i.e. an exclusive/
+            # between-samples boundary just like raw_end above.
+            raw_position = nearest_zero_crossing_boundary(
+                self.raw_wave_state.x, raw_position, radius
+            )
 
         if not self._insert_raw_range(raw_position, clip_x):
             return
