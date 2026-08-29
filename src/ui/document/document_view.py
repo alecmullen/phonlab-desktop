@@ -137,15 +137,7 @@ class DocumentView(QWidget):
         sample rate (used for scrolling/selection/spectrogram) into the
         equivalent sample indices in the raw display audio, which may have
         a different sample rate."""
-        proc_fs = self.view_model.audio_wave_state.fs
-        raw_wave = self.view_model.raw_wave_state
-        raw_len = len(raw_wave.x)
-        if proc_fs == 0 or raw_wave.fs == 0 or raw_len == 0:
-            return start, end
-        ratio = raw_wave.fs / proc_fs
-        raw_start = min(max(round(start * ratio), 0), raw_len - 1)
-        raw_end = min(max(round(end * ratio), 0), raw_len - 1)
-        return raw_start, raw_end
+        return self.view_model.to_raw_range(start, end)
 
     def clear_plots(self):
         """Clear all current plots"""
