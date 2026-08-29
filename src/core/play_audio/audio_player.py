@@ -1,9 +1,9 @@
 import time
 
 import numpy as np
-from PyQt6.QtCore import QObject, QThreadPool, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal, pyqtSlot
 
-from core.play_audio.audio_thread import AudioThread
+from core.play_audio.audio_worker import AudioWorker
 from core.play_audio.entity.latency_info import LatencyInfo
 from core.play_audio.entity.playback_poll import PlaybackPoll
 
@@ -11,9 +11,8 @@ from core.play_audio.entity.playback_poll import PlaybackPoll
 class AudioPlayer(QObject):
     playback_poll = pyqtSignal(object)
     playback_error = pyqtSignal(str)
-    stop_signal = pyqtSignal()
 
-    thread_pool: QThreadPool = QThreadPool.globalInstance()
+    audio_queue = pyqtSignal(object, int)
 
     PLAYBACK_POLL_MS = 33
 
@@ -24,11 +23,25 @@ class AudioPlayer(QObject):
         self._audible_start_time: float | None = None
         self._audio_length_time = 0.0
         self._latency = 0.0
-        self._audio_thread: AudioThread | None = None
+
+        self._audio_thread = QThread()
+        self._audio_worker = AudioWorker(self._on_latency)
+        self.set_up_threading()
 
         self.poll_timer = QTimer(self)
         self.poll_timer.setInterval(self.PLAYBACK_POLL_MS)
         self.poll_timer.timeout.connect(self._poll_playback)
+
+    def set_up_threading(self):
+        self._audio_worker.moveToThread(self._audio_thread)
+
+        self._audio_worker.finished.connect(self._on_audio_finished)
+        self._audio_worker.started.connect(self._on_audio_started)
+        self._audio_worker.error.connect(self._on_error)
+
+        self.audio_queue.connect(self._audio_worker.play)
+
+        self._audio_thread.start()
 
     def _get_current_time(self) -> float:
         if self._audible_start_time is None:
@@ -40,30 +53,26 @@ class AudioPlayer(QObject):
 
     def play(self, audio_data: np.ndarray, fs: int, start_time: float):
         """Play audio using whatever the current default output device is."""
-        self.stop() 
+        self.stop()
 
         self._start_time = start_time
         self._audible_start_time = None
         self._audio_length_time = len(audio_data) / fs
 
-        audio_thread = AudioThread(audio_data, fs)
-        self._audio_thread = audio_thread
-
-        audio_thread.signals.finished.connect(self._on_thread_finished)
-        audio_thread.signals.error.connect(self._on_error)
-        audio_thread.signals.latency.connect(self._on_latency)
-
-        self.stop_signal.connect(audio_thread.slots.stop)
-
-        self.thread_pool.start(audio_thread)
-        self.poll_timer.start()
+        self.audio_queue.emit(audio_data, fs)
 
     @pyqtSlot()
     def _poll_playback(self):
-        self.playback_poll.emit(PlaybackPoll(self._get_current_time(), self._latency, True))
+        self.playback_poll.emit(
+            PlaybackPoll(self._get_current_time(), self._latency, True)
+        )
 
     @pyqtSlot()
-    def _on_thread_finished(self):
+    def _on_audio_started(self):
+        self.poll_timer.start()
+
+    @pyqtSlot()
+    def _on_audio_finished(self):
         self.playback_poll.emit(PlaybackPoll(0.0, self._latency, False))
         self.poll_timer.stop()
 
@@ -78,4 +87,6 @@ class AudioPlayer(QObject):
         self.poll_timer.stop()
 
     def stop(self):
-        self.stop_signal.emit()
+        if self._audio_worker is not None:
+            self._audio_worker.stop()
+        self.poll_timer.stop()
