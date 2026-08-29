@@ -6,17 +6,20 @@ from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QMainWindow,
+    QMessageBox,
     QSizePolicy,
     QTabWidget,
     QToolBar,
     QWidget,
 )
 
+from core.edit_audio.save_audio import save_audio_signal
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.audio_info_dialog import AudioInfoDialog
 from ui.main.open_audio_dialog import OpenAudioDialog
+from ui.main.save_audio_dialog import SaveAudioDialog
 
 
 class MainWindow(QMainWindow):
@@ -67,6 +70,14 @@ class MainWindow(QMainWindow):
         self.close_action.setShortcut("Ctrl+W")
         self.close_action.triggered.connect(self.close_current_tab)
         fileMenu.addAction(self.close_action)
+
+        fileMenu.addSeparator()
+
+        self.save_action = QAction(self.tr("&Save…"), self)
+        self.save_action.setStatusTip(self.tr("Save the current document's audio to a file"))
+        self.save_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_action.triggered.connect(self.save_audio)
+        fileMenu.addAction(self.save_action)
 
         fileMenu.addSeparator()
 
@@ -212,6 +223,7 @@ class MainWindow(QMainWindow):
             # Create new document
             doc = DocumentView(DocumentViewModel())
             doc.origin_name = Path(filename).name
+            doc.origin_path = filename
 
             # Add tab with shortened filename
             tab_name = doc.origin_name
@@ -238,6 +250,7 @@ class MainWindow(QMainWindow):
             source_index = self.tab_widget.indexOf(source_doc)
             origin_name = self.tab_widget.tabText(source_index)
         doc.origin_name = origin_name
+        doc.origin_path = source_doc.origin_path
 
         n = self.clip_counters.get(origin_name, 0) + 1
         self.clip_counters[origin_name] = n
@@ -246,6 +259,22 @@ class MainWindow(QMainWindow):
 
         target_fs = source_doc.view_model.audio_wave_state.fs
         doc.view_model.load_from_samples(clip.x, clip.fs, target_fs)
+
+    def save_audio(self):
+        doc = self.get_current_document()
+        if not doc:
+            return
+        index = self.tab_widget.indexOf(doc)
+        options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
+        if options is None:
+            return
+        raw = doc.view_model.raw_wave_state
+        try:
+            save_audio_signal(raw.x, raw.fs, options.path, options.target_fs, options.scale)
+        except Exception as err:
+            QMessageBox.critical(
+                self, self.tr("Save Audio"), self.tr("Could not save the file:\n{}").format(err)
+            )
 
     def show_audio_info(self):
         doc = self.get_current_document()
