@@ -263,7 +263,7 @@ class DocumentViewModel(ViewModel):
             self.state_changed.emit(self.playback_state)
 
         self.audio_player.playback_poll.connect(on_poll)
-        self.audio_player.play(x, fs, start / self.audio_wave_state.fs)
+        self.audio_player.play(x, fs, start / fs)
 
     def stop_audio(self):
         self.audio_player.stop()    
@@ -408,20 +408,41 @@ class DocumentViewModel(ViewModel):
         self.document_window_state = DocumentWindowState(start=0, end=end)
         self.state_changed.emit(self.document_window_state)
 
+    def to_raw_range(self, start: int, end: int) -> tuple[int, int]:
+        """Convert a [start, end) sample range from the processed audio's
+        sample rate (used for scrolling/selection/spectrogram) into the
+        equivalent sample indices in the raw audio, which may have a
+        different sample rate. Shared with DocumentView, which uses the
+        same conversion to decide what to draw."""
+        proc_fs = self.audio_wave_state.fs
+        raw_fs = self.raw_wave_state.fs
+        raw_len = len(self.raw_wave_state.x)
+        if proc_fs == 0 or raw_fs == 0 or raw_len == 0:
+            return start, end
+        ratio = raw_fs / proc_fs
+        raw_start = min(max(round(start * ratio), 0), raw_len - 1)
+        raw_end = min(max(round(end * ratio), 0), raw_len - 1)
+        return raw_start, raw_end
+
     def play_selected_audio(self):
-        start = int(self.select_state.sel_start * self.audio_wave_state.fs)
-        end = int(self.select_state.sel_end * self.audio_wave_state.fs)
+        # Play from the raw buffer, not the prepped/analysis buffer — the
+        # latter is normalized for analysis (scaled, preemphasized) and
+        # shouldn't be what the user actually hears.
+        raw_fs = self.raw_wave_state.fs
+        start = int(self.select_state.sel_start * raw_fs)
+        end = int(self.select_state.sel_end * raw_fs)
 
         if start != end:
-            section = self.audio_wave_state.x[start:end]
-            self.play_audio(section, self.audio_wave_state.fs, start=start)
+            section = self.raw_wave_state.x[start:end]
+            self.play_audio(section, raw_fs, start=start)
 
     def play_visible_audio(self):
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        if len(self.audio_wave_state.x) > 0:
-            section = self.audio_wave_state.x[start:end]
-            self.play_audio(section, self.audio_wave_state.fs, start=start)
+        if len(self.raw_wave_state.x) > 0:
+            raw_start, raw_end = self.to_raw_range(start, end)
+            section = self.raw_wave_state.x[raw_start:raw_end]
+            self.play_audio(section, self.raw_wave_state.fs, start=raw_start)
 
     def set_mark(self, x_pos: float):
         self.mark_state = MarkState(position=x_pos, is_set=True)
