@@ -4,15 +4,13 @@ from ui.document.document_view import DocumentView
 
 
 class AudioInfoDialog(QDialog):
-    """Read-only summary of the current document's audio, both the native
-    (raw) buffer and the resampled buffer used for analysis/display."""
+    """Read-only summary of the current document's native (raw) audio."""
 
     def __init__(self, doc: DocumentView, tab_name: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Audio Info"))
 
         raw = doc.view_model.raw_wave_state
-        prepped = doc.view_model.audio_wave_state
         raw_duration = len(raw.x) / raw.fs if raw.fs else 0.0
 
         form = QFormLayout()
@@ -22,10 +20,6 @@ class AudioInfoDialog(QDialog):
         form.addRow(
             self.tr("Min / max amplitude:"),
             QLabel(self.tr("{:.4g} / {:.4g}").format(raw.min_x, raw.max_x)),
-        )
-        form.addRow(
-            self.tr("Analysis sample rate:"),
-            QLabel(self.tr("{} Hz").format(prepped.fs)),
         )
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
