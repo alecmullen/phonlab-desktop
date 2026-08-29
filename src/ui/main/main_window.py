@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
+from ui.main.audio_info_dialog import AudioInfoDialog
 from ui.main.open_audio_dialog import OpenAudioDialog
 
 
@@ -28,6 +29,7 @@ class MainWindow(QMainWindow):
         self.filters = "Sound files (*.wav)"
         self.splash = splash
         self.clipboard: AudioSignal | None = None
+        self.clip_counters: dict[str, int] = {}
 
         # Create tab widget
         self.tab_widget = QTabWidget()
@@ -65,6 +67,15 @@ class MainWindow(QMainWindow):
         self.close_action.setShortcut("Ctrl+W")
         self.close_action.triggered.connect(self.close_current_tab)
         fileMenu.addAction(self.close_action)
+
+        fileMenu.addSeparator()
+
+        self.audio_info_action = QAction(self.tr("Audio &Info"), self)
+        self.audio_info_action.setStatusTip(
+            self.tr("Show sample rate, duration, and amplitude of the current document")
+        )
+        self.audio_info_action.triggered.connect(self.show_audio_info)
+        fileMenu.addAction(self.audio_info_action)
 
         fileMenu.addSeparator()
 
@@ -200,9 +211,10 @@ class MainWindow(QMainWindow):
 
             # Create new document
             doc = DocumentView(DocumentViewModel())
+            doc.origin_name = Path(filename).name
 
             # Add tab with shortened filename
-            tab_name = Path(filename).name
+            tab_name = doc.origin_name
             index = self.tab_widget.addTab(doc, tab_name)
             self.tab_widget.setCurrentIndex(index)
             self.tab_widget.setTabToolTip(index, filename)
@@ -216,13 +228,30 @@ class MainWindow(QMainWindow):
         should undo the cut, not land on the empty history of the new tab."""
         doc = DocumentView(DocumentViewModel())
 
-        source_index = self.tab_widget.indexOf(source_doc)
-        source_name = Path(self.tab_widget.tabText(source_index)).stem
-        tab_name = f"{source_name} (copy)"
+        # Always name after the ORIGINAL source file, even if source_doc is
+        # itself a clip tab, so repeated clipping doesn't compound names
+        # like "CLIP 1: CLIP 2: foo.wav" — and count clips per origin file
+        # so numbering stays consistent no matter which of its tabs a clip
+        # was taken from.
+        origin_name = source_doc.origin_name
+        if not origin_name:
+            source_index = self.tab_widget.indexOf(source_doc)
+            origin_name = self.tab_widget.tabText(source_index)
+        doc.origin_name = origin_name
+
+        n = self.clip_counters.get(origin_name, 0) + 1
+        self.clip_counters[origin_name] = n
+        tab_name = f"CLIP {n}: {origin_name}"
         self.tab_widget.addTab(doc, tab_name)
 
         target_fs = source_doc.view_model.audio_wave_state.fs
         doc.view_model.load_from_samples(clip.x, clip.fs, target_fs)
+
+    def show_audio_info(self):
+        doc = self.get_current_document()
+        if doc:
+            index = self.tab_widget.indexOf(doc)
+            AudioInfoDialog.show_info(doc, self.tab_widget.tabText(index), self)
 
     def close_tab(self, index):
         """Close a tab"""
