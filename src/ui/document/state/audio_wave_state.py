@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from core.entity.audio_signal import AudioSignal
+from core.load_audio.entity.audio_signal import AudioSignal
 
 
 @dataclass

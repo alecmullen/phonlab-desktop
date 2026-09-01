@@ -15,6 +15,8 @@ from ui.document.component.spectrogram_plot import SpectrogramPlot
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_wave_state import AudioWaveState
 from ui.document.state.document_window_state import DocumentWindowState
+from ui.document.state.load_progress_state import LoadProgressState
+from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
@@ -104,12 +106,16 @@ class DocumentView(QWidget):
             self.update_document_window(model)
         elif isinstance(model, StatusMessageState):
             self.message_label.setText(model.message)
+        elif isinstance(model, PlaybackState):
+            self.update_playback_cursor(model)
+        elif isinstance(model, LoadProgressState):
+            self.update_load_progress(model)
         elif isinstance(model, PlotLayoutState):
             self.update_plot_layout(model, self.view_model.audio_wave_state)
 
-    def load_audio(self, filename):
+    def load_audio(self, filename, options):
         """Load an audio file into this document"""
-        self.view_model.load_audio(filename)
+        self.view_model.load_audio(filename, options)
 
     def load_audio_wave_view(self, audio_wave: AudioWaveState):
         self.reset_slider(audio_wave.fs)
@@ -269,6 +275,21 @@ class DocumentView(QWidget):
         if self.wave_plot is not None:
             self.wave_plot.update_selection_region(box_left, xrange)
 
+    def update_playback_cursor(self, playback: PlaybackState):
+        if self.wave_plot:
+            self.wave_plot.set_cursor_position(playback.position, playback.is_playing)
+        if self.spec_plot:
+            self.spec_plot.set_cursor_position(playback.position, playback.is_playing)
+
+    def update_load_progress(self, progress: LoadProgressState):
+        self.progress_bar.setVisible(progress.is_loading)
+        if progress.is_loading:
+            self.progress_bar.setRange(0, 0)  # no known percentage, just "busy"
+            self.progress_bar.setFormat(self.tr("Loading full file…"))
+        else:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setFormat(self.tr("Computing %p%"))
+
     def update_document_window(self, doc_window: DocumentWindowState):
         start, end = doc_window.start, doc_window.end
         t, x = self.view_model.audio_wave_state.t, self.view_model.audio_wave_state.x
@@ -307,11 +328,12 @@ class DocumentView(QWidget):
             if not self.is_dragging:
                 self.view_model.start_selection(x)
             else:
+                # continue_selection() sets its own "Select: ... to ..."
+                # status message; don't clobber it with the cursor position.
                 self.view_model.continue_selection(x)
             self.is_dragging = True
-
-        # Update status message
-        self.message_label.setText(status_msg)
+        else:
+            self.message_label.setText(status_msg)
 
     def eventFilter(self, obj, event):
         """Filter mouse events from the graphics widget"""
@@ -403,12 +425,20 @@ class DocumentView(QWidget):
                     return True
 
                 if abs(scroll_x) > abs(scroll_y):  # horizontal motion
-                    # if is_trackpad:
-                    #    scroll_fraction = -scroll_x * 0.002
-                    #    self.scroll_by_fraction(scroll_fraction)
+                    # A plain mouse wheel reports shift+scroll as horizontal
+                    # motion (angleDelta().x()) rather than vertical, so
+                    # this is where that gesture actually lands.
+                    if modifiers == Qt.KeyboardModifier.ShiftModifier:
+                        if scroll_x > 0:
+                            self.zoom_in(1.05)
+                        else:
+                            self.zoom_out(1.05)
+                    elif is_trackpad:
+                        scroll_fraction = -scroll_x * 0.002
+                        self.view_model.move_start_by_fraction(scroll_fraction)
                     # else:
                     #    scroll_fraction = -scroll_x * 0.1
-                    #    self.scroll_by_fraction(scroll_fraction)
+                    #    self.view_model.move_start_by_fraction(scroll_fraction)
                     return True
 
                 elif abs(scroll_y) > 0:  # vertical motion
