@@ -1,7 +1,6 @@
 import numpy as np
-import soundfile as sf
-
 import phonlab as phon
+import soundfile as sf
 
 
 def save_audio_signal(raw_x: np.ndarray, raw_fs: int, path: str, target_fs: int, scale: bool):

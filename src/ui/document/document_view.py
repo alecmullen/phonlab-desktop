@@ -10,10 +10,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.component.audio_wave_plot import AudioWavePlot
 from ui.document.component.spectrogram_plot import SpectrogramPlot
 from ui.document.document_view_model import DocumentViewModel
-from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.state.audio_wave_state import AudioWaveState
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState

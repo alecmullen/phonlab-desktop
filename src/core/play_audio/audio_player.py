@@ -76,19 +76,16 @@ class AudioPlayer(QObject):
     def _on_audio_finished(self):
         self.playback_poll.emit(PlaybackPoll(0.0, self._latency, False))
         self.poll_timer.stop()
-        self._current_thread = None
 
     @pyqtSlot(object)
     def _on_latency(self, latency_info: LatencyInfo):
         self._latency = latency_info.latency
         self._audible_start_time = latency_info.audible_start_time
 
-    def _on_error(self, message: str, thread: "AudioThread"):
-        if thread is not self._current_thread:
-            return
+    @pyqtSlot(str)
+    def _on_error(self, message: str):
         self.playback_error.emit(message)
         self.poll_timer.stop()
-        self._current_thread = None
 
     def stop(self):
         if self._audio_worker is not None:
