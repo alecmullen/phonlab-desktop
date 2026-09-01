@@ -1,9 +1,9 @@
 from dataclasses import replace
 
 import numpy as np
+import phonlab as phon
 from PyQt6.QtCore import QTimer, pyqtSlot
 
-import phonlab as phon
 from core.load_audio.entity.audio_document import AudioDocument
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.load_audio import LoadAudio
@@ -46,19 +46,14 @@ class DocumentViewModel(ViewModel):
 
     def load_audio(self, filepath: str, options: AudioOpenOptions):
         # LoadAudio yields twice: a fast preview of the first window, then
-        # the fully loaded file once it's ready (which can take a while for
-        # a long recording). is_preview tracks which one this callback is
-        # currently handling.
-        is_preview = [True]
+        # the fully loaded file once it's ready
         @pyqtSlot(object)
         def on_success(audio_document: AudioDocument):
-            preview = is_preview[0]
-            is_preview[0] = False
 
             self.audio_document = audio_document
             audio_signal = audio_document.channels[audio_document.primary_channel]
 
-            if preview:
+            if audio_document.is_preview:
                 self.remove_selection()
 
             self.audio_wave_state = to_audio_wave_state(audio_signal)
@@ -66,7 +61,7 @@ class DocumentViewModel(ViewModel):
 
             signal_end = len(audio_signal.x) - 1
             window_end = min(signal_end, MAX_SGRAM_LENGTH * audio_signal.fs)
-            if preview:
+            if audio_document.is_preview:
                 # Nothing has loaded past the preview yet, so scrolling is
                 # capped to what's currently in memory.
                 self.document_window_state = replace(
@@ -84,9 +79,9 @@ class DocumentViewModel(ViewModel):
                 )
             self.state_changed.emit(self.document_window_state)
 
-            self.state_changed.emit(LoadProgressState(is_loading=preview))
+            self.state_changed.emit(LoadProgressState(is_loading=audio_document.is_preview))
 
-            if not preview:
+            if not audio_document.is_preview:
                 shown = (
                     self.document_window_state.end - self.document_window_state.start
                 )

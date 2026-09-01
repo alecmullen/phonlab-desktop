@@ -1,4 +1,5 @@
 import phonlab as phon
+
 from core.base.use_case import UseCase
 from core.load_audio.entity.audio_document import AudioDocument
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -27,7 +28,7 @@ class LoadAudio(UseCase[AudioDocument]):
                 raw,
                 fs,
                 target_fs=self.target_fs,
-                scale=True,
+                scale=False,
                 pre=0.94,
                 add_tiny_noise=True,
             )
@@ -36,9 +37,7 @@ class LoadAudio(UseCase[AudioDocument]):
 
     def invoke(self):
         # Yield a fast preview of just the first window first, so there's
-        # something on screen immediately, then load+prep the whole file
-        # (which can take many seconds for an hour-long recording) and
-        # yield that once it's ready.
+        # something on screen immediately
         *preview_raw, preview_fs = phon.loadsig(
             self.filename, chansel=self.retained_channels, duration=MAX_SGRAM_LENGTH
         )
@@ -47,12 +46,11 @@ class LoadAudio(UseCase[AudioDocument]):
             channels=preview_channels,
             primary_channel=self.primary_channel,
             channel_mode=self.channel_mode,
+            is_preview=True
         )
 
         # Full load of every native channel at its native rate, unprocessed.
-        # This doubles as the "original" audio kept for future channel
-        # switching / resampling, and as the source for the retained,
-        # prepped working channels below (no second disk read needed).
+        # Emit prepped channels and originals
         *original_channels, original_fs = phon.loadsig(self.filename)
         full_raw = [original_channels[idx] for idx in self.retained_channels]
         full_channels = self._prep_channels(full_raw, original_fs)
