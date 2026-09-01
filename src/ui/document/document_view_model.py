@@ -5,7 +5,6 @@ import phonlab as phon
 from PyQt6.QtCore import QTimer, pyqtSlot
 
 from core.edit_audio.entity.edit_command import EditCommand
-from core.edit_audio.load_audio_from_samples import LoadAudioFromSamples
 from core.edit_audio.resample import resample_signal
 from core.edit_audio.zero_crossing import (
     nearest_zero_crossing,
@@ -138,14 +137,14 @@ class DocumentViewModel(ViewModel):
         self.launch_use_case("load_audio", use_case, on_success, self.on_error)
 
     def load_from_samples(self, x: np.ndarray, fs: int, target_fs: int):
-        @pyqtSlot(object)
-        def on_success(audio_document: AudioDocument):
-            self._apply_audio_document(
-                audio_document, initialize_window=True, is_loading=False
-            )
-
-        use_case = LoadAudioFromSamples(x, fs, target_fs)
-        self.launch_use_case("load_audio", use_case, on_success, self.on_error)
+        audio_document = AudioDocument(
+            channels={0: prep_channel(x, fs, target_fs)},
+            primary_channel=0,
+            channel_mode="mono",
+            original_channels=[x],
+            original_fs=fs,
+        )
+        self._apply_audio_document(audio_document, initialize_window=True, is_loading=False)
 
     def show_spectrogram(self, show: bool):
         self.plot_layout_state = replace(self.plot_layout_state, is_spectrogram=show)

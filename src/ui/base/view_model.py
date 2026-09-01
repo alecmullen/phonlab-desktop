@@ -36,10 +36,6 @@ class ViewModel(QObject):
 
             @pyqtSlot()
             def on_finished():
-                # Only remove our own entry: close_thread() may already have
-                # evicted it (and a newer manager may since have taken the
-                # key), and a stopped worker can still emit `finished` after
-                # that happens.
                 if self.job_managers.get(key) is manager:
                     del self.job_managers[key]
 
