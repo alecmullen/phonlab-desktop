@@ -33,10 +33,7 @@ class DocumentView(QWidget):
         self.view_model = view_model
         view_model.subscribe(self.on_state_change)
 
-        # Name/path of the file this document (or the clip it was cut/
-        # copied from) ultimately originates from, set by MainWindow. Used
-        # to build "CLIP n: <source>" names for clip tabs and to default
-        # the Save dialog's folder.
+        # Name/path of the file this document 
         self.origin_name: str | None = None
         self.origin_path: str | None = None
 
@@ -528,10 +525,6 @@ class DocumentView(QWidget):
                 self.is_dragging = False
                 self.view_model.play_selected_audio()
             else:
-                # Capture the modifier state now, at the actual click, not
-                # 250ms later when the single-click timer fires below — the
-                # user may well have released Shift by then, which would
-                # silently misplace the mark or skip it.
                 shift_pressed = event.modifiers() == Qt.KeyboardModifier.ShiftModifier
                 self.pending_single_click = (scene_pos, shift_pressed)
                 if self.click_timer is not None:

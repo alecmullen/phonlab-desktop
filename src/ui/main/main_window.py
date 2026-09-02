@@ -236,15 +236,10 @@ class MainWindow(QMainWindow):
 
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
         """Open a new tab containing the just-copied/cut samples, without
-        stealing focus from source_doc — an immediate Ctrl+Z after Cut
-        should undo the cut, not land on the empty history of the new tab."""
+        stealing focus from source_doc """
         doc = DocumentView(DocumentViewModel())
 
-        # Always name after the ORIGINAL source file, even if source_doc is
-        # itself a clip tab, so repeated clipping doesn't compound names
-        # like "CLIP 1: CLIP 2: foo.wav" — and count clips per origin file
-        # so numbering stays consistent no matter which of its tabs a clip
-        # was taken from.
+        # Always name after the ORIGINAL source file
         origin_name = source_doc.origin_name
         if not origin_name:
             source_index = self.tab_widget.indexOf(source_doc)
@@ -254,10 +249,10 @@ class MainWindow(QMainWindow):
 
         n = self.clip_counters.get(origin_name, 0) + 1
         self.clip_counters[origin_name] = n
-        tab_name = f"CLIP {n}: {origin_name}"
+        tab_name = self.tr("CLIP {}: {}").format(n, origin_name)
         self.tab_widget.addTab(doc, tab_name)
 
-        target_fs = source_doc.view_model.prepped_audio_state.channels[source_doc.view_model.channel_state.primary_channel].fs
+        target_fs = source_doc.view_model.get_primary_prepped_channel().fs
         doc.view_model.load_from_samples(clip.x, clip.fs, target_fs)
 
     def save_audio(self):
