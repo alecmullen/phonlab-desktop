@@ -46,11 +46,6 @@ class ViewModel(QObject):
             self.job_managers[key].quit()
 
     def close_thread(self, key):
-        # Evict immediately rather than waiting for the async `finished`
-        # signal, so a launch_use_case() call for the same key right after
-        # this (e.g. to recompute against a just-replaced buffer) starts a
-        # fresh job instead of being silently dropped by `only_once`, or
-        # queued onto the worker we just asked to stop.
         manager = self.job_managers.pop(key, None)
         if manager is not None:
             manager.quit()

@@ -14,7 +14,6 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.component.audio_wave_plot import AudioWavePlot
 from ui.document.component.spectrogram_plot import SpectrogramPlot
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_wave_state import AudioWaveState
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.mark_state import MarkState
@@ -23,6 +22,7 @@ from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.document.state.waveform_state import WaveformState
 
 
 class DocumentView(QWidget):
@@ -103,7 +103,7 @@ class DocumentView(QWidget):
         self.wave_y_scale = 1.0
 
     def on_state_change(self, model):
-        if isinstance(model, AudioWaveState):
+        if isinstance(model, WaveformState):
             self.load_audio_wave_view(model)
             self.view_model.compute_spectrogram()
         elif isinstance(model, SpectrogramState):
@@ -120,7 +120,7 @@ class DocumentView(QWidget):
         elif isinstance(model, LoadProgressState):
             self.update_load_progress(model)
         elif isinstance(model, PlotLayoutState):
-            self.update_plot_layout(model, self.view_model.raw_wave_state)
+            self.update_plot_layout(model, self.view_model.waveform_state)
         elif isinstance(model, MarkState):
             self.update_mark(model)
 
@@ -128,16 +128,9 @@ class DocumentView(QWidget):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
-    def load_audio_wave_view(self, audio_wave: AudioWaveState):
+    def load_audio_wave_view(self, audio_wave: WaveformState):
         self.reset_slider(audio_wave.fs)
-        self.update_plot_layout(self.view_model.plot_layout_state, self.view_model.raw_wave_state)
-
-    def _raw_window_bounds(self, start: int, end: int) -> tuple[int, int]:
-        """Convert a [start, end) sample range from the processed audio's
-        sample rate (used for scrolling/selection/spectrogram) into the
-        equivalent sample indices in the raw display audio, which may have
-        a different sample rate."""
-        return self.view_model.to_raw_range(start, end)
+        self.update_plot_layout(self.view_model.plot_layout_state, self.view_model.waveform_state)
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -147,27 +140,23 @@ class DocumentView(QWidget):
             self.wave_plot.clear()
             self.wave_plot = None
 
-        # graphics_widget.clear() above already tore the spectrogram plot
-        # item out of the scene; null the reference here too so mouse-hit
-        # tests elsewhere don't touch a deleted PyQtGraph item.
         self.spec_plot = None
 
         self.selection_region_wave = None
         self.selection_region_spec = None
 
-    def create_wave_plot(self, row, col, raw_wave: AudioWaveState, rowspan=1):
+    def create_wave_plot(self, row, col, waveform: WaveformState, rowspan=1):
         """Create a waveform plot at the specified position"""
         start, end = (
             self.view_model.document_window_state.start,
             self.view_model.document_window_state.end,
         )
-        raw_start, raw_end = self._raw_window_bounds(start, end)
 
         wave_plot = AudioWavePlot()
         self.graphics_widget.addItem(wave_plot, row=row, col=col, rowspan=rowspan)
 
         wave_plot.plot_wave(
-            raw_wave.t, raw_wave.x, raw_start, raw_end, raw_wave.max_x, raw_wave.min_x
+            waveform.t, waveform.x, start, end, waveform.max_x, waveform.min_x
         )
 
         return wave_plot
@@ -180,10 +169,10 @@ class DocumentView(QWidget):
     def show_spectrogram(self, show: bool):
         self.view_model.show_spectrogram(show)
 
-    def update_plot_layout(self, layout_state: PlotLayoutState, raw_wave: AudioWaveState):
+    def update_plot_layout(self, layout_state: PlotLayoutState, waveform: WaveformState):
         self.clear_plots()
 
-        self.wave_plot = self.create_wave_plot(0, 0, raw_wave)
+        self.wave_plot = self.create_wave_plot(0, 0, waveform)
 
         if layout_state.is_spectrogram:
             self.wave_plot.getAxis("bottom").setStyle(showValues=False)
@@ -215,8 +204,8 @@ class DocumentView(QWidget):
     def update_wave_y_range(self):
         """Update the y-axis range of the waveform plot based on scale factor"""
         max_x, min_x = (
-            self.view_model.raw_wave_state.max_x,
-            self.view_model.raw_wave_state.min_x,
+            self.view_model.waveform_state.max_x,
+            self.view_model.waveform_state.min_x,
         )
         if self.wave_plot:
             y_max = max(abs(min_x), abs(max_x))
@@ -326,10 +315,9 @@ class DocumentView(QWidget):
         self.slider.setValue(start)
 
         if self.wave_plot:
-            raw_start, raw_end = self._raw_window_bounds(start, end)
-            raw_t, raw_x = self.view_model.raw_wave_state.t, self.view_model.raw_wave_state.x
+            raw_t, raw_x = self.view_model.waveform_state.t, self.view_model.waveform_state.x
             self.wave_plot.update_wave(
-                raw_t[raw_start:raw_end], raw_x[raw_start:raw_end], raw_t[raw_end]
+                raw_t[start:end], raw_x[start:end], raw_t[end]
             )
 
         self.view_model.compute_spectrogram()

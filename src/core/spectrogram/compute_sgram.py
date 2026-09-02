@@ -1,6 +1,6 @@
 import numpy as np
-
 import phonlab as phon
+
 from core.base.use_case import UseCase
 from core.spectrogram.entity.spectrogram import Spectrogram
 

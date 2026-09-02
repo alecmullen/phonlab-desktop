@@ -257,7 +257,7 @@ class MainWindow(QMainWindow):
         tab_name = f"CLIP {n}: {origin_name}"
         self.tab_widget.addTab(doc, tab_name)
 
-        target_fs = source_doc.view_model.audio_wave_state.fs
+        target_fs = source_doc.view_model.prepped_audio_state.channels[source_doc.view_model.channel_state.primary_channel].fs
         doc.view_model.load_from_samples(clip.x, clip.fs, target_fs)
 
     def save_audio(self):

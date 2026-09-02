@@ -10,11 +10,10 @@ from core.edit_audio.zero_crossing import (
     nearest_zero_crossing,
     nearest_zero_crossing_boundary,
 )
-from core.load_audio.entity.audio_document import AudioDocument
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
-from core.load_audio.prep_channel import prep_channel
+from core.load_audio.prep_audio import PrepAudio
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
 from core.settings.app_settings import settings
@@ -24,15 +23,21 @@ from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
 from res.constants import MAX_SGRAM_LENGTH, MAX_UNDO_HISTORY, ZERO_CROSSING_SEARCH_MS
 from ui.base.view_model import ViewModel
-from ui.document.state.audio_wave_state import AudioWaveState, to_audio_wave_state
+from ui.document.state.channel_state import ChannelState
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.mark_state import MarkState
 from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState
+from ui.document.state.prepped_audio_state import (
+    PreppedAudioState,
+    to_prepped_audio_state,
+)
+from ui.document.state.raw_audio_state import RawAudioState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.document.state.waveform_state import WaveformState, to_waveform_state
 
 LATENCY_WARNING_THRESHOLD_S = 0.1  # audacity's own reference for "robust" latency
 
@@ -40,11 +45,11 @@ LATENCY_WARNING_THRESHOLD_S = 0.1  # audacity's own reference for "robust" laten
 class DocumentViewModel(ViewModel):
     def __init__(self):
         super().__init__()
-        self.audio_wave_state: AudioWaveState = AudioWaveState()
-        self.raw_wave_state: AudioWaveState = AudioWaveState()
-        self.audio_document: AudioDocument | None = None
+        self.raw_audio_state: RawAudioState = RawAudioState()
+        self.prepped_audio_state: PreppedAudioState = PreppedAudioState()
+        self.waveform_state: WaveformState = WaveformState()
+        self.channel_state: ChannelState = ChannelState()
         self.sgram_state: SpectrogramState = SpectrogramState()
-        self.is_audio_playing = False
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
@@ -59,92 +64,94 @@ class DocumentViewModel(ViewModel):
 
         self.audio_player = AudioPlayer()
 
-    def _apply_audio_document(
-        self, audio_document: AudioDocument, initialize_window: bool, is_loading: bool
-    ):
-        # This replaces audio_wave_state/raw_wave_state just like
-        # _replace_raw_buffer does (e.g. the preview -> full-file swap), so
-        # it needs the same staleness guard for any spectrogram job still
-        # in flight against the buffer being replaced.
-        self._buffer_generation += 1
-        self.audio_document = audio_document
-        audio_signal = audio_document.channels[audio_document.primary_channel]
+    def load_audio(self, filepath: str, options: AudioOpenOptions):
+        self.channel_state = ChannelState(primary_channel=options.primary_channel, channel_mode=options.channel_mode)
 
-        if audio_document.original_channels is not None:
-            raw_signal = AudioSignal(
-                audio_document.original_channels[audio_document.primary_channel],
-                audio_document.original_fs,
-            )
-        else:
-            # Preview yield: the unprocessed file hasn't been read yet,
-            # so fall back to the prepped preview signal for display.
-            raw_signal = audio_signal
+        @pyqtSlot(object)
+        def on_success(audio_signals: list[AudioSignal]):
+            original_fs = audio_signals[options.primary_channel].fs
 
-        if initialize_window:
-            self.remove_selection()
+            raw_audio = RawAudioState(channels=[sig.x for sig in audio_signals], fs=original_fs)
+            self.set_raw_audio(raw_audio, options.primary_channel, reset_window=True)
 
-        self.audio_wave_state = to_audio_wave_state(audio_signal)
-        self.raw_wave_state = to_audio_wave_state(raw_signal)
-        self.state_changed.emit(self.audio_wave_state)
+            self.prep_audio(audio_signals, options)
 
-        signal_end = len(audio_signal.x) - 1
-        window_end = min(signal_end, MAX_SGRAM_LENGTH * audio_signal.fs)
-        if initialize_window:
-            # Nothing has loaded past the preview yet, so scrolling is
-            # capped to what's currently in memory.
+        use_case = LoadAudio(filepath)
+        self.launch_use_case("load_audio", use_case, on_success, self.on_error)
+
+    def prep_audio(self, channels: list[AudioSignal], options: AudioOpenOptions):
+        use_case = PrepAudio(channels, options.target_fs, options.retained_channels)
+
+        @pyqtSlot(object)
+        def on_success(prepped: dict[int, AudioSignal]):
+            self.prepped_audio_state = to_prepped_audio_state(prepped)
+
+        self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
+
+    def prep_edited_audio_channel(self, new_raw_signal: AudioSignal, target_fs, channel_idx: int):
+        use_case = PrepAudio([new_raw_signal], target_fs, [0])
+
+        @pyqtSlot(object)
+        def on_success(prepped: dict[int, AudioSignal]):
+            # Merge existing channel dictionary with the newly prepped channel.
+            # We passed a single channel to PrepAudio, so we retreieve it at prepped[0]
+            new_prepped_signal = prepped[0]
+            prepped = self.prepped_audio_state.channels | {channel_idx: new_prepped_signal}
+
+            self.prepped_audio_state = replace(self.prepped_audio_state, channels=prepped)
+
+        self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
+
+    def adjust_window_if_needed(self, signal_end: int):
+        window_size = self.document_window_state.end - self.document_window_state.start
+        new_start = min(self.document_window_state.start, max(0, signal_end - window_size))
+        new_end = min(new_start + window_size, signal_end)
+        self.document_window_state = replace(
+            self.document_window_state,
+            start=new_start,
+            end=new_end,
+            max_start=max(0, signal_end - window_size),
+        )
+
+    def set_raw_audio(self, raw_audio: RawAudioState, primary_channel: int, reset_window: bool):
+        self.raw_audio_state = raw_audio
+        self.waveform_state = to_waveform_state(raw_audio.channels[primary_channel], raw_audio.fs)
+        self.state_changed.emit(self.waveform_state)
+
+        x, fs = raw_audio.channels[primary_channel], raw_audio.fs
+
+        self._invalidate_spectrogram()
+        self.remove_selection()
+        self.remove_mark()
+
+        if reset_window:
+            signal_end = len(x) - 1
+            window_end = min(signal_end, MAX_SGRAM_LENGTH * fs)
+
             self.document_window_state = replace(
                 self.document_window_state,
                 start=0,
                 end=window_end,
                 max_start=(signal_end - window_end),
             )
-        else:
-            # Keep whatever the user is currently looking at; just
-            # widen how far they're now allowed to scroll.
-            self.document_window_state = replace(
-                self.document_window_state,
-                max_start=(signal_end - window_end),
-            )
-        self.state_changed.emit(self.document_window_state)
 
-        self.state_changed.emit(LoadProgressState(is_loading=is_loading))
+            self.state_changed.emit(self.document_window_state)
 
-        if not is_loading:
             shown = (
                 self.document_window_state.end - self.document_window_state.start
             )
             msg = self.tr(
                 "Duration shown {:.3f} seconds, out of {:.3f} seconds"
-            ).format(shown / audio_signal.fs, len(audio_signal.x) / audio_signal.fs)
+            ).format(shown / fs, len(x) / fs)
             self.state_changed.emit(StatusMessageState(msg))
-
-    def load_audio(self, filepath: str, options: AudioOpenOptions):
-        # LoadAudio yields twice: a fast preview of the first window, then
-        # the fully loaded file once it's ready
-        @pyqtSlot(object)
-        def on_success(audio_document: AudioDocument):
-            self._apply_audio_document(
-                audio_document, initialize_window=audio_document.is_preview, is_loading=audio_document.is_preview
-            )
-
-        use_case = LoadAudio(
-            filepath,
-            target_fs=options.target_fs,
-            channel_mode=options.channel_mode,
-            retained_channels=options.retained_channels,
-            primary_channel=options.primary_channel,
-        )
-        self.launch_use_case("load_audio", use_case, on_success, self.on_error)
+        else:
+            self.adjust_window_if_needed(len(self.waveform_state.x) - 1)
 
     def load_from_samples(self, x: np.ndarray, fs: int, target_fs: int):
-        audio_document = AudioDocument(
-            channels={0: prep_channel(x, fs, target_fs)},
-            primary_channel=0,
-            channel_mode="mono",
-            original_channels=[x],
-            original_fs=fs,
-        )
-        self._apply_audio_document(audio_document, initialize_window=True, is_loading=False)
+        self.raw_audio_state = RawAudioState(channels=[x], fs=fs)
+        self.set_raw_audio(self.raw_audio_state, primary_channel=0, reset_window=True)
+
+        self.prep_audio([AudioSignal(x, fs)], AudioOpenOptions(target_fs=target_fs, channel_mode="mono", retained_channels=[0], primary_channel=0))
 
     def show_spectrogram(self, show: bool):
         self.plot_layout_state = replace(self.plot_layout_state, is_spectrogram=show)
@@ -156,30 +163,37 @@ class DocumentViewModel(ViewModel):
         if not self.plot_layout_state.is_spectrogram:
             return
 
-        x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
+        prepped_audio_signal = self.prepped_audio_state.channels[self.channel_state.primary_channel]
+        x, fs = prepped_audio_signal.x, prepped_audio_signal.fs
+
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        if (end - start) / fs > MAX_SGRAM_LENGTH:
+        #convert to prepped audio sample indices
+        start_t = start / self.waveform_state.fs
+        end_t = end / self.waveform_state.fs
+        start_idx = int(start_t * fs)
+        end_idx = int(end_t * fs)
+
+        if (end_idx - start_idx) / fs > MAX_SGRAM_LENGTH:
             self.sgram_state = replace(self.sgram_state, is_showing=False)
             self.state_changed.emit(self.sgram_state)
             return
 
-        self.load_spectrogram_window(x, fs, start, end)
+        self.load_spectrogram_window(x, fs, start_idx, end_idx, start_t, end_t)
         self.load_spectrogram_mmap(x, fs)
 
-    def load_spectrogram_window(self, x: np.ndarray, fs: int, start: int, end: int):
+    def load_spectrogram_window(self, x: np.ndarray, fs: int, start_idx: int, end_idx: int, start_t: float, end_t: float):
         if (
             self.sgram_state.sxx_mmap is not None
             and self.sgram_state.t_mmap is not None
-            and self.sgram_state.samples_computed > end
+            and self.sgram_state.samples_computed > end_idx
         ):
             frames_computed = self.sgram_state.frames_computed
             sfr = np.abs(
-                self.sgram_state.t_mmap[:frames_computed]
-                - self.audio_wave_state.t[start]
+                self.sgram_state.t_mmap[:frames_computed] - start_t
             ).argmin()
             efr = np.abs(
-                self.sgram_state.t_mmap[:frames_computed] - self.audio_wave_state.t[end]
+                self.sgram_state.t_mmap[:frames_computed] - end_t
             ).argmin()
 
             t_window = np.array(self.sgram_state.t_mmap[sfr:efr])
@@ -193,11 +207,11 @@ class DocumentViewModel(ViewModel):
             )
             self.state_changed.emit(self.sgram_state)
         else:
-            t, f, sxx = phon.compute_sgram(x[start:end], fs, 0.008, 0.003, 9)
+            t, f, sxx = phon.compute_sgram(x[start_idx:end_idx], fs, 0.008, 0.003, 9)
 
             self.sgram_state = replace(
                 self.sgram_state,
-                t_window=t + (start / fs),
+                t_window=t + start_t,
                 sxx_window=sxx,
                 f=f,
                 is_showing=True,
@@ -212,14 +226,14 @@ class DocumentViewModel(ViewModel):
                     return  # stale result computed against a since-replaced buffer
                 self.sgram_state = replace(
                     self.sgram_state,
-                    t_window=sgram.t + (start / fs),
+                    t_window=sgram.t + start_t,
                     sxx_window=sgram.sxx,
                     f=sgram.f,
                     is_showing=True,
                 )
                 self.state_changed.emit(self.sgram_state)
 
-            use_case = ComputeSpectrogram(x[start:end], fs)
+            use_case = ComputeSpectrogram(x[start_idx:end_idx], fs)
             self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
 
     def load_spectrogram_mmap(self, x, fs):
@@ -244,6 +258,11 @@ class DocumentViewModel(ViewModel):
             self.launch_use_case(
                 "sgram_mmap", use_case, on_success, self.on_error, only_once=True
             )
+
+    def _invalidate_spectrogram(self):
+        self._buffer_generation += 1
+        self.close_thread("sgram_mmap")
+        self.close_thread("sgram_window")
 
     def play_audio(self, x: np.ndarray, fs: int, start: int):
         self.stop_audio()
@@ -286,7 +305,7 @@ class DocumentViewModel(ViewModel):
         start = self.document_window_state.start
         end = self.document_window_state.end
         window_size = end - start
-        max_end = len(self.audio_wave_state.x) - 1
+        max_end = len(self.waveform_state.x) - 1
 
         if new_start < start:
             new_start = max(0, new_start)
@@ -316,7 +335,7 @@ class DocumentViewModel(ViewModel):
 
         if x_pos >= self.select_state.sel_anchor:
             sel_start = self.select_state.sel_anchor
-            sel_end = min(x_pos, self.audio_wave_state.t[-1])
+            sel_end = min(x_pos, self.waveform_state.t[-1])
         elif x_pos < self.select_state.sel_anchor:
             sel_start = max(x_pos, 0.0)
             sel_end = self.select_state.sel_anchor
@@ -336,7 +355,7 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.select_state)
 
     def zoom_if_in_selection(self, x_pos: float):
-        x, fs = self.audio_wave_state.x, self.audio_wave_state.fs
+        x, fs = self.waveform_state.x, self.waveform_state.fs
         max_end = len(x) - 1
         sel_start, sel_end = self.select_state.sel_start, self.select_state.sel_end
         if sel_end > x_pos > sel_start:
@@ -357,8 +376,8 @@ class DocumentViewModel(ViewModel):
             return
 
         # Calculate the center of the selection in samples
-        sel_start_samples = int(self.select_state.sel_start * self.audio_wave_state.fs)
-        sel_end_samples = int(self.select_state.sel_end * self.audio_wave_state.fs)
+        sel_start_samples = int(self.select_state.sel_start * self.waveform_state.fs)
+        sel_end_samples = int(self.select_state.sel_end * self.waveform_state.fs)
         sel_center_samples = (sel_start_samples + sel_end_samples) // 2
 
         # Calculate new window bounds centered on selection
@@ -372,7 +391,7 @@ class DocumentViewModel(ViewModel):
 
         center = start + int((end - start) / 2)
         new_size = int((end - start) * factor)
-        max_end = len(self.audio_wave_state.x) - 1
+        max_end = len(self.waveform_state.x) - 1
 
         new_end = center + int(new_size / 2)
         new_end = min(new_end, max_end)
@@ -394,7 +413,7 @@ class DocumentViewModel(ViewModel):
         new_end = center + int(new_size / 2)
         new_start = new_end - new_size
 
-        max_end = len(self.audio_wave_state.x) - 1
+        max_end = len(self.waveform_state.x) - 1
         window_length = new_end - new_start
 
         self.document_window_state = replace(
@@ -403,109 +422,67 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.document_window_state)
 
     def show_all(self):
-        end = len(self.audio_wave_state.x) - 1
+        end = len(self.waveform_state.x) - 1
         self.document_window_state = DocumentWindowState(start=0, end=end)
         self.state_changed.emit(self.document_window_state)
-
-    def to_raw_range(self, start: int, end: int) -> tuple[int, int]:
-        """Convert a [start, end) sample range from the processed audio's
-        sample rate (used for scrolling/selection/spectrogram) into the
-        equivalent sample indices in the raw audio, which may have a
-        different sample rate. Shared with DocumentView, which uses the
-        same conversion to decide what to draw."""
-        proc_fs = self.audio_wave_state.fs
-        raw_fs = self.raw_wave_state.fs
-        raw_len = len(self.raw_wave_state.x)
-        if proc_fs == 0 or raw_fs == 0 or raw_len == 0:
-            return start, end
-        ratio = raw_fs / proc_fs
-        raw_start = min(max(round(start * ratio), 0), raw_len - 1)
-        raw_end = min(max(round(end * ratio), 0), raw_len - 1)
-        return raw_start, raw_end
 
     def play_selected_audio(self):
         # Play from the raw buffer, not the prepped/analysis buffer — the
         # latter is normalized for analysis (scaled, preemphasized) and
         # shouldn't be what the user actually hears.
-        raw_fs = self.raw_wave_state.fs
-        start = int(self.select_state.sel_start * raw_fs)
-        end = int(self.select_state.sel_end * raw_fs)
+        fs = self.waveform_state.fs
+        start = int(self.select_state.sel_start * fs)
+        end = int(self.select_state.sel_end * fs)
 
         if start != end:
-            section = self.raw_wave_state.x[start:end]
-            self.play_audio(section, raw_fs, start=start)
+            section = self.waveform_state.x[start:end]
+            self.play_audio(section, fs, start=start)
 
     def play_visible_audio(self):
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        if len(self.raw_wave_state.x) > 0:
-            raw_start, raw_end = self.to_raw_range(start, end)
-            section = self.raw_wave_state.x[raw_start:raw_end]
-            self.play_audio(section, self.raw_wave_state.fs, start=raw_start)
+        if len(self.waveform_state.x) > 0:
+            section = self.waveform_state.x[start:end]
+            self.play_audio(section, self.waveform_state.fs, start=start)
 
     def set_mark(self, x_pos: float):
         self.mark_state = MarkState(position=x_pos, is_set=True)
         self.state_changed.emit(self.mark_state)
 
+    def remove_mark(self):
+        self.mark_state = MarkState()
+        self.state_changed.emit(self.mark_state)
+
     def _raw_buffer_ready(self) -> bool:
-        if self.audio_document is None or self.audio_document.original_channels is None:
+        if self.raw_audio_state.channels is None:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Audio is still loading, please wait."))
             )
             return False
         return True
 
-    def _replace_raw_buffer(self, new_raw_x: np.ndarray) -> bool:
-        if len(new_raw_x) == 0:
+    def _replace_raw_buffer(self, new_raw_signal: AudioSignal) -> bool:
+        if len(new_raw_signal) == 0:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Cannot remove entire selection"))
             )
             return False
 
-        raw_fs = self.raw_wave_state.fs
-        self.raw_wave_state = to_audio_wave_state(AudioSignal(new_raw_x, raw_fs))
-        if self.audio_document.original_channels is not None:
-            self.audio_document.original_channels[
-                self.audio_document.primary_channel
-            ] = new_raw_x
+        raw_audio_state =  self.raw_audio_state
+        raw_audio_state.channels[self.channel_state.primary_channel] = new_raw_signal
+        self.set_raw_audio(raw_audio_state, self.channel_state.primary_channel, reset_window=False)
 
-        prepped = prep_channel(new_raw_x, raw_fs, self.audio_wave_state.fs)
-        new_prepped_x, new_prepped_fs = prepped.x, prepped.fs
-        self.audio_document.channels[self.audio_document.primary_channel] = prepped
-
-        signal_end = max(0, len(new_prepped_x) - 1)
-        window_size = self.document_window_state.end - self.document_window_state.start
-        new_start = min(self.document_window_state.start, max(0, signal_end - window_size))
-        new_end = min(new_start + window_size, signal_end)
-        self.document_window_state = replace(
-            self.document_window_state,
-            start=new_start,
-            end=new_end,
-            max_start=max(0, signal_end - window_size),
-        )
-
-        # Invalidate stale spectrogram jobs/results computed against the old
-        # buffer before triggering any recompute against the new one.
-        self._buffer_generation += 1
-        self.close_thread("sgram_mmap")
-        self.close_thread("sgram_window")
-        self.sgram_state = SpectrogramState()
-
-        self.audio_wave_state = to_audio_wave_state(AudioSignal(new_prepped_x, new_prepped_fs))
-        self.state_changed.emit(self.audio_wave_state)
-        self.state_changed.emit(self.document_window_state)
-
-        self.remove_selection()
-        self.mark_state = MarkState()
-        self.state_changed.emit(self.mark_state)
+        channel_idx = self.channel_state.primary_channel
+        old_signal = self.prepped_audio_state.channels[channel_idx]
+        self.prep_edited_audio_channel(new_raw_signal, old_signal.fs, channel_idx)
         return True
 
     def _remove_raw_range(self, start: int, end: int) -> bool:
-        raw_x = self.raw_wave_state.x
+        raw_x = self.waveform_state.x
         return self._replace_raw_buffer(np.concatenate([raw_x[:start], raw_x[end:]]))
 
     def _insert_raw_range(self, position: int, samples: np.ndarray) -> bool:
-        raw_x = self.raw_wave_state.x
+        raw_x = self.waveform_state.x
         return self._replace_raw_buffer(
             np.concatenate([raw_x[:position], samples.astype(raw_x.dtype), raw_x[position:]])
         )
@@ -521,30 +498,25 @@ class DocumentViewModel(ViewModel):
 
     def _selected_raw_range(self, no_selection_message: str) -> tuple[int, int] | None:
         """Validate the current selection and return it as raw-buffer
-        sample indices, or emit a status message and return None. Checked
-        in raw samples (not just seconds) so a selection shorter than one
-        raw sample doesn't slip through as a nonempty range."""
+        sample indices, or emit a status message and return None. """
         if not self.select_state.is_selected:
             self.state_changed.emit(StatusMessageState(no_selection_message))
             return None
 
-        raw_fs = self.raw_wave_state.fs
-        raw_start = int(self.select_state.sel_start * raw_fs)
-        raw_end = int(self.select_state.sel_end * raw_fs)
+        fs = self.waveform_state.fs
+        raw_start = int(self.select_state.sel_start * fs)
+        raw_end = int(self.select_state.sel_end * fs)
         if raw_end <= raw_start:
             self.state_changed.emit(StatusMessageState(no_selection_message))
             return None
 
         if settings.cut_and_paste_at_zero_crossings:
-            raw_x = self.raw_wave_state.x
-            radius = self._zero_crossing_search_radius(raw_fs)
+            raw_x = self.waveform_state.x
+            radius = self._zero_crossing_search_radius(fs)
+
             snapped_start = nearest_zero_crossing(raw_x, raw_start, radius)
-            # raw_end is an exclusive boundary (can legitimately equal
-            # len(raw_x)); snap it as one, not as a plain sample index.
             snapped_end = nearest_zero_crossing_boundary(raw_x, raw_end, radius)
-            # Only use the snapped bounds if they still form a valid,
-            # nonempty range — a very short selection could snap both
-            # edges to the same (or an inverted) crossing.
+
             if snapped_end > snapped_start:
                 raw_start, raw_end = snapped_start, snapped_end
 
@@ -558,8 +530,8 @@ class DocumentViewModel(ViewModel):
             return None
 
         raw_start, raw_end = selected
-        raw_fs = self.raw_wave_state.fs
-        return AudioSignal(self.raw_wave_state.x[raw_start:raw_end].copy(), raw_fs)
+        fs = self.waveform_state.fs
+        return AudioSignal(self.waveform_state.x[raw_start:raw_end].copy(), fs)
 
     def cut_selection(self) -> AudioSignal | None:
         if not self._raw_buffer_ready():
@@ -569,8 +541,8 @@ class DocumentViewModel(ViewModel):
             return None
 
         raw_start, raw_end = selected
-        raw_fs = self.raw_wave_state.fs
-        clip = AudioSignal(self.raw_wave_state.x[raw_start:raw_end].copy(), raw_fs)
+        fs = self.waveform_state.fs
+        clip = AudioSignal(self.waveform_state.x[raw_start:raw_end].copy(), fs)
 
         if not self._remove_raw_range(raw_start, raw_end):
             return None
@@ -581,16 +553,16 @@ class DocumentViewModel(ViewModel):
         if not self._raw_buffer_ready():
             return
 
-        raw_fs = self.raw_wave_state.fs
-        clip_x = resample_signal(clip.x, clip.fs, raw_fs) if clip.fs != raw_fs else clip.x
-        raw_position = int(np.clip(position_seconds * raw_fs, 0, len(self.raw_wave_state.x)))
+        fs = self.waveform_state.fs
+        clip_x = resample_signal(clip.x, clip.fs, fs) if clip.fs != fs else clip.x
+        raw_position = int(np.clip(position_seconds * fs, 0, len(self.waveform_state.x)))
 
         if settings.cut_and_paste_at_zero_crossings:
-            radius = self._zero_crossing_search_radius(raw_fs)
+            radius = self._zero_crossing_search_radius(fs)
             # raw_position is an insertion point, i.e. an exclusive/
             # between-samples boundary just like raw_end above.
             raw_position = nearest_zero_crossing_boundary(
-                self.raw_wave_state.x, raw_position, radius
+                self.waveform_state.x, raw_position, radius
             )
 
         if not self._insert_raw_range(raw_position, clip_x):
