@@ -13,8 +13,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.edit_audio.save_audio import save_audio_signal
 from core.load_audio.entity.audio_signal import AudioSignal
+from core.save_audio.save_audio import SaveAudio
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.audio_info_dialog import AudioInfoDialog
@@ -263,9 +263,9 @@ class MainWindow(QMainWindow):
         options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
         if options is None:
             return
-        raw = doc.view_model.raw_wave_state
+        raw = doc.view_model.get_primary_raw_channel()
         try:
-            save_audio_signal(raw.x, raw.fs, options.path, options.target_fs, options.scale)
+            SaveAudio(options.path, raw.x, raw.fs, options.target_fs, options.scale).invoke()
         except Exception as err:
             QMessageBox.critical(
                 self, self.tr("Save Audio"), self.tr("Could not save the file:\n{}").format(err)

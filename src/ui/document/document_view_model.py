@@ -431,20 +431,21 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.document_window_state)
 
     def play_selected_audio(self):
-        fs = self.waveform_state.fs
-        start = int(self.select_state.sel_start * fs)
-        end = int(self.select_state.sel_end * fs)
+        channel = self.get_primary_raw_channel()
+        start = int(self.select_state.sel_start * channel.fs)
+        end = int(self.select_state.sel_end * channel.fs)
 
         if start != end:
-            section = self.waveform_state.x[start:end]
-            self.play_audio(section, fs, start=start)
+            section = channel.x[start:end]
+            self.play_audio(section, channel.fs, start=start)
 
     def play_visible_audio(self):
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        if len(self.waveform_state.x) > 0:
-            section = self.waveform_state.x[start:end]
-            self.play_audio(section, self.waveform_state.fs, start=start)
+        channel = self.get_primary_raw_channel()
+        if len(channel.x) > 0:
+            section = channel.x[start:end]
+            self.play_audio(section, channel.fs, start=start)
 
     def get_primary_raw_channel(self) -> AudioChannelState:
         return self.raw_audio_state[self.channel_state.primary_channel]
