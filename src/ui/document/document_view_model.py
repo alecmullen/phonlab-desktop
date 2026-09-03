@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import numpy as np
 import phonlab as phon
-from PyQt6.QtCore import QTimer, pyqtSlot
+from PyQt6.QtCore import QTimer, pyqtSignal, pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
 from core.edit_audio.entity.edit_command import EditCommand
@@ -39,6 +39,8 @@ LATENCY_WARNING_THRESHOLD_S = 0.1  # audacity's own reference for "robust" laten
 
 
 class DocumentViewModel(ViewModel):
+    audio_loaded = pyqtSignal(object, object)
+
     def __init__(self):
         super().__init__()
         self.raw_audio_state: list[AudioChannelState] = None
@@ -60,6 +62,8 @@ class DocumentViewModel(ViewModel):
 
         self.audio_player = AudioPlayer()
 
+        self.audio_loaded.connect(self.prep_audio)
+
     def load_audio(self, filepath: str, options: AudioOpenOptions):
         self.channel_state = ChannelState(primary_channel=options.primary_channel, channel_mode=options.channel_mode)
 
@@ -68,22 +72,26 @@ class DocumentViewModel(ViewModel):
             raw_audio = [to_audio_channel_state(sig) for sig in audio_signals]
             self.set_raw_audio(raw_audio, options.primary_channel, reset_window=True)
 
-            self.prep_audio(audio_signals, options)
+            self.audio_loaded.emit(audio_signals, options)
 
         use_case = LoadAudio(filepath)
         self.launch_use_case("load_audio", use_case, on_success, self.on_error)
 
+    @pyqtSlot(object, object)
     def prep_audio(self, channels: list[AudioSignal], options: AudioOpenOptions):
         use_case = PrepAudio(channels, options.target_fs, options.retained_channels)
+        self.state_changed.emit(LoadProgressState(True))
 
         @pyqtSlot(object)
         def on_success(prepped: dict[int, AudioSignal]):
             self.prepped_audio_state = { idx: to_audio_channel_state(sig) for idx, sig in prepped.items() }
+            self.state_changed.emit(LoadProgressState(False))
 
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
     def prep_edited_audio_channel(self, new_raw_signal: AudioSignal, target_fs, channel_idx: int):
         use_case = PrepAudio([new_raw_signal], target_fs, [0])
+        self.state_changed.emit(LoadProgressState(True))
 
         @pyqtSlot(object)
         def on_success(prepped: dict[int, AudioSignal]):
@@ -91,6 +99,7 @@ class DocumentViewModel(ViewModel):
             # We passed a single channel to PrepAudio, so we retreieve it at prepped[0]
             new_prepped_signal = prepped[0]
             self.prepped_audio_state = self.prepped_audio_state | {channel_idx: new_prepped_signal}
+            self.state_changed.emit(LoadProgressState(False))
 
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
@@ -231,6 +240,7 @@ class DocumentViewModel(ViewModel):
 
     def load_spectrogram_mmap(self, x, fs):
         if self.sgram_state.sxx_mmap is None or self.sgram_state.t_mmap is None:
+            self.state_changed.emit(LoadProgressState(True))
 
             generation = self._buffer_generation
 
@@ -246,6 +256,7 @@ class DocumentViewModel(ViewModel):
                     frames_computed=sgram.frames_computed,
                     samples_computed=sgram.samples_computed,
                 )
+                self.state_changed.emit(LoadProgressState(False))
 
             use_case = ComputeSpectrogramMmap(x, fs)
             self.launch_use_case(
