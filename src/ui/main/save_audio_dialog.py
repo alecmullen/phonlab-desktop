@@ -44,7 +44,7 @@ class SaveAudioDialog(QDialog):
         self.setWindowTitle(self.tr("Save Audio"))
         self.setMinimumWidth(420)
 
-        raw_fs = doc.view_model.get_primary_raw_channel().fs
+        raw_fs = doc.view_model.primary_raw_channel().fs
         default_dir = Path(doc.origin_path).parent if doc.origin_path else Path.home()
         self._default_path = str(default_dir / _default_filename(tab_name))
 

@@ -73,6 +73,7 @@ class DocumentViewModel(ViewModel):
         plots = self.plot_layout_state.plots.copy()
         if PlotType.WAVEFORM not in plots:
             plots.add(PlotType.WAVEFORM)
+            self.update_audio_waveform()
         elif len(plots) > 1:
             plots.remove(PlotType.WAVEFORM)
 
@@ -94,6 +95,7 @@ class DocumentViewModel(ViewModel):
         plots = self.plot_layout_state.plots.copy()
         if PlotType.ANNOTATION not in plots:
             plots.add(PlotType.ANNOTATION)
+            self.update_annotation_state()
         elif len(plots) > 1:
             plots.remove(PlotType.ANNOTATION)
 
@@ -192,9 +194,6 @@ class DocumentViewModel(ViewModel):
         self.prep_audio([AudioSignal(x, fs)], AudioOpenOptions(target_fs=target_fs, channel_mode="mono", retained_channels=[0], primary_channel=0))
             
     def compute_spectrogram(self):
-        if not self.plot_layout_state.has_spectrogram():
-            return
-
         prepped_audio_signal = self.primary_prepped_channel()
         start, end = self.document_window_state.start, self.document_window_state.end
 
@@ -243,9 +242,12 @@ class DocumentViewModel(ViewModel):
         self.document_window_state = document_window_state
         self.state_changed.emit(self.document_window_state)
 
-        self.compute_spectrogram()
-        self.update_audio_waveform()
-        self.update_annotation_state()
+        if self.plot_layout_state.has_spectrogram():
+            self.compute_spectrogram()
+        if self.plot_layout_state.has_waveform():
+            self.update_audio_waveform()
+        if self.plot_layout_state.has_annotation():
+            self.update_annotation_state()
 
     def go_back(self):
         window_size = self.document_window_state.end - self.document_window_state.start

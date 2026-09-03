@@ -261,7 +261,7 @@ class MainWindow(QMainWindow):
         tab_name = self.tr("CLIP {}: {}").format(n, origin_name)
         self.tab_widget.addTab(doc, tab_name)
 
-        target_fs = source_doc.view_model.get_primary_prepped_channel().fs
+        target_fs = source_doc.view_model.primary_prepped_channel().fs
         doc.view_model.load_from_samples(clip.x, clip.fs, target_fs)
 
     def save_audio(self):
@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
         options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
         if options is None:
             return
-        raw = doc.view_model.get_primary_raw_channel()
+        raw = doc.view_model.primary_raw_channel()
         try:
             SaveAudio(options.path, raw.x, raw.fs, options.target_fs, options.scale).invoke()
         except Exception as err:

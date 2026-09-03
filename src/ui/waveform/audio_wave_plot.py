@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtWidgets import QWidget
 from pyqtgraph import PlotDataItem
 
@@ -49,6 +49,14 @@ class AudioWavePlot(pg.PlotItem):
         self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen="r")
         self.addItem(self.cursor_line, ignoreBounds=True)
 
+        self.mark_line = pg.InfiniteLine(
+            angle=90,
+            movable=False,
+            pen=pg.mkPen(color="g", width=2, style=Qt.PenStyle.DashLine),
+        )
+        self.addItem(self.mark_line, ignoreBounds=True)
+        self.mark_line.setVisible(False)
+
         if len(self.view_model.audio_wave_state.t) > 0:
             self.plot_wave(self.view_model.audio_wave_state)
             self.is_initialized = True
@@ -74,6 +82,8 @@ class AudioWavePlot(pg.PlotItem):
         self.enableAutoRange(axis="y", enable=False)
 
         self.wave_curve = self.plot(audio_wave.t, audio_wave.x, pen="b")
+        self.wave_curve.setDownsampling(auto=True, method="peak")
+        self.wave_curve.setClipToView(True)
         self.setXRange(audio_wave.t[0], audio_wave.t[-1], padding=0)
 
     def update_wave(self, audio_wave: AudioWaveState):
@@ -98,5 +108,13 @@ class AudioWavePlot(pg.PlotItem):
         x = self.getViewBox().mapSceneToView(pos).x()
         self.cursor_line.setPos(x)
 
+    def set_mark_position(self, x: float, visible: bool):
+        self.mark_line.setPos(x)
+        self.mark_line.setVisible(visible)
+
+    def set_cursor_position(self, x: float, visible: bool):
+        self.cursor_line.setPos(x)
+        self.cursor_line.setVisible(visible)
+        
     def clear(self):
         self.wave_curve = None

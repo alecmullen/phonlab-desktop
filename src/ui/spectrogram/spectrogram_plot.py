@@ -42,7 +42,6 @@ class SpectrogramPlot(pg.PlotItem):
 
         self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen="r")
         self.addItem(self.cursor_line, ignoreBounds=True)
-        self.cursor_line.setVisible(False)
 
         self.mark_line = pg.InfiniteLine(
             angle=90,

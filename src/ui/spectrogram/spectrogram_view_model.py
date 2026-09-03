@@ -4,12 +4,14 @@ import numpy as np
 import phonlab as phon
 from PyQt6.QtCore import pyqtSlot
 
-from core.entity.spectrogram import Spectrogram
-from core.entity.spectrogram_mmap import SpectrogramMmap
-from core.usecase.compute_sgram import ComputeSpectrogram
-from core.usecase.compute_sgram_mmap import ComputeSpectrogramMmap
+from core.spectrogram.compute_sgram import ComputeSpectrogram
+from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
+from core.spectrogram.entity.spectrogram import Spectrogram
+from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.view_model import ViewModel
+from ui.document.state.audio_channel_state import AudioChannelState
+from ui.document.state.load_progress_state import LoadProgressState
 from ui.spectrogram.spectrogram_state import SpectrogramState
 
 
@@ -18,9 +20,13 @@ class SpectrogramViewModel(ViewModel):
         super().__init__()
         self.sgram_state: SpectrogramState = SpectrogramState()
 
+        self._buffer_generation = 0
+
     def compute_spectrogram(
-        self, x: np.ndarray, t: np.ndarray, fs: int, start: float, end: float
+        self, channel: AudioChannelState, start: float, end: float
     ):
+        x, t, fs = channel.x, channel.t, channel.fs
+        
         if (end - start) / fs > MAX_SGRAM_LENGTH:
             self.sgram_state = replace(self.sgram_state, is_showing=False)
             self.state_changed.emit(self.sgram_state)
@@ -63,6 +69,8 @@ class SpectrogramViewModel(ViewModel):
             )
             self.state_changed.emit(self.sgram_state)
 
+            self._buffer_generation += 1
+
             @pyqtSlot(object)
             def on_success(sgram: Spectrogram):
                 self.sgram_state = replace(
@@ -79,9 +87,14 @@ class SpectrogramViewModel(ViewModel):
 
     def load_spectrogram_mmap(self, x, fs):
         if self.sgram_state.sxx_mmap is None or self.sgram_state.t_mmap is None:
+            self.state_changed.emit(LoadProgressState(True))
+
+            generation = self._buffer_generation
 
             @pyqtSlot(object)
             def on_success(sgram: SpectrogramMmap):
+                if generation != self._buffer_generation:
+                    return  # stale result computed against a since-replaced buffer
                 self.sgram_state = replace(
                     self.sgram_state,
                     sxx_mmap=sgram.sxx_mmap,
@@ -90,6 +103,7 @@ class SpectrogramViewModel(ViewModel):
                     frames_computed=sgram.frames_computed,
                     samples_computed=sgram.samples_computed,
                 )
+                self.state_changed.emit(LoadProgressState(False))
 
             use_case = ComputeSpectrogramMmap(x, fs)
             self.launch_use_case(
@@ -101,6 +115,11 @@ class SpectrogramViewModel(ViewModel):
         gray_cutoff = max(0.0, min(0.7, gray_cutoff))
         self.sgram_state = replace(self.sgram_state, gray_cutoff=gray_cutoff)
         self.state_changed.emit(self.sgram_state)
+
+    def invalidate_spectrogram(self):
+        self._buffer_generation += 1
+        self.close_thread("sgram_mmap")
+        self.close_thread("sgram_window")
 
     @pyqtSlot(object)
     def on_error(self, err):

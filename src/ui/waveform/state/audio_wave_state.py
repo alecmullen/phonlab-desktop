@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ui.document.state.audio_signal_state import AudioSignalState
+from ui.document.state.audio_channel_state import AudioChannelState
 
 
 @dataclass
@@ -15,12 +15,12 @@ class AudioWaveState:
     max_t: float = 0.0
 
 
-def to_audio_wave_state(audio_signal: AudioSignalState, start, end):
-    min_x = np.min(audio_signal.x)
-    max_x = np.max(audio_signal.x)
-    max_t = (len(audio_signal.x) - 1) / audio_signal.fs
+def to_audio_wave_state(channel: AudioChannelState, start, end):
+    min_x = float(np.min(channel.x))
+    max_x = float(np.max(channel.x))
+    max_t = (len(channel.x) - 1) / channel.fs
 
-    x = audio_signal.x[start:end]
-    t = (np.arange(len(x)) + start) / audio_signal.fs
+    x = channel.x[start:end]
+    t = channel.t[start:end]
 
-    return AudioWaveState(x, audio_signal.fs, min_x, max_x, t, max_t)
+    return AudioWaveState(x, channel.fs, min_x, max_x, t, max_t)
