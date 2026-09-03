@@ -4,8 +4,8 @@ import tempfile
 import numpy as np
 import phonlab as phon
 
-from core.entity.spectrogram_mmap import SpectrogramMmap
-from core.usecase.use_case import UseCase
+from core.base.use_case import UseCase
+from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
 
 
 class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
@@ -24,6 +24,10 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         self.step_size = step_size
         self.order = order
         self.chunk_duration = chunk_duration
+        self.sxx_mmap = None
+        self.t_mmap = None
+        self.mmap_file = None
+        self.ts_file = None
 
     def invoke(self):
         try:

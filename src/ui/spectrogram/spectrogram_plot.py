@@ -1,6 +1,6 @@
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
@@ -42,6 +42,15 @@ class SpectrogramPlot(pg.PlotItem):
 
         self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen="r")
         self.addItem(self.cursor_line, ignoreBounds=True)
+        self.cursor_line.setVisible(False)
+
+        self.mark_line = pg.InfiniteLine(
+            angle=90,
+            movable=False,
+            pen=pg.mkPen(color="g", width=2, style=Qt.PenStyle.DashLine),
+        )
+        self.addItem(self.mark_line, ignoreBounds=True)
+        self.mark_line.setVisible(False)
 
         self.selection_region = pg.LinearRegionItem(
             values=[0, 0],
@@ -111,6 +120,14 @@ class SpectrogramPlot(pg.PlotItem):
     def on_mouse_moved(self, pos):
         x = self.getViewBox().mapSceneToView(pos).x()
         self.cursor_line.setPos(x)
+
+    def set_cursor_position(self, x: float, visible: bool):
+        self.cursor_line.setPos(x)
+        self.cursor_line.setVisible(visible)
+
+    def set_mark_position(self, x: float, visible: bool):
+        self.mark_line.setPos(x)
+        self.mark_line.setVisible(visible)
 
     def update_selection_region(self, box_left: float, xrange: float):
         if xrange > 0:

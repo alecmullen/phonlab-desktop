@@ -10,10 +10,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.load_audio.entity.audio_signal import AudioSignal
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_signal_state import AudioSignalState
+from ui.document.state.audio_loaded import AudioLoaded
 from ui.document.state.document_window_state import DocumentWindowState
+from ui.document.state.load_progress_state import LoadProgressState
+from ui.document.state.mark_state import MarkState
+from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
@@ -28,6 +32,10 @@ class DocumentView(QWidget):
         super().__init__(parent)
         self.view_model = view_model
         view_model.subscribe(self.on_state_change)
+
+        # Name/path of the file this document 
+        self.origin_name: str | None = None
+        self.origin_path: str | None = None
 
         pg.setConfigOption("background", "w")
         pg.setConfigOption("foreground", "k")
@@ -86,7 +94,7 @@ class DocumentView(QWidget):
 
     @pyqtSlot(object)
     def on_state_change(self, model):
-        if isinstance(model, AudioSignalState):
+        if isinstance(model, AudioLoaded):
             self.reset_slider(model.fs)
             self.update_plot_layout(self.view_model.plot_layout_state)
         elif isinstance(model, SelectState):
@@ -95,12 +103,18 @@ class DocumentView(QWidget):
             self.update_slider_value(model)
         elif isinstance(model, StatusMessageState):
             self.message_label.setText(model.message)
+        elif isinstance(model, PlaybackState):
+            self.update_playback_cursor(model)
+        elif isinstance(model, LoadProgressState):
+            self.update_load_progress(model)
         elif isinstance(model, PlotLayoutState):
             self.update_plot_layout(model)
+        elif isinstance(model, MarkState):
+            self.update_mark(model)
 
-    def load_audio(self, filename):
+    def load_audio(self, filename, options):
         """Load an audio file into this document"""
-        self.view_model.load_audio(filename)
+        self.view_model.load_audio(filename, options)
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -109,6 +123,8 @@ class DocumentView(QWidget):
         if self.wave_plot:
             self.wave_plot.clear()
             self.wave_plot = None
+
+        self.spec_plot = None
 
         self.selection_region_wave = None
         self.selection_region_spec = None
@@ -149,6 +165,7 @@ class DocumentView(QWidget):
 
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
+        self.update_mark(self.view_model.mark_state)
 
     def add_plot(self, row: int, plot_type: PlotType, is_bottom: False):
         if plot_type == PlotType.WAVEFORM:
@@ -257,6 +274,27 @@ class DocumentView(QWidget):
         self.slider.setValue(doc_window.start)
         self.update_slider_page_step(doc_window)
 
+    def update_mark(self, mark: MarkState):
+        if self.spec_plot is not None:
+            self.spec_plot.set_mark_position(mark.position, mark.is_set)
+        if self.wave_plot is not None:
+            self.wave_plot.set_mark_position(mark.position, mark.is_set)
+
+    def update_playback_cursor(self, playback: PlaybackState):
+        if self.wave_plot:
+            self.wave_plot.set_cursor_position(playback.position, playback.is_playing)
+        if self.spec_plot:
+            self.spec_plot.set_cursor_position(playback.position, playback.is_playing)
+
+    def update_load_progress(self, progress: LoadProgressState):
+        self.progress_bar.setVisible(progress.is_loading)
+        if progress.is_loading:
+            self.progress_bar.setRange(0, 0)  # no known percentage, just "busy"
+            self.progress_bar.setFormat(self.tr("Loading full file…"))
+        else:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setFormat(self.tr("Computing %p%"))
+
     def on_mouse_moved(self, pos):
         # Determine which plot the mouse is over
 
@@ -281,11 +319,12 @@ class DocumentView(QWidget):
             if not self.is_dragging:
                 self.view_model.start_selection(x)
             else:
+                # continue_selection() sets its own "Select: ... to ..."
+                # status message; don't clobber it with the cursor position.
                 self.view_model.continue_selection(x)
             self.is_dragging = True
-
-        # Update status message
-        self.message_label.setText(status_msg)
+        else:
+            self.message_label.setText(status_msg)
 
     def eventFilter(self, obj, event):
         """Filter mouse events from the graphics widget"""
@@ -307,6 +346,7 @@ class DocumentView(QWidget):
 
             elif event.type() == QEvent.Type.Wheel:
                 return self.handle_scroll(event)
+            
         return super().eventFilter(obj, event)
 
     def handle_mouse_press(self, event):
@@ -367,7 +407,8 @@ class DocumentView(QWidget):
                 self.is_dragging = False
                 self.view_model.play_selected_audio()
             else:
-                self.pending_single_click = (scene_pos, event)
+                shift_pressed = event.modifiers() == Qt.KeyboardModifier.ShiftModifier
+                self.pending_single_click = (scene_pos, shift_pressed)
                 if self.click_timer is not None:
                     self.click_timer.stop()
                 self.click_timer = QTimer()
@@ -380,10 +421,7 @@ class DocumentView(QWidget):
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
-            scene_pos, _ = self.pending_single_click
-
-            modifiers = QApplication.keyboardModifiers()
-            shift_pressed = modifiers == Qt.KeyboardModifier.ShiftModifier
+            scene_pos, shift_pressed = self.pending_single_click
 
             if shift_pressed:
                 self.set_mark(scene_pos)
@@ -452,6 +490,8 @@ class DocumentView(QWidget):
         return True
 
     def set_mark(self, scene_pos):
+        """Shift+Click: place a persistent mark at this time, used as the
+        paste insertion point (and available for future uses)."""
         clicked_plot = None
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.wave_plot
@@ -461,7 +501,9 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
-        self.view_model.remove_selection()
+        mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
+        x = mouse_point.x()
+        self.view_model.set_mark(x)
 
     def stop_audio(self):
         """Stop audio playback"""
@@ -470,6 +512,21 @@ class DocumentView(QWidget):
     def play_visible(self):
         """Play the audio currently visible in the viewport"""
         self.view_model.play_visible_audio()
+
+    def copy_selection(self) -> AudioSignal | None:
+        return self.view_model.copy_selection()
+
+    def cut_selection(self) -> AudioSignal | None:
+        return self.view_model.cut_selection()
+
+    def paste_at_cursor(self, clip: AudioSignal):
+        self.view_model.paste_at_mark(clip)
+
+    def undo(self):
+        self.view_model.undo()
+
+    def redo(self):
+        self.view_model.redo()
 
     def cleanup(self):
         """Clean up resources when closing document"""
