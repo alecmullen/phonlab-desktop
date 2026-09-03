@@ -10,17 +10,19 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.component.audio_wave_plot import AudioWavePlot
 from ui.document.component.spectrogram_plot import SpectrogramPlot
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_wave_state import AudioWaveState
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
+from ui.document.state.mark_state import MarkState
 from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
 from ui.document.state.sgram_state import SpectrogramState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.document.state.waveform_state import WaveformState
 
 
 class DocumentView(QWidget):
@@ -30,6 +32,10 @@ class DocumentView(QWidget):
         super().__init__(parent)
         self.view_model = view_model
         view_model.subscribe(self.on_state_change)
+
+        # Name/path of the file this document 
+        self.origin_name: str | None = None
+        self.origin_path: str | None = None
 
         pg.setConfigOption("background", "w")
         pg.setConfigOption("foreground", "k")
@@ -94,7 +100,7 @@ class DocumentView(QWidget):
         self.wave_y_scale = 1.0
 
     def on_state_change(self, model):
-        if isinstance(model, AudioWaveState):
+        if isinstance(model, WaveformState):
             self.load_audio_wave_view(model)
             self.view_model.compute_spectrogram()
         elif isinstance(model, SpectrogramState):
@@ -111,15 +117,17 @@ class DocumentView(QWidget):
         elif isinstance(model, LoadProgressState):
             self.update_load_progress(model)
         elif isinstance(model, PlotLayoutState):
-            self.update_plot_layout(model, self.view_model.audio_wave_state)
+            self.update_plot_layout(model, self.view_model.waveform_state)
+        elif isinstance(model, MarkState):
+            self.update_mark(model)
 
     def load_audio(self, filename, options):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
-    def load_audio_wave_view(self, audio_wave: AudioWaveState):
+    def load_audio_wave_view(self, audio_wave: WaveformState):
         self.reset_slider(audio_wave.fs)
-        self.update_plot_layout(self.view_model.plot_layout_state, audio_wave)
+        self.update_plot_layout(self.view_model.plot_layout_state, self.view_model.waveform_state)
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -129,10 +137,12 @@ class DocumentView(QWidget):
             self.wave_plot.clear()
             self.wave_plot = None
 
+        self.spec_plot = None
+
         self.selection_region_wave = None
         self.selection_region_spec = None
 
-    def create_wave_plot(self, row, col, audio_wave: AudioWaveState, rowspan=1):
+    def create_wave_plot(self, row, col, waveform: WaveformState, rowspan=1):
         """Create a waveform plot at the specified position"""
         start, end = (
             self.view_model.document_window_state.start,
@@ -143,7 +153,7 @@ class DocumentView(QWidget):
         self.graphics_widget.addItem(wave_plot, row=row, col=col, rowspan=rowspan)
 
         wave_plot.plot_wave(
-            audio_wave.t, audio_wave.x, start, end, audio_wave.max_x, audio_wave.min_x
+            waveform.t, waveform.x, start, end, waveform.max_x, waveform.min_x
         )
 
         return wave_plot
@@ -156,10 +166,10 @@ class DocumentView(QWidget):
     def show_spectrogram(self, show: bool):
         self.view_model.show_spectrogram(show)
 
-    def update_plot_layout(self, layout_state: PlotLayoutState, audio_wave: AudioWaveState):
+    def update_plot_layout(self, layout_state: PlotLayoutState, waveform: WaveformState):
         self.clear_plots()
 
-        self.wave_plot = self.create_wave_plot(0, 0, audio_wave)
+        self.wave_plot = self.create_wave_plot(0, 0, waveform)
 
         if layout_state.is_spectrogram:
             self.wave_plot.getAxis("bottom").setStyle(showValues=False)
@@ -178,6 +188,7 @@ class DocumentView(QWidget):
 
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
+        self.update_mark(self.view_model.mark_state)
 
     def plot_spectrogram(self, sgram: SpectrogramState):
         if self.spec_plot is None:
@@ -190,8 +201,8 @@ class DocumentView(QWidget):
     def update_wave_y_range(self):
         """Update the y-axis range of the waveform plot based on scale factor"""
         max_x, min_x = (
-            self.view_model.audio_wave_state.max_x,
-            self.view_model.audio_wave_state.min_x,
+            self.view_model.waveform_state.max_x,
+            self.view_model.waveform_state.min_x,
         )
         if self.wave_plot:
             y_max = max(abs(min_x), abs(max_x))
@@ -275,6 +286,12 @@ class DocumentView(QWidget):
         if self.wave_plot is not None:
             self.wave_plot.update_selection_region(box_left, xrange)
 
+    def update_mark(self, mark: MarkState):
+        if self.spec_plot is not None:
+            self.spec_plot.set_mark_position(mark.position, mark.is_set)
+        if self.wave_plot is not None:
+            self.wave_plot.set_mark_position(mark.position, mark.is_set)
+
     def update_playback_cursor(self, playback: PlaybackState):
         if self.wave_plot:
             self.wave_plot.set_cursor_position(playback.position, playback.is_playing)
@@ -292,11 +309,13 @@ class DocumentView(QWidget):
 
     def update_document_window(self, doc_window: DocumentWindowState):
         start, end = doc_window.start, doc_window.end
-        t, x = self.view_model.audio_wave_state.t, self.view_model.audio_wave_state.x
         self.slider.setValue(start)
 
         if self.wave_plot:
-            self.wave_plot.update_wave(t[start:end], x[start:end], t[end])
+            raw_t, raw_x = self.view_model.waveform_state.t, self.view_model.waveform_state.x
+            self.wave_plot.update_wave(
+                raw_t[start:end], raw_x[start:end], raw_t[end]
+            )
 
         self.view_model.compute_spectrogram()
         self.update_slider_page_step(doc_window)
@@ -506,7 +525,8 @@ class DocumentView(QWidget):
                 self.is_dragging = False
                 self.view_model.play_selected_audio()
             else:
-                self.pending_single_click = (scene_pos, event)
+                shift_pressed = event.modifiers() == Qt.KeyboardModifier.ShiftModifier
+                self.pending_single_click = (scene_pos, shift_pressed)
                 if self.click_timer is not None:
                     self.click_timer.stop()
                 self.click_timer = QTimer()
@@ -516,10 +536,7 @@ class DocumentView(QWidget):
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
-            scene_pos, _ = self.pending_single_click
-
-            modifiers = QApplication.keyboardModifiers()
-            shift_pressed = modifiers == Qt.KeyboardModifier.ShiftModifier
+            scene_pos, shift_pressed = self.pending_single_click
 
             if shift_pressed:
                 self.set_mark(scene_pos)
@@ -530,7 +547,8 @@ class DocumentView(QWidget):
         self.click_timer = None
 
     def set_mark(self, scene_pos):
-
+        """Shift+Click: place a persistent mark at this time, used as the
+        paste insertion point (and available for future uses)."""
         clicked_plot = None
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.wave_plot
@@ -540,7 +558,9 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
-        self.view_model.remove_selection()
+        mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
+        x = mouse_point.x()
+        self.view_model.set_mark(x)
 
     def handle_right_click(self, scene_pos):
         pass
@@ -552,6 +572,21 @@ class DocumentView(QWidget):
     def play_visible(self):
         """Play the audio currently visible in the viewport"""
         self.view_model.play_visible_audio()
+
+    def copy_selection(self) -> AudioSignal | None:
+        return self.view_model.copy_selection()
+
+    def cut_selection(self) -> AudioSignal | None:
+        return self.view_model.cut_selection()
+
+    def paste_at_cursor(self, clip: AudioSignal):
+        self.view_model.paste_at_mark(clip)
+
+    def undo(self):
+        self.view_model.undo()
+
+    def redo(self):
+        self.view_model.redo()
 
     def cleanup(self):
         """Clean up resources when closing document"""

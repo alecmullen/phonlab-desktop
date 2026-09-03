@@ -30,15 +30,22 @@ class ViewModel(QObject):
                 return
             self.job_managers[key].queue_job(Job(use_case, on_success, on_error))
         else:
-            self.job_managers[key] = JobManager()
-            self.job_managers[key](Job(use_case, on_success, on_error))
+            manager = JobManager()
+            self.job_managers[key] = manager
+            manager(Job(use_case, on_success, on_error))
 
             @pyqtSlot()
             def on_finished():
-                del self.job_managers[key]
+                if self.job_managers.get(key) is manager:
+                    del self.job_managers[key]
 
-            self.job_managers[key].signals.finished.connect(on_finished)
+            manager.signals.finished.connect(on_finished)
 
     def close_threads(self):
         for key in self.job_managers:
             self.job_managers[key].quit()
+
+    def close_thread(self, key):
+        manager = self.job_managers.pop(key, None)
+        if manager is not None:
+            manager.quit()

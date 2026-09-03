@@ -15,6 +15,7 @@ class AudioPlayer(QObject):
     audio_queue = pyqtSignal(object, int)
 
     PLAYBACK_POLL_MS = 33
+    STOP_TIMEOUT_S = 2.0
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -82,8 +83,8 @@ class AudioPlayer(QObject):
         self._audible_start_time = latency_info.audible_start_time
 
     @pyqtSlot(str)
-    def _on_error(self, str):
-        self.playback_error.emit(str)
+    def _on_error(self, message: str):
+        self.playback_error.emit(message)
         self.poll_timer.stop()
 
     def stop(self):

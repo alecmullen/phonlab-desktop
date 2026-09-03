@@ -1,20 +1,25 @@
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtGui import QAction, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QMainWindow,
+    QMessageBox,
     QSizePolicy,
     QTabWidget,
     QToolBar,
     QWidget,
 )
 
+from core.load_audio.entity.audio_signal import AudioSignal
+from core.save_audio.save_audio import SaveAudio
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
+from ui.main.audio_info_dialog import AudioInfoDialog
 from ui.main.open_audio_dialog import OpenAudioDialog
+from ui.main.save_audio_dialog import SaveAudioDialog
 
 
 class MainWindow(QMainWindow):
@@ -26,6 +31,8 @@ class MainWindow(QMainWindow):
 
         self.filters = "Sound files (*.wav)"
         self.splash = splash
+        self.clipboard: AudioSignal | None = None
+        self.clip_counters: dict[str, int] = {}
 
         # Create tab widget
         self.tab_widget = QTabWidget()
@@ -60,9 +67,26 @@ class MainWindow(QMainWindow):
             QIcon.fromTheme("window-close"), self.tr("&Close"), self
         )
         self.close_action.setStatusTip(self.tr("Close current file"))
-        self.close_action.setShortcut("Ctrl-W")
+        self.close_action.setShortcut("Ctrl+W")
         self.close_action.triggered.connect(self.close_current_tab)
         fileMenu.addAction(self.close_action)
+
+        fileMenu.addSeparator()
+
+        self.save_action = QAction(self.tr("&Save…"), self)
+        self.save_action.setStatusTip(self.tr("Save the current document's audio to a file"))
+        self.save_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_action.triggered.connect(self.save_audio)
+        fileMenu.addAction(self.save_action)
+
+        fileMenu.addSeparator()
+
+        self.audio_info_action = QAction(self.tr("Audio &Info"), self)
+        self.audio_info_action.setStatusTip(
+            self.tr("Show sample rate, duration, and amplitude of the current document")
+        )
+        self.audio_info_action.triggered.connect(self.show_audio_info)
+        fileMenu.addAction(self.audio_info_action)
 
         fileMenu.addSeparator()
 
@@ -74,7 +98,39 @@ class MainWindow(QMainWindow):
         fileMenu.addAction(self.exit_action)
 
         # Edit Menu
-        mainMenu.addMenu("&Edit")
+        editMenu = mainMenu.addMenu("&Edit")
+
+        self.undo_action = QAction(self.tr("&Undo"), self)
+        self.undo_action.setStatusTip(self.tr("Undo the last cut or paste"))
+        self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        self.undo_action.triggered.connect(self.undo)
+        editMenu.addAction(self.undo_action)
+
+        self.redo_action = QAction(self.tr("&Redo"), self)
+        self.redo_action.setStatusTip(self.tr("Redo the last undone cut or paste"))
+        self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        self.redo_action.triggered.connect(self.redo)
+        editMenu.addAction(self.redo_action)
+
+        editMenu.addSeparator()
+
+        self.cut_action = QAction(self.tr("Cu&t"), self)
+        self.cut_action.setStatusTip(self.tr("Cut the selected audio"))
+        self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
+        self.cut_action.triggered.connect(self.cut_selection)
+        editMenu.addAction(self.cut_action)
+
+        self.copy_action = QAction(self.tr("&Copy"), self)
+        self.copy_action.setStatusTip(self.tr("Copy the selected audio"))
+        self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
+        self.copy_action.triggered.connect(self.copy_selection)
+        editMenu.addAction(self.copy_action)
+
+        self.paste_action = QAction(self.tr("&Paste"), self)
+        self.paste_action.setStatusTip(self.tr("Paste audio at the mark"))
+        self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
+        self.paste_action.triggered.connect(self.paste_at_cursor)
+        editMenu.addAction(self.paste_action)
 
         # View Menu
         viewMenu = mainMenu.addMenu("&View")
@@ -166,15 +222,60 @@ class MainWindow(QMainWindow):
 
             # Create new document
             doc = DocumentView(DocumentViewModel())
+            doc.origin_name = Path(filename).name
+            doc.origin_path = filename
 
             # Add tab with shortened filename
-            tab_name = Path(filename).name
+            tab_name = doc.origin_name
             index = self.tab_widget.addTab(doc, tab_name)
             self.tab_widget.setCurrentIndex(index)
             self.tab_widget.setTabToolTip(index, filename)
 
             # Load the audio file
             doc.load_audio(filename, options)
+
+    def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
+        """Open a new tab containing the just-copied/cut samples, without
+        stealing focus from source_doc """
+        doc = DocumentView(DocumentViewModel())
+
+        # Always name after the ORIGINAL source file
+        origin_name = source_doc.origin_name
+        if not origin_name:
+            source_index = self.tab_widget.indexOf(source_doc)
+            origin_name = self.tab_widget.tabText(source_index)
+        doc.origin_name = origin_name
+        doc.origin_path = source_doc.origin_path
+
+        n = self.clip_counters.get(origin_name, 0) + 1
+        self.clip_counters[origin_name] = n
+        tab_name = self.tr("CLIP {}: {}").format(n, origin_name)
+        self.tab_widget.addTab(doc, tab_name)
+
+        target_fs = source_doc.view_model.get_primary_prepped_channel().fs
+        doc.view_model.load_from_samples(clip.x, clip.fs, target_fs)
+
+    def save_audio(self):
+        doc = self.get_current_document()
+        if not doc:
+            return
+        index = self.tab_widget.indexOf(doc)
+        options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
+        if options is None:
+            return
+        raw = doc.view_model.get_primary_raw_channel()
+        try:
+            SaveAudio(options.path, raw.x, raw.fs, options.target_fs, options.scale).invoke()
+        except Exception as err:
+            QMessageBox.critical(
+                self, self.tr("Save Audio"), self.tr("Could not save the file:\n{}").format(err)
+            )
+
+    def show_audio_info(self):
+        doc = self.get_current_document()
+        if doc:
+            index = self.tab_widget.indexOf(doc)
+            AudioInfoDialog.show_info(doc, self.tab_widget.tabText(index), self)
 
     def close_tab(self, index):
         """Close a tab"""
@@ -223,6 +324,37 @@ class MainWindow(QMainWindow):
         doc = self.get_current_document()
         if doc:
             doc.recenter_on_selection()
+
+    def copy_selection(self):
+        doc = self.get_current_document()
+        if doc:
+            clip = doc.copy_selection()
+            if clip is not None:
+                self.clipboard = clip
+                self._open_clip_tab(doc, clip)
+
+    def cut_selection(self):
+        doc = self.get_current_document()
+        if doc:
+            clip = doc.cut_selection()
+            if clip is not None:
+                self.clipboard = clip
+                self._open_clip_tab(doc, clip)
+
+    def paste_at_cursor(self):
+        doc = self.get_current_document()
+        if doc and self.clipboard is not None:
+            doc.paste_at_cursor(self.clipboard)
+
+    def undo(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.undo()
+
+    def redo(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.redo()
 
     def keyPressEvent(self, event):
         """Forward keyboard events to current document"""
