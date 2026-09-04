@@ -33,7 +33,7 @@ class DocumentView(QWidget):
         self.view_model = view_model
         view_model.subscribe(self.on_state_change)
 
-        # Name/path of the file this document 
+        # Name/path of the file this document
         self.origin_name: str | None = None
         self.origin_path: str | None = None
 
@@ -353,7 +353,7 @@ class DocumentView(QWidget):
 
             elif event.type() == QEvent.Type.Wheel:
                 return self.handle_scroll(event)
-            
+
         return super().eventFilter(obj, event)
 
     def handle_mouse_press(self, event):

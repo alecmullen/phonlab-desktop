@@ -18,7 +18,6 @@ from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_channel_state import AudioChannelState
 from ui.main.audio_info_dialog import AudioInfoDialog
 from ui.main.open_audio_dialog import OpenAudioDialog
 from ui.main.save_audio_dialog import SaveAudioDialog
@@ -76,7 +75,9 @@ class MainWindow(QMainWindow):
         fileMenu.addSeparator()
 
         self.save_action = QAction(self.tr("&Save…"), self)
-        self.save_action.setStatusTip(self.tr("Save the current document's audio to a file"))
+        self.save_action.setStatusTip(
+            self.tr("Save the current document's audio to a file")
+        )
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_action.triggered.connect(self.save_audio)
         fileMenu.addAction(self.save_action)
@@ -155,7 +156,9 @@ class MainWindow(QMainWindow):
 
         if settings.enable_annotation:
             self.annotationview_action = QAction(
-                QIcon.fromTheme("view-media-visualization"), self.tr("&Annotation"), self
+                QIcon.fromTheme("view-media-visualization"),
+                self.tr("&Annotation"),
+                self,
             )
             self.annotationview_action.setStatusTip(self.tr("View annotations"))
             self.annotationview_action.setShortcut("Ctrl+3")
@@ -249,7 +252,7 @@ class MainWindow(QMainWindow):
 
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
         """Open a new tab containing the just-copied/cut samples, without
-        stealing focus from source_doc """
+        stealing focus from source_doc"""
         doc = DocumentView(DocumentViewModel())
 
         # Always name after the ORIGINAL source file
@@ -278,10 +281,14 @@ class MainWindow(QMainWindow):
             return
         raw = doc.view_model.primary_raw_channel()
         try:
-            SaveAudio(options.path, raw.x, raw.fs, options.target_fs, options.scale).invoke()
-        except Exception as err:
+            SaveAudio(
+                options.path, raw.x, raw.fs, options.target_fs, options.scale
+            ).invoke()
+        except RuntimeError as err:
             QMessageBox.critical(
-                self, self.tr("Save Audio"), self.tr("Could not save the file:\n{}").format(err)
+                self,
+                self.tr("Save Audio"),
+                self.tr("Could not save the file:\n{}").format(err),
             )
 
     def show_audio_info(self):

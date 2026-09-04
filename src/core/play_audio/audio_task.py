@@ -34,9 +34,7 @@ class AudioTask(QObject):
 
         # Fresh OutputStream with currently selected system default
         with self._open_stream(self._fs, audio_data.shape[1]):
-            self._finished_event.wait(
-                timeout=(len(self._audio_data) / self._fs) + 0.02
-            )
+            self._finished_event.wait(timeout=(len(self._audio_data) / self._fs) + 0.02)
             time.sleep(self._latency)
 
     def _audio_callback(self, outdata, frames, time_info, status):

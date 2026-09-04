@@ -106,7 +106,7 @@ class AudioWavePlot(pg.PlotItem, CursorController):
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos):
-         if self.has_cursor_control:
+        if self.has_cursor_control:
             x = self.getViewBox().mapSceneToView(pos).x()
             self.cursor_line.setPos(x)
 

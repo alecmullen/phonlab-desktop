@@ -66,7 +66,7 @@ class DocumentViewModel(ViewModel):
         self.annotation_view_model = AnnotationViewModel()
 
         self.audio_player = AudioPlayer()
-        
+
         self.audio_loaded.connect(self.prep_audio)
 
     def toggle_wave(self):
@@ -103,7 +103,9 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.plot_layout_state)
 
     def load_audio(self, filepath: str, options: AudioOpenOptions):
-        self.channel_state = ChannelState(primary_channel=options.primary_channel, channel_mode=options.channel_mode)
+        self.channel_state = ChannelState(
+            primary_channel=options.primary_channel, channel_mode=options.channel_mode
+        )
 
         @pyqtSlot(object)
         def on_success(audio_signals: dict[int, AudioSignal]):
@@ -128,7 +130,9 @@ class DocumentViewModel(ViewModel):
 
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
-    def prep_edited_audio_channel(self, new_raw_signal: AudioSignal, target_fs, channel_idx: int):
+    def prep_edited_audio_channel(
+        self, new_raw_signal: AudioSignal, target_fs, channel_idx: int
+    ):
         use_case = PrepAudio([new_raw_signal], target_fs, [0])
         self.state_changed.emit(LoadProgressState(True))
 
@@ -145,7 +149,9 @@ class DocumentViewModel(ViewModel):
 
     def adjust_window_if_needed(self, signal_end: int):
         window_size = self.document_window_state.end - self.document_window_state.start
-        new_start = min(self.document_window_state.start, max(0, signal_end - window_size))
+        new_start = min(
+            self.document_window_state.start, max(0, signal_end - window_size)
+        )
         new_end = min(new_start + window_size, signal_end)
         document_window_state = replace(
             self.document_window_state,
@@ -155,7 +161,12 @@ class DocumentViewModel(ViewModel):
         )
         self.update_document_window(document_window_state)
 
-    def set_raw_audio(self, raw_audio: dict[int, AudioChannelState], primary_channel: int, reset_window: bool):
+    def set_raw_audio(
+        self,
+        raw_audio: dict[int, AudioChannelState],
+        primary_channel: int,
+        reset_window: bool,
+    ):
         self.raw_audio_state = raw_audio
         self.update_audio_waveform()
 
@@ -177,9 +188,7 @@ class DocumentViewModel(ViewModel):
             )
             self.update_document_window(self.document_window_state)
 
-            shown = (
-                self.document_window_state.end - self.document_window_state.start
-            )
+            shown = self.document_window_state.end - self.document_window_state.start
             msg = self.tr(
                 "Duration shown {:.3f} seconds, out of {:.3f} seconds"
             ).format(shown / fs, len(x) / fs)
@@ -188,21 +197,31 @@ class DocumentViewModel(ViewModel):
             self.adjust_window_if_needed(len(self.primary_raw_channel().x) - 1)
 
     def load_from_samples(self, clip: AudioSignal, target_fs: int):
-        raw_audio_state = { 0: to_audio_channel_state(clip) }
+        raw_audio_state = {0: to_audio_channel_state(clip)}
         self.set_raw_audio(raw_audio_state, primary_channel=0, reset_window=True)
 
-        self.prep_audio([clip], AudioOpenOptions(target_fs=target_fs, channel_mode="mono", retained_channels=[0], primary_channel=0))
-            
+        self.prep_audio(
+            [clip],
+            AudioOpenOptions(
+                target_fs=target_fs,
+                channel_mode="mono",
+                retained_channels=[0],
+                primary_channel=0,
+            ),
+        )
+
     def compute_spectrogram(self):
         prepped_audio_signal = self.primary_prepped_channel()
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        #convert to prepped audio sample indices
+        # convert to prepped audio sample indices
         raw_fs = self.primary_raw_channel().fs
         start_idx = int((start / raw_fs) * prepped_audio_signal.fs)
         end_idx = int((end / raw_fs) * prepped_audio_signal.fs)
-        
-        self.spectrogram_view_model.compute_spectrogram(prepped_audio_signal, start_idx, end_idx)
+
+        self.spectrogram_view_model.compute_spectrogram(
+            prepped_audio_signal, start_idx, end_idx
+        )
 
     def update_audio_waveform(self):
         start, end = self.document_window_state.start, self.document_window_state.end
@@ -226,17 +245,19 @@ class DocumentViewModel(ViewModel):
             if high_latency and not self.playback_state.high_latency:
                 msg = self.tr(
                     "System audio latency is a little long ({:.0f} ms). Consider using a different audio device."
-                ).format(playback_poll.latency  * 1000)
+                ).format(playback_poll.latency * 1000)
                 self.state_changed.emit(StatusMessageState(msg))
 
-            self.playback_state = PlaybackState(playback_poll.is_playing, playback_poll.current_time, high_latency)
+            self.playback_state = PlaybackState(
+                playback_poll.is_playing, playback_poll.current_time, high_latency
+            )
             self.state_changed.emit(self.playback_state)
 
         self.audio_player.playback_poll.connect(on_poll)
         self.audio_player.play(x, fs, start / fs)
 
     def stop_audio(self):
-        self.audio_player.stop()    
+        self.audio_player.stop()
 
     def update_document_window(self, document_window_state: DocumentWindowState):
         self.document_window_state = document_window_state
@@ -453,8 +474,12 @@ class DocumentViewModel(ViewModel):
             return False
 
         raw_audio_state = self.raw_audio_state
-        raw_audio_state[self.channel_state.primary_channel] = to_audio_channel_state(new_raw_signal)
-        self.set_raw_audio(raw_audio_state, self.channel_state.primary_channel, reset_window=False)
+        raw_audio_state[self.channel_state.primary_channel] = to_audio_channel_state(
+            new_raw_signal
+        )
+        self.set_raw_audio(
+            raw_audio_state, self.channel_state.primary_channel, reset_window=False
+        )
 
         channel_idx = self.channel_state.primary_channel
         old_signal = self.prepped_audio_state[channel_idx]
@@ -476,7 +501,7 @@ class DocumentViewModel(ViewModel):
 
         result = EditAudio(
             to_audio_signal(self.primary_raw_channel()),
-            EditCommand("copy", self.select_state.sel_start, self.select_state.sel_end)
+            EditCommand("copy", self.select_state.sel_start, self.select_state.sel_end),
         ).invoke()
 
         if result is None:
@@ -494,7 +519,7 @@ class DocumentViewModel(ViewModel):
 
         result = EditAudio(
             to_audio_signal(self.primary_raw_channel()),
-            EditCommand("cut", self.select_state.sel_start, self.select_state.sel_end)
+            EditCommand("cut", self.select_state.sel_start, self.select_state.sel_end),
         ).invoke()
 
         if result is None:
@@ -502,7 +527,9 @@ class DocumentViewModel(ViewModel):
             return None
         else:
             self._replace_primary_channel(result.new_channel)
-            self._push_undo(EditCommandState("cut", result.start_idx, result.new_clip.x))
+            self._push_undo(
+                EditCommandState("cut", result.start_idx, result.new_clip.x)
+            )
             return result.new_clip
 
     def paste_at(self, start_time: float, clip: AudioSignal):
@@ -511,14 +538,16 @@ class DocumentViewModel(ViewModel):
 
         result = EditAudio(
             to_audio_signal(self.primary_raw_channel()),
-            EditCommand("paste", start_time, clip_x=clip.x, clip_fs=clip.fs)
+            EditCommand("paste", start_time, clip_x=clip.x, clip_fs=clip.fs),
         ).invoke()
 
         if result is None:
             return None
         else:
             self._replace_primary_channel(result.new_channel)
-            self._push_undo(EditCommandState("paste", result.start_idx, result.new_clip))
+            self._push_undo(
+                EditCommandState("paste", result.start_idx, result.new_clip)
+            )
             return result.new_clip
 
     def paste_at_mark(self, clip: AudioSignal):
@@ -537,10 +566,17 @@ class DocumentViewModel(ViewModel):
 
         removing = (cmd.type == "cut") == forward
         if removing:
-            new_x = np.concatenate([channel.x[:cmd.start_idx], channel.x[cmd.start_idx + len(cmd.clip_x):]])
+            new_x = np.concatenate(
+                [
+                    channel.x[: cmd.start_idx],
+                    channel.x[cmd.start_idx + len(cmd.clip_x) :],
+                ]
+            )
             return self._replace_primary_channel(AudioSignal(new_x, channel.fs))
-        
-        new_x = np.concatenate([channel.x[:cmd.start_idx], cmd.clip_x, channel.x[cmd.start_idx:]])
+
+        new_x = np.concatenate(
+            [channel.x[: cmd.start_idx], cmd.clip_x, channel.x[cmd.start_idx :]]
+        )
         return self._replace_primary_channel(AudioSignal(new_x, channel.fs))
 
     def undo(self):

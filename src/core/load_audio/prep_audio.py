@@ -24,7 +24,12 @@ class PrepAudio(UseCase[dict[AudioSignal]]):
             if self.should_stop:
                 return
             x, prepped_fs = phon.prep_audio(
-                raw.x, raw.fs, target_fs=self.target_fs, scale=True, pre=0.94, add_tiny_noise=True
+                raw.x,
+                raw.fs,
+                target_fs=self.target_fs,
+                scale=True,
+                pre=0.94,
+                add_tiny_noise=True,
             )
             channels[idx] = AudioSignal(x, prepped_fs)
         yield channels

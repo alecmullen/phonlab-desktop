@@ -90,7 +90,7 @@ class OpenAudioDialog(QDialog):
             info = sf.info(filename)
             self.native_channels = info.channels
             self.native_fs = int(info.samplerate)
-        except Exception as e:
+        except ValueError as e:
             self.is_valid = False
             QMessageBox.critical(
                 parent, self.tr("Cannot open file"), self.tr(f"{filename}\n\n{e}")
@@ -163,7 +163,6 @@ class OpenAudioDialog(QDialog):
         choices_layout.addRow(options_layout)
         layout.addLayout(choices_layout)
 
-
         self._populate_primary_channel_combo()
         self.channel_mode_group.buttonToggled.connect(
             self._populate_primary_channel_combo
@@ -202,7 +201,9 @@ class OpenAudioDialog(QDialog):
             )
 
         if previous_channel in candidates:
-            self.primary_channel_combo.setCurrentIndex(candidates.index(previous_channel))
+            self.primary_channel_combo.setCurrentIndex(
+                candidates.index(previous_channel)
+            )
 
     def build_options(self) -> AudioOpenOptions:
         channel_mode = self._current_channel_mode()

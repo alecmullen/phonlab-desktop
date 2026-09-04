@@ -122,4 +122,3 @@ class AnnotationPlot(pg.PlotItem, CursorController):
     def set_cursor_position(self, x: float):
         self.remove_cursor_control()
         self.cursor_line.setPos(x)
-

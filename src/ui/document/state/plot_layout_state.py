@@ -14,7 +14,7 @@ class PlotLayoutState:
 
     def has_waveform(self):
         return PlotType.WAVEFORM in self.plots
-    
+
     def has_spectrogram(self):
         return PlotType.SPECTROGRAM in self.plots
 

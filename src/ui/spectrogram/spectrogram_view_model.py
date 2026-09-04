@@ -22,11 +22,9 @@ class SpectrogramViewModel(ViewModel):
 
         self._buffer_generation = 0
 
-    def compute_spectrogram(
-        self, channel: AudioChannelState, start: float, end: float
-    ):
+    def compute_spectrogram(self, channel: AudioChannelState, start: float, end: float):
         x, t, fs = channel.x, channel.t, channel.fs
-        
+
         if (end - start) / fs > MAX_SGRAM_LENGTH:
             self.sgram_state = replace(self.sgram_state, is_showing=False)
             self.state_changed.emit(self.sgram_state)
