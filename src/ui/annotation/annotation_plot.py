@@ -6,9 +6,10 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
+from ui.common.cursor_controller import CursorController
 
 
-class AnnotationPlot(pg.PlotItem):
+class AnnotationPlot(pg.PlotItem, CursorController):
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -28,6 +29,9 @@ class AnnotationPlot(pg.PlotItem):
             self.getViewBox().GraphicsItemFlag.ItemClipsChildrenToShape, False
         )
 
+        self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen="r")
+        self.addItem(self.cursor_line, ignoreBounds=True)
+
         if is_bottom_plot:
             self.setLabel("bottom", self.tr("Time"), units="s")
             self.getAxis("bottom").enableAutoSIPrefix(False)
@@ -45,9 +49,6 @@ class AnnotationPlot(pg.PlotItem):
     def on_state_change(self, model):
         if isinstance(model, AnnotationWindowState):
             self.populate(model)
-
-    def connect_plot_signals(self):
-        self.scene().sigMouseMoved.connect(self.on_mouse_moved)
 
     def show_time_axis(self, show: bool):
         if show:
@@ -111,6 +112,14 @@ class AnnotationPlot(pg.PlotItem):
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos):
+        x = self.getViewBox().mapSceneToView(pos).x()
+
         if self.dragging_node is not None:
-            x = self.getViewBox().mapSceneToView(pos).x()
             self.view_model.change_node_state(self.dragging_node, x)
+        elif self.has_cursor_control:
+            self.cursor_line.setPos(x)
+
+    def set_cursor_position(self, x: float):
+        self.remove_cursor_control()
+        self.cursor_line.setPos(x)
+

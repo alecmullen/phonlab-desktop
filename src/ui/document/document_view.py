@@ -50,6 +50,7 @@ class DocumentView(QWidget):
         # Initialize plot items (will be created in plot methods)
         self.wave_plot = None
         self.spec_plot = None
+        self.annot_plot = None
 
         # ------ Slider ---------
         self.slider = QScrollBar(Qt.Orientation.Horizontal, self)
@@ -139,6 +140,8 @@ class DocumentView(QWidget):
             scene.sigMouseMoved.connect(self.wave_plot.on_mouse_moved)
         if self.spec_plot is not None:
             scene.sigMouseMoved.connect(self.spec_plot.on_mouse_moved)
+        if self.annot_plot is not None:
+            scene.sigMouseMoved.connect(self.annot_plot.on_mouse_moved)
 
     def toggle_wave(self):
         self.view_model.toggle_wave()
@@ -192,7 +195,6 @@ class DocumentView(QWidget):
                 is_bottom_plot=is_bottom,
             )
             self.graphics_widget.addItem(self.annot_plot, row=row, col=0)
-            self.annot_plot.connect_plot_signals()
             self.annot_plot.show()
 
     @pyqtSlot(int)
@@ -288,6 +290,8 @@ class DocumentView(QWidget):
                 self.wave_plot.set_cursor_position(playback.position)
             if self.spec_plot:
                 self.spec_plot.set_cursor_position(playback.position)
+            if self.annot_plot:
+                self.annot_plot.set_cursor_position(playback.position)
 
     def update_load_progress(self, progress: LoadProgressState):
         self.progress_bar.setVisible(progress.is_loading)
