@@ -3,12 +3,13 @@ from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtWidgets import QWidget
 from pyqtgraph import PlotDataItem
 
+from ui.common.cursor_controller import CursorController
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
 from ui.waveform.state.audio_wave_state import AudioWaveState
 
 
-class AudioWavePlot(pg.PlotItem):
+class AudioWavePlot(pg.PlotItem, CursorController):
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -105,16 +106,17 @@ class AudioWavePlot(pg.PlotItem):
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos):
-        x = self.getViewBox().mapSceneToView(pos).x()
+         if self.has_cursor_control:
+            x = self.getViewBox().mapSceneToView(pos).x()
+            self.cursor_line.setPos(x)
+
+    def set_cursor_position(self, x: float):
+        self.remove_cursor_control()
         self.cursor_line.setPos(x)
 
     def set_mark_position(self, x: float, visible: bool):
         self.mark_line.setPos(x)
         self.mark_line.setVisible(visible)
 
-    def set_cursor_position(self, x: float, visible: bool):
-        self.cursor_line.setPos(x)
-        self.cursor_line.setVisible(visible)
-        
     def clear(self):
         self.wave_curve = None

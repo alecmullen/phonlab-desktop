@@ -122,8 +122,10 @@ class DocumentView(QWidget):
 
         if self.wave_plot:
             self.wave_plot.clear()
+            del self.wave_plot
             self.wave_plot = None
 
+        del self.spec_plot
         self.spec_plot = None
 
         self.selection_region_wave = None
@@ -281,10 +283,11 @@ class DocumentView(QWidget):
             self.wave_plot.set_mark_position(mark.position, mark.is_set)
 
     def update_playback_cursor(self, playback: PlaybackState):
-        if self.wave_plot:
-            self.wave_plot.set_cursor_position(playback.position, playback.is_playing)
-        if self.spec_plot:
-            self.spec_plot.set_cursor_position(playback.position, playback.is_playing)
+        if playback.is_playing:
+            if self.wave_plot:
+                self.wave_plot.set_cursor_position(playback.position)
+            if self.spec_plot:
+                self.spec_plot.set_cursor_position(playback.position)
 
     def update_load_progress(self, progress: LoadProgressState):
         self.progress_bar.setVisible(progress.is_loading)

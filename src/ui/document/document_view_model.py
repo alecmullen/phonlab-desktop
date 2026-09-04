@@ -137,7 +137,8 @@ class DocumentViewModel(ViewModel):
             # Merge existing channel dictionary with the newly prepped channel.
             # We passed a single channel to PrepAudio, so we retreieve it at prepped[0]
             new_prepped_signal = to_audio_channel_state(prepped[0])
-            self.prepped_audio_state = self.prepped_audio_state | {channel_idx: new_prepped_signal}
+            self.prepped_audio_state[channel_idx] = new_prepped_signal
+            self.spectrogram_view_model.invalidate_spectrogram()
             self.state_changed.emit(LoadProgressState(False))
 
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
@@ -158,7 +159,6 @@ class DocumentViewModel(ViewModel):
         self.raw_audio_state = raw_audio
         self.update_audio_waveform()
 
-        self.spectrogram_view_model.invalidate_spectrogram()
         self.remove_selection()
         self.remove_mark()
 
@@ -187,11 +187,11 @@ class DocumentViewModel(ViewModel):
         else:
             self.adjust_window_if_needed(len(self.primary_raw_channel().x) - 1)
 
-    def load_from_samples(self, x: np.ndarray, fs: int, target_fs: int):
-        raw_audio_state = [AudioChannelState(x, fs)]
+    def load_from_samples(self, clip: AudioSignal, target_fs: int):
+        raw_audio_state = { 0: to_audio_channel_state(clip) }
         self.set_raw_audio(raw_audio_state, primary_channel=0, reset_window=True)
 
-        self.prep_audio([AudioSignal(x, fs)], AudioOpenOptions(target_fs=target_fs, channel_mode="mono", retained_channels=[0], primary_channel=0))
+        self.prep_audio([clip], AudioOpenOptions(target_fs=target_fs, channel_mode="mono", retained_channels=[0], primary_channel=0))
             
     def compute_spectrogram(self):
         prepped_audio_signal = self.primary_prepped_channel()

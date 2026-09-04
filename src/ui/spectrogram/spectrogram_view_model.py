@@ -69,10 +69,12 @@ class SpectrogramViewModel(ViewModel):
             )
             self.state_changed.emit(self.sgram_state)
 
-            self._buffer_generation += 1
+            generation = self._buffer_generation
 
             @pyqtSlot(object)
             def on_success(sgram: Spectrogram):
+                if generation != self._buffer_generation:
+                    return
                 self.sgram_state = replace(
                     self.sgram_state,
                     t_window=sgram.t + (start / fs),
@@ -94,7 +96,7 @@ class SpectrogramViewModel(ViewModel):
             @pyqtSlot(object)
             def on_success(sgram: SpectrogramMmap):
                 if generation != self._buffer_generation:
-                    return  # stale result computed against a since-replaced buffer
+                    return
                 self.sgram_state = replace(
                     self.sgram_state,
                     sxx_mmap=sgram.sxx_mmap,
@@ -120,6 +122,9 @@ class SpectrogramViewModel(ViewModel):
         self._buffer_generation += 1
         self.close_thread("sgram_mmap")
         self.close_thread("sgram_window")
+        self.sgram_state = replace(
+            self.sgram_state, sxx_mmap=None, t_mmap=None, frames_computed=0
+        )
 
     @pyqtSlot(object)
     def on_error(self, err):

@@ -4,11 +4,12 @@ from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
+from ui.common.cursor_controller import CursorController
 from ui.spectrogram.spectrogram_state import SpectrogramState
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 
 
-class SpectrogramPlot(pg.PlotItem):
+class SpectrogramPlot(pg.PlotItem, CursorController):
     def __init__(
         self,
         parent: QWidget | None = None,
@@ -117,12 +118,13 @@ class SpectrogramPlot(pg.PlotItem):
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos):
-        x = self.getViewBox().mapSceneToView(pos).x()
-        self.cursor_line.setPos(x)
+        if self.has_cursor_control:
+            x = self.getViewBox().mapSceneToView(pos).x()
+            self.cursor_line.setPos(x)
 
-    def set_cursor_position(self, x: float, visible: bool):
+    def set_cursor_position(self, x: float):
+        self.remove_cursor_control()
         self.cursor_line.setPos(x)
-        self.cursor_line.setVisible(visible)
 
     def set_mark_position(self, x: float, visible: bool):
         self.mark_line.setPos(x)
