@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import phonlab as phon
 import soundfile as sf
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -17,9 +18,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-import phonlab as phon
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
-from res.constants import MAX_SGRAM_LENGTH
+from res.constants import DEFAULT_WINDOW_LENGTH
 
 CHANNEL_MODE_MONO = "mono"
 CHANNEL_MODE_STEREO = "stereo"
@@ -63,7 +63,7 @@ class OpenAudioDialog(QDialog):
 
         if dlg.native_channels == 2:
             chan_a, chan_b, _fs = phon.loadsig(
-                filename, chansel=[0, 1], duration=MAX_SGRAM_LENGTH
+                filename, chansel=[0, 1], duration=DEFAULT_WINDOW_LENGTH
             )
             if phon.channels_are_duplicates(chan_a, chan_b):
                 QMessageBox.warning(
@@ -90,7 +90,7 @@ class OpenAudioDialog(QDialog):
             info = sf.info(filename)
             self.native_channels = info.channels
             self.native_fs = int(info.samplerate)
-        except Exception as e:
+        except ValueError as e:
             self.is_valid = False
             QMessageBox.critical(
                 parent, self.tr("Cannot open file"), self.tr(f"{filename}\n\n{e}")
@@ -163,7 +163,6 @@ class OpenAudioDialog(QDialog):
         choices_layout.addRow(options_layout)
         layout.addLayout(choices_layout)
 
-
         self._populate_primary_channel_combo()
         self.channel_mode_group.buttonToggled.connect(
             self._populate_primary_channel_combo
@@ -202,7 +201,9 @@ class OpenAudioDialog(QDialog):
             )
 
         if previous_channel in candidates:
-            self.primary_channel_combo.setCurrentIndex(candidates.index(previous_channel))
+            self.primary_channel_combo.setCurrentIndex(
+                candidates.index(previous_channel)
+            )
 
     def build_options(self) -> AudioOpenOptions:
         channel_mode = self._current_channel_mode()

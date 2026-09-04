@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 
 
@@ -6,4 +5,3 @@ from dataclasses import dataclass
 class ChannelState:
     primary_channel: int = 0
     channel_mode: str = ""
-    

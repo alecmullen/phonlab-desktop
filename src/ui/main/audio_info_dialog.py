@@ -16,7 +16,9 @@ class AudioInfoDialog(QDialog):
         form = QFormLayout()
         form.addRow(self.tr("Name:"), QLabel(tab_name))
         form.addRow(self.tr("Sample rate:"), QLabel(self.tr("{} Hz").format(raw.fs)))
-        form.addRow(self.tr("Duration:"), QLabel(self.tr("{:.3f} s").format(raw_duration)))
+        form.addRow(
+            self.tr("Duration:"), QLabel(self.tr("{:.3f} s").format(raw_duration))
+        )
         form.addRow(
             self.tr("Min / max amplitude:"),
             QLabel(self.tr("{:.4g} / {:.4g}").format(raw.min_x, raw.max_x)),

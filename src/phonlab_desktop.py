@@ -2,8 +2,8 @@ import importlib
 import logging
 import os
 import sys
-import phonlab
 
+import phonlab  # noqa: F401
 from PyQt6.QtWidgets import QApplication
 
 from ui.main.main_window import MainWindow
@@ -28,7 +28,10 @@ else:
         try:
             from Foundation import NSBundle
 
-            info = NSBundle.mainBundle().localizedInfoDictionary() or NSBundle.mainBundle().infoDictionary()
+            info = (
+                NSBundle.mainBundle().localizedInfoDictionary()
+                or NSBundle.mainBundle().infoDictionary()
+            )
             if info is not None:
                 info["CFBundleName"] = "Phonlab"
         except ImportError:
@@ -36,7 +39,13 @@ else:
 
 try:
     import librosa
-    example_audio = importlib.resources.files('phonlab') / 'data' / 'example_audio' / 'two_plus_two.wav'
+
+    example_audio = (
+        importlib.resources.files("phonlab")
+        / "data"
+        / "example_audio"
+        / "two_plus_two.wav"
+    )
     librosa.load(example_audio)
 except FileNotFoundError:
     logger.exception("Example file not found. Librosa JIT functions not pre-compiled.")

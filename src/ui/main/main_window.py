@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.save_audio.save_audio import SaveAudio
+from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.audio_info_dialog import AudioInfoDialog
@@ -74,7 +75,9 @@ class MainWindow(QMainWindow):
         fileMenu.addSeparator()
 
         self.save_action = QAction(self.tr("&Save…"), self)
-        self.save_action.setStatusTip(self.tr("Save the current document's audio to a file"))
+        self.save_action.setStatusTip(
+            self.tr("Save the current document's audio to a file")
+        )
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_action.triggered.connect(self.save_audio)
         fileMenu.addAction(self.save_action)
@@ -151,6 +154,17 @@ class MainWindow(QMainWindow):
         self.sgramview_action.triggered.connect(self.plot_wave_sgram)
         viewMenu.addAction(self.sgramview_action)
 
+        if settings.enable_annotation:
+            self.annotationview_action = QAction(
+                QIcon.fromTheme("view-media-visualization"),
+                self.tr("&Annotation"),
+                self,
+            )
+            self.annotationview_action.setStatusTip(self.tr("View annotations"))
+            self.annotationview_action.setShortcut("Ctrl+3")
+            self.annotationview_action.triggered.connect(self.plot_annotations)
+            viewMenu.addAction(self.annotationview_action)
+
         self.viewall_action = QAction(
             QIcon.fromTheme("view-fullscreen"), self.tr("View &All"), self
         )
@@ -176,6 +190,8 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction(self.waveview_action)
         toolbar.addAction(self.sgramview_action)
+        if settings.enable_annotation:
+            toolbar.addAction(self.annotationview_action)
         toolbar.addAction(self.viewall_action)
         toolbar.addAction(self.recenter_action)
 
@@ -236,7 +252,7 @@ class MainWindow(QMainWindow):
 
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
         """Open a new tab containing the just-copied/cut samples, without
-        stealing focus from source_doc """
+        stealing focus from source_doc"""
         doc = DocumentView(DocumentViewModel())
 
         # Always name after the ORIGINAL source file
@@ -252,8 +268,8 @@ class MainWindow(QMainWindow):
         tab_name = self.tr("CLIP {}: {}").format(n, origin_name)
         self.tab_widget.addTab(doc, tab_name)
 
-        target_fs = source_doc.view_model.get_primary_prepped_channel().fs
-        doc.view_model.load_from_samples(clip.x, clip.fs, target_fs)
+        target_fs = source_doc.view_model.primary_prepped_channel().fs
+        doc.view_model.load_from_samples(clip, target_fs)
 
     def save_audio(self):
         doc = self.get_current_document()
@@ -263,12 +279,16 @@ class MainWindow(QMainWindow):
         options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
         if options is None:
             return
-        raw = doc.view_model.get_primary_raw_channel()
+        raw = doc.view_model.primary_raw_channel()
         try:
-            SaveAudio(options.path, raw.x, raw.fs, options.target_fs, options.scale).invoke()
-        except Exception as err:
+            SaveAudio(
+                options.path, raw.x, raw.fs, options.target_fs, options.scale
+            ).invoke()
+        except RuntimeError as err:
             QMessageBox.critical(
-                self, self.tr("Save Audio"), self.tr("Could not save the file:\n{}").format(err)
+                self,
+                self.tr("Save Audio"),
+                self.tr("Could not save the file:\n{}").format(err),
             )
 
     def show_audio_info(self):
@@ -297,12 +317,17 @@ class MainWindow(QMainWindow):
     def plot_wave(self):
         doc = self.get_current_document()
         if doc:
-            doc.show_spectrogram(False)
+            doc.toggle_wave()
 
     def plot_wave_sgram(self):
         doc = self.get_current_document()
         if doc:
-            doc.show_spectrogram(True)
+            doc.toggle_spectrogram()
+
+    def plot_annotations(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.toggle_annotations()
 
     def show_all(self):
         doc = self.get_current_document()

@@ -1,8 +1,22 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 
 
-@dataclass
+class PlotType(Enum):
+    WAVEFORM = 1
+    SPECTROGRAM = 2
+    ANNOTATION = 3
+
+
+@dataclass(frozen=True)
 class PlotLayoutState:
-    is_waveform: bool = True
-    is_spectrogram: bool = False
-    is_text_notes: bool = False
+    plots: set[PlotType] = field(default_factory=lambda: {PlotType.WAVEFORM})
+
+    def has_waveform(self):
+        return PlotType.WAVEFORM in self.plots
+
+    def has_spectrogram(self):
+        return PlotType.SPECTROGRAM in self.plots
+
+    def has_annotation(self):
+        return PlotType.ANNOTATION in self.plots

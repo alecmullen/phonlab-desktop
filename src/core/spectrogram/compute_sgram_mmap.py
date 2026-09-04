@@ -83,17 +83,18 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         estimated_frames = int(frames_per_sec * (len(self.x) / self.fs) * 1.2)
 
         temp_dir = tempfile.gettempdir()
-        mmap_file = os.path.join(temp_dir, f"spectrogram_{id(self)}.dat")
-        ts_file = os.path.join(temp_dir, f"spectrogram_ts_{id(self)}.dat")
-        self.mmap_file = mmap_file
-        self.ts_file = ts_file
+        self.mmap_file = os.path.join(temp_dir, f"spectrogram_{id(self)}.dat")
+        self.ts_file = os.path.join(temp_dir, f"spectrogram_ts_{id(self)}.dat")
 
         try:
             sxx_mmap = np.memmap(
-                mmap_file, dtype="float32", mode="w+", shape=(n_freqs, estimated_frames)
+                self.mmap_file,
+                dtype="float32",
+                mode="w+",
+                shape=(n_freqs, estimated_frames),
             )
             ts_mmap = np.memmap(
-                ts_file, dtype="float64", mode="w+", shape=(estimated_frames,)
+                self.ts_file, dtype="float64", mode="w+", shape=(estimated_frames,)
             )
         except MemoryError as e:
             raise MemoryError(f"Failed to create memory-mapped file: {e}") from e

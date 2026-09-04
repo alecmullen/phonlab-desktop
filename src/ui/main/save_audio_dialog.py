@@ -44,7 +44,7 @@ class SaveAudioDialog(QDialog):
         self.setWindowTitle(self.tr("Save Audio"))
         self.setMinimumWidth(420)
 
-        raw_fs = doc.view_model.get_primary_raw_channel().fs
+        raw_fs = doc.view_model.primary_raw_channel().fs
         default_dir = Path(doc.origin_path).parent if doc.origin_path else Path.home()
         self._default_path = str(default_dir / _default_filename(tab_name))
 
@@ -71,7 +71,8 @@ class SaveAudioDialog(QDialog):
         form.addRow("", self.scale_check)
 
         buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
         )
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
@@ -82,14 +83,19 @@ class SaveAudioDialog(QDialog):
 
     def _browse(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, self.tr("Save Audio"), self.path_edit.text(), self.tr("Sound files (*.wav)")
+            self,
+            self.tr("Save Audio"),
+            self.path_edit.text(),
+            self.tr("Sound files (*.wav)"),
         )
         if path:
             self.path_edit.setText(path)
 
     def _on_accept(self):
         if not self.path_edit.text().strip():
-            QMessageBox.warning(self, self.tr("Save Audio"), self.tr("Choose a file to save to."))
+            QMessageBox.warning(
+                self, self.tr("Save Audio"), self.tr("Choose a file to save to.")
+            )
             return
         self.accept()
 
@@ -101,7 +107,9 @@ class SaveAudioDialog(QDialog):
         )
 
     @staticmethod
-    def get_options(doc: DocumentView, tab_name: str, parent=None) -> SaveOptions | None:
+    def get_options(
+        doc: DocumentView, tab_name: str, parent=None
+    ) -> SaveOptions | None:
         dlg = SaveAudioDialog(doc, tab_name, parent)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             return dlg.options()
