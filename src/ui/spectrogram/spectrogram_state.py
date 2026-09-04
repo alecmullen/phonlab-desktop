@@ -2,9 +2,11 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ui.base.state import State
+
 
 @dataclass(frozen=True)
-class SpectrogramState:
+class SpectrogramState(State):
     f: np.ndarray = field(default_factory=lambda: np.zeros(0))
 
     t_window: np.ndarray = field(default_factory=lambda: np.zeros(0))

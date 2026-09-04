@@ -1,9 +1,10 @@
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import QPointF, Qt, pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
+from ui.base.state import State
 from ui.common.cursor_controller import CursorController
 from ui.spectrogram.spectrogram_state import SpectrogramState
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
@@ -12,10 +13,10 @@ from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 class SpectrogramPlot(pg.PlotItem, CursorController):
     def __init__(
         self,
-        parent: QWidget | None = None,
-        view_model: SpectrogramViewModel = None,
+        view_model: SpectrogramViewModel,
         linked_plot: pg.PlotItem | None = None,
         is_bottom_plot: bool = False,
+        parent: QWidget | None = None,
     ):
         super().__init__(parent)
 
@@ -77,7 +78,7 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.plot_spectrogram(self.view_model.sgram_state)
 
     @pyqtSlot(object)
-    def on_state_change(self, model):
+    def on_state_change(self, model: State):
         if isinstance(model, SpectrogramState):
             self.plot_spectrogram(model)
 
@@ -87,7 +88,7 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         else:
             self.populate_spectrogram(sgram)
 
-    def populate_spectrogram(self, sgram: SpectrogramState):
+    def populate_spectrogram(self, sgram: SpectrogramState) -> bool:
         """Fill the spectrogram image with data"""
 
         self.center_label.setVisible(False)
@@ -117,7 +118,7 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         return True
 
     @pyqtSlot(object)
-    def on_mouse_moved(self, pos):
+    def on_mouse_moved(self, pos: QPointF):
         if self.has_cursor_control:
             x = self.getViewBox().mapSceneToView(pos).x()
             self.cursor_line.setPos(x)

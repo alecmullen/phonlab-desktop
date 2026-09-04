@@ -1,0 +1,2 @@
+[analysis]
+replace-imports-with-any = ["pyqtgraph.**"]

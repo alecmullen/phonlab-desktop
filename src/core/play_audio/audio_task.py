@@ -37,9 +37,15 @@ class AudioTask(QObject):
             self._finished_event.wait(timeout=(len(self._audio_data) / self._fs) + 0.02)
             time.sleep(self._latency)
 
-    def _audio_callback(self, outdata, frames, time_info, status):
+    def _audio_callback(
+        self,
+        outdata: np.ndarray,
+        frames: int,
+        time_info: object,
+        status: sd.CallbackFlags,
+    ):
         if self._is_first_chunk:
-            self._latency = time_info.outputBufferDacTime - time_info.currentTime
+            self._latency = time_info.outputBufferDacTime - time_info.currentTime  # ty: ignore[unresolved-attribute]
             audible_start_time = time.monotonic() + self._latency
             self.latency.emit(LatencyInfo(self._latency, audible_start_time))
             self._is_first_chunk = False

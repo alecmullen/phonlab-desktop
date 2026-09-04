@@ -1,6 +1,7 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter, QPainterPath, QPicture
+from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
 V_MARGIN = 0.05
 H_MARGIN = 0.075
@@ -53,10 +54,16 @@ class NodeView(pg.GraphicsObject):
 
         painter.end()
 
-    def paint(self, p, opt, widget):
-        p.drawPicture(0, 0, self.pic)
+    def paint(
+        self,
+        painter: QPainter | None,
+        option: QStyleOptionGraphicsItem | None,
+        widget: QWidget | None,
+    ):
+        if painter is not None:
+            painter.drawPicture(0, 0, self.pic)
 
-    def boundingRect(self):
+    def boundingRect(self) -> QRectF:
         return QRectF(
             -H_MARGIN,
             -V_MARGIN,

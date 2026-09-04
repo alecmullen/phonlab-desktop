@@ -5,13 +5,17 @@ from core.base.job_worker import JobWorker
 
 
 class JobManager:
-    thread_pool: QThreadPool = QThreadPool.globalInstance()
+    thread_pool: QThreadPool | None = QThreadPool.globalInstance()
 
     def __init__(self):
         self.signals = JobManagerSignals()
 
     def __call__(self, job: Job):
         self.worker = JobWorker(job)
+
+        if self.thread_pool is None:
+            raise RuntimeError("Thread pool not initialized")
+
         self.thread_pool.start(self.worker)
 
         self.worker.signals.finished.connect(self.signals.finished)

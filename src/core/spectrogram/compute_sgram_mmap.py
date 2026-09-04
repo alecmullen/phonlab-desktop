@@ -69,7 +69,7 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
             self.stop()
             raise RuntimeError(f"Error during spectrogram computation: {e}") from e
 
-    def init_mmap(self):
+    def init_mmap(self) -> tuple[np.memmap, np.memmap, float, int]:
         test_samples = min(len(self.x), self.fs)
         test_ts, _, test_Sxx = phon.compute_sgram(
             self.x[:test_samples], self.fs, self.window_size, self.step_size, self.order

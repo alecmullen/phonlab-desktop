@@ -1,8 +1,9 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import QPointF, Qt, pyqtSlot
 from PyQt6.QtWidgets import QWidget
 from pyqtgraph import PlotDataItem
 
+from ui.base.state import State
 from ui.common.cursor_controller import CursorController
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
@@ -12,9 +13,9 @@ from ui.waveform.state.audio_wave_state import AudioWaveState
 class AudioWavePlot(pg.PlotItem, CursorController):
     def __init__(
         self,
-        parent: QWidget | None = None,
-        view_model: AudioWaveViewModel = None,
+        view_model: AudioWaveViewModel,
         is_bottom_plot: bool = False,
+        parent: QWidget | None = None,
     ):
         super().__init__(parent)
 
@@ -65,7 +66,7 @@ class AudioWavePlot(pg.PlotItem, CursorController):
             self.is_initialized = False
 
     @pyqtSlot(object)
-    def on_state_change(self, model):
+    def on_state_change(self, model: State):
         if isinstance(model, AudioWaveState):
             if self.is_initialized:
                 self.update_wave(model)
@@ -91,9 +92,9 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         self.wave_curve.setData(audio_wave.t, audio_wave.x)
         self.setXRange(audio_wave.t[0], audio_wave.t[-1], padding=0)
 
-    def update_selection_region(self, box_left, xrange):
-        if xrange > 0:
-            self.selection_region.setRegion([box_left, box_left + xrange])
+    def update_selection_region(self, box_left: float, t_range: float):
+        if t_range > 0:
+            self.selection_region.setRegion([box_left, box_left + t_range])
             self.selection_region.setVisible(True)
         else:
             self.selection_region.setVisible(False)
@@ -105,7 +106,7 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         self.setYRange(-scaled_y_max, scaled_y_max, padding=0)
 
     @pyqtSlot(object)
-    def on_mouse_moved(self, pos):
+    def on_mouse_moved(self, pos: QPointF):
         if self.has_cursor_control:
             x = self.getViewBox().mapSceneToView(pos).x()
             self.cursor_line.setPos(x)

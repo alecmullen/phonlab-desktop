@@ -1,21 +1,23 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtCore import QPointF, pyqtSlot
+from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import QWidget
 
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
+from ui.base.state import State
 from ui.common.cursor_controller import CursorController
 
 
 class AnnotationPlot(pg.PlotItem, CursorController):
     def __init__(
         self,
-        parent: QWidget | None = None,
-        view_model: AnnotationViewModel = None,
+        view_model: AnnotationViewModel,
         linked_plot: pg.PlotItem | None = None,
         is_bottom_plot: bool = False,
+        parent: QWidget | None = None,
     ):
         super().__init__(parent)
 
@@ -41,12 +43,12 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         self.node_views: dict[int, NodeView] = {}
         self.label_views: list[LabelView] = []
 
-        self.dragging_node: int = None
+        self.dragging_node: int | None = None
 
         self.populate(self.view_model.annotation_window_state)
 
     @pyqtSlot(object)
-    def on_state_change(self, model):
+    def on_state_change(self, model: State):
         if isinstance(model, AnnotationWindowState):
             self.populate(model)
 
@@ -94,7 +96,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
                 self.node_views[node] = node_view
                 self.addItem(node_view)
 
-    def handle_mouse_press(self, event):
+    def handle_mouse_press(self, event: QMouseEvent) -> bool:
         for node, node_view in self.node_views.items():
             child_pos = node_view.mapFromScene(event.position())
             if node_view.contains(child_pos):
@@ -103,7 +105,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
                 return True
         return False
 
-    def handle_mouse_release(self, event):
+    def handle_mouse_release(self, event: QMouseEvent) -> bool:
         if self.dragging_node is not None:
             self.dragging_node = None
             event.accept()
@@ -111,7 +113,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         return False
 
     @pyqtSlot(object)
-    def on_mouse_moved(self, pos):
+    def on_mouse_moved(self, pos: QPointF):
         x = self.getViewBox().mapSceneToView(pos).x()
 
         if self.dragging_node is not None:

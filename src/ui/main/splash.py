@@ -1,22 +1,24 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QPainter, QPixmap
+from PyQt6.QtGui import QFont, QMouseEvent, QPainter, QPixmap
 from PyQt6.QtWidgets import QSplashScreen
+
+from ui.main.main_window import MainWindow
 
 
 class ClickableSplash(QSplashScreen):
     """Splash screen that opens file dialog when clicked"""
 
-    def __init__(self, pixmap, main_window):
+    def __init__(self, pixmap: QPixmap, main_window: MainWindow):
         super().__init__(pixmap, Qt.WindowType.Tool)
         self.main_window = main_window
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, a0: QMouseEvent | None):
         """Open file dialog when splash is clicked"""
         self.main_window.open_file()
-        super().mousePressEvent(event)
+        super().mousePressEvent(a0)
 
 
-def create_splash_pixmap(width=400, height=300):
+def create_splash_pixmap(width: int = 400, height: int = 300) -> QPixmap:
     """Create a simple splash screen pixmap"""
     pixmap = QPixmap(width, height)
     pixmap.fill(Qt.GlobalColor.white)

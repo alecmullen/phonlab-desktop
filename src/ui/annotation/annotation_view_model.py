@@ -8,7 +8,7 @@ class AnnotationViewModel(ViewModel):
     def __init__(self):
         super().__init__()
 
-        self.annotation_window_state: AnnotationWindowState = None
+        self.annotation_window_state = AnnotationWindowState()
 
     def change_node_state(self, drag_node: int, new_pos: float):
         start, end = (

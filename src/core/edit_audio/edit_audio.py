@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.signal import resample_poly
 
-from core.base.use_case import UseCase
+from core.base.use_case_sync import UseCaseSync
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
 from core.edit_audio.entity.edit_result import EditResult
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -9,7 +9,7 @@ from core.settings.app_settings import settings
 from res.constants import ZERO_CROSSING_SEARCH_MS
 
 
-class EditAudio(UseCase[EditResult | None]):
+class EditAudio(UseCaseSync[EditResult | None]):
     def __init__(self, channel: AudioSignal, edit_command: EditCommand):
         super().__init__()
         self._channel = channel
@@ -54,10 +54,13 @@ class EditAudio(UseCase[EditResult | None]):
         sample indices, or emit a status message and return None."""
 
         fs = self._channel.fs
+        if (
+            self._edit_command.end_time is None
+            or self._edit_command.end_time <= self._edit_command.start_time
+        ):
+            return None
         start_idx = int(self._edit_command.start_time * fs)
         end_idx = int(self._edit_command.end_time * fs)
-        if end_idx <= start_idx:
-            return None
 
         if settings.cut_and_paste_at_zero_crossings:
             snapped_start = self._nearest_zero_crossing(start_idx)
@@ -68,7 +71,7 @@ class EditAudio(UseCase[EditResult | None]):
 
         return start_idx, end_idx
 
-    def _resample_signal(self, clip_x: np.ndarray, clip_fs: int) -> AudioSignal:
+    def _resample_signal(self, clip_x: np.ndarray, clip_fs: int) -> np.ndarray:
         """Resample clip to the target channel fs."""
         if clip_fs == self._channel.fs:
             return clip_x
@@ -77,7 +80,7 @@ class EditAudio(UseCase[EditResult | None]):
             clip_x, up=self._channel.fs // cd, down=clip_fs // cd
         ).astype(self._channel.x.dtype)
 
-    def invoke(self):
+    def invoke(self) -> EditResult:
         if self._edit_command.type == EditCommandType.COPY:
             range = self._selected_range()
             if range is None:
@@ -102,9 +105,11 @@ class EditAudio(UseCase[EditResult | None]):
 
         if self._edit_command.type == EditCommandType.PASTE:
             x, fs = self._edit_command.clip_x, self._edit_command.clip_fs
+            if x is None or fs is None:
+                raise RuntimeError("Lost copied audio data")
 
             if self._channel.fs != fs:
-                clip_x = self._resample_signal(x, fs, self._channel.fs)
+                clip_x = self._resample_signal(x, fs)
             else:
                 clip_x = x
 
@@ -117,7 +122,9 @@ class EditAudio(UseCase[EditResult | None]):
             new_x = np.concatenate(
                 [self._channel.x[:start_idx], clip_x, self._channel.x[start_idx:]]
             )
-            return EditResult(new_channel=AudioSignal(new_x, self._channel.fs))
+            return EditResult(
+                new_channel=AudioSignal(new_x, self._channel.fs), start_idx=start_idx
+            )
 
     def stop(self):
         pass

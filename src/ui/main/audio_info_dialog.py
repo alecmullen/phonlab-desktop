@@ -1,4 +1,11 @@
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLabel, QVBoxLayout
+from PyQt6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui.document.document_view import DocumentView
 
@@ -6,11 +13,11 @@ from ui.document.document_view import DocumentView
 class AudioInfoDialog(QDialog):
     """Read-only summary of the current document's native (raw) audio."""
 
-    def __init__(self, doc: DocumentView, tab_name: str, parent=None):
+    def __init__(self, doc: DocumentView, tab_name: str, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Audio Info"))
 
-        raw = doc.view_model.raw_wave_state
+        raw = doc.view_model.primary_raw_channel()
         raw_duration = len(raw.x) / raw.fs if raw.fs else 0.0
 
         form = QFormLayout()
@@ -21,7 +28,7 @@ class AudioInfoDialog(QDialog):
         )
         form.addRow(
             self.tr("Min / max amplitude:"),
-            QLabel(self.tr("{:.4g} / {:.4g}").format(raw.min_x, raw.max_x)),
+            QLabel(self.tr("{:.4g} / {:.4g}").format(min(raw.x), max(raw.x))),
         )
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
@@ -32,6 +39,6 @@ class AudioInfoDialog(QDialog):
         layout.addWidget(buttons)
 
     @staticmethod
-    def show_info(doc: DocumentView, tab_name: str, parent=None):
+    def show_info(doc: DocumentView, tab_name: str, parent: QWidget | None = None):
         dlg = AudioInfoDialog(doc, tab_name, parent)
         dlg.exec()

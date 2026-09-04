@@ -53,7 +53,9 @@ class OpenAudioDialog(QDialog):
     using the left channel)."""
 
     @staticmethod
-    def get_options(filename: str, parent=None) -> AudioOpenOptions | None:
+    def get_options(
+        filename: str, parent: QWidget | None = None
+    ) -> AudioOpenOptions | None:
         dlg = OpenAudioDialog(filename, parent)
         if not dlg.is_valid:
             return None
@@ -81,7 +83,7 @@ class OpenAudioDialog(QDialog):
             return dlg.build_options()
         return None
 
-    def __init__(self, filename: str, parent=None):
+    def __init__(self, filename: str, parent: QWidget | None = None):
         super().__init__(parent)
         self.filename = filename
         self.is_valid = True
@@ -190,7 +192,7 @@ class OpenAudioDialog(QDialog):
             return list(range(self.native_channels))
         return list(range(self.native_channels))  # mono: any channel selectable
 
-    def _populate_primary_channel_combo(self, *_args):
+    def _populate_primary_channel_combo(self):
         previous_channel = self.primary_channel_combo.currentData()
 
         self.primary_channel_combo.clear()

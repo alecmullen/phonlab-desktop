@@ -2,10 +2,10 @@ import numpy as np
 import phonlab as phon
 import soundfile as sf
 
-from core.base.use_case import UseCase
+from core.base.use_case_sync import UseCaseSync
 
 
-class SaveAudio(UseCase):
+class SaveAudio(UseCaseSync):
     def __init__(
         self, path: str, raw_x: np.ndarray, raw_fs: int, target_fs: int, scale: bool
     ):
@@ -26,6 +26,3 @@ class SaveAudio(UseCase):
             add_tiny_noise=False,
         )
         sf.write(self.path, x, fs, subtype="PCM_16")
-
-    def stop(self):
-        pass

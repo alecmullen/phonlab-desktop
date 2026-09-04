@@ -22,7 +22,7 @@ class SpectrogramViewModel(ViewModel):
 
         self._buffer_generation = 0
 
-    def compute_spectrogram(self, channel: AudioChannelState, start: float, end: float):
+    def compute_spectrogram(self, channel: AudioChannelState, start: int, end: int):
         x, t, fs = channel.x, channel.t, channel.fs
 
         if (end - start) / fs > MAX_SGRAM_LENGTH:
@@ -85,7 +85,7 @@ class SpectrogramViewModel(ViewModel):
             use_case = ComputeSpectrogram(x[start:end], fs)
             self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
 
-    def load_spectrogram_mmap(self, x, fs):
+    def load_spectrogram_mmap(self, x: np.ndarray, fs: int):
         if self.sgram_state.sxx_mmap is None or self.sgram_state.t_mmap is None:
             self.state_changed.emit(LoadProgressState(True))
 
@@ -125,5 +125,5 @@ class SpectrogramViewModel(ViewModel):
         )
 
     @pyqtSlot(object)
-    def on_error(self, err):
+    def on_error(self, err: Exception):
         print(err)

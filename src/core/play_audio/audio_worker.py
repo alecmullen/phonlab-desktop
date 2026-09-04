@@ -1,8 +1,11 @@
+from collections.abc import Callable
+
 import numpy as np
 import sounddevice as sd
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from core.play_audio.audio_task import AudioTask
+from core.play_audio.entity.latency_info import LatencyInfo
 
 
 class AudioWorker(QObject):
@@ -10,7 +13,7 @@ class AudioWorker(QObject):
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
-    def __init__(self, latency_slot):
+    def __init__(self, latency_slot: Callable[[LatencyInfo], None]):
         super().__init__()
         self._task: AudioTask | None = None
 

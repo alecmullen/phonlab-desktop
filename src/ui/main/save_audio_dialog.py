@@ -39,7 +39,7 @@ class SaveAudioDialog(QDialog):
     before writing the current document's audio to disk. Always shown —
     audio edits aren't saved implicitly the way text edits often are."""
 
-    def __init__(self, doc: DocumentView, tab_name: str, parent=None):
+    def __init__(self, doc: DocumentView, tab_name: str, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Save Audio"))
         self.setMinimumWidth(420)
@@ -108,7 +108,7 @@ class SaveAudioDialog(QDialog):
 
     @staticmethod
     def get_options(
-        doc: DocumentView, tab_name: str, parent=None
+        doc: DocumentView, tab_name: str, parent: QWidget | None = None
     ) -> SaveOptions | None:
         dlg = SaveAudioDialog(doc, tab_name, parent)
         if dlg.exec() == QDialog.DialogCode.Accepted:

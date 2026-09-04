@@ -1,7 +1,8 @@
-import importlib
+import importlib.resources
 import logging
 import os
 import sys
+from typing import cast
 
 import phonlab  # noqa: F401
 from PyQt6.QtWidgets import QApplication
@@ -16,26 +17,6 @@ if getattr(sys, "frozen", False):
     _numba_cache_dir = os.path.join(os.path.dirname(sys.executable), "numba_cache")
     os.makedirs(_numba_cache_dir, exist_ok=True)
     os.environ.setdefault("NUMBA_CACHE_DIR", _numba_cache_dir)
-else:
-    # Only relevant when running from source: a packaged .app (built with
-    # `pyinstaller --name Phonlab`) already has its own Info.plist and shows
-    # "Phonlab" in the macOS menu bar correctly. Run unbundled via `python
-    # phonlab_desktop.py`, though, and macOS shows the interpreter's own
-    # process name ("Python") there instead — this is a best-effort,
-    # dev-only fix for that, silently doing nothing if pyobjc isn't
-    # installed or we're not on macOS.
-    if sys.platform == "darwin":
-        try:
-            from Foundation import NSBundle
-
-            info = (
-                NSBundle.mainBundle().localizedInfoDictionary()
-                or NSBundle.mainBundle().infoDictionary()
-            )
-            if info is not None:
-                info["CFBundleName"] = "Phonlab"
-        except ImportError:
-            pass
 
 try:
     import librosa
@@ -46,7 +27,7 @@ try:
         / "example_audio"
         / "two_plus_two.wav"
     )
-    librosa.load(example_audio)
+    librosa.load(cast(os.PathLike, example_audio))
 except FileNotFoundError:
     logger.exception("Example file not found. Librosa JIT functions not pre-compiled.")
 

@@ -2,6 +2,7 @@ import time
 
 import numpy as np
 from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import QWidget
 
 from core.play_audio.audio_worker import AudioWorker
 from core.play_audio.entity.latency_info import LatencyInfo
@@ -17,7 +18,7 @@ class AudioPlayer(QObject):
     PLAYBACK_POLL_MS = 33
     STOP_TIMEOUT_S = 2.0
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
 
         self._start_time = 0.0
