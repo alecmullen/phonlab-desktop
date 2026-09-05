@@ -1,5 +1,8 @@
+from typing import cast
+
 import pyqtgraph as pg
-from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
+from PyQt6.QtGui import QMouseEvent, QWheelEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -10,8 +13,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.annotation.annotation_plot import AnnotationPlot
+from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_loaded import AudioLoaded
 from ui.document.state.document_window_state import DocumentWindowState
@@ -28,7 +33,7 @@ from ui.waveform.audio_wave_plot import AudioWavePlot
 class DocumentView(QWidget):
     """A single audio document with its own waveform/spectrogram display"""
 
-    def __init__(self, view_model: DocumentViewModel, parent=None):
+    def __init__(self, view_model: DocumentViewModel, parent: QWidget | None = None):
         super().__init__(parent)
         self.view_model = view_model
         view_model.subscribe(self.on_state_change)
@@ -90,11 +95,11 @@ class DocumentView(QWidget):
         # mouse interaction state
         self.mouse_pressed = False
         self.is_dragging = False
-        self.pending_single_click = None
+        self.pending_single_click: tuple[QPointF, bool] | None = None
         self.click_timer = None
 
     @pyqtSlot(object)
-    def on_state_change(self, model):
+    def on_state_change(self, model: State):
         if isinstance(model, AudioLoaded):
             self.reset_slider(model.fs)
             self.update_plot_layout(self.view_model.plot_layout_state)
@@ -113,7 +118,7 @@ class DocumentView(QWidget):
         elif isinstance(model, MarkState):
             self.update_mark(model)
 
-    def load_audio(self, filename, options):
+    def load_audio(self, filename: str, options: AudioOpenOptions):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
@@ -172,7 +177,7 @@ class DocumentView(QWidget):
         self.update_selection_box(self.view_model.select_state)
         self.update_mark(self.view_model.mark_state)
 
-    def add_plot(self, row: int, plot_type: PlotType, is_bottom: False):
+    def add_plot(self, row: int, plot_type: PlotType, is_bottom: bool = False):
         if plot_type == PlotType.WAVEFORM:
             self.wave_plot = AudioWavePlot(
                 view_model=self.view_model.audio_wave_view_model,
@@ -240,7 +245,7 @@ class DocumentView(QWidget):
         """Center the view window on the selected region without changing zoom level"""
         self.view_model.center_on_selection()
 
-    def play_window_or_selection(self, scene_pos):
+    def play_window_or_selection(self, scene_pos: QPointF):
         clicked_plot = None
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.wave_plot
@@ -265,14 +270,14 @@ class DocumentView(QWidget):
     def update_selection_box(self, select_state: SelectState):
         if select_state.is_selected:
             box_left = select_state.sel_start
-            xrange = select_state.sel_end - select_state.sel_start
+            t_range = select_state.sel_end - select_state.sel_start
         else:
-            box_left = xrange = 0
+            box_left = t_range = 0
 
         if self.spec_plot is not None:
-            self.spec_plot.update_selection_region(box_left, xrange)
+            self.spec_plot.update_selection_region(box_left, t_range)
         if self.wave_plot is not None:
-            self.wave_plot.update_selection_region(box_left, xrange)
+            self.wave_plot.update_selection_region(box_left, t_range)
 
     def update_slider_value(self, doc_window: DocumentWindowState):
         self.slider.setValue(doc_window.start)
@@ -302,7 +307,7 @@ class DocumentView(QWidget):
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setFormat(self.tr("Computing %p%"))
 
-    def on_mouse_moved(self, pos):
+    def on_mouse_moved(self, pos: QPointF):
         # Determine which plot the mouse is over
 
         if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(pos):
@@ -333,30 +338,34 @@ class DocumentView(QWidget):
         else:
             self.message_label.setText(status_msg)
 
-    def eventFilter(self, obj, event):
+    def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
         """Filter mouse events from the graphics widget"""
-        if obj == self.graphics_widget.viewport():
+        obj, event = a0, a1
+        if obj == self.graphics_widget.viewport() and event is not None:
             if event.type() == QEvent.Type.MouseButtonDblClick:
+                event = cast(QMouseEvent, event)
                 if event.button() == Qt.MouseButton.LeftButton:
                     self.handle_double_click(event)
                     return True
 
             elif event.type() == QEvent.Type.MouseButtonPress:
+                event = cast(QMouseEvent, event)
                 if event.button() == Qt.MouseButton.LeftButton:
                     self.handle_mouse_press(event)
                     return True
 
             elif event.type() == QEvent.Type.MouseButtonRelease:
+                event = cast(QMouseEvent, event)
                 if event.button() == Qt.MouseButton.LeftButton:
                     self.handle_mouse_release(event)
                     return True
 
             elif event.type() == QEvent.Type.Wheel:
-                return self.handle_scroll(event)
+                return self.handle_scroll(cast(QWheelEvent, event))
 
         return super().eventFilter(obj, event)
 
-    def handle_mouse_press(self, event):
+    def handle_mouse_press(self, event: QMouseEvent):
         """Handle left mouse button press"""
         scene_pos = self.graphics_widget.mapToScene(event.pos())
 
@@ -377,7 +386,7 @@ class DocumentView(QWidget):
 
         self.mouse_pressed = True
 
-    def handle_double_click(self, event):
+    def handle_double_click(self, event: QMouseEvent):
         """Handle double-click"""
         scene_pos = self.graphics_widget.mapToScene(event.pos())
 
@@ -403,7 +412,7 @@ class DocumentView(QWidget):
         if clicked_plot == self.wave_plot or clicked_plot == self.spec_plot:
             self.view_model.zoom_if_in_selection(x)
 
-    def handle_mouse_release(self, event):
+    def handle_mouse_release(self, event: QMouseEvent):
         """Handle left mouse button release"""
         scene_pos = self.graphics_widget.mapToScene(event.pos())
 
@@ -438,7 +447,7 @@ class DocumentView(QWidget):
         self.pending_single_click = None
         self.click_timer = None
 
-    def handle_scroll(self, event):
+    def handle_scroll(self, event: QWheelEvent) -> bool:
         angle_x = event.angleDelta().x()
         angle_y = event.angleDelta().y()
         pixel_x = event.pixelDelta().x()
@@ -467,14 +476,16 @@ class DocumentView(QWidget):
             else:
                 return self.handle_plain_scroll(scroll, is_trackpad)
 
-    def handle_shift_scroll(self, scroll):
+        return False
+
+    def handle_shift_scroll(self, scroll: float) -> bool:
         if scroll > 0:
             self.zoom_in(1.05)
         else:
             self.zoom_out(1.05)
         return True
 
-    def handle_plain_scroll(self, scroll, is_trackpad):
+    def handle_plain_scroll(self, scroll: float, is_trackpad: bool) -> bool:
         if is_trackpad:
             scroll_fraction = -scroll * 0.002
         else:
@@ -483,7 +494,9 @@ class DocumentView(QWidget):
         self.view_model.move_start_by_fraction(scroll_fraction)
         return True
 
-    def handle_control_scroll(self, event, scroll_y, is_trackpad):
+    def handle_control_scroll(
+        self, event: QWheelEvent, scroll_y: float, is_trackpad: bool
+    ) -> bool:
         mouse_pos = event.position() if hasattr(event, "position") else event.pos()
         scene_pos = self.graphics_widget.mapToScene(mouse_pos.toPoint())
 
@@ -496,7 +509,7 @@ class DocumentView(QWidget):
 
         return True
 
-    def set_mark(self, scene_pos):
+    def set_mark(self, scene_pos: QPointF):
         """Shift+Click: place a persistent mark at this time, used as the
         paste insertion point (and available for future uses)."""
         clicked_plot = None

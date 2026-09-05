@@ -4,7 +4,7 @@ from core.base.use_case import UseCase
 from core.load_audio.entity.audio_signal import AudioSignal
 
 
-class PrepAudio(UseCase[dict[AudioSignal]]):
+class PrepAudio(UseCase[dict[int, AudioSignal]]):
     def __init__(
         self,
         raw_signals: list[AudioSignal],

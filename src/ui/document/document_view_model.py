@@ -4,7 +4,7 @@ import numpy as np
 from PyQt6.QtCore import pyqtSignal, pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
-from core.edit_audio.entity.edit_command import EditCommand
+from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
@@ -48,8 +48,8 @@ class DocumentViewModel(ViewModel):
     def __init__(self):
         super().__init__()
 
-        self.raw_audio_state: dict[int, AudioChannelState] = None
-        self.prepped_audio_state: dict[int, AudioChannelState] = None
+        self.raw_audio_state: dict[int, AudioChannelState] = {}
+        self.prepped_audio_state: dict[int, AudioChannelState] = {}
         self.channel_state: ChannelState = ChannelState()
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
@@ -131,7 +131,7 @@ class DocumentViewModel(ViewModel):
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
     def prep_edited_audio_channel(
-        self, new_raw_signal: AudioSignal, target_fs, channel_idx: int
+        self, new_raw_signal: AudioSignal, target_fs: int, channel_idx: int
     ):
         use_case = PrepAudio([new_raw_signal], target_fs, [0])
         self.state_changed.emit(LoadProgressState(True))
@@ -164,10 +164,13 @@ class DocumentViewModel(ViewModel):
     def set_raw_audio(
         self,
         raw_audio: dict[int, AudioChannelState],
-        primary_channel: int,
+        primary_channel_idx: int,
         reset_window: bool,
     ):
         self.raw_audio_state = raw_audio
+        self.channel_state = replace(
+            self.channel_state, primary_channel=primary_channel_idx
+        )
         self.update_audio_waveform()
 
         self.remove_selection()
@@ -198,7 +201,7 @@ class DocumentViewModel(ViewModel):
 
     def load_from_samples(self, clip: AudioSignal, target_fs: int):
         raw_audio_state = {0: to_audio_channel_state(clip)}
-        self.set_raw_audio(raw_audio_state, primary_channel=0, reset_window=True)
+        self.set_raw_audio(raw_audio_state, primary_channel_idx=0, reset_window=True)
 
         self.prep_audio(
             [clip],
@@ -367,9 +370,9 @@ class DocumentViewModel(ViewModel):
 
         # Calculate the center of the selection in samples
         sel_start_samples = int(
-            self.select_state.sel_start * self.audio_signal_state.fs
+            self.select_state.sel_start * self.primary_raw_channel().fs
         )
-        sel_end_samples = int(self.select_state.sel_end * self.audio_signal_state.fs)
+        sel_end_samples = int(self.select_state.sel_end * self.primary_raw_channel().fs)
         sel_center_samples = (sel_start_samples + sel_end_samples) // 2
 
         # Calculate new window bounds centered on selection
@@ -459,7 +462,7 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.mark_state)
 
     def _raw_audio_ready(self) -> bool:
-        if self.raw_audio_state is None:
+        if not self.raw_audio_state:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Audio is still loading, please wait."))
             )
@@ -501,7 +504,11 @@ class DocumentViewModel(ViewModel):
 
         result = EditAudio(
             to_audio_signal(self.primary_raw_channel()),
-            EditCommand("copy", self.select_state.sel_start, self.select_state.sel_end),
+            EditCommand(
+                EditCommandType.COPY,
+                self.select_state.sel_start,
+                self.select_state.sel_end,
+            ),
         ).invoke()
 
         if result is None:
@@ -519,7 +526,11 @@ class DocumentViewModel(ViewModel):
 
         result = EditAudio(
             to_audio_signal(self.primary_raw_channel()),
-            EditCommand("cut", self.select_state.sel_start, self.select_state.sel_end),
+            EditCommand(
+                EditCommandType.CUT,
+                self.select_state.sel_start,
+                self.select_state.sel_end,
+            ),
         ).invoke()
 
         if result is None:
@@ -528,17 +539,21 @@ class DocumentViewModel(ViewModel):
         else:
             self._replace_primary_channel(result.new_channel)
             self._push_undo(
-                EditCommandState("cut", result.start_idx, result.new_clip.x)
+                EditCommandState(
+                    EditCommandType.CUT, result.start_idx, result.new_clip.x
+                )
             )
             return result.new_clip
 
-    def paste_at(self, start_time: float, clip: AudioSignal):
+    def paste_at(self, start_time: float, clip: AudioSignal) -> AudioSignal | None:
         if not self._raw_audio_ready():
-            return
+            return None
 
         result = EditAudio(
             to_audio_signal(self.primary_raw_channel()),
-            EditCommand("paste", start_time, clip_x=clip.x, clip_fs=clip.fs),
+            EditCommand(
+                EditCommandType.PASTE, start_time, clip_x=clip.x, clip_fs=clip.fs
+            ),
         ).invoke()
 
         if result is None:
@@ -546,7 +561,9 @@ class DocumentViewModel(ViewModel):
         else:
             self._replace_primary_channel(result.new_channel)
             self._push_undo(
-                EditCommandState("paste", result.start_idx, result.new_clip)
+                EditCommandState(
+                    EditCommandType.PASTE, result.start_idx, result.new_clip.x
+                )
             )
             return result.new_clip
 
@@ -598,9 +615,9 @@ class DocumentViewModel(ViewModel):
         self.undo_stack.append(cmd)
 
     @pyqtSlot(object)
-    def on_error(self, err):
+    def on_error(self, err: Exception):
         print(err)
 
-    def close_threads(self):
+    def close_threads(self) -> None:
         self.audio_player.stop()
         return super().close_threads()

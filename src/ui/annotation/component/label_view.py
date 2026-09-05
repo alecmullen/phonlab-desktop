@@ -1,6 +1,7 @@
 import pyqtgraph as pg
-from PyQt6.QtGui import QFont
-from pyqtgraph.Qt import QtCore, QtGui
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QFont, QPainter, QPicture
+from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
 
 class LabelView(pg.GraphicsObject):
@@ -14,21 +15,27 @@ class LabelView(pg.GraphicsObject):
         label_item.setPos(0, 0)
         label_item.setParentItem(self)
 
-        self.pic = QtGui.QPicture()
+        self.pic = QPicture()
         self._generate_picture()
 
     def _generate_picture(self):
         width, height = self.size
 
-        painter = QtGui.QPainter(self.pic)
-        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter = QPainter(self.pic)
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(pg.mkBrush(0, 0, 0, 20))
-        painter.drawRect(QtCore.QRectF(-width / 2, -height / 2, width, height))
+        painter.drawRect(QRectF(-width / 2, -height / 2, width, height))
         painter.end()
 
-    def paint(self, p, opt, widget):
-        p.drawPicture(0, 0, self.pic)
+    def paint(
+        self,
+        painter: QPainter | None,
+        option: QStyleOptionGraphicsItem | None,
+        widget: QWidget | None,
+    ):
+        if painter is not None:
+            painter.drawPicture(0, 0, self.pic)
 
-    def boundingRect(self):
+    def boundingRect(self) -> QRectF:
         width, height = self.size
-        return QtCore.QRectF(-width / 2, -height / 2, width, height)
+        return QRectF(-width / 2, -height / 2, width, height)

@@ -3,10 +3,11 @@ from dataclasses import dataclass
 import numpy as np
 
 from core.load_audio.entity.audio_signal import AudioSignal
+from ui.base.state import State
 
 
 @dataclass(frozen=True)
-class AudioChannelState:
+class AudioChannelState(State):
     x: np.ndarray
     fs: int
     t: np.ndarray

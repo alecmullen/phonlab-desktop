@@ -9,7 +9,7 @@ class AppSettings:
 
     cut_and_paste_at_zero_crossings: bool = True
 
-    enable_annotation = False
+    enable_annotation = True
 
 
 settings = AppSettings()
