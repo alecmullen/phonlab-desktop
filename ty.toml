@@ -1,2 +1,5 @@
 [analysis]
 replace-imports-with-any = ["pyqtgraph.**"]
+
+[src]
+include = ["src"]
