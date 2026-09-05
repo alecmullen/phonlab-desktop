@@ -80,7 +80,7 @@ class EditAudio(UseCaseSync[EditResult | None]):
             clip_x, up=self._channel.fs // cd, down=clip_fs // cd
         ).astype(self._channel.x.dtype)
 
-    def invoke(self) -> EditResult:
+    def invoke(self) -> EditResult | None:
         if self._edit_command.type == EditCommandType.COPY:
             range = self._selected_range()
             if range is None:
