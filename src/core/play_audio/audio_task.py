@@ -73,7 +73,7 @@ class AudioTask(QObject):
                 self._is_first_chunk = True
                 return sd.OutputStream(
                     samplerate=fs,
-                    blocksize=128,
+                    blocksize=512,
                     channels=channels,
                     dtype="float32",
                     callback=self._audio_callback,

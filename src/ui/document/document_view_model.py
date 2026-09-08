@@ -215,6 +215,9 @@ class DocumentViewModel(ViewModel):
 
     def compute_spectrogram(self):
         prepped_audio_signal = self.primary_prepped_channel()
+        if prepped_audio_signal is None:
+            return
+        
         start, end = self.document_window_state.start, self.document_window_state.end
 
         # convert to prepped audio sample indices
@@ -450,8 +453,11 @@ class DocumentViewModel(ViewModel):
     def primary_raw_channel(self) -> AudioChannelState:
         return self.raw_audio_state[self.channel_state.primary_channel]
 
-    def primary_prepped_channel(self) -> AudioChannelState:
-        return self.prepped_audio_state[self.channel_state.primary_channel]
+    def primary_prepped_channel(self) -> AudioChannelState | None:
+        if self.channel_state.primary_channel in self.prepped_audio_state:
+            return self.prepped_audio_state[self.channel_state.primary_channel]
+        else:
+            return None
 
     def set_mark(self, x_pos: float):
         self.mark_state = MarkState(position=x_pos, is_set=True)
