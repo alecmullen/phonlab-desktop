@@ -218,9 +218,9 @@ class DocumentViewModel(ViewModel):
         start, end = self.document_window_state.start, self.document_window_state.end
 
         # convert to prepped audio sample indices
-        raw_fs = self.primary_raw_channel().fs
-        start_idx = int((start / raw_fs) * prepped_audio_signal.fs)
-        end_idx = int((end / raw_fs) * prepped_audio_signal.fs)
+        fs_ratio = prepped_audio_signal.fs / self.primary_raw_channel().fs
+        start_idx = int(start * fs_ratio)
+        end_idx = int(end * fs_ratio)
 
         self.spectrogram_view_model.compute_spectrogram(
             prepped_audio_signal, start_idx, end_idx
