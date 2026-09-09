@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from core.parse_textgrid.annotation import Annotation
 from ui.base.state import State
 
 
@@ -20,3 +21,19 @@ class AnnotationTypeState(State):
 class AnnotationState(State):
     nodes: dict[int, float] = field(default_factory=dict)
     types: list[AnnotationTypeState] = field(default_factory=list)
+
+
+def to_annotation_state(annotation: Annotation) -> AnnotationState:
+    return AnnotationState(
+        nodes=annotation.nodes,
+        types=[
+            AnnotationTypeState(
+                type.type,
+                [
+                    AnnotationLabelState(label.s_node, label.e_node, label.label)
+                    for label in type.labels
+                ],
+            )
+            for type in annotation.types
+        ],
+    )

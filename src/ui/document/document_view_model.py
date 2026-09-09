@@ -9,6 +9,7 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
 from core.load_audio.prep_audio import PrepAudio
+from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
 from mock.mock_entity import FAKE_ANNOTATION_STATE
@@ -20,7 +21,7 @@ from res.constants import (
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.base.view_model import ViewModel
-from ui.document.state.annotation_state import AnnotationState
+from ui.document.state.annotation_state import AnnotationState, to_annotation_state
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
     to_audio_channel_state,
@@ -217,7 +218,7 @@ class DocumentViewModel(ViewModel):
         prepped_audio_signal = self.primary_prepped_channel()
         if prepped_audio_signal is None:
             return
-        
+
         start, end = self.document_window_state.start, self.document_window_state.end
 
         # convert to prepped audio sample indices
@@ -619,6 +620,10 @@ class DocumentViewModel(ViewModel):
             self.redo_stack.append(cmd)  # put it back, nothing actually happened
             return
         self.undo_stack.append(cmd)
+
+    def parse_textgrid(self, path: str):
+        use_case = ParseTextGrid(path)
+        self.annotation_state = to_annotation_state(use_case.invoke())
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

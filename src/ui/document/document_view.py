@@ -2,7 +2,7 @@ from typing import cast
 
 import pyqtgraph as pg
 from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
-from PyQt6.QtGui import QMouseEvent, QWheelEvent
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -97,6 +97,8 @@ class DocumentView(QWidget):
         self.is_dragging = False
         self.pending_single_click: tuple[QPointF, bool] | None = None
         self.click_timer = None
+
+        self.setAcceptDrops(True)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -547,6 +549,24 @@ class DocumentView(QWidget):
 
     def redo(self):
         self.view_model.redo()
+
+    def dragEnterEvent(self, a0: QDragEnterEvent | None):
+        if a0 is None:
+            return
+        mime_data = a0.mimeData()
+        if mime_data is not None:
+            if mime_data.hasUrls():
+                a0.acceptProposedAction()
+            else:
+                a0.ignore()
+
+    def dropEvent(self, a0: QDropEvent | None):
+        if a0 is None:
+            return
+        mime_data = a0.mimeData()
+        if mime_data is not None:
+            path = mime_data.urls()[0].toLocalFile()
+            self.view_model.parse_textgrid(path)
 
     def cleanup(self):
         """Clean up resources when closing document"""
