@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.document.document_view import DocumentView
+from ui.document.state.audio_channel_state import AudioChannelState
 
 
 class AudioInfoDialog(QDialog):
@@ -18,6 +19,8 @@ class AudioInfoDialog(QDialog):
         self.setWindowTitle(self.tr("Audio Info"))
 
         raw = doc.view_model.primary_raw_channel()
+        if raw is None:
+            raw = AudioChannelState()
         raw_duration = len(raw.x) / raw.fs if raw.fs else 0.0
 
         form = QFormLayout()

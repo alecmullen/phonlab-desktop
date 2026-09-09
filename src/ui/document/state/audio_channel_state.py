@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -8,9 +8,9 @@ from ui.base.state import State
 
 @dataclass(frozen=True)
 class AudioChannelState(State):
-    x: np.ndarray
-    fs: int
-    t: np.ndarray
+    x: np.ndarray = field(default_factory=lambda: np.array([]))
+    fs: int = 0
+    t: np.ndarray = field(default_factory=lambda: np.array([]))
 
 
 def to_audio_state(channels: dict[int, AudioSignal]) -> dict[int, AudioChannelState]:

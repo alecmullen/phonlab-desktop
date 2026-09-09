@@ -96,8 +96,7 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.getViewBox().setLimits(yMin=0, yMax=sgram.f[-1])
         self.getViewBox().setYRange(sgram.f[0], sgram.f[-1])
 
-        min, max = np.min(sgram.sxx_window), np.max(sgram.sxx_window)
-        vmin = min + (max - min) * sgram.gray_cutoff
+        vmin = sgram.min_sxx + (sgram.max_sxx - sgram.min_sxx) * sgram.gray_cutoff
 
         self.spec_img.setImage(
             sgram.sxx_window.T,

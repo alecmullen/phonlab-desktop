@@ -9,9 +9,9 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
 from core.load_audio.prep_audio import PrepAudio
+from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
-from mock.mock_entity import FAKE_ANNOTATION_STATE
 from res.constants import (
     DEFAULT_WINDOW_LENGTH,
     LATENCY_WARNING_THRESHOLD_S,
@@ -20,7 +20,7 @@ from res.constants import (
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.base.view_model import ViewModel
-from ui.document.state.annotation_state import AnnotationState
+from ui.document.state.annotation_state import AnnotationState, to_annotation_state
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
     to_audio_channel_state,
@@ -53,7 +53,7 @@ class DocumentViewModel(ViewModel):
         self.channel_state: ChannelState = ChannelState()
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
-        self.annotation_state: AnnotationState = FAKE_ANNOTATION_STATE
+        self.annotation_state: AnnotationState = AnnotationState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
         self.playback_state = PlaybackState()
         self.mark_state: MarkState = MarkState()
@@ -110,9 +110,11 @@ class DocumentViewModel(ViewModel):
         @pyqtSlot(object)
         def on_success(audio_signals: dict[int, AudioSignal]):
             raw_audio = to_audio_state(audio_signals)
-            self.set_raw_audio(raw_audio, options.primary_channel, reset_window=True)
+            primary_channel = self.set_raw_audio(
+                raw_audio, options.primary_channel, reset_window=True
+            )
 
-            self.state_changed.emit(AudioLoaded(self.primary_raw_channel().fs))
+            self.state_changed.emit(AudioLoaded(primary_channel.fs))
             self.audio_loaded.emit(audio_signals, options)
 
         use_case = LoadAudio(filepath)
@@ -166,7 +168,7 @@ class DocumentViewModel(ViewModel):
         raw_audio: dict[int, AudioChannelState],
         primary_channel_idx: int,
         reset_window: bool,
-    ):
+    ) -> AudioChannelState:
         self.raw_audio_state = raw_audio
         self.channel_state = replace(
             self.channel_state, primary_channel=primary_channel_idx
@@ -176,8 +178,11 @@ class DocumentViewModel(ViewModel):
         self.remove_selection()
         self.remove_mark()
 
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            raise RuntimeError("Missing primary audio channel")
+
         if reset_window:
-            primary_channel = self.primary_raw_channel()
             x, fs = primary_channel.x, primary_channel.fs
 
             signal_end = len(x) - 1
@@ -197,7 +202,9 @@ class DocumentViewModel(ViewModel):
             ).format(shown / fs, len(x) / fs)
             self.state_changed.emit(StatusMessageState(msg))
         else:
-            self.adjust_window_if_needed(len(self.primary_raw_channel().x) - 1)
+            self.adjust_window_if_needed(len(primary_channel.x) - 1)
+
+        return primary_channel
 
     def load_from_samples(self, clip: AudioSignal, target_fs: int):
         raw_audio_state = {0: to_audio_channel_state(clip)}
@@ -215,28 +222,44 @@ class DocumentViewModel(ViewModel):
 
     def compute_spectrogram(self):
         prepped_audio_signal = self.primary_prepped_channel()
+        if prepped_audio_signal is None:
+            return
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            raise RuntimeError("Missing primary audio channel")
+
         start, end = self.document_window_state.start, self.document_window_state.end
 
         # convert to prepped audio sample indices
-        raw_fs = self.primary_raw_channel().fs
-        start_idx = int((start / raw_fs) * prepped_audio_signal.fs)
-        end_idx = int((end / raw_fs) * prepped_audio_signal.fs)
+        fs_ratio = prepped_audio_signal.fs / primary_channel.fs
+        start_idx = int(start * fs_ratio)
+        end_idx = int(end * fs_ratio)
 
         self.spectrogram_view_model.compute_spectrogram(
             prepped_audio_signal, start_idx, end_idx
         )
 
     def update_audio_waveform(self):
-        start, end = self.document_window_state.start, self.document_window_state.end
-        self.audio_wave_view_model.set_wave_state(
-            to_audio_wave_state(self.primary_raw_channel(), start, end)
-        )
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is not None:
+            start, end = (
+                self.document_window_state.start,
+                self.document_window_state.end,
+            )
+            self.audio_wave_view_model.set_wave_state(
+                to_audio_wave_state(primary_channel, start, end)
+            )
 
     def update_annotation_state(self):
-        start, end = self.document_window_state.start, self.document_window_state.end
-        fs = self.primary_raw_channel().fs
-        state = AnnotationWindowState(self.annotation_state, start / fs, end / fs)
-        self.annotation_view_model.set_annotation_state(state)
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is not None:
+            start, end = (
+                self.document_window_state.start,
+                self.document_window_state.end,
+            )
+            fs = primary_channel.fs
+            state = AnnotationWindowState(self.annotation_state, start / fs, end / fs)
+            self.annotation_view_model.set_annotation_state(state)
 
     def play_audio(self, x: np.ndarray, fs: int, start: int):
         self.stop_audio()
@@ -289,11 +312,15 @@ class DocumentViewModel(ViewModel):
         self.move_start(start + scroll_amount)
 
     def move_start(self, new_start: int):
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            return
+
         start = self.document_window_state.start
         end = self.document_window_state.end
         window_size = end - start
 
-        max_end = len(self.primary_raw_channel().x) - 1
+        max_end = len(primary_channel.x) - 1
 
         if new_start < start:
             new_start = max(0, new_start)
@@ -318,12 +345,16 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.select_state)
 
     def continue_selection(self, x_pos: float):
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            return
+
         sel_start = self.select_state.sel_start
         sel_end = self.select_state.sel_end
 
         if x_pos >= self.select_state.sel_anchor:
             sel_start = self.select_state.sel_anchor
-            sel_end = min(x_pos, self.primary_raw_channel().t[-1])
+            sel_end = min(x_pos, primary_channel.t[-1])
 
         elif x_pos < self.select_state.sel_anchor:
             sel_start = max(x_pos, 0.0)
@@ -344,7 +375,10 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.select_state)
 
     def zoom_if_in_selection(self, x_pos: float):
-        x, fs = self.primary_raw_channel().x, self.primary_raw_channel().fs
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            return
+        x, fs = primary_channel.x, primary_channel.fs
 
         max_end = len(x) - 1
         sel_start, sel_end = self.select_state.sel_start, self.select_state.sel_end
@@ -363,16 +397,17 @@ class DocumentViewModel(ViewModel):
             self.remove_selection()
 
     def center_on_selection(self):
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            return
         if not self.select_state.is_selected:
             msg = self.tr("No selection to center on")
             self.state_changed.emit(StatusMessageState(msg))
             return
 
         # Calculate the center of the selection in samples
-        sel_start_samples = int(
-            self.select_state.sel_start * self.primary_raw_channel().fs
-        )
-        sel_end_samples = int(self.select_state.sel_end * self.primary_raw_channel().fs)
+        sel_start_samples = int(self.select_state.sel_start * primary_channel.fs)
+        sel_end_samples = int(self.select_state.sel_end * primary_channel.fs)
         sel_center_samples = (sel_start_samples + sel_end_samples) // 2
 
         # Calculate new window bounds centered on selection
@@ -382,12 +417,16 @@ class DocumentViewModel(ViewModel):
         self.move_start(new_start)
 
     def zoom_out(self, factor: float = 2):
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            return
+
         start, end = self.document_window_state.start, self.document_window_state.end
 
         center = start + int((end - start) / 2)
         new_size = int((end - start) * factor)
 
-        max_end = len(self.primary_raw_channel().x) - 1
+        max_end = len(primary_channel.x) - 1
 
         new_end = center + int(new_size / 2)
         new_end = min(new_end, max_end)
@@ -403,6 +442,10 @@ class DocumentViewModel(ViewModel):
         self.update_document_window(self.document_window_state)
 
     def zoom_in(self, factor: float = 2):
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            return
+
         start, end = self.document_window_state.start, self.document_window_state.end
 
         center = start + int((end - start) / 2)
@@ -412,7 +455,7 @@ class DocumentViewModel(ViewModel):
         new_end = center + int(new_size / 2)
         new_start = new_end - new_size
 
-        max_end = len(self.primary_raw_channel().x) - 1
+        max_end = len(primary_channel.x) - 1
 
         window_length = new_end - new_start
 
@@ -425,13 +468,24 @@ class DocumentViewModel(ViewModel):
         self.update_document_window(self.document_window_state)
 
     def show_all(self):
-        end = len(self.primary_raw_channel().x) - 1
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            return
+
+        end = len(primary_channel.x) - 1
 
         self.document_window_state = DocumentWindowState(start=0, end=end)
         self.update_document_window(self.document_window_state)
 
     def play_selected_audio(self):
         channel = self.primary_raw_channel()
+
+        if channel is None:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Audio is still loading, please wait."))
+            )
+            return
+
         start = int(self.select_state.sel_start * channel.fs)
         end = int(self.select_state.sel_end * channel.fs)
 
@@ -443,15 +497,28 @@ class DocumentViewModel(ViewModel):
         start, end = self.document_window_state.start, self.document_window_state.end
 
         channel = self.primary_raw_channel()
+
+        if channel is None:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Audio is still loading, please wait."))
+            )
+            return
+
         if len(channel.x) > 0:
             section = channel.x[start:end]
             self.play_audio(section, channel.fs, start=start)
 
-    def primary_raw_channel(self) -> AudioChannelState:
-        return self.raw_audio_state[self.channel_state.primary_channel]
+    def primary_raw_channel(self) -> AudioChannelState | None:
+        if self.channel_state.primary_channel in self.raw_audio_state:
+            return self.raw_audio_state[self.channel_state.primary_channel]
+        else:
+            return None
 
-    def primary_prepped_channel(self) -> AudioChannelState:
-        return self.prepped_audio_state[self.channel_state.primary_channel]
+    def primary_prepped_channel(self) -> AudioChannelState | None:
+        if self.channel_state.primary_channel in self.prepped_audio_state:
+            return self.prepped_audio_state[self.channel_state.primary_channel]
+        else:
+            return None
 
     def set_mark(self, x_pos: float):
         self.mark_state = MarkState(position=x_pos, is_set=True)
@@ -498,12 +565,17 @@ class DocumentViewModel(ViewModel):
     def copy_selection(self) -> AudioSignal | None:
         if not self._raw_audio_ready():
             return None
+
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            raise RuntimeError("Missing primary audio channel")
+
         if not self.select_state.is_selected:
             self.state_changed.emit(StatusMessageState(self.tr("No selection to copy")))
             return None
 
         result = EditAudio(
-            to_audio_signal(self.primary_raw_channel()),
+            to_audio_signal(primary_channel),
             EditCommand(
                 EditCommandType.COPY,
                 self.select_state.sel_start,
@@ -520,12 +592,17 @@ class DocumentViewModel(ViewModel):
     def cut_selection(self) -> AudioSignal | None:
         if not self._raw_audio_ready():
             return None
+
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            raise RuntimeError("Missing primary audio channel")
+
         if not self.select_state.is_selected:
             self.state_changed.emit(StatusMessageState(self.tr("No selection to cut")))
             return None
 
         result = EditAudio(
-            to_audio_signal(self.primary_raw_channel()),
+            to_audio_signal(primary_channel),
             EditCommand(
                 EditCommandType.CUT,
                 self.select_state.sel_start,
@@ -549,8 +626,12 @@ class DocumentViewModel(ViewModel):
         if not self._raw_audio_ready():
             return None
 
+        primary_channel = self.primary_raw_channel()
+        if primary_channel is None:
+            raise RuntimeError("Missing primary audio channel")
+
         result = EditAudio(
-            to_audio_signal(self.primary_raw_channel()),
+            to_audio_signal(primary_channel),
             EditCommand(
                 EditCommandType.PASTE, start_time, clip_x=clip.x, clip_fs=clip.fs
             ),
@@ -580,6 +661,8 @@ class DocumentViewModel(ViewModel):
         its inverse (forward=False, i.e. undo). A cut removes going
         forward and re-inserts in reverse; a paste is the opposite."""
         channel = self.primary_raw_channel()
+        if channel is None:
+            raise RuntimeError("Missing primary audio channel")
 
         removing = (cmd.type == "cut") == forward
         if removing:
@@ -613,6 +696,11 @@ class DocumentViewModel(ViewModel):
             self.redo_stack.append(cmd)  # put it back, nothing actually happened
             return
         self.undo_stack.append(cmd)
+
+    def parse_textgrid(self, path: str):
+        use_case = ParseTextGrid(path)
+        self.annotation_state = to_annotation_state(use_case.invoke())
+        self.update_annotation_state()
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

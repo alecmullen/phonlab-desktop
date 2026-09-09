@@ -3,15 +3,16 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter, QPainterPath, QPicture
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
-V_MARGIN = 0.05
-H_MARGIN = 0.075
+V_MARGIN = 7
+H_MARGIN = 5
 
 
 class NodeView(pg.GraphicsObject):
-    def __init__(self, x: float, ys: list[float]):
+    def __init__(self, x: float, ys: list[float], pixel_size: tuple[float, float]):
         super().__init__()
         self.x = x
         self.ys = ys
+        self.pixel_size = pixel_size
 
         self.setPos(x, ys[0])
 
@@ -65,8 +66,8 @@ class NodeView(pg.GraphicsObject):
 
     def boundingRect(self) -> QRectF:
         return QRectF(
-            -H_MARGIN,
-            -V_MARGIN,
-            2 * H_MARGIN,
-            self.ys[-1] - self.ys[0] + 1 + 2 * V_MARGIN,
+            -H_MARGIN * self.pixel_size[0],
+            -V_MARGIN * self.pixel_size[1],
+            2 * H_MARGIN * self.pixel_size[0],
+            self.ys[-1] - self.ys[0] + 1 + 2 * V_MARGIN * self.pixel_size[1],
         )

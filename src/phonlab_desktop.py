@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
         # Optionally open a file if provided as command line argument
         if len(sys.argv) > 1:
-            mainWin.open_file(sys.argv[1])
+            mainWin.open_files(sys.argv[1:])
 
         app.exec()
 

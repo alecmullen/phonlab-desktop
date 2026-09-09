@@ -65,6 +65,7 @@ class SpectrogramViewModel(ViewModel):
                 f=f,
                 is_showing=True,
             )
+            self.update_sxx_extrema(sxx)
             self.state_changed.emit(self.sgram_state)
 
             generation = self._buffer_generation
@@ -80,6 +81,7 @@ class SpectrogramViewModel(ViewModel):
                     f=sgram.f,
                     is_showing=True,
                 )
+                self.update_sxx_extrema(sgram.sxx)
                 self.state_changed.emit(self.sgram_state)
 
             use_case = ComputeSpectrogram(x[start:end], fs)
@@ -103,6 +105,7 @@ class SpectrogramViewModel(ViewModel):
                     frames_computed=sgram.frames_computed,
                     samples_computed=sgram.samples_computed,
                 )
+                self.update_sxx_extrema(sgram.sxx_mmap)
                 self.state_changed.emit(LoadProgressState(False))
 
             use_case = ComputeSpectrogramMmap(x, fs)
@@ -115,6 +118,13 @@ class SpectrogramViewModel(ViewModel):
         gray_cutoff = max(0.0, min(0.7, gray_cutoff))
         self.sgram_state = replace(self.sgram_state, gray_cutoff=gray_cutoff)
         self.state_changed.emit(self.sgram_state)
+
+    def update_sxx_extrema(self, sxx: np.ndarray | np.memmap):
+        self.sgram_state = replace(
+            self.sgram_state,
+            min_sxx=min(self.sgram_state.min_sxx, np.min(sxx)),
+            max_sxx=max(self.sgram_state.max_sxx, np.max(sxx)),
+        )
 
     def invalidate_spectrogram(self):
         self._buffer_generation += 1
