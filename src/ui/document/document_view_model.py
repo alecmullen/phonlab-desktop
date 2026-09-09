@@ -624,6 +624,7 @@ class DocumentViewModel(ViewModel):
     def parse_textgrid(self, path: str):
         use_case = ParseTextGrid(path)
         self.annotation_state = to_annotation_state(use_case.invoke())
+        self.update_annotation_state()
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

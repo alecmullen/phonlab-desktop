@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, pyqtSlot
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QMouseEvent, QShowEvent
 from PyQt6.QtWidgets import QWidget
 
 from ui.annotation.annotation_view_model import AnnotationViewModel
@@ -45,8 +45,6 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
         self.dragging_node: int | None = None
 
-        self.populate(self.view_model.annotation_window_state)
-
     @pyqtSlot(object)
     def on_state_change(self, model: State):
         if isinstance(model, AnnotationWindowState):
@@ -56,6 +54,10 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         if show:
             self.setLabel("bottom", self.tr("Time"), units="s")
             self.getAxis("bottom").enableAutoSIPrefix(False)
+
+    def showEvent(self, a0: QShowEvent):
+        super().showEvent(a0)
+        self.populate(self.view_model.annotation_window_state)
 
     def populate(self, window_state: AnnotationWindowState):
         self.clear()
@@ -90,9 +92,12 @@ class AnnotationPlot(pg.PlotItem, CursorController):
                 node_extents[label.e_node].add(i)
                 node_extents[label.s_node].add(i)
 
+        pixel_size = self.getViewBox().viewPixelSize()
         for node in nodes:
             if start <= nodes[node] <= end:
-                node_view = NodeView(nodes[node], sorted(node_extents[node]))
+                node_view = NodeView(
+                    nodes[node], sorted(node_extents[node]), pixel_size
+                )
                 self.node_views[node] = node_view
                 self.addItem(node_view)
 
