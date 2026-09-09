@@ -14,7 +14,7 @@ class ClickableSplash(QSplashScreen):
 
     def mousePressEvent(self, a0: QMouseEvent | None):
         """Open file dialog when splash is clicked"""
-        self.main_window.open_file()
+        self.main_window.open_files()
         super().mousePressEvent(a0)
 
 

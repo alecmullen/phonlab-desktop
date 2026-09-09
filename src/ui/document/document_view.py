@@ -124,6 +124,9 @@ class DocumentView(QWidget):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
+    def load_textgrid(self, filename: str):
+        self.view_model.parse_textgrid(filename)
+
     def clear_plots(self):
         """Clear all current plots"""
         self.graphics_widget.clear()
@@ -566,7 +569,7 @@ class DocumentView(QWidget):
         mime_data = a0.mimeData()
         if mime_data is not None:
             path = mime_data.urls()[0].toLocalFile()
-            self.view_model.parse_textgrid(path)
+            self.load_textgrid(path)
 
     def cleanup(self):
         """Clean up resources when closing document"""

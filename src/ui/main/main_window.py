@@ -30,7 +30,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Phonlab")
         self.resize(1200, 800)
 
-        self.filters = "Sound files (*.wav)"
+        self.filters = "Sound files and TextGrids (*.wav *.TextGrid)"
         self.splash = None
         self.clipboard: AudioSignal | None = None
         self.clip_counters: dict[str, int] = {}
@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         )
         self.open_action.setStatusTip(self.tr("Open a sound file"))
         self.open_action.setShortcut("Ctrl+O")
-        self.open_action.triggered.connect(self.open_file)
+        self.open_action.triggered.connect(self.open_files)
 
         self.close_action = QAction(
             QIcon.fromTheme("window-close"), self.tr("&Close"), self
@@ -223,33 +223,44 @@ class MainWindow(QMainWindow):
             return current_widget
         return None
 
-    def open_file(self, filename: str | None = None):
+    def open_files(self, filenames: list[str] | None = None):
         """Open a new audio file in a new tab"""
-        if not filename:
-            filename, _ = QFileDialog.getOpenFileName(self, filter=self.filters)
+        if filenames is None:
+            filenames, _ = QFileDialog.getOpenFileNames(self, filter=self.filters)
 
-        if filename:
-            options = OpenAudioDialog.get_options(filename, self)
-            if options is None:
-                return
+        if len(filenames) > 0:
+            audio_filename = next(
+                (file for file in filenames if file.endswith(".wav")), None
+            )
 
-            if self.splash is not None:
-                self.splash.close()
-                self.splash = None
+            if audio_filename is not None:
+                options = OpenAudioDialog.get_options(audio_filename, self)
+                if options is None:
+                    return
 
-            # Create new document
-            doc = DocumentView(DocumentViewModel())
-            doc.origin_name = Path(filename).name
-            doc.origin_path = filename
+                if self.splash is not None:
+                    self.splash.close()
+                    self.splash = None
 
-            # Add tab with shortened filename
-            tab_name = doc.origin_name
-            index = self.tab_widget.addTab(doc, tab_name)
-            self.tab_widget.setCurrentIndex(index)
-            self.tab_widget.setTabToolTip(index, filename)
+                # Create new document
+                doc = DocumentView(DocumentViewModel())
+                doc.origin_name = Path(audio_filename).name
+                doc.origin_path = audio_filename
 
-            # Load the audio file
-            doc.load_audio(filename, options)
+                # Add tab with shortened filename
+                tab_name = doc.origin_name
+                index = self.tab_widget.addTab(doc, tab_name)
+                self.tab_widget.setCurrentIndex(index)
+                self.tab_widget.setTabToolTip(index, audio_filename)
+
+                # Load the audio file
+                doc.load_audio(audio_filename, options)
+
+                annotation_filename = next(
+                    (file for file in filenames if file.endswith(".TextGrid")), None
+                )
+                if annotation_filename is not None:
+                    doc.load_textgrid(annotation_filename)
 
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
         """Open a new tab containing the just-copied/cut samples, without
@@ -286,6 +297,8 @@ class MainWindow(QMainWindow):
             return
         raw = doc.view_model.primary_raw_channel()
         try:
+            if raw is None:
+                raise RuntimeError("Cannot save audio that is not loaded")
             SaveAudio(
                 options.path, raw.x, raw.fs, options.target_fs, options.scale
             ).invoke()
