@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from res.constants import DEFAULT_GRAY_CUTOFF
 from ui.base.state import State
 
 
@@ -20,4 +21,6 @@ class SpectrogramState(State):
 
     is_showing: bool = False
 
-    gray_cutoff: float = 0.55
+    gray_cutoff: float = DEFAULT_GRAY_CUTOFF
+    min_sxx: float = float("inf")
+    max_sxx: float = float("-inf")

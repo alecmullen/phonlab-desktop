@@ -14,7 +14,7 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         x: np.ndarray,
         fs: int,
         window_size: float = 0.008,
-        step_size: float = 0.002,
+        step_size: float = 0.001,
         order: int = 9,
         chunk_duration: int = 300,
     ):
