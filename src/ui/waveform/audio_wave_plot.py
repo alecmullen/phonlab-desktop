@@ -14,6 +14,7 @@ class AudioWavePlot(pg.PlotItem, CursorController):
     def __init__(
         self,
         view_model: AudioWaveViewModel,
+        linked_plot: pg.PlotItem | None = None,
         is_bottom_plot: bool = False,
         parent: QWidget | None = None,
     ):
@@ -34,6 +35,9 @@ class AudioWavePlot(pg.PlotItem, CursorController):
             self.getAxis("bottom").enableAutoSIPrefix(False)
         else:
             self.getAxis("bottom").setStyle(showValues=False)
+
+        if linked_plot is not None:
+            self.getViewBox().setXLink(linked_plot)
 
         self.vb.setMouseEnabled(x=False, y=False)
         self.vb.rbScaleBox.hide()
@@ -86,11 +90,9 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         self.wave_curve = self.plot(audio_wave.t, audio_wave.x, pen="b")
         self.wave_curve.setDownsampling(auto=True, method="peak")
         self.wave_curve.setClipToView(True)
-        self.setXRange(audio_wave.t[0], audio_wave.t[-1], padding=0)
 
     def update_wave(self, audio_wave: AudioWaveState):
         self.wave_curve.setData(audio_wave.t, audio_wave.x)
-        self.setXRange(audio_wave.t[0], audio_wave.t[-1], padding=0)
 
     def update_selection_region(self, box_left: float, t_range: float):
         if t_range > 0:

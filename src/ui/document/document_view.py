@@ -53,9 +53,11 @@ class DocumentView(QWidget):
         self.graphics_widget.viewport().installEventFilter(self)
 
         # Initialize plot items (will be created in plot methods)
-        self.wave_plot = None
-        self.spec_plot = None
-        self.annot_plot = None
+        self.wave_plot: AudioWavePlot | None = None
+        self.spec_plot: SpectrogramPlot | None = None
+        self.annot_plot: AnnotationPlot | None = None
+        # Track one plot to have main x-axis others link to
+        self.first_plot: pg.PlotItem | None = None
 
         # ------ Slider ---------
         self.slider = QScrollBar(Qt.Orientation.Horizontal, self)
@@ -108,7 +110,7 @@ class DocumentView(QWidget):
         elif isinstance(model, SelectState):
             self.update_selection_box(model)
         elif isinstance(model, DocumentWindowState):
-            self.update_slider_value(model)
+            self.update_document_window(model)
         elif isinstance(model, StatusMessageState):
             self.message_label.setText(model.message)
         elif isinstance(model, PlaybackState):
@@ -130,6 +132,8 @@ class DocumentView(QWidget):
     def clear_plots(self):
         """Clear all current plots"""
         self.graphics_widget.clear()
+
+        self.first_plot = None
 
         if self.wave_plot:
             self.wave_plot.clear()
@@ -168,7 +172,9 @@ class DocumentView(QWidget):
         ordered_plots = sorted(layout_state.plots, key=lambda type: type.value)
         for i, plot_type in enumerate(ordered_plots):
             is_bottom = i == len(ordered_plots) - 1
-            self.add_plot(i, plot_type, is_bottom)
+            plot = self.add_plot(i, plot_type, is_bottom)
+            if self.first_plot is None:
+                self.first_plot = plot
 
         if len(layout_state.plots) == 2:
             self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
@@ -181,31 +187,38 @@ class DocumentView(QWidget):
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
         self.update_mark(self.view_model.mark_state)
+        self.update_document_window(self.view_model.document_window_state)
 
-    def add_plot(self, row: int, plot_type: PlotType, is_bottom: bool = False):
+    def add_plot(
+        self, row: int, plot_type: PlotType, is_bottom: bool = False
+    ) -> pg.PlotItem:
         if plot_type == PlotType.WAVEFORM:
             self.wave_plot = AudioWavePlot(
                 view_model=self.view_model.audio_wave_view_model,
+                linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom,
             )
             self.graphics_widget.addItem(self.wave_plot, row=row, col=0)
             self.wave_plot.show()
+            return self.wave_plot
         elif plot_type == PlotType.SPECTROGRAM:
             self.spec_plot = SpectrogramPlot(
                 view_model=self.view_model.spectrogram_view_model,
-                linked_plot=self.wave_plot,
+                linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom,
             )
             self.graphics_widget.addItem(self.spec_plot, row=row, col=0)
             self.spec_plot.show()
+            return self.spec_plot
         elif plot_type == PlotType.ANNOTATION:
             self.annot_plot = AnnotationPlot(
                 view_model=self.view_model.annotation_view_model,
-                linked_plot=self.wave_plot,
+                linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom,
             )
             self.graphics_widget.addItem(self.annot_plot, row=row, col=0)
             self.annot_plot.show()
+            return self.annot_plot
 
     @pyqtSlot(int)
     def on_slider_move(self, value: int):
@@ -226,6 +239,7 @@ class DocumentView(QWidget):
         """Update the slider's page step to reflect current window size"""
         window_size = doc_window.end - doc_window.start
         self.slider.setPageStep(window_size)
+        self.slider.setMinimum(0)
         self.slider.setMaximum(doc_window.max_start)
 
         if self.slider.value() > self.slider.maximum():
@@ -284,9 +298,17 @@ class DocumentView(QWidget):
         if self.wave_plot is not None:
             self.wave_plot.update_selection_region(box_left, t_range)
 
-    def update_slider_value(self, doc_window: DocumentWindowState):
-        self.slider.setValue(doc_window.start)
+    def update_document_window(self, doc_window: DocumentWindowState):
         self.update_slider_page_step(doc_window)
+        self.slider.setValue(doc_window.start)
+
+        primary_channel = self.view_model.primary_raw_channel()
+        if primary_channel is not None and self.first_plot is not None:
+            self.first_plot.getViewBox().setXRange(
+                primary_channel.t[doc_window.start],
+                primary_channel.t[doc_window.end],
+                padding=0,
+            )
 
     def update_mark(self, mark: MarkState):
         if self.spec_plot is not None:
