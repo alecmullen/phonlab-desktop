@@ -62,7 +62,8 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.addItem(self.selection_region)
         self.selection_region.setVisible(False)
 
-        self.getViewBox().setXLink(linked_plot)
+        if linked_plot is not None:
+            self.getViewBox().setXLink(linked_plot)
 
         self.center_label = pg.LabelItem(
             self.tr(

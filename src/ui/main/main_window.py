@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtCore import QSize, Qt, pyqtSlot
 from PyQt6.QtGui import QAction, QCloseEvent, QIcon, QKeyEvent, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
@@ -223,6 +223,7 @@ class MainWindow(QMainWindow):
             return current_widget
         return None
 
+    @pyqtSlot()
     def open_files(self, filenames: list[str] | None = None):
         """Open a new audio file in a new tab"""
         if filenames is None:

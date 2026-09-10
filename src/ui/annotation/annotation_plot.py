@@ -24,7 +24,8 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         self.view_model = view_model
         self.view_model.subscribe(self.on_state_change)
 
-        self.getViewBox().setXLink(linked_plot)
+        if linked_plot is not None:
+            self.getViewBox().setXLink(linked_plot)
         self.getAxis("left").setWidth(60)
 
         self.getViewBox().setFlag(
