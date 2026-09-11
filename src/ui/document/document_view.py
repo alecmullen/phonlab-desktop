@@ -2,7 +2,12 @@ from typing import cast
 
 import pyqtgraph as pg
 from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
-from PyQt6.QtGui import QAction, QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
+from PyQt6.QtGui import (
+    QDragEnterEvent,
+    QDropEvent,
+    QMouseEvent,
+    QWheelEvent,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -11,12 +16,14 @@ from PyQt6.QtWidgets import (
     QScrollBar,
     QVBoxLayout,
     QWidget,
+    QWidgetAction,
 )
 
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
+from ui.common.context_menu_hint import ContextMenuHint
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_loaded import AudioLoaded
@@ -98,18 +105,41 @@ class DocumentView(QWidget):
         # mouse interaction state
         self.mouse_pressed = False
         self.is_dragging = False
-        self.pending_single_click: tuple[QPointF, bool] | None = None
+        self.pending_single_click: QPointF | None = None
         self.click_timer = None
 
+        # context menu
+        self.context_pos: QPointF | None = None
         self.set_up_menu()
 
         self.setAcceptDrops(True)
 
     def set_up_menu(self):
-        resample_action = QAction(self.tr("Resample"))
+        resample_action = QWidgetAction(self)
+        resample_action.setDefaultWidget(ContextMenuHint(self.tr("Resample")))
         resample_action.triggered.connect(self.open_resample_dialog)
 
-        self.graphics_widget.scene().contextMenu = [resample_action]
+        set_mark_action = QWidgetAction(self)
+        set_mark_action.setDefaultWidget(
+            ContextMenuHint(self.tr("Set Mark"), self.tr("Shift+Click"))
+        )
+        set_mark_action.triggered.connect(
+            lambda: (
+                self.set_mark(self.context_pos)
+                if self.context_pos is not None
+                else None
+            )
+        )
+
+        remove_mark_action = QWidgetAction(self)
+        remove_mark_action.setDefaultWidget(ContextMenuHint(self.tr("Remove Mark")))
+        remove_mark_action.triggered.connect(self.view_model.remove_mark)
+
+        self.graphics_widget.scene().contextMenu = [
+            resample_action,
+            set_mark_action,
+            remove_mark_action,
+        ]
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -389,6 +419,8 @@ class DocumentView(QWidget):
                 if event.button() == Qt.MouseButton.LeftButton:
                     self.handle_mouse_press(event)
                     return True
+                else:
+                    self.context_pos = self.graphics_widget.mapToScene(event.pos())
 
             elif event.type() == QEvent.Type.MouseButtonRelease:
                 event = cast(QMouseEvent, event)
@@ -459,26 +491,24 @@ class DocumentView(QWidget):
                 self.is_dragging = False
                 self.view_model.play_selected_audio()
             else:
-                shift_pressed = event.modifiers() == Qt.KeyboardModifier.ShiftModifier
-                self.pending_single_click = (scene_pos, shift_pressed)
-                if self.click_timer is not None:
-                    self.click_timer.stop()
-                self.click_timer = QTimer()
-                self.click_timer.setSingleShot(True)
-                self.click_timer.timeout.connect(self.handle_single_click)
-                self.click_timer.start(250)
+                if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+                    self.set_mark(scene_pos)
+                else:
+                    self.pending_single_click = scene_pos
+                    if self.click_timer is not None:
+                        self.click_timer.stop()
+                    self.click_timer = QTimer()
+                    self.click_timer.setSingleShot(True)
+                    self.click_timer.timeout.connect(self.handle_single_click)
+                    self.click_timer.start(250)
         else:
             if self.annot_plot is not None:
                 self.annot_plot.handle_mouse_release(event)
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
-            scene_pos, shift_pressed = self.pending_single_click
-
-            if shift_pressed:
-                self.set_mark(scene_pos)
-            else:
-                self.play_window_or_selection(scene_pos)
+            scene_pos = self.pending_single_click
+            self.play_window_or_selection(scene_pos)
 
         self.pending_single_click = None
         self.click_timer = None
