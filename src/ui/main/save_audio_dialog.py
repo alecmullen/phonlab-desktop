@@ -44,7 +44,7 @@ class SaveAudioDialog(QDialog):
         self.setWindowTitle(self.tr("Save Audio"))
         self.setMinimumWidth(420)
 
-        primary_channel = doc.view_model.primary_raw_channel()
+        primary_channel = doc.view_model.primary_channel()
         if primary_channel is None:
             return
         raw_fs = primary_channel.fs

@@ -16,8 +16,10 @@ from PyQt6.QtWidgets import (
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
+from ui.base.state import State
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
+from ui.document.state.audio_loaded import AudioLoaded
 from ui.main.audio_info_dialog import AudioInfoDialog
 from ui.main.open_audio_dialog import OpenAudioDialog
 from ui.main.save_audio_dialog import SaveAudioDialog
@@ -39,6 +41,7 @@ class MainWindow(QMainWindow):
         self.tab_widget = QTabWidget()
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
+        self.tab_widget.currentChanged.connect(self.on_tab_changed)
         self.setCentralWidget(self.tab_widget)
 
         # --------- Menu --------------------
@@ -147,6 +150,7 @@ class MainWindow(QMainWindow):
         self.sgramview_action.setStatusTip(self.tr("View waveform and spectrogram"))
         self.sgramview_action.setShortcut("Ctrl+2")
         self.sgramview_action.triggered.connect(self.plot_wave_sgram)
+        self.sgramview_action.setEnabled(False)
 
         if settings.enable_annotation:
             self.annotationview_action = QAction(
@@ -223,6 +227,11 @@ class MainWindow(QMainWindow):
             return current_widget
         return None
 
+    @pyqtSlot(object)
+    def on_doc_state_change(self, state: State):
+        if isinstance(state, AudioLoaded):
+            self.sgramview_action.setEnabled(True)
+
     @pyqtSlot()
     def open_files(self, filenames: list[str] | None = None):
         """Open a new audio file in a new tab"""
@@ -244,7 +253,9 @@ class MainWindow(QMainWindow):
                     self.splash = None
 
                 # Create new document
-                doc = DocumentView(DocumentViewModel())
+                doc_view_model = DocumentViewModel()
+                doc_view_model.subscribe(self.on_doc_state_change)
+                doc = DocumentView(doc_view_model)
                 doc.origin_name = Path(audio_filename).name
                 doc.origin_path = audio_filename
 
@@ -266,7 +277,9 @@ class MainWindow(QMainWindow):
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
         """Open a new tab containing the just-copied/cut samples, without
         stealing focus from source_doc"""
-        doc = DocumentView(DocumentViewModel())
+        doc_view_model = DocumentViewModel()
+        doc_view_model.subscribe(self.on_doc_state_change)
+        doc = DocumentView(doc_view_model)
 
         # Always name after the ORIGINAL source file
         origin_name = source_doc.origin_name
@@ -281,12 +294,22 @@ class MainWindow(QMainWindow):
         tab_name = self.tr("CLIP {}: {}").format(n, origin_name)
         self.tab_widget.addTab(doc, tab_name)
 
-        primary_channel = source_doc.view_model.primary_prepped_channel()
+        primary_channel = source_doc.view_model.primary_channel()
         if primary_channel is None:
             target_fs = clip.fs
         else:
             target_fs = primary_channel.fs
         doc.view_model.load_from_samples(clip, target_fs)
+
+    pyqtSlot(int)
+
+    def on_tab_changed(self, index: int):
+        doc = self.get_current_document()
+
+        if doc is not None:
+            self.sgramview_action.setEnabled(
+                doc.view_model.audio_loaded_state.is_loaded
+            )
 
     def save_audio(self):
         doc = self.get_current_document()
@@ -296,7 +319,7 @@ class MainWindow(QMainWindow):
         options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
         if options is None:
             return
-        raw = doc.view_model.primary_raw_channel()
+        raw = doc.view_model.primary_channel()
         try:
             if raw is None:
                 raise RuntimeError("Cannot save audio that is not loaded")

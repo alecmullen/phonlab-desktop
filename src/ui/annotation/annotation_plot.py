@@ -41,6 +41,9 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         else:
             self.getAxis("bottom").setStyle(showValues=False)
 
+        self.getViewBox().menu.clear()
+        self.ctrlMenu.menuAction().setVisible(False)
+
         self.node_views: dict[int, NodeView] = {}
         self.label_views: list[LabelView] = []
 

@@ -18,7 +18,7 @@ class AudioInfoDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Audio Info"))
 
-        raw = doc.view_model.primary_raw_channel()
+        raw = doc.view_model.primary_channel()
         if raw is None:
             raw = AudioChannelState()
         raw_duration = len(raw.x) / raw.fs if raw.fs else 0.0

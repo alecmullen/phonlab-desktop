@@ -20,6 +20,13 @@ def to_audio_state(channels: dict[int, AudioSignal]) -> dict[int, AudioChannelSt
     return channel_states
 
 
+def to_audio_signals(channels: dict[int, AudioChannelState]) -> dict[int, AudioSignal]:
+    signals = {}
+    for idx, channel in channels.items():
+        signals[idx] = to_audio_signal(channel)
+    return signals
+
+
 def to_audio_channel_state(audio_signal: AudioSignal) -> AudioChannelState:
     x, fs = audio_signal.x, audio_signal.fs
     return AudioChannelState(x, fs, np.arange(len(x)) / fs)

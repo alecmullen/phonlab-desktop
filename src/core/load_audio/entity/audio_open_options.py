@@ -1,9 +1,9 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class AudioOpenOptions:
-    target_fs: int
-    channel_mode: str  # "mono" | "stereo" | "multichannel"
-    retained_channels: list[int]
-    primary_channel: int
+    target_fs: int = 16000
+    channel_mode: str = "mono"  # "mono" | "stereo" | "multichannel"
+    retained_channels: list[int] = field(default_factory=lambda: [0])
+    primary_channel: int = 0

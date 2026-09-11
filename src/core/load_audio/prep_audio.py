@@ -7,7 +7,7 @@ from core.load_audio.entity.audio_signal import AudioSignal
 class PrepAudio(UseCase[dict[int, AudioSignal]]):
     def __init__(
         self,
-        raw_signals: list[AudioSignal],
+        raw_signals: dict[int, AudioSignal],
         target_fs: int,
         retained_channels: list[int],
     ):

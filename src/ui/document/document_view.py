@@ -2,7 +2,7 @@ from typing import cast
 
 import pyqtgraph as pg
 from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
+from PyQt6.QtGui import QAction, QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -17,6 +17,7 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
+from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_loaded import AudioLoaded
 from ui.document.state.document_window_state import DocumentWindowState
@@ -100,7 +101,15 @@ class DocumentView(QWidget):
         self.pending_single_click: tuple[QPointF, bool] | None = None
         self.click_timer = None
 
+        self.set_up_menu()
+
         self.setAcceptDrops(True)
+
+    def set_up_menu(self):
+        resample_action = QAction(self.tr("Resample"))
+        resample_action.triggered.connect(self.open_resample_dialog)
+
+        self.graphics_widget.scene().contextMenu = [resample_action]
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -302,7 +311,7 @@ class DocumentView(QWidget):
         self.update_slider_page_step(doc_window)
         self.slider.setValue(doc_window.start)
 
-        primary_channel = self.view_model.primary_raw_channel()
+        primary_channel = self.view_model.primary_channel()
         if primary_channel is not None and self.first_plot is not None:
             self.first_plot.getViewBox().setXRange(
                 primary_channel.t[doc_window.start],
@@ -592,6 +601,16 @@ class DocumentView(QWidget):
         if mime_data is not None:
             path = mime_data.urls()[0].toLocalFile()
             self.load_textgrid(path)
+
+    @pyqtSlot()
+    def open_resample_dialog(self):
+        primary_channel = self.view_model.primary_channel()
+        if primary_channel is None:
+            return
+
+        target_fs = ResampleAudioDialog.get_target_fs(primary_channel.fs)
+        if target_fs is not None:
+            self.view_model.resample(target_fs)
 
     def cleanup(self):
         """Clean up resources when closing document"""
