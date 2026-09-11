@@ -69,6 +69,9 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         else:
             self.is_initialized = False
 
+        self.getViewBox().menu.clear()
+        self.ctrlMenu.menuAction().setVisible(False)
+
     @pyqtSlot(object)
     def on_state_change(self, model: State):
         if isinstance(model, AudioWaveState):

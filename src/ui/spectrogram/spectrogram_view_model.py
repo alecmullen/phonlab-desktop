@@ -2,28 +2,69 @@ from dataclasses import replace
 
 import numpy as np
 import phonlab as phon
-from PyQt6.QtCore import pyqtSlot
+from PyQt6.QtCore import pyqtSignal, pyqtSlot
 
+from core.load_audio.entity.audio_signal import AudioSignal
+from core.load_audio.prep_audio import PrepAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.view_model import ViewModel
-from ui.document.state.audio_channel_state import AudioChannelState
+from ui.document.state.audio_channel_state import (
+    AudioChannelState,
+    to_audio_state,
+)
 from ui.document.state.load_progress_state import LoadProgressState
-from ui.spectrogram.spectrogram_state import SpectrogramState
+from ui.spectrogram.state.spectrogram_state import SpectrogramState
+from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 
 class SpectrogramViewModel(ViewModel):
+    audio_prepped = pyqtSignal()
+
     def __init__(self):
         super().__init__()
+        self.prepped_audio_state: AudioChannelState | None = None
         self.sgram_state: SpectrogramState = SpectrogramState()
+        self.window_state: SpectrogramWindowState = SpectrogramWindowState()
 
         self._buffer_generation = 0
 
-    def compute_spectrogram(self, channel: AudioChannelState, start: int, end: int):
-        x, t, fs = channel.x, channel.t, channel.fs
+        self.audio_prepped.connect(self.compute_spectrogram)
+
+    @pyqtSlot(object, object)
+    def prep_audio(self, x: np.ndarray, fs: int, target_fs: int | None = None):
+        if target_fs is None:
+            if self.prepped_audio_state is None:
+                raise RuntimeError(
+                    "Cannot prep audio for the first time without a target sample rate"
+                )
+            target_fs = self.prepped_audio_state.fs
+        use_case = PrepAudio({0: AudioSignal(x, fs)}, target_fs, [0])
+        self.state_changed.emit(LoadProgressState(True))
+
+        @pyqtSlot(object)
+        def on_success(prepped: dict[int, AudioSignal]):
+            self.prepped_audio_state = to_audio_state(prepped)[0]
+            self.invalidate_spectrogram()
+            self.state_changed.emit(LoadProgressState(False))
+            self.audio_prepped.emit()
+
+        self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
+
+    @pyqtSlot()
+    def compute_spectrogram(self):
+        if self.prepped_audio_state is None:
+            return
+
+        x, t, fs = (
+            self.prepped_audio_state.x,
+            self.prepped_audio_state.t,
+            self.prepped_audio_state.fs,
+        )
+        start, end = self.window_state.start, self.window_state.end
 
         if (end - start) / fs > MAX_SGRAM_LENGTH:
             self.sgram_state = replace(self.sgram_state, is_showing=False)
@@ -133,6 +174,24 @@ class SpectrogramViewModel(ViewModel):
         self.sgram_state = replace(
             self.sgram_state, sxx_mmap=None, t_mmap=None, frames_computed=0
         )
+
+    def set_window_state(
+        self, start: int, end: int, raw_fs: int, target_fs: int | None = None
+    ):
+        if target_fs is None:
+            if self.prepped_audio_state is None:
+                raise RuntimeError(
+                    "Cannot set spectrogram window without a target sample rate"
+                )
+            target_fs = self.prepped_audio_state.fs
+
+        # convert to prepped audio sample indices
+        fs_ratio = target_fs / raw_fs
+        start_idx = int(start * fs_ratio)
+        end_idx = int(end * fs_ratio)
+
+        self.window_state = SpectrogramWindowState(start_idx, end_idx)
+        self.compute_spectrogram()
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

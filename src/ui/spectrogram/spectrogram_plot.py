@@ -6,8 +6,8 @@ from PyQt6.QtWidgets import QWidget
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.state import State
 from ui.common.cursor_controller import CursorController
-from ui.spectrogram.spectrogram_state import SpectrogramState
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
+from ui.spectrogram.state.spectrogram_state import SpectrogramState
 
 
 class SpectrogramPlot(pg.PlotItem, CursorController):
@@ -75,6 +75,9 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.center_label.setVisible(False)
         self.center_label.setParentItem(self.getViewBox())
         self.center_label.anchor(itemPos=(0.5, 0.5), parentPos=(0.5, 0.5))
+
+        self.getViewBox().menu.clear()
+        self.ctrlMenu.menuAction().setVisible(False)
 
         self.plot_spectrogram(self.view_model.sgram_state)
 
