@@ -16,14 +16,13 @@ from PyQt6.QtWidgets import (
     QScrollBar,
     QVBoxLayout,
     QWidget,
-    QWidgetAction,
 )
 
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
-from ui.common.context_menu_hint import ContextMenuHint
+from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_loaded import AudioLoaded
@@ -115,13 +114,11 @@ class DocumentView(QWidget):
         self.setAcceptDrops(True)
 
     def set_up_menu(self):
-        resample_action = QWidgetAction(self)
-        resample_action.setDefaultWidget(ContextMenuHint(self.tr("Resample")))
+        resample_action = ContextMenuHintAction(self.tr("Resample..."))
         resample_action.triggered.connect(self.open_resample_dialog)
 
-        set_mark_action = QWidgetAction(self)
-        set_mark_action.setDefaultWidget(
-            ContextMenuHint(self.tr("Set Mark"), self.tr("Shift+Click"))
+        set_mark_action = ContextMenuHintAction(
+            self.tr("Set Mark"), self.tr("Shift+Click")
         )
         set_mark_action.triggered.connect(
             lambda: (
@@ -131,8 +128,7 @@ class DocumentView(QWidget):
             )
         )
 
-        remove_mark_action = QWidgetAction(self)
-        remove_mark_action.setDefaultWidget(ContextMenuHint(self.tr("Remove Mark")))
+        remove_mark_action = ContextMenuHintAction(self.tr("Remove Mark"))
         remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
         self.graphics_widget.scene().contextMenu = [

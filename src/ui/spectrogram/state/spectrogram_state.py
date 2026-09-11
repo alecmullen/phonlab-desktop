@@ -20,6 +20,7 @@ class SpectrogramState(State):
     samples_computed: int = 0
 
     is_showing: bool = False
+    is_loading: bool = True
 
     gray_cutoff: float = DEFAULT_GRAY_CUTOFF
     min_sxx: float = float("inf")

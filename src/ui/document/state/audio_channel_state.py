@@ -10,7 +10,10 @@ from ui.base.state import State
 class AudioChannelState(State):
     x: np.ndarray = field(default_factory=lambda: np.array([]))
     fs: int = 0
-    t: np.ndarray = field(default_factory=lambda: np.array([]))
+    t: np.ndarray = field(init=False)
+
+    def __post_init__(self):
+        object.__setattr__(self, "t", np.arange(len(self.x)) / self.fs)
 
 
 def to_audio_state(channels: dict[int, AudioSignal]) -> dict[int, AudioChannelState]:
@@ -28,8 +31,7 @@ def to_audio_signals(channels: dict[int, AudioChannelState]) -> dict[int, AudioS
 
 
 def to_audio_channel_state(audio_signal: AudioSignal) -> AudioChannelState:
-    x, fs = audio_signal.x, audio_signal.fs
-    return AudioChannelState(x, fs, np.arange(len(x)) / fs)
+    return AudioChannelState(audio_signal.x, audio_signal.fs)
 
 
 def to_audio_signal(audio_channel_state: AudioChannelState) -> AudioSignal:
