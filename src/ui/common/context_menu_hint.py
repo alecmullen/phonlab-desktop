@@ -57,16 +57,11 @@ class ContextMenuHintAction(QWidgetAction):
         self,
         action_text: str,
         hint_text: str | None = None,
-        widget_parent: QWidget | None = None,
         parent: QObject | None = None,
     ):
         super().__init__(parent)
         self.action_text = action_text
         self.hint_text = hint_text
 
-        self.widget_parent = widget_parent
-
     def createWidget(self, parent: QWidget | None = None) -> QWidget:
-        # if self.widget_parent is not None:
-        #     parent = self.widget_parent
         return ContextMenuHint(self.action_text, self.hint_text, parent)

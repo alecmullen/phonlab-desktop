@@ -350,6 +350,8 @@ class DocumentView(QWidget):
             self.spec_plot.set_mark_position(mark.position, mark.is_set)
         if self.wave_plot is not None:
             self.wave_plot.set_mark_position(mark.position, mark.is_set)
+        if self.annot_plot is not None:
+            self.annot_plot.set_mark_position(mark.position, mark.is_set)
 
     def update_playback_cursor(self, playback: PlaybackState):
         if playback.is_playing:
@@ -579,6 +581,10 @@ class DocumentView(QWidget):
             clicked_plot = self.wave_plot
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
             clicked_plot = self.spec_plot
+        elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
+            scene_pos
+        ):
+            clicked_plot = self.annot_plot
 
         if not clicked_plot:
             return
