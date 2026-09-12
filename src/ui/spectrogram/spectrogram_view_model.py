@@ -1,7 +1,6 @@
 from dataclasses import replace
 
 import numpy as np
-import phonlab as phon
 from PyQt6.QtCore import pyqtSignal, pyqtSlot
 
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -17,6 +16,7 @@ from ui.document.state.audio_channel_state import (
     to_audio_state,
 )
 from ui.document.state.load_progress_state import LoadProgressState
+from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
@@ -26,22 +26,24 @@ class SpectrogramViewModel(ViewModel):
 
     def __init__(self):
         super().__init__()
+        self.spectrogram_settings = SpectrogramSettingsState()
+        self.raw_audio_state: AudioChannelState | None = None
         self.prepped_audio_state: AudioChannelState | None = None
-        self.sgram_state: SpectrogramState = SpectrogramState()
-        self.window_state: SpectrogramWindowState = SpectrogramWindowState()
+        self.sgram_state = SpectrogramState()
+        self.window_state = SpectrogramWindowState()
 
         self._buffer_generation = 0
 
-        self.audio_prepped.connect(self.compute_spectrogram)
+        self.audio_prepped.connect(self.load_spectrogram)
 
     @pyqtSlot(object, object)
     def prep_audio(self, x: np.ndarray, fs: int, target_fs: int | None = None):
         if target_fs is None:
-            if self.prepped_audio_state is None:
-                raise RuntimeError(
-                    "Cannot prep audio for the first time without a target sample rate"
-                )
-            target_fs = self.prepped_audio_state.fs
+            target_fs = self.spectrogram_settings.fs
+        else:
+            self.spectrogram_settings = replace(self.spectrogram_settings, fs=target_fs)
+
+        self.raw_audio_state = AudioChannelState(x, fs)
         use_case = PrepAudio({0: AudioSignal(x, fs)}, target_fs, [0])
         self.state_changed.emit(LoadProgressState(True))
 
@@ -55,7 +57,7 @@ class SpectrogramViewModel(ViewModel):
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
     @pyqtSlot()
-    def compute_spectrogram(self):
+    def load_spectrogram(self):
         if self.prepped_audio_state is None:
             return
 
@@ -67,12 +69,16 @@ class SpectrogramViewModel(ViewModel):
         start, end = self.window_state.start, self.window_state.end
 
         if (end - start) / fs > MAX_SGRAM_LENGTH:
-            self.sgram_state = replace(self.sgram_state, is_showing=False)
+            self.sgram_state = replace(
+                self.sgram_state, is_showing=False, is_loading=False
+            )
             self.state_changed.emit(self.sgram_state)
             return
 
         self.load_spectrogram_window(x, t, fs, start, end)
-        self.load_spectrogram_mmap(x, fs)
+
+        if self.sgram_state.sxx_mmap is None or self.sgram_state.t_mmap is None:
+            self.compute_spectrogram_mmap(x, fs)
 
     def load_spectrogram_window(
         self, x: np.ndarray, t: np.ndarray, fs: int, start: int, end: int
@@ -97,62 +103,74 @@ class SpectrogramViewModel(ViewModel):
             )
             self.state_changed.emit(self.sgram_state)
         else:
-            t, f, sxx = phon.compute_sgram(x[start:end], fs, 0.008, 0.003, 8)
+            self.compute_low_res_sgram(x, fs, start, end)
+            self.compute_sgram_window(x, fs, start, end)
 
+    def compute_low_res_sgram(self, x: np.ndarray, fs: int, start: int, end: int):
+        # SpectrogramSettingsState ensures that 'order' is large enough
+        settings = replace(self.spectrogram_settings, step_size=0.003, order=8)
+        use_case = ComputeSpectrogram(
+            x[start:end], fs, settings.window_size, settings.step_size, settings.order
+        )
+        sgram = use_case.run_sync()
+        self.update_sgram_window_state(sgram.t, sgram.f, sgram.sxx, fs, start)
+
+    def compute_sgram_window(self, x: np.ndarray, fs: int, start: int, end: int):
+        settings = self.spectrogram_settings
+        use_case = ComputeSpectrogram(
+            x[start:end], fs, settings.window_size, settings.step_size, settings.order
+        )
+
+        generation = self._buffer_generation
+
+        @pyqtSlot(object)
+        def on_success(sgram: Spectrogram):
+            if generation != self._buffer_generation:
+                return
+            self.update_sgram_window_state(sgram.t, sgram.f, sgram.sxx, fs, start)
+
+        self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
+
+    def update_sgram_window_state(
+        self, t: np.ndarray, f: np.ndarray, sxx: np.ndarray, fs: int, start: int
+    ):
+        self.sgram_state = replace(
+            self.sgram_state,
+            t_window=t + (start / fs),
+            sxx_window=sxx,
+            f=f,
+            is_showing=True,
+        )
+        self.update_sxx_extrema(sxx)
+        self.state_changed.emit(self.sgram_state)
+
+    def compute_spectrogram_mmap(self, x: np.ndarray, fs: int):
+        self.state_changed.emit(LoadProgressState(True))
+
+        generation = self._buffer_generation
+
+        @pyqtSlot(object)
+        def on_success(sgram: SpectrogramMmap):
+            if generation != self._buffer_generation:
+                return
             self.sgram_state = replace(
                 self.sgram_state,
-                t_window=t + (start / fs),
-                sxx_window=sxx,
-                f=f,
-                is_showing=True,
+                sxx_mmap=sgram.sxx_mmap,
+                t_mmap=sgram.t_mmap,
+                frames_per_sec=sgram.frames_per_sec,
+                frames_computed=sgram.frames_computed,
+                samples_computed=sgram.samples_computed,
             )
-            self.update_sxx_extrema(sxx)
-            self.state_changed.emit(self.sgram_state)
+            self.update_sxx_extrema(sgram.sxx_mmap)
+            self.state_changed.emit(LoadProgressState(False))
 
-            generation = self._buffer_generation
-
-            @pyqtSlot(object)
-            def on_success(sgram: Spectrogram):
-                if generation != self._buffer_generation:
-                    return
-                self.sgram_state = replace(
-                    self.sgram_state,
-                    t_window=sgram.t + (start / fs),
-                    sxx_window=sgram.sxx,
-                    f=sgram.f,
-                    is_showing=True,
-                )
-                self.update_sxx_extrema(sgram.sxx)
-                self.state_changed.emit(self.sgram_state)
-
-            use_case = ComputeSpectrogram(x[start:end], fs)
-            self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
-
-    def load_spectrogram_mmap(self, x: np.ndarray, fs: int):
-        if self.sgram_state.sxx_mmap is None or self.sgram_state.t_mmap is None:
-            self.state_changed.emit(LoadProgressState(True))
-
-            generation = self._buffer_generation
-
-            @pyqtSlot(object)
-            def on_success(sgram: SpectrogramMmap):
-                if generation != self._buffer_generation:
-                    return
-                self.sgram_state = replace(
-                    self.sgram_state,
-                    sxx_mmap=sgram.sxx_mmap,
-                    t_mmap=sgram.t_mmap,
-                    frames_per_sec=sgram.frames_per_sec,
-                    frames_computed=sgram.frames_computed,
-                    samples_computed=sgram.samples_computed,
-                )
-                self.update_sxx_extrema(sgram.sxx_mmap)
-                self.state_changed.emit(LoadProgressState(False))
-
-            use_case = ComputeSpectrogramMmap(x, fs)
-            self.launch_use_case(
-                "sgram_mmap", use_case, on_success, self.on_error, only_once=True
-            )
+        settings = self.spectrogram_settings
+        use_case = ComputeSpectrogramMmap(
+            x, fs, settings.window_size, settings.step_size, settings.order
+        )
+        self.launch_use_case(
+            "sgram_mmap", use_case, on_success, self.on_error, only_once=True
+        )
 
     def adjust_gray_scale(self, adjustment: float):
         gray_cutoff = self.sgram_state.gray_cutoff + adjustment
@@ -191,7 +209,20 @@ class SpectrogramViewModel(ViewModel):
         end_idx = int(end * fs_ratio)
 
         self.window_state = SpectrogramWindowState(start_idx, end_idx)
-        self.compute_spectrogram()
+        self.load_spectrogram()
+
+    def update_settings(self, settings: SpectrogramSettingsState):
+        is_resample = settings.fs != self.spectrogram_settings.fs
+        self.spectrogram_settings = settings
+
+        if self.raw_audio_state is None:
+            return
+
+        if is_resample:
+            self.prep_audio(self.raw_audio_state.x, self.raw_audio_state.fs)
+        else:
+            self.invalidate_spectrogram()
+            self.load_spectrogram()
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

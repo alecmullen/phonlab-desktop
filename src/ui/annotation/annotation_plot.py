@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, pyqtSlot
+from PyQt6.QtCore import QPointF, Qt, pyqtSlot
 from PyQt6.QtGui import QMouseEvent, QShowEvent
 from PyQt6.QtWidgets import QWidget
 
@@ -43,6 +43,14 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
         self.getViewBox().menu.clear()
         self.ctrlMenu.menuAction().setVisible(False)
+
+        self.mark_line = pg.InfiniteLine(
+            angle=90,
+            movable=False,
+            pen=pg.mkPen(color="g", width=2, style=Qt.PenStyle.DashLine),
+        )
+        self.addItem(self.mark_line, ignoreBounds=True)
+        self.mark_line.setVisible(False)
 
         self.node_views: dict[int, NodeView] = {}
         self.label_views: list[LabelView] = []
@@ -133,3 +141,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
     def set_cursor_position(self, x: float):
         self.remove_cursor_control()
         self.cursor_line.setPos(x)
+
+    def set_mark_position(self, x: float, visible: bool):
+        self.mark_line.setPos(x)
+        self.mark_line.setVisible(visible)

@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         self.redo_action.triggered.connect(self.redo)
 
-        self.cut_action = QAction(self.tr("Cu&t"), self)
+        self.cut_action = QAction(self.tr("&Cut"), self)
         self.cut_action.setStatusTip(self.tr("Cut the selected audio"))
         self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
         self.cut_action.triggered.connect(self.cut_selection)

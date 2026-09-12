@@ -5,7 +5,11 @@ from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.state import State
+from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.cursor_controller import CursorController
+from ui.spectrogram.component.spectrogram_settings_dialog import (
+    SpectrogramSettingsDialog,
+)
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 
@@ -77,9 +81,18 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.center_label.anchor(itemPos=(0.5, 0.5), parentPos=(0.5, 0.5))
 
         self.getViewBox().menu.clear()
+        self.set_up_menu()
         self.ctrlMenu.menuAction().setVisible(False)
 
         self.plot_spectrogram(self.view_model.sgram_state)
+
+    def set_up_menu(self):
+        open_settings_action = ContextMenuHintAction(
+            self.tr("Spectrogram settings..."), parent=self
+        )
+        open_settings_action.triggered.connect(self.open_settings_dialog)
+
+        self.getViewBox().menu.addAction(open_settings_action)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -87,9 +100,9 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
             self.plot_spectrogram(model)
 
     def plot_spectrogram(self, sgram: SpectrogramState):
-        if not sgram.is_showing:
+        if not sgram.is_showing and not sgram.is_loading:
             self.display_window_too_big()
-        else:
+        elif sgram.is_showing:
             self.populate_spectrogram(sgram)
 
     def populate_spectrogram(self, sgram: SpectrogramState) -> bool:
@@ -154,3 +167,11 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
             adjustment = delta * 0.01
 
         self.view_model.adjust_gray_scale(adjustment)
+
+    @pyqtSlot()
+    def open_settings_dialog(self):
+        new_settings = SpectrogramSettingsDialog.open_spectrogram_settings(
+            self.view_model.spectrogram_settings
+        )
+        if new_settings is not None:
+            self.view_model.update_settings(new_settings)

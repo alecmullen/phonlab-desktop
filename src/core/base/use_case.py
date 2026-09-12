@@ -10,3 +10,6 @@ class UseCase[T](ABC):
     @abstractmethod
     def stop(self) -> None:
         pass
+
+    def run_sync(self) -> T:
+        return next(self.invoke())
