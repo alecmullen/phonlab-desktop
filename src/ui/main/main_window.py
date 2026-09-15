@@ -294,12 +294,7 @@ class MainWindow(QMainWindow):
         tab_name = self.tr("CLIP {}: {}").format(n, origin_name)
         self.tab_widget.addTab(doc, tab_name)
 
-        primary_channel = source_doc.view_model.primary_channel()
-        if primary_channel is None:
-            target_fs = clip.fs
-        else:
-            target_fs = primary_channel.fs
-        doc.view_model.load_from_samples(clip, target_fs)
+        doc.view_model.load_from_samples(clip)
 
     pyqtSlot(int)
 

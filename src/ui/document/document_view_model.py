@@ -196,12 +196,11 @@ class DocumentViewModel(ViewModel):
 
         return primary_channel
 
-    def load_from_samples(self, clip: AudioSignal, target_fs: int):
+    def load_from_samples(self, clip: AudioSignal):
         audio_state = {0: to_audio_channel_state(clip)}
         self.set_audio(audio_state, primary_channel_idx=0, reset_window=True)
-
-        if self.plot_layout_state.has_spectrogram():
-            self.spectrogram_view_model.prep_audio(clip.x, clip.fs, target_fs)
+        self.raw_audio_state = self.audio_state.copy()
+        self.state_changed.emit(AudioLoaded(True, clip.fs))
 
     def resample(self, target_fs: int):
         use_case = PrepAudio(
@@ -225,14 +224,11 @@ class DocumentViewModel(ViewModel):
                 max_start=int(self.document_window_state.max_start * ratio),
             )
 
-            primary_channel = self.set_audio(
+            self.set_audio(
                 to_audio_state(prepped), self.channel_state.primary_channel, False
             )
 
-            if self.plot_layout_state.has_spectrogram():
-                self.spectrogram_view_model.prep_audio(
-                    primary_channel.x, primary_channel.fs
-                )
+            self.prep_audio_spectrogram()
 
             self.state_changed.emit(LoadProgressState(False))
 
@@ -561,8 +557,7 @@ class DocumentViewModel(ViewModel):
         self.set_audio(
             audio_state, self.channel_state.primary_channel, reset_window=False
         )
-        if self.plot_layout_state.has_spectrogram():
-            self.spectrogram_view_model.prep_audio(new_signal.x, new_signal.fs)
+        self.prep_audio_spectrogram()
         return True
 
     def _push_undo(self, cmd: EditCommandState):
