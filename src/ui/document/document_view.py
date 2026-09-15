@@ -117,18 +117,9 @@ class DocumentView(QWidget):
     def set_up_menu(self):
         self.graphics_widget.scene().contextMenu = []
 
-        # Plain QAction: a QWidgetAction's custom widget row reliably
-        # fails to paint (though it still highlights on hover) when it's
-        # the first action in a freshly-populated QMenu. Resample has no
-        # hint text, so it doesn't need the custom ContextMenuHint widget
-        # -- a native QAction renders correctly in any position.
-        self.resample_action = QAction(self.tr("Resample..."), self)
+        self.resample_action = ContextMenuHintAction(self.tr("Resample..."), parent=self)
         self.resample_action.triggered.connect(self.open_resample_dialog)
 
-        # Set Mark needs the two-part "Set Mark    Shift+Click" layout, so
-        # it does need the custom widget. It's never the first action
-        # added to any of these menus (resample_action always precedes
-        # it), so it isn't affected by the QWidgetAction-at-position-0 bug.
         self.set_mark_action = ContextMenuHintAction(
             self.tr("Set Mark"), self.tr("Shift+Click"), parent=self
         )
