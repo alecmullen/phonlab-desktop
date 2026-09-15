@@ -10,10 +10,12 @@ class PrepAudio(UseCase[dict[int, AudioSignal]]):
         raw_signals: dict[int, AudioSignal],
         target_fs: int,
         retained_channels: list[int],
+        pre: float = 0,
     ):
         self.raw_signals = raw_signals
         self.target_fs = target_fs
         self.retained_channels = retained_channels
+        self.pre = pre
 
         self.should_stop = False
 
@@ -28,7 +30,7 @@ class PrepAudio(UseCase[dict[int, AudioSignal]]):
                 raw.fs,
                 target_fs=self.target_fs,
                 scale=True,
-                pre=0.94,
+                pre=self.pre,
                 add_tiny_noise=True,
             )
             channels[idx] = AudioSignal(x, prepped_fs)
