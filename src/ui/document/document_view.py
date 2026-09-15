@@ -3,7 +3,6 @@ from typing import cast
 import pyqtgraph as pg
 from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
-    QAction,
     QDragEnterEvent,
     QDropEvent,
     QMouseEvent,
@@ -117,7 +116,9 @@ class DocumentView(QWidget):
     def set_up_menu(self):
         self.graphics_widget.scene().contextMenu = []
 
-        self.resample_action = ContextMenuHintAction(self.tr("Resample..."), parent=self)
+        self.resample_action = ContextMenuHintAction(
+            self.tr("Resample..."), parent=self
+        )
         self.resample_action.triggered.connect(self.open_resample_dialog)
 
         self.set_mark_action = ContextMenuHintAction(
@@ -131,7 +132,9 @@ class DocumentView(QWidget):
             )
         )
 
-        self.remove_mark_action = QAction(self.tr("Remove Mark"), self)
+        self.remove_mark_action = ContextMenuHintAction(
+            self.tr("Remove Mark"), parent=self
+        )
         self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):

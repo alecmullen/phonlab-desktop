@@ -1,7 +1,6 @@
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
@@ -88,7 +87,9 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.plot_spectrogram(self.view_model.sgram_state)
 
     def set_up_menu(self):
-        open_settings_action = ContextMenuHintAction(self.tr("Spectrogram settings..."), parent=self)
+        open_settings_action = ContextMenuHintAction(
+            self.tr("Spectrogram settings..."), parent=self
+        )
         open_settings_action.triggered.connect(self.open_settings_dialog)
 
         self.getViewBox().menu.addAction(open_settings_action)
