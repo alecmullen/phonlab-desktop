@@ -111,9 +111,6 @@ jobs:
         run:  |
             pip install -r requirements.txt pyinstaller
             pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --additional-hooks-dir=pyinstaller_hooks
-      - name: Warm Numba Cache
-        run: |
-          PHONLAB_WARMUP_ONLY=1 "dist/Phonlab/Phonlab"
       - name: Create tarball
         run: |
           tar -czvf phonlab.tar.gz  -C $dist/Phonlab .
