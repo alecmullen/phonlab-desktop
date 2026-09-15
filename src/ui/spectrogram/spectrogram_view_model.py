@@ -39,12 +39,11 @@ class SpectrogramViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_state_changed(self, model: State):
-        if isinstance(model, AudioPrepped):
+        if isinstance(model, AudioPrepped) and self.sgram_state.is_showing:
             self.load_spectrogram()
 
     @pyqtSlot(object, object)
     def prep_audio(self, x: np.ndarray, fs: int, target_fs: int | None = None):
-        self.invalidate_spectrogram()
         if target_fs is None:
             target_fs = self.spectrogram_settings.fs
         else:
@@ -57,6 +56,7 @@ class SpectrogramViewModel(ViewModel):
         @pyqtSlot(object)
         def on_success(prepped: dict[int, AudioSignal]):
             self.prepped_audio_state = to_audio_state(prepped)[0]
+            self.invalidate_spectrogram()
             self.state_changed.emit(LoadProgressState(False))
             self.state_changed.emit(AudioPrepped())
 
