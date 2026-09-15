@@ -40,6 +40,7 @@ from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
+from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 from ui.waveform.state.audio_wave_state import to_audio_wave_state
 
@@ -68,13 +69,21 @@ class DocumentViewModel(ViewModel):
         self.spectrogram_view_model = SpectrogramViewModel()
         self.annotation_view_model = AnnotationViewModel()
 
+        self.state_changed.connect(self.on_state_changed)
         self.spectrogram_view_model.state_changed.connect(self.on_sgram_state_change)
 
         self.audio_player = AudioPlayer()
 
     @pyqtSlot(object)
+    def on_state_changed(self, model: State):
+        if isinstance(model, AudioLoaded):
+            self.prep_audio_spectrogram()
+
+    @pyqtSlot(object)
     def on_sgram_state_change(self, model: State):
         if isinstance(model, LoadProgressState):
+            self.state_changed.emit(model)
+        if isinstance(model, AudioPrepped):
             self.state_changed.emit(model)
 
     def toggle_wave(self):
@@ -92,7 +101,7 @@ class DocumentViewModel(ViewModel):
         plots = self.plot_layout_state.plots.copy()
         if PlotType.SPECTROGRAM not in plots:
             plots.add(PlotType.SPECTROGRAM)
-            self.prep_spectrogram()
+            self.update_spectrogram()
         elif len(plots) > 1:
             plots.remove(PlotType.SPECTROGRAM)
 
@@ -229,18 +238,10 @@ class DocumentViewModel(ViewModel):
 
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
-    def prep_spectrogram(self):
+    def prep_audio_spectrogram(self):
         primary_channel = self.primary_channel()
         if primary_channel is None:
-            self.state_changed.emit(
-                StatusMessageState(self.tr("Audio not loaded yet. Please try again"))
-            )
             return
-
-        start, end = self.document_window_state.start, self.document_window_state.end
-        self.spectrogram_view_model.set_window_state(
-            start, end, primary_channel.fs, self.audio_options.target_fs
-        )
 
         self.spectrogram_view_model.prep_audio(
             primary_channel.x, primary_channel.fs, self.audio_options.target_fs
