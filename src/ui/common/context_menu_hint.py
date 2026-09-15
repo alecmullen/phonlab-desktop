@@ -1,5 +1,4 @@
-from PyQt6.QtCore import QEvent, QObject, Qt
-from PyQt6.QtGui import QEnterEvent, QPalette
+from PyQt6.QtCore import QObject, Qt
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -20,6 +19,13 @@ class ContextMenuHint(QWidget):
         super().__init__(parent)
 
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        # Hover highlighting is done with a stylesheet (rather than
+        # manually toggling autoFillBackground/backgroundRole from
+        # enterEvent/leaveEvent) so Qt's own style engine owns the repaint.
+        self.setStyleSheet(
+            "ContextMenuHint:hover { background-color: palette(highlight); }"
+            "ContextMenuHint:hover QLabel { color: palette(highlighted-text); }"
+        )
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(18, 4, 18, 4)
@@ -36,20 +42,6 @@ class ContextMenuHint(QWidget):
             )
             layout.addSpacerItem(self.spacer)
             layout.addWidget(self.label_hint)
-
-    def enterEvent(self, event: QEnterEvent | None):
-        self.highlight(True)
-
-    def leaveEvent(self, a0: QEvent | None):
-        self.highlight(False)
-
-    def highlight(self, value: bool):
-        if value:
-            self.setBackgroundRole(QPalette.ColorRole.Highlight)
-        else:
-            self.setBackgroundRole(QPalette.ColorRole.Window)
-
-        self.setAutoFillBackground(value)
 
 
 class ContextMenuHintAction(QWidgetAction):

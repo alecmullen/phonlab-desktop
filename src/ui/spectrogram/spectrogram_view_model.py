@@ -10,7 +10,7 @@ from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
-from res.constants import MAX_SGRAM_LENGTH
+from res.constants import MAX_SGRAM_LENGTH, SPECTROGRAM_PRE_EMPHASIS
 from ui.base.state import State
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_channel_state import (
@@ -50,7 +50,9 @@ class SpectrogramViewModel(ViewModel):
             self.spectrogram_settings = replace(self.spectrogram_settings, fs=target_fs)
 
         self.raw_audio_state = AudioChannelState(x, fs)
-        use_case = PrepAudio({0: AudioSignal(x, fs)}, target_fs, [0])
+        use_case = PrepAudio(
+            {0: AudioSignal(x, fs)}, target_fs, [0], pre=SPECTROGRAM_PRE_EMPHASIS
+        )
         self.state_changed.emit(LoadProgressState(True))
 
         @pyqtSlot(object)
@@ -76,7 +78,10 @@ class SpectrogramViewModel(ViewModel):
         )
         start, end = self.window_state.start, self.window_state.end
 
-        if (end - start) / fs > MAX_SGRAM_LENGTH:
+        window_samples = int(self.spectrogram_settings.window_size * fs)
+        too_long = (end - start) / fs > MAX_SGRAM_LENGTH
+        too_short = (end - start) < window_samples
+        if too_long or too_short:
             self.sgram_state = replace(
                 self.sgram_state, is_showing=False, is_loading=False
             )

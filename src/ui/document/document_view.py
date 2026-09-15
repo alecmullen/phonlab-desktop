@@ -3,6 +3,7 @@ from typing import cast
 import pyqtgraph as pg
 from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
+    QAction,
     QDragEnterEvent,
     QDropEvent,
     QMouseEvent,
@@ -114,13 +115,24 @@ class DocumentView(QWidget):
         self.setAcceptDrops(True)
 
     def set_up_menu(self):
-        resample_action = ContextMenuHintAction(self.tr("Resample..."))
-        resample_action.triggered.connect(self.open_resample_dialog)
+        self.graphics_widget.scene().contextMenu = []
 
-        set_mark_action = ContextMenuHintAction(
-            self.tr("Set Mark"), self.tr("Shift+Click")
+        # Plain QAction: a QWidgetAction's custom widget row reliably
+        # fails to paint (though it still highlights on hover) when it's
+        # the first action in a freshly-populated QMenu. Resample has no
+        # hint text, so it doesn't need the custom ContextMenuHint widget
+        # -- a native QAction renders correctly in any position.
+        self.resample_action = QAction(self.tr("Resample..."), self)
+        self.resample_action.triggered.connect(self.open_resample_dialog)
+
+        # Set Mark needs the two-part "Set Mark    Shift+Click" layout, so
+        # it does need the custom widget. It's never the first action
+        # added to any of these menus (resample_action always precedes
+        # it), so it isn't affected by the QWidgetAction-at-position-0 bug.
+        self.set_mark_action = ContextMenuHintAction(
+            self.tr("Set Mark"), self.tr("Shift+Click"), parent=self
         )
-        set_mark_action.triggered.connect(
+        self.set_mark_action.triggered.connect(
             lambda: (
                 self.set_mark(self.context_pos)
                 if self.context_pos is not None
@@ -128,14 +140,20 @@ class DocumentView(QWidget):
             )
         )
 
-        remove_mark_action = ContextMenuHintAction(self.tr("Remove Mark"))
-        remove_mark_action.triggered.connect(self.view_model.remove_mark)
+        self.remove_mark_action = QAction(self.tr("Remove Mark"), self)
+        self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
-        self.graphics_widget.scene().contextMenu = [
-            resample_action,
-            set_mark_action,
-            remove_mark_action,
-        ]
+    def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
+        """Add the Resample/Set Mark/Remove Mark actions to a plot's ViewBox menu.
+
+        Added directly to each plot's own menu (rather than via the
+        scene-wide contextMenu list) so they're present before the menu
+        is ever shown.
+        """
+        menu = view_box.menu
+        menu.addAction(self.resample_action)
+        menu.addAction(self.set_mark_action)
+        menu.addAction(self.remove_mark_action)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -233,6 +251,7 @@ class DocumentView(QWidget):
                 linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom,
             )
+            self.add_shared_context_menu_actions(self.wave_plot.getViewBox())
             self.graphics_widget.addItem(self.wave_plot, row=row, col=0)
             self.wave_plot.show()
             return self.wave_plot
@@ -242,6 +261,7 @@ class DocumentView(QWidget):
                 linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom,
             )
+            self.add_shared_context_menu_actions(self.spec_plot.getViewBox())
             self.graphics_widget.addItem(self.spec_plot, row=row, col=0)
             self.spec_plot.show()
             return self.spec_plot
@@ -251,6 +271,7 @@ class DocumentView(QWidget):
                 linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom,
             )
+            self.add_shared_context_menu_actions(self.annot_plot.getViewBox())
             self.graphics_widget.addItem(self.annot_plot, row=row, col=0)
             self.annot_plot.show()
             return self.annot_plot
