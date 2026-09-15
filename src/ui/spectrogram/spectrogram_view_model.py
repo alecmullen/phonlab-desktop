@@ -78,7 +78,10 @@ class SpectrogramViewModel(ViewModel):
         )
         start, end = self.window_state.start, self.window_state.end
 
-        if (end - start) / fs > MAX_SGRAM_LENGTH:
+        window_samples = int(self.spectrogram_settings.window_size * fs)
+        too_long = (end - start) / fs > MAX_SGRAM_LENGTH
+        too_short = (end - start) < window_samples
+        if too_long or too_short:
             self.sgram_state = replace(
                 self.sgram_state, is_showing=False, is_loading=False
             )

@@ -1,11 +1,11 @@
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.state import State
-from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.cursor_controller import CursorController
 from ui.spectrogram.component.spectrogram_settings_dialog import (
     SpectrogramSettingsDialog,
@@ -87,9 +87,13 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.plot_spectrogram(self.view_model.sgram_state)
 
     def set_up_menu(self):
-        open_settings_action = ContextMenuHintAction(
-            self.tr("Spectrogram settings..."), parent=self
-        )
+        # Plain QAction, not the custom ContextMenuHint widget: this item
+        # has no hint text to show, and a QWidgetAction's custom widget
+        # row reliably fails to paint when it's the first action added to
+        # a freshly-cleared QMenu (it still highlights on hover, but its
+        # label never appears). A native QAction renders correctly in any
+        # position, including this one.
+        open_settings_action = QAction(self.tr("Spectrogram settings..."), self)
         open_settings_action.triggered.connect(self.open_settings_dialog)
 
         self.getViewBox().menu.addAction(open_settings_action)
