@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
 )
 
-SAMPLE_RATE_OPTIONS = [4000, 8000, 16000, 32000, 44100, 48000, 96000]
+SAMPLE_RATE_OPTIONS = [4000, 8000, 16000, 22050, 32000, 44100, 48000, 96000]
 
 
 class ResampleAudioDialog(QDialog):
