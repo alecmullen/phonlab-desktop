@@ -8,22 +8,25 @@ jobs:
   pyinstaller-build-mac:
     runs-on: macos-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Python 3.12.10
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12.10'
       - name: Create Executable
         id: create-executable
-        uses: sayyid5416/pyinstaller@v1
-        with:
-          python_ver: '3.12.10'
-          spec: 'src/phonlab_desktop.py'
-          requirements: 'requirements.txt'
-          options: --name "Phonlab", --windowed, --additional-hooks-dir=pyinstaller_hooks
+        run:  |
+            pip install -r requirements.txt pyinstaller
+            pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --additional-hooks-dir=pyinstaller_hooks
       - name: Warm Numba Cache
         run: |
-          PHONLAB_WARMUP_ONLY=1 "${{steps.create-executable.outputs.executable_path}}/Phonlab.app/Contents/MacOS/Phonlab"
+          PHONLAB_WARMUP_ONLY=1 "dist/Phonlab.app/Contents/MacOS/Phonlab"
         shell: bash
       - name: Create Installer
         run: |
           chmod +x ./script/create-phonlab-dmg.sh
-          ./script/create-phonlab-dmg.sh ${{steps.create-executable.outputs.executable_path}}/Phonlab.app Phonlab-Installer.dmg
+          ./script/create-phonlab-dmg.sh dist/Phonlab.app Phonlab-Installer.dmg
         shell: bash
       - name: (Upload) Executable
         uses: actions/upload-artifact@v4
@@ -38,22 +41,25 @@ jobs:
         run: |
           brew install llvm@22
           echo "CMAKE_PREFIX_PATH=/usr/local/opt/llvm@22" >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Python 3.12.10
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12.10'
       - name: Create Executable
         id: create-executable
-        uses: sayyid5416/pyinstaller@v1
-        with:
-          python_ver: '3.12.10'
-          spec: 'src/phonlab_desktop.py'
-          requirements: 'requirements.txt'
-          options: --name "Phonlab", --windowed, --additional-hooks-dir=pyinstaller_hooks
+        run:  |
+            pip install -r requirements.txt pyinstaller
+            pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --additional-hooks-dir=pyinstaller_hooks
       - name: Warm Numba Cache
         run: |
-          PHONLAB_WARMUP_ONLY=1 "${{steps.create-executable.outputs.executable_path}}/Phonlab.app/Contents/MacOS/Phonlab"
+          PHONLAB_WARMUP_ONLY=1 "dist/Phonlab.app/Contents/MacOS/Phonlab"
         shell: bash
       - name: Create Installer
         run: |
           chmod +x ./script/create-phonlab-dmg.sh
-          ./script/create-phonlab-dmg.sh ${{steps.create-executable.outputs.executable_path}}/Phonlab.app Phonlab-Installer.dmg
+          ./script/create-phonlab-dmg.sh dist/Phonlab.app Phonlab-Installer.dmg
         shell: bash
       - name: (Upload) Executable
         uses: actions/upload-artifact@v4
@@ -64,19 +70,22 @@ jobs:
   pyinstaller-build-windows:
     runs-on: windows-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Python 3.12.10
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12.10'
       - name: Create Executable
         id: create-executable
-        uses: sayyid5416/pyinstaller@v1
-        with:
-          python_ver: '3.12.10'
-          spec: 'src/phonlab_desktop.py'
-          requirements: 'requirements.txt'
-          options: --name "Phonlab", --windowed, --additional-hooks-dir=pyinstaller_hooks
+        run:  |
+            pip install -r requirements.txt pyinstaller
+            pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --additional-hooks-dir=pyinstaller_hooks
       - name: Warm Numba Cache
         shell: pwsh
         run: |
           $env:PHONLAB_WARMUP_ONLY = "1"
-          & "${{steps.create-executable.outputs.executable_path}}\Phonlab\Phonlab.exe"
+          & "dist\Phonlab\Phonlab.exe"
       - name: Compile .ISS to .EXE Installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
@@ -91,20 +100,20 @@ jobs:
   pyinstaller-build-linux:
     runs-on: ubuntu-22.04
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Python 3.12.10
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12.10'
       - name: Create Executable
         id: create-executable
-        uses: sayyid5416/pyinstaller@v1
-        with:
-          python_ver: '3.12.10'
-          spec: 'src/phonlab_desktop.py'
-          requirements: 'requirements.txt'
-          options: --name "Phonlab", --windowed, --additional-hooks-dir=pyinstaller_hooks
-      - name: Warm Numba Cache
-        run: |
-          PHONLAB_WARMUP_ONLY=1 "${{steps.create-executable.outputs.executable_path}}/Phonlab/Phonlab"
+        run:  |
+            pip install -r requirements.txt pyinstaller
+            pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --additional-hooks-dir=pyinstaller_hooks
       - name: Create tarball
         run: |
-          tar -czvf phonlab.tar.gz  -C ${{steps.create-executable.outputs.executable_path}}/Phonlab .
+          tar -czvf phonlab.tar.gz  -C dist/Phonlab .
       - name: Upload Tarball Artifact
         uses: actions/upload-artifact@v4
         with:
