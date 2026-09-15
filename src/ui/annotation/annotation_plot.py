@@ -53,7 +53,6 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         self.mark_line.setVisible(False)
 
         self.node_views: dict[int, NodeView] = {}
-        self.label_views: list[LabelView] = []
 
         self.dragging_node: int | None = None
 
@@ -83,8 +82,11 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         self.getAxis("left").setTicks(
             [[(i, type.type) for i, type in enumerate(types)]]
         )
-        label_height = self.getViewBox().viewRect().height() / (1.2 * len(types))
 
+        if len(types) == 0:
+            return
+
+        label_height = self.getViewBox().viewRect().height() / (1.2 * len(types))
         node_extents = {node: set() for node in nodes}
         for i, type in enumerate(types):
             for label in type.labels:
@@ -98,7 +100,6 @@ class AnnotationPlot(pg.PlotItem, CursorController):
                 width = x_e - x_s
                 label_item = LabelView((width, label_height), label.label)
                 label_item.setPos(center_x, center_y)
-                self.label_views.append(label_item)
                 self.addItem(label_item)
 
                 node_extents[label.e_node].add(i)

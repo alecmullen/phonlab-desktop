@@ -7,6 +7,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.play_audio.entity.latency_info import LatencyInfo
 
+BLOCK_SIZE = 2048
 
 class AudioTask(QObject):
     latency = pyqtSignal(object)
@@ -30,10 +31,10 @@ class AudioTask(QObject):
             sd._terminate()
             sd._initialize()
 
-        audio_data = np.ascontiguousarray(self._audio_data, dtype="float32")
+        self._audio_data = np.ascontiguousarray(self._audio_data, dtype="float32")
 
         # Fresh OutputStream with currently selected system default
-        with self._open_stream(self._fs, audio_data.shape[1]):
+        with self._open_stream(self._fs, self._audio_data.shape[1]):
             self._finished_event.wait(timeout=(len(self._audio_data) / self._fs) + 0.02)
             time.sleep(self._latency)
 
@@ -73,7 +74,7 @@ class AudioTask(QObject):
                 self._is_first_chunk = True
                 return sd.OutputStream(
                     samplerate=fs,
-                    blocksize=512,
+                    blocksize=BLOCK_SIZE,
                     channels=channels,
                     dtype="float32",
                     callback=self._audio_callback,
