@@ -9,6 +9,7 @@ from core.play_audio.entity.latency_info import LatencyInfo
 
 BLOCK_SIZE = 2048
 
+
 class AudioTask(QObject):
     latency = pyqtSignal(object)
 
