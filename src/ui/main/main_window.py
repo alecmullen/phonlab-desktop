@@ -19,10 +19,10 @@ from core.settings.app_settings import settings
 from ui.base.state import State
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_loaded import AudioLoaded
 from ui.main.audio_info_dialog import AudioInfoDialog
 from ui.main.open_audio_dialog import OpenAudioDialog
 from ui.main.save_audio_dialog import SaveAudioDialog
+from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
 class MainWindow(QMainWindow):
@@ -229,7 +229,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(object)
     def on_doc_state_change(self, state: State):
-        if isinstance(state, AudioLoaded):
+        if isinstance(state, AudioPrepped):
             self.sgramview_action.setEnabled(True)
 
     @pyqtSlot()
@@ -294,12 +294,7 @@ class MainWindow(QMainWindow):
         tab_name = self.tr("CLIP {}: {}").format(n, origin_name)
         self.tab_widget.addTab(doc, tab_name)
 
-        primary_channel = source_doc.view_model.primary_channel()
-        if primary_channel is None:
-            target_fs = clip.fs
-        else:
-            target_fs = primary_channel.fs
-        doc.view_model.load_from_samples(clip, target_fs)
+        doc.view_model.load_from_samples(clip)
 
     pyqtSlot(int)
 
@@ -308,7 +303,7 @@ class MainWindow(QMainWindow):
 
         if doc is not None:
             self.sgramview_action.setEnabled(
-                doc.view_model.audio_loaded_state.is_loaded
+                doc.view_model.spectrogram_view_model.prepped_audio_state is not None
             )
 
     def save_audio(self):
