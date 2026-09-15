@@ -1,1 +1,14 @@
+# -- Document Window --
+DEFAULT_WINDOW_LENGTH = 10
+
+# -- Audio Editing --
+MAX_UNDO_HISTORY = 10
+ZERO_CROSSING_SEARCH_MS = 5
+
+# -- Audio Player --
+LATENCY_WARNING_THRESHOLD_S = 0.1
+
+# -- Spectrogram --
 MAX_SGRAM_LENGTH = 10
+DEFAULT_GRAY_CUTOFF = 0.6
+SPECTROGRAM_PRE_EMPHASIS = 0.94

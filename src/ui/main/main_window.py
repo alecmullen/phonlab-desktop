@@ -1,30 +1,41 @@
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt
-from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtCore import QSize, Qt, pyqtSlot
+from PyQt6.QtGui import QAction, QCloseEvent, QIcon, QKeyEvent, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QMainWindow,
+    QMessageBox,
     QSizePolicy,
     QTabWidget,
     QToolBar,
     QWidget,
 )
 
+from core.load_audio.entity.audio_signal import AudioSignal
+from core.save_audio.save_audio import SaveAudio
+from core.settings.app_settings import settings
+from ui.base.state import State
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
+from ui.main.audio_info_dialog import AudioInfoDialog
+from ui.main.open_audio_dialog import OpenAudioDialog
+from ui.main.save_audio_dialog import SaveAudioDialog
+from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, splash=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
 
         self.setWindowTitle("Phonlab")
         self.resize(1200, 800)
 
-        self.filters = "Sound files (*.wav)"
-        self.splash = splash
+        self.filters = "Sound files and TextGrids (*.wav *.TextGrid)"
+        self.splash = None
+        self.clipboard: AudioSignal | None = None
+        self.clip_counters: dict[str, int] = {}
 
         # Create tab widget
         self.tab_widget = QTabWidget()
@@ -44,39 +55,87 @@ class MainWindow(QMainWindow):
         mainMenu = self.menuBar()
         self.style()
 
-        # File Menu
-        fileMenu = mainMenu.addMenu("&File")
-
         self.open_action = QAction(
             QIcon.fromTheme("document-open"), self.tr("&Open"), self
         )
         self.open_action.setStatusTip(self.tr("Open a sound file"))
         self.open_action.setShortcut("Ctrl+O")
-        self.open_action.triggered.connect(self.open_file)
-        fileMenu.addAction(self.open_action)
+        self.open_action.triggered.connect(self.open_files)
 
         self.close_action = QAction(
             QIcon.fromTheme("window-close"), self.tr("&Close"), self
         )
         self.close_action.setStatusTip(self.tr("Close current file"))
-        self.close_action.setShortcut("Ctrl-W")
+        self.close_action.setShortcut("Ctrl+W")
         self.close_action.triggered.connect(self.close_current_tab)
-        fileMenu.addAction(self.close_action)
 
-        fileMenu.addSeparator()
+        self.save_action = QAction(self.tr("&Save…"), self)
+        self.save_action.setStatusTip(
+            self.tr("Save the current document's audio to a file")
+        )
+        self.save_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_action.triggered.connect(self.save_audio)
+
+        self.audio_info_action = QAction(self.tr("Audio &Info"), self)
+        self.audio_info_action.setStatusTip(
+            self.tr("Show sample rate, duration, and amplitude of the current document")
+        )
+        self.audio_info_action.triggered.connect(self.show_audio_info)
 
         self.exit_action = QAction(
             QIcon.fromTheme("application-exit"), self.tr("&Quit"), self
         )
         self.exit_action.setStatusTip(self.tr("Terminate the program"))
         self.exit_action.triggered.connect(self.quit_app)
-        fileMenu.addAction(self.exit_action)
+
+        # File Menu
+        if mainMenu is not None:
+            fileMenu = mainMenu.addMenu("&File")
+        if fileMenu is not None:
+            fileMenu.addAction(self.open_action)
+            fileMenu.addAction(self.close_action)
+            fileMenu.addSeparator()
+            fileMenu.addAction(self.save_action)
+            fileMenu.addSeparator()
+            fileMenu.addAction(self.audio_info_action)
+            fileMenu.addSeparator()
+            fileMenu.addAction(self.exit_action)
+
+        self.undo_action = QAction(self.tr("&Undo"), self)
+        self.undo_action.setStatusTip(self.tr("Undo the last cut or paste"))
+        self.undo_action.setShortcut(QKeySequence.StandardKey.Undo)
+        self.undo_action.triggered.connect(self.undo)
+
+        self.redo_action = QAction(self.tr("&Redo"), self)
+        self.redo_action.setStatusTip(self.tr("Redo the last undone cut or paste"))
+        self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
+        self.redo_action.triggered.connect(self.redo)
+
+        self.cut_action = QAction(self.tr("&Cut"), self)
+        self.cut_action.setStatusTip(self.tr("Cut the selected audio"))
+        self.cut_action.setShortcut(QKeySequence.StandardKey.Cut)
+        self.cut_action.triggered.connect(self.cut_selection)
+
+        self.copy_action = QAction(self.tr("&Copy"), self)
+        self.copy_action.setStatusTip(self.tr("Copy the selected audio"))
+        self.copy_action.setShortcut(QKeySequence.StandardKey.Copy)
+        self.copy_action.triggered.connect(self.copy_selection)
+
+        self.paste_action = QAction(self.tr("&Paste"), self)
+        self.paste_action.setStatusTip(self.tr("Paste audio at the mark"))
+        self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
+        self.paste_action.triggered.connect(self.paste_at_cursor)
 
         # Edit Menu
-        mainMenu.addMenu("&Edit")
-
-        # View Menu
-        viewMenu = mainMenu.addMenu("&View")
+        if mainMenu is not None:
+            editMenu = mainMenu.addMenu("&Edit")
+        if editMenu is not None:
+            editMenu.addAction(self.undo_action)
+            editMenu.addAction(self.redo_action)
+            editMenu.addSeparator()
+            editMenu.addAction(self.cut_action)
+            editMenu.addAction(self.copy_action)
+            editMenu.addAction(self.paste_action)
 
         self.waveview_action = QAction(
             QIcon.fromTheme("audio-x-generic"), self.tr("&Wave"), self
@@ -84,7 +143,6 @@ class MainWindow(QMainWindow):
         self.waveview_action.setStatusTip(self.tr("View audio waveform"))
         self.waveview_action.setShortcut("Ctrl+1")
         self.waveview_action.triggered.connect(self.plot_wave)
-        viewMenu.addAction(self.waveview_action)
 
         self.sgramview_action = QAction(
             QIcon.fromTheme("view-media-visualization"), self.tr("&Spectrogram"), self
@@ -92,7 +150,17 @@ class MainWindow(QMainWindow):
         self.sgramview_action.setStatusTip(self.tr("View waveform and spectrogram"))
         self.sgramview_action.setShortcut("Ctrl+2")
         self.sgramview_action.triggered.connect(self.plot_wave_sgram)
-        viewMenu.addAction(self.sgramview_action)
+        self.sgramview_action.setEnabled(False)
+
+        if settings.enable_annotation:
+            self.annotationview_action = QAction(
+                QIcon.fromTheme("view-media-visualization"),
+                self.tr("&Annotation"),
+                self,
+            )
+            self.annotationview_action.setStatusTip(self.tr("View annotations"))
+            self.annotationview_action.setShortcut("Ctrl+3")
+            self.annotationview_action.triggered.connect(self.plot_annotations)
 
         self.viewall_action = QAction(
             QIcon.fromTheme("view-fullscreen"), self.tr("View &All"), self
@@ -100,14 +168,22 @@ class MainWindow(QMainWindow):
         self.viewall_action.setStatusTip(self.tr("Zoom out to see the whole file"))
         self.viewall_action.setShortcut("Ctrl+A")
         self.viewall_action.triggered.connect(self.show_all)
-        viewMenu.addAction(self.viewall_action)
 
         self.recenter_action = QAction(
             QIcon.fromTheme("mail-send"), self.tr("Re-center"), self
         )
         self.recenter_action.setStatusTip(self.tr("Center view on selection"))
         self.recenter_action.triggered.connect(self.recenter_on_selection)
-        viewMenu.addAction(self.recenter_action)
+
+        # View Menu
+        if mainMenu is not None:
+            viewMenu = mainMenu.addMenu("&View")
+        if viewMenu is not None:
+            viewMenu.addAction(self.waveview_action)
+            viewMenu.addAction(self.sgramview_action)
+            viewMenu.addAction(self.annotationview_action)
+            viewMenu.addAction(self.viewall_action)
+            viewMenu.addAction(self.recenter_action)
 
     def create_toolbar(self):
         """Create application toolbar"""
@@ -119,6 +195,8 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction(self.waveview_action)
         toolbar.addAction(self.sgramview_action)
+        if settings.enable_annotation:
+            toolbar.addAction(self.annotationview_action)
         toolbar.addAction(self.viewall_action)
         toolbar.addAction(self.recenter_action)
 
@@ -142,36 +220,121 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(spacer)
         toolbar.addAction(self.exit_action)
 
-    def get_current_document(self):
-        """Get the currently active AudioView"""
+    def get_current_document(self) -> DocumentView | None:
+        """Get the currently active DocumentView"""
         current_widget = self.tab_widget.currentWidget()
         if isinstance(current_widget, DocumentView):
             return current_widget
         return None
 
-    def open_file(self, filename=None):
+    @pyqtSlot(object)
+    def on_doc_state_change(self, state: State):
+        if isinstance(state, AudioPrepped):
+            self.sgramview_action.setEnabled(True)
+
+    @pyqtSlot()
+    def open_files(self, filenames: list[str] | None = None):
         """Open a new audio file in a new tab"""
-        if not filename:
-            filename, _ = QFileDialog.getOpenFileName(self, filter=self.filters)
+        if filenames is None:
+            filenames, _ = QFileDialog.getOpenFileNames(self, filter=self.filters)
 
-        if filename:
-            if self.splash is not None:
-                self.splash.close()
-                self.splash = None
+        if len(filenames) > 0:
+            audio_filename = next(
+                (file for file in filenames if file.endswith(".wav")), None
+            )
 
-            # Create new document
-            doc = DocumentView(DocumentViewModel())
+            if audio_filename is not None:
+                options = OpenAudioDialog.get_options(audio_filename, self)
+                if options is None:
+                    return
 
-            # Add tab with shortened filename
-            tab_name = Path(filename).name
-            index = self.tab_widget.addTab(doc, tab_name)
-            self.tab_widget.setCurrentIndex(index)
-            self.tab_widget.setTabToolTip(index, filename)
+                if self.splash is not None:
+                    self.splash.close()
+                    self.splash = None
 
-            # Load the audio file
-            doc.load_audio(filename)
+                # Create new document
+                doc_view_model = DocumentViewModel()
+                doc_view_model.subscribe(self.on_doc_state_change)
+                doc = DocumentView(doc_view_model)
+                doc.origin_name = Path(audio_filename).name
+                doc.origin_path = audio_filename
 
-    def close_tab(self, index):
+                # Add tab with shortened filename
+                tab_name = doc.origin_name
+                index = self.tab_widget.addTab(doc, tab_name)
+                self.tab_widget.setCurrentIndex(index)
+                self.tab_widget.setTabToolTip(index, audio_filename)
+
+                # Load the audio file
+                doc.load_audio(audio_filename, options)
+
+                annotation_filename = next(
+                    (file for file in filenames if file.endswith(".TextGrid")), None
+                )
+                if annotation_filename is not None:
+                    doc.load_textgrid(annotation_filename)
+
+    def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
+        """Open a new tab containing the just-copied/cut samples, without
+        stealing focus from source_doc"""
+        doc_view_model = DocumentViewModel()
+        doc_view_model.subscribe(self.on_doc_state_change)
+        doc = DocumentView(doc_view_model)
+
+        # Always name after the ORIGINAL source file
+        origin_name = source_doc.origin_name
+        if not origin_name:
+            source_index = self.tab_widget.indexOf(source_doc)
+            origin_name = self.tab_widget.tabText(source_index)
+        doc.origin_name = origin_name
+        doc.origin_path = source_doc.origin_path
+
+        n = self.clip_counters.get(origin_name, 0) + 1
+        self.clip_counters[origin_name] = n
+        tab_name = self.tr("CLIP {}: {}").format(n, origin_name)
+        self.tab_widget.addTab(doc, tab_name)
+
+        doc.view_model.load_from_samples(clip)
+
+    pyqtSlot(int)
+
+    def on_tab_changed(self, index: int):
+        doc = self.get_current_document()
+
+        if doc is not None:
+            self.sgramview_action.setEnabled(
+                doc.view_model.spectrogram_view_model.prepped_audio_state is not None
+            )
+
+    def save_audio(self):
+        doc = self.get_current_document()
+        if not doc:
+            return
+        index = self.tab_widget.indexOf(doc)
+        options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
+        if options is None:
+            return
+        raw = doc.view_model.primary_channel()
+        try:
+            if raw is None:
+                raise RuntimeError("Cannot save audio that is not loaded")
+            SaveAudio(
+                options.path, raw.x, raw.fs, options.target_fs, options.scale
+            ).invoke()
+        except RuntimeError as err:
+            QMessageBox.critical(
+                self,
+                self.tr("Save Audio"),
+                self.tr("Could not save the file:\n{}").format(err),
+            )
+
+    def show_audio_info(self):
+        doc = self.get_current_document()
+        if doc:
+            index = self.tab_widget.indexOf(doc)
+            AudioInfoDialog.show_info(doc, self.tab_widget.tabText(index), self)
+
+    def close_tab(self, index: int):
         """Close a tab"""
         widget = self.tab_widget.widget(index)
         if isinstance(widget, DocumentView):
@@ -184,19 +347,21 @@ class MainWindow(QMainWindow):
         if index >= 0:
             self.close_tab(index)
 
-    def on_tab_changed(self, index):
-        """Called when the active tab changes"""
-
     # Delegate actions to current document
     def plot_wave(self):
         doc = self.get_current_document()
         if doc:
-            doc.plot_wave()
+            doc.toggle_wave()
 
     def plot_wave_sgram(self):
         doc = self.get_current_document()
         if doc:
-            doc.plot_wave_sgram()
+            doc.toggle_spectrogram()
+
+    def plot_annotations(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.toggle_annotations()
 
     def show_all(self):
         doc = self.get_current_document()
@@ -219,22 +384,53 @@ class MainWindow(QMainWindow):
         if doc:
             doc.recenter_on_selection()
 
-    def keyPressEvent(self, event):
-        """Forward keyboard events to current document"""
+    def copy_selection(self):
         doc = self.get_current_document()
         if doc:
-            if event.key() == Qt.Key.Key_Left:
+            clip = doc.copy_selection()
+            if clip is not None:
+                self.clipboard = clip
+                self._open_clip_tab(doc, clip)
+
+    def cut_selection(self):
+        doc = self.get_current_document()
+        if doc:
+            clip = doc.cut_selection()
+            if clip is not None:
+                self.clipboard = clip
+                self._open_clip_tab(doc, clip)
+
+    def paste_at_cursor(self):
+        doc = self.get_current_document()
+        if doc and self.clipboard is not None:
+            doc.paste_at_cursor(self.clipboard)
+
+    def undo(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.undo()
+
+    def redo(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.redo()
+
+    def keyPressEvent(self, a0: QKeyEvent | None):
+        """Forward keyboard events to current document"""
+        doc = self.get_current_document()
+        if doc is not None and a0 is not None:
+            if a0.key() == Qt.Key.Key_Left:
                 doc.go_back()
-            elif event.key() == Qt.Key.Key_Right:
+            elif a0.key() == Qt.Key.Key_Right:
                 doc.advance()
-            elif event.key() == Qt.Key.Key_Down:
+            elif a0.key() == Qt.Key.Key_Down:
                 doc.zoom_out()
-            elif event.key() == Qt.Key.Key_Up:
+            elif a0.key() == Qt.Key.Key_Up:
                 doc.zoom_in()
             else:
-                super().keyPressEvent(event)
+                super().keyPressEvent(a0)
         else:
-            super().keyPressEvent(event)
+            super().keyPressEvent(a0)
 
     def quit_app(self):
         """Quit the application"""
@@ -247,7 +443,7 @@ class MainWindow(QMainWindow):
         self.close()
         QApplication.quit()
 
-    def closeEvent(self, event):
+    def closeEvent(self, a0: QCloseEvent | None):
         """Handle window close event"""
         # Clean up all open documents
         for i in range(self.tab_widget.count()):
@@ -255,4 +451,5 @@ class MainWindow(QMainWindow):
             if isinstance(widget, DocumentView):
                 widget.cleanup()
 
-        event.accept()
+        if a0 is not None:
+            a0.accept()
