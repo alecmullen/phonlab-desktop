@@ -3,6 +3,7 @@ from PyQt6.QtCore import QPointF, Qt, pyqtSlot
 from PyQt6.QtGui import QMouseEvent, QShowEvent
 from PyQt6.QtWidgets import QWidget
 
+from res.constants import NODE_H_MARGIN, NODE_V_MARGIN
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.annotation.component.label_view import LabelView
@@ -11,9 +12,6 @@ from ui.annotation.state.label_view_state import LabelViewState
 from ui.annotation.state.node_view_state import NodeViewState
 from ui.base.state import State
 from ui.common.cursor_controller import CursorController
-
-V_MARGIN = 7
-H_MARGIN = 5
 
 
 class AnnotationPlot(pg.PlotItem, CursorController):
@@ -129,8 +127,8 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
     def handle_mouse_press(self, event: QMouseEvent) -> bool:
         pixel_size = self.getViewBox().viewPixelSize()
-        h_margin = H_MARGIN * pixel_size[0]
-        v_margin = V_MARGIN * pixel_size[1]
+        h_margin = NODE_H_MARGIN * pixel_size[0]
+        v_margin = NODE_V_MARGIN * pixel_size[1]
 
         pos = self.getViewBox().mapSceneToView(event.position())
 
