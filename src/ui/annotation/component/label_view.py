@@ -3,28 +3,38 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QFont, QPainter, QPicture
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
+from ui.annotation.state.label_view_state import LabelViewState
+
 
 class LabelView(pg.GraphicsObject):
-    def __init__(self, size: tuple, label: str):
+    def __init__(self, labels: list[LabelViewState], parent_plot: pg.PlotItem):
         super().__init__()
-        self.size = size
-        self.label = label
+        self.labels = labels
+        self.parent_plot = parent_plot
 
-        label_item = pg.TextItem(self.label, anchor=(0.5, 0.5), color=(0, 0, 0))
-        label_item.setFont(QFont("Arial", 16))
-        label_item.setPos(0, 0)
-        label_item.setParentItem(self)
+        for label in labels:
+            label_item = pg.TextItem(label.label, anchor=(0.5, 0.5), color=(0, 0, 0))
+            label_item.setFont(QFont("Arial", 16))
+            label_item.setPos(*label.pos)
+            label_item.setParentItem(self)
 
         self.pic = QPicture()
         self._generate_picture()
 
     def _generate_picture(self):
-        width, height = self.size
-
         painter = QPainter(self.pic)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(pg.mkBrush(0, 0, 0, 20))
-        painter.drawRect(QRectF(-width / 2, -height / 2, width, height))
+        for label in self.labels:
+            width, height = label.size
+            painter.drawRect(
+                QRectF(
+                    label.pos[0] - (width / 2),
+                    label.pos[1] - (height / 2),
+                    width,
+                    height,
+                )
+            )
         painter.end()
 
     def paint(
@@ -37,5 +47,4 @@ class LabelView(pg.GraphicsObject):
             painter.drawPicture(0, 0, self.pic)
 
     def boundingRect(self) -> QRectF:
-        width, height = self.size
-        return QRectF(-width / 2, -height / 2, width, height)
+        return self.parent_plot.getViewBox().rect()
