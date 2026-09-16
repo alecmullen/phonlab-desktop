@@ -10,7 +10,9 @@ class LabelView(pg.GraphicsObject):
     def __init__(self, labels: list[LabelViewState], parent_plot: pg.PlotItem):
         super().__init__()
         self.labels = labels
-        self.parent_plot = parent_plot
+
+        self.view_rect: QRectF = parent_plot.getViewBox().viewRect()
+        self.setPos(self.view_rect.left(), self.view_rect.bottom())
 
         for label in labels:
             label_item = pg.TextItem(label.label, anchor=(0.5, 0.5), color=(0, 0, 0))
@@ -47,4 +49,4 @@ class LabelView(pg.GraphicsObject):
             painter.drawPicture(0, 0, self.pic)
 
     def boundingRect(self) -> QRectF:
-        return self.parent_plot.getViewBox().rect()
+        return self.view_rect

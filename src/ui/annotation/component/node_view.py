@@ -3,6 +3,7 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter, QPainterPath, QPicture
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
+from res.constants import NODE_H_MARGIN, NODE_V_MARGIN
 from ui.annotation.state.node_view_state import NodeViewState
 
 
@@ -10,7 +11,9 @@ class NodeView(pg.GraphicsObject):
     def __init__(self, nodes: list[NodeViewState], parent_plot: pg.PlotItem):
         super().__init__()
         self.nodes = nodes
-        self.parent_plot = parent_plot
+
+        self.view_rect: QRectF = parent_plot.getViewBox().viewRect()
+        self.setPos(self.view_rect.left(), self.view_rect.bottom())
 
         xs = [node.x for node in nodes]
         ys = [node.ys[0] for node in nodes]
@@ -66,4 +69,6 @@ class NodeView(pg.GraphicsObject):
             painter.drawPicture(0, 0, self.pic)
 
     def boundingRect(self) -> QRectF:
-        return self.parent_plot.getViewBox().rect()
+        return self.view_rect.adjusted(
+            -NODE_H_MARGIN, -NODE_V_MARGIN, NODE_H_MARGIN, NODE_V_MARGIN
+        )
