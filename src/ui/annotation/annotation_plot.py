@@ -7,8 +7,13 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
+from ui.annotation.state.label_view_state import LabelViewState
+from ui.annotation.state.node_view_state import NodeViewState
 from ui.base.state import State
 from ui.common.cursor_controller import CursorController
+
+V_MARGIN = 7
+H_MARGIN = 5
 
 
 class AnnotationPlot(pg.PlotItem, CursorController):
@@ -52,7 +57,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         self.addItem(self.mark_line, ignoreBounds=True)
         self.mark_line.setVisible(False)
 
-        self.node_views: dict[int, NodeView] = {}
+        self.visible_nodes: dict[int, NodeViewState] = {}
 
         self.dragging_node: int | None = None
 
@@ -89,6 +94,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         label_height = self.getViewBox().viewRect().height() / (1.2 * len(types))
         node_extents = {node: set() for node in nodes}
         for i, type in enumerate(types):
+            label_view_states = []
             for label in type.labels:
                 if nodes[label.e_node] <= start or nodes[label.s_node] >= end:
                     continue
@@ -98,26 +104,40 @@ class AnnotationPlot(pg.PlotItem, CursorController):
                 center_x = (x_e - x_s) / 2 + x_s
                 center_y = i + 0.5
                 width = x_e - x_s
-                label_item = LabelView((width, label_height), label.label)
-                label_item.setPos(center_x, center_y)
-                self.addItem(label_item)
+
+                label_view_states.append(
+                    LabelViewState(
+                        (width, label_height), (center_x, center_y), label.label
+                    )
+                )
 
                 node_extents[label.e_node].add(i)
                 node_extents[label.s_node].add(i)
+            label_view = LabelView(label_view_states, self)
+            label_view.setPos(0, 0)
+            self.addItem(label_view)
 
-        pixel_size = self.getViewBox().viewPixelSize()
-        for node in nodes:
-            if start <= nodes[node] <= end:
-                node_view = NodeView(
-                    nodes[node], sorted(node_extents[node]), pixel_size
+        self.visible_nodes = {}
+        for node, loc in nodes.items():
+            if start <= loc <= end:
+                self.visible_nodes[node] = NodeViewState(
+                    loc, sorted(node_extents[node])
                 )
-                self.node_views[node] = node_view
-                self.addItem(node_view)
+        node_view = NodeView(list(self.visible_nodes.values()), self)
+        node_view.setPos(0, 0)
+        self.addItem(node_view)
 
     def handle_mouse_press(self, event: QMouseEvent) -> bool:
-        for node, node_view in self.node_views.items():
-            child_pos = node_view.mapFromScene(event.position())
-            if node_view.contains(child_pos):
+        pixel_size = self.getViewBox().viewPixelSize()
+        h_margin = H_MARGIN * pixel_size[0]
+        v_margin = V_MARGIN * pixel_size[1]
+
+        pos = self.getViewBox().mapSceneToView(event.position())
+
+        for node, node_view_state in self.visible_nodes.items():
+            node_x = node_view_state.x
+            node_y = node_view_state.ys[0]
+            if abs(pos.x() - node_x) < h_margin and abs(pos.y() - node_y) < v_margin:
                 self.dragging_node = node
                 event.accept()
                 return True
