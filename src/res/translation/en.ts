@@ -4,8 +4,8 @@
 <context>
     <name>AnnotationPlot</name>
     <message>
-        <location filename="../../ui/annotation/annotation_plot.py" line="39"/>
-        <location filename="../../ui/annotation/annotation_plot.py" line="59"/>
+        <location filename="../../ui/annotation/annotation_plot.py" line="42"/>
+        <location filename="../../ui/annotation/annotation_plot.py" line="69"/>
         <source>Time</source>
         <translation type="unfinished"></translation>
     </message>
@@ -67,45 +67,53 @@
     </message>
 </context>
 <context>
+    <name>ClickableSplash</name>
+    <message>
+        <location filename="../../ui/main/splash.py" line="49"/>
+        <source>Click on this card to open a sound file</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>DocumentView</name>
     <message>
         <location filename="../../ui/document/document_view.py" line="93"/>
-        <location filename="../../ui/document/document_view.py" line="370"/>
+        <location filename="../../ui/document/document_view.py" line="387"/>
         <source>Computing %p%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="117"/>
+        <location filename="../../ui/document/document_view.py" line="120"/>
         <source>Resample...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="121"/>
+        <location filename="../../ui/document/document_view.py" line="125"/>
         <source>Set Mark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="121"/>
+        <location filename="../../ui/document/document_view.py" line="125"/>
         <source>Shift+Click</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="131"/>
+        <location filename="../../ui/document/document_view.py" line="136"/>
         <source>Remove Mark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="367"/>
+        <location filename="../../ui/document/document_view.py" line="384"/>
         <source>Loading full file…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="378"/>
+        <location filename="../../ui/document/document_view.py" line="395"/>
         <source>Cursor time: {:.3f}s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="384"/>
+        <location filename="../../ui/document/document_view.py" line="401"/>
         <source>Cursor time: {:.3f}s, frequency: {:.0f} Hz</source>
         <translation type="unfinished"></translation>
     </message>
@@ -113,56 +121,51 @@
 <context>
     <name>DocumentViewModel</name>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="182"/>
+        <location filename="../../ui/document/document_view_model.py" line="191"/>
         <source>Duration shown {:.3f} seconds, out of {:.3f} seconds</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="236"/>
-        <source>Audio not loaded yet. Please try again</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/document/document_view_model.py" line="289"/>
+        <location filename="../../ui/document/document_view_model.py" line="286"/>
         <source>System audio latency is a little long ({:.0f} ms). Consider using a different audio device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="384"/>
+        <location filename="../../ui/document/document_view_model.py" line="381"/>
         <source>Select: {:.3f} to {:.3f} ({:.3f}s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="420"/>
+        <location filename="../../ui/document/document_view_model.py" line="417"/>
         <source>No selection to center on</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="501"/>
-        <location filename="../../ui/document/document_view_model.py" line="519"/>
-        <location filename="../../ui/document/document_view_model.py" line="544"/>
+        <location filename="../../ui/document/document_view_model.py" line="498"/>
+        <location filename="../../ui/document/document_view_model.py" line="516"/>
+        <location filename="../../ui/document/document_view_model.py" line="541"/>
         <source>Audio is still loading, please wait.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="552"/>
+        <location filename="../../ui/document/document_view_model.py" line="549"/>
         <source>Cannot remove entire selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="582"/>
-        <location filename="../../ui/document/document_view_model.py" line="595"/>
+        <location filename="../../ui/document/document_view_model.py" line="578"/>
+        <location filename="../../ui/document/document_view_model.py" line="591"/>
         <source>No selection to copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="609"/>
-        <location filename="../../ui/document/document_view_model.py" line="622"/>
+        <location filename="../../ui/document/document_view_model.py" line="605"/>
+        <location filename="../../ui/document/document_view_model.py" line="618"/>
         <source>No selection to cut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="662"/>
+        <location filename="../../ui/document/document_view_model.py" line="658"/>
         <source>Set a mark (Shift+Click) before pasting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -241,7 +244,7 @@
     </message>
     <message>
         <location filename="../../ui/main/main_window.py" line="114"/>
-        <source>&amp;Cut</source>
+        <source>Cu&amp;t</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -345,12 +348,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/main_window.py" line="332"/>
+        <location filename="../../ui/main/main_window.py" line="327"/>
         <source>Save Audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/main_window.py" line="333"/>
+        <location filename="../../ui/main/main_window.py" line="328"/>
         <source>Could not save the file:
 {}</source>
         <translation type="unfinished"></translation>
