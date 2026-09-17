@@ -8,7 +8,7 @@ import phonlab  # noqa: F401
 from PyQt6.QtWidgets import QApplication
 
 from ui.main.main_window import MainWindow
-from ui.main.splash import ClickableSplash, create_splash_pixmap
+from ui.main.splash import ClickableSplash
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,7 @@ if __name__ == "__main__":
         mainWin = MainWindow()
 
         # Create and show splash screen
-        splash_pix = create_splash_pixmap()
-        splash = ClickableSplash(splash_pix, mainWin)
+        splash = ClickableSplash(mainWin)
         mainWin.splash = splash
 
         mainWin.show()
