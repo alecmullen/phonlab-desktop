@@ -2,3 +2,4 @@
 pythonpath = ["src"]
 testpaths = ["test"]
 qt_api = "pyqt6"
+addopts = ["--import-mode=importlib"]
