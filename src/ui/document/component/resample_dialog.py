@@ -1,9 +1,6 @@
-import bisect
-
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -12,6 +9,8 @@ from PyQt6.QtWidgets import (
     QSpacerItem,
     QSpinBox,
 )
+
+from ui.common.sample_rate_dropdown import SampleRateDropdown
 
 SAMPLE_RATE_OPTIONS = [4000, 8000, 16000, 22050, 32000, 44100, 48000, 96000]
 
@@ -28,10 +27,7 @@ class ResampleAudioDialog(QDialog):
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        self.fs_dropdown = QComboBox()
-        for fs in sample_rates:
-            self.fs_dropdown.addItem(f"{fs} Hz", fs)
-        self.fs_dropdown.setCurrentIndex(bisect.bisect_left(sample_rates, current_fs))
+        self.fs_dropdown = SampleRateDropdown(sample_rates, current_fs)
         layout.addRow(self.tr("Target sample rate:"), self.fs_dropdown)
 
         layout.addItem(

@@ -1,9 +1,9 @@
-import bisect
 from dataclasses import replace
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QSpinBox
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QSpinBox
 
+from ui.common.sample_rate_dropdown import SampleRateDropdown
 from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
 
 SAMPLE_RATE_OPTIONS = [4000, 8000, 16000, 32000, 44100, 48000, 96000]
@@ -20,10 +20,7 @@ class SpectrogramSettingsDialog(QDialog):
 
         sample_rates = sorted(SAMPLE_RATE_OPTIONS)
 
-        self.fs_dropdown = QComboBox()
-        for fs in sample_rates:
-            self.fs_dropdown.addItem(f"{fs} Hz", fs)
-        self.fs_dropdown.setCurrentIndex(bisect.bisect_left(sample_rates, settings.fs))
+        self.fs_dropdown = SampleRateDropdown(sample_rates, settings.fs)
         layout.addRow(self.tr("Sample rate:"), self.fs_dropdown)
 
         self.window_spin = QSpinBox()
