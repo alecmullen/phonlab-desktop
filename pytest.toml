@@ -1,0 +1,4 @@
+[pytest]
+pythonpath = ["src"]
+testpaths = ["test"]
+qt_api = "pyqt6"

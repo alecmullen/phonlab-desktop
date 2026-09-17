@@ -86,6 +86,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
             [[(i, type.type) for i, type in enumerate(types)]]
         )
 
+        self.visible_nodes = {}
         if len(types) == 0:
             return
 
@@ -115,7 +116,6 @@ class AnnotationPlot(pg.PlotItem, CursorController):
             label_view.setPos(0, 0)
             self.addItem(label_view)
 
-        self.visible_nodes = {}
         for node, loc in nodes.items():
             if start <= loc <= end:
                 self.visible_nodes[node] = NodeViewState(
