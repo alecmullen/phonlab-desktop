@@ -9,7 +9,7 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
 from core.load_audio.prep_audio import PrepAudio
-from core.parse_textgrid.parse_textgrid import ParseTextGrid
+from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
 from res.constants import (
@@ -703,8 +703,11 @@ class DocumentViewModel(ViewModel):
 
     def parse_textgrid(self, path: str):
         use_case = ParseTextGrid(path)
-        self.annotation_state = to_annotation_state(use_case.invoke())
-        self.update_annotation_state()
+        try:
+            self.annotation_state = to_annotation_state(use_case.invoke())
+            self.update_annotation_state()
+        except ParseTextGridError as e:
+            self.state_changed.emit(StatusMessageState(str(e)))
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

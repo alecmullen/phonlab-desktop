@@ -630,6 +630,72 @@ def test_parse_textgrid_loads_annotation_state(
     ]
 
 
+POINT_TIER_TEXTGRID = """File type = "ooTextFile"
+Object class = "TextGrid"
+xmin = 0
+xmax = 1.0
+tiers? <exists>
+size = 1
+item []:
+    item [1]:
+        class = "TextTier"
+        name = "mark"
+        xmin = 0
+        xmax = 1.0
+        points: size = 1
+        points [1]:
+            number = 0.5
+            mark = "click"
+"""
+
+
+def test_parse_textgrid_loads_point_tier(view_model: DocumentViewModel, tmp_path: Path):
+    load_signal(view_model, np.arange(5000), fs=1000)
+    view_model.update_annotation_state = lambda: None
+    textgrid = tmp_path / "point.TextGrid"
+    textgrid.write_text(POINT_TIER_TEXTGRID)
+
+    view_model.parse_textgrid(str(textgrid))
+
+    assert view_model.annotation_state.nodes == {0: 0.5}
+    assert [t.type for t in view_model.annotation_state.types] == ["mark"]
+    assert [label.label for label in view_model.annotation_state.types[0].labels] == [
+        "click"
+    ]
+
+
+BROKEN_TIER_TEXTGRID = """File type = "ooTextFile"
+Object class = "TextGrid"
+xmin = 0
+xmax = 1.0
+tiers? <exists>
+size = 1
+item []:
+    item [1]:
+        class = "UnknownTier"
+        name = "word"
+        xmin = 0
+        xmax = 1.0
+"""
+
+
+def test_parse_textgrid_shows_status_message_on_invalid_tier_type(
+    view_model: DocumentViewModel, tmp_path: Path
+):
+    textgrid = tmp_path / "broken.TextGrid"
+    textgrid.write_text(BROKEN_TIER_TEXTGRID)
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.parse_textgrid(str(textgrid))
+
+    status_messages = [s for s in received if isinstance(s, StatusMessageState)]
+    assert len(status_messages) == 1
+    assert "Invalid Textgrid" in status_messages[0].message
+    assert view_model.annotation_state.nodes == {}
+    assert view_model.annotation_state.types == []
+
+
 def test_play_selected_audio_plays_selection(view_model: DocumentViewModel):
     load_signal(view_model, np.arange(10000), fs=1000)
     view_model.start_selection(2.0)
