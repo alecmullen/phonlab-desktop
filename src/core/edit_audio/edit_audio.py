@@ -66,8 +66,7 @@ class EditAudio(UseCaseSync[EditResult | None]):
             snapped_start = self._nearest_zero_crossing(start_idx)
             snapped_end = self._nearest_zero_crossing_boundary(end_idx)
 
-            if snapped_end > snapped_start:
-                start_idx, end_idx = snapped_start, snapped_end
+            start_idx, end_idx = snapped_start, snapped_end
 
         return start_idx, end_idx
 
@@ -125,6 +124,3 @@ class EditAudio(UseCaseSync[EditResult | None]):
             return EditResult(
                 new_channel=AudioSignal(new_x, self._channel.fs), start_idx=start_idx
             )
-
-    def stop(self):
-        pass
