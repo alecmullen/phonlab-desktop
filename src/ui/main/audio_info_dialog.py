@@ -31,7 +31,9 @@ class AudioInfoDialog(QDialog):
         )
         min_max_label = None
         if len(raw.x) > 0:
-            min_max_label = QLabel(self.tr("{:.4g} / {:.4g}").format(min(raw.x), max(raw.x)))
+            min_max_label = QLabel(
+                self.tr("{:.4g} / {:.4g}").format(min(raw.x), max(raw.x))
+            )
         form.addRow(self.tr("Min / max amplitude:"), min_max_label)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
