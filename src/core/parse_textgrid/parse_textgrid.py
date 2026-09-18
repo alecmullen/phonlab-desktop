@@ -7,6 +7,11 @@ from core.parse_textgrid.annotation import Annotation, AnnotationLabel, Annotati
 
 SAME_NODE_THRESHOLD = 0.005
 INTERVAL_TIER_NAME = "IntervalTier"
+POINT_TIER_NAME = "TextTier"
+
+
+class ParseTextGridError(ValueError):
+    pass
 
 
 class ParseTextGrid(UseCaseSync):
@@ -55,6 +60,24 @@ class ParseTextGrid(UseCaseSync):
                         labels[tier_name].append(
                             (interval_label, interval_start, interval_end)
                         )
+                elif _tier_type == POINT_TIER_NAME:
+                    tier_name = self.get_next_quoted_string(words)
+                    labels[tier_name] = []
+
+                    _tier_start = self.get_next_float(words)
+                    _tier_end = self.get_next_float(words)
+
+                    num_points = self.get_next_int(words)
+
+                    for i in range(num_points):
+                        point_time = self.get_next_float(words)
+                        point_label = self.get_next_quoted_string(words)
+
+                        node_times = get_or_add_node(node_times, point_time)
+
+                        labels[tier_name].append((point_label, point_time, point_time))
+                else:
+                    raise ParseTextGridError("Invalid Textgrid")
 
         nodes = {idx: node for idx, node in enumerate(node_times)}
         types = []
