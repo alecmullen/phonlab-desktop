@@ -1,3 +1,40 @@
+[project]
+name = "phonlab-desktop"
+version = "0.0.3-alpha"
+description = "Desktop GUI for acoustic speech analysis, powered by the phonlab Python library"
+readme = "README.md"
+requires-python = ">=3.12.10"
+dependencies = [
+    "librosa==0.11",
+    "numba>=0.67.0",
+    "numpy==2.4",
+    "phonlab==0.0.58",
+    "pyqt6==6.11",
+    "pyqt6-sip==13.12",
+    "pyqtgraph==0.14",
+    "scipy==1.15",
+    "sounddevice==0.5.5",
+    "soundfile==0.13.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-qt>=4.5.0",
+    "ruff>=0.16.8",
+    "ty>=0.0.83",
+]
+build = [
+    "pyinstaller>=6.22.3",
+]
+
+[tool.pytest]
+pythonpath = ["src"]
+testpaths = ["test"]
+qt_api = "pyqt6"
+addopts = ["--import-mode=importlib"]
+
+[tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".bzr",
@@ -35,7 +72,7 @@ indent-width = 4
 # Assume Python 3.12
 target-version = "py312"
 
-[lint]
+[tool.ruff.lint]
 extend-select = ["ANN"]
 ignore = []
 
@@ -46,10 +83,10 @@ unfixable = []
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-[lint.flake8-annotations]
+[tool.ruff.lint.flake8-annotations]
 suppress-none-returning = true
 
-[format]
+[tool.ruff.format]
 # Like Black, use double quotes for strings.
 quote-style = "double"
 
@@ -61,3 +98,9 @@ skip-magic-trailing-comma = false
 
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
+
+[tool.ty.analysis]
+replace-imports-with-any = ["pyqtgraph.**"]
+
+[tool.ty.src]
+include = ["src"]

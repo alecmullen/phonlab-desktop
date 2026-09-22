@@ -8,3 +8,5 @@ phonlab_desktop.spec
 .venv/
 **.dmg
 **.spec
+coverage.xml
+.coverage

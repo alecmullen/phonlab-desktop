@@ -3,16 +3,16 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.12
-  - numpy=2.4.*
+  - python>=3.12.10
   - pip
-  - scipy==1.15
-  - pyqt6==6.11
-  - pyqtgraph==0.14
-  - librosa==0.11
-  - numba
   - pip:
+    - librosa==0.11
+    - numba>=0.67.0
+    - numpy==2.4
     - phonlab==0.0.58
+    - pyqt6==6.11
+    - pyqt6-sip==13.12
+    - pyqtgraph==0.14
+    - scipy==1.15
     - sounddevice==0.5.5
     - soundfile==0.13.1
-    - pyqt6-sip==13.12
