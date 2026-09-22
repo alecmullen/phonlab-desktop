@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [ "main", "dev" ]
 
+permissions:
+  contents: read        # For checkout and comparing commits
+  pull-requests: write 
+
 jobs:
   lint-format-type-test:
     runs-on: macos-latest
