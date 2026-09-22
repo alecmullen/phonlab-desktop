@@ -3,7 +3,7 @@ name = "phonlab-desktop"
 version = "0.0.3-alpha"
 description = "Desktop GUI for acoustic speech analysis, powered by the phonlab Python library"
 readme = "README.md"
-requires-python = ">=3.12.10"
+requires-python = ">=3.12.10, <3.13"
 dependencies = [
     "librosa==0.11",
     "numba>=0.67.0",
