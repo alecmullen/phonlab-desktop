@@ -30,4 +30,9 @@ jobs:
         run: ty check .
 
       - name: Run Automated Tests
-        run: pytest .
+        run: pytest --cov-report=xml:coverage.xml --cov=src .
+
+      - name: Coverage comment
+        uses: MishaKav/pytest-coverage-comment@v1
+        with:
+            pytest-xml-coverage-path: ./coverage.xml

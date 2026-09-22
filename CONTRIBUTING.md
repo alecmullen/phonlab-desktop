@@ -12,7 +12,11 @@ Please try to limit pull requests to 400 lines or under. If necessary, you can s
 
 ## Linting, formatting, and type checking
 
-Linting, formatting, and type checking are enforced with ruff and ty on `dev` and `main`. Install both and run `ruff check` and `ty check` and fix any errors introduced. Run `ruff format` to automatically format. Rules are mostly default, with the addition that type annotations are required on methods.
+Linting, formatting, and type checking are enforced with ruff and ty on `dev` and `main`. Install both (`uv sync --dev`) and run `ruff check` and `ty check` and fix any errors introduced. Run `ruff format` to automatically format. Rules are mostly default, with the addition that type annotations are required on methods.
+
+## Automated tests
+
+Tests are located in `test`. The file structure mirrors `src`. We strive to maintain higher than 95% test coverage. We use `pytest` and `pytest-qt`, and we use `pytest-cov` to check coverage. Tests must pass on PRs to `dev` and `main`.
 
 ## Translation/Localization
 
