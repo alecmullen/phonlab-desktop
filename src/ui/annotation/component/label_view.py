@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QFont, QPainter, QPicture
+from PyQt6.QtGui import QFont, QFontMetrics, QPainter, QPicture, QTextOption
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
 from ui.annotation.state.label_view_state import LabelViewState
@@ -14,9 +14,28 @@ class LabelView(pg.GraphicsObject):
         self.view_rect: QRectF = parent_plot.getViewBox().viewRect()
         self.setPos(self.view_rect.left(), self.view_rect.bottom())
 
+        pixel_size = parent_plot.getViewBox().viewPixelSize()
+
         for label in labels:
-            label_item = pg.TextItem(label.label, anchor=(0.5, 0.5), color=(0, 0, 0))
-            label_item.setFont(QFont("Arial", 16))
+            label_width = int(max(label.size[0], 1.0) / pixel_size[0])
+            label_height = int(label.size[1] / pixel_size[1])
+
+            text = " ".join(label.label.splitlines())
+
+            font = QFont("Arial", 16)
+            metrics = QFontMetrics(font)
+            num_lines = int(label_height / (metrics.lineSpacing() * 1.5))
+            clipped_text = metrics.elidedText(
+                text, Qt.TextElideMode.ElideRight, label_width * num_lines
+            )
+
+            label_item = pg.TextItem(clipped_text, anchor=(0.5, 0.5), color=(0, 0, 0))
+            option = label_item.textItem.document().defaultTextOption()
+            option.setWrapMode(QTextOption.WrapMode.WordWrap)
+            option.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            label_item.textItem.document().setDefaultTextOption(option)
+            label_item.setFont(font)
+            label_item.setTextWidth(label_width)
             label_item.setPos(*label.pos)
             label_item.setParentItem(self)
 

@@ -9,7 +9,7 @@ from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
 from ui.annotation.state.label_view_state import LabelViewState
-from ui.annotation.state.node_view_state import NodeViewState
+from ui.annotation.state.node_view_state import NodeTierExtent, NodeViewState
 from ui.base.state import State
 from ui.common.cursor_controller import CursorController
 
@@ -57,7 +57,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
         self.visible_nodes: dict[int, NodeViewState] = {}
 
-        self.dragging_node: int | None = None
+        self.dragging_node: NodeViewState | None = None
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -91,7 +91,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
             return
 
         label_height = self.getViewBox().viewRect().height() / (1.2 * len(types))
-        node_extents = {node: set() for node in nodes}
+        node_extents = {node: set[NodeTierExtent]() for node in nodes}
         for i, type in enumerate(types):
             label_view_states = []
             for label in type.labels:
@@ -110,8 +110,15 @@ class AnnotationPlot(pg.PlotItem, CursorController):
                     )
                 )
 
-                node_extents[label.e_node].add(i)
-                node_extents[label.s_node].add(i)
+                node_extents[label.e_node] = {
+                    extent for extent in node_extents[label.e_node] if extent.tier != i
+                }
+                node_extents[label.s_node] = {
+                    extent for extent in node_extents[label.s_node] if extent.tier != i
+                }
+
+                node_extents[label.e_node].add(NodeTierExtent(i, width == 0))
+                node_extents[label.s_node].add(NodeTierExtent(i, width == 0))
             label_view = LabelView(label_view_states, self)
             label_view.setPos(0, 0)
             self.addItem(label_view)
@@ -119,7 +126,9 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         for node, loc in nodes.items():
             if start <= loc <= end:
                 self.visible_nodes[node] = NodeViewState(
-                    loc, sorted(node_extents[node])
+                    node,
+                    loc,
+                    sorted(node_extents[node], key=lambda extent: extent.tier),
                 )
         node_view = NodeView(list(self.visible_nodes.values()), self)
         node_view.setPos(0, 0)
@@ -132,11 +141,11 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
         pos = self.getViewBox().mapSceneToView(event.position())
 
-        for node, node_view_state in self.visible_nodes.items():
+        for node_view_state in self.visible_nodes.values():
             node_x = node_view_state.x
-            node_y = node_view_state.ys[0]
+            node_y = node_view_state.extents[0].tier
             if abs(pos.x() - node_x) < h_margin and abs(pos.y() - node_y) < v_margin:
-                self.dragging_node = node
+                self.dragging_node = node_view_state
                 event.accept()
                 return True
         return False
@@ -154,7 +163,8 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
         if self.dragging_node is not None:
             self.view_model.change_node_state(self.dragging_node, x)
-        elif self.has_cursor_control:
+
+        if self.has_cursor_control:
             self.cursor_line.setPos(x)
 
     def set_cursor_position(self, x: float):
