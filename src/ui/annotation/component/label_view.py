@@ -3,6 +3,7 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QFont, QFontMetrics, QPainter, QPicture, QTextOption
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
+from res.constants import POINT_LABEL_WIDTH
 from ui.annotation.state.label_view_state import LabelViewState
 
 
@@ -17,8 +18,11 @@ class LabelView(pg.GraphicsObject):
         pixel_size = parent_plot.getViewBox().viewPixelSize()
 
         for label in labels:
-            label_width = int(max(label.size[0], 1.0) / pixel_size[0])
+            label_width = int(label.size[0] / pixel_size[0])
             label_height = int(label.size[1] / pixel_size[1])
+
+            if label_width == 0:
+                label_width = POINT_LABEL_WIDTH
 
             text = " ".join(label.label.splitlines())
 

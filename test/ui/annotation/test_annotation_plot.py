@@ -7,7 +7,7 @@ from pytestqt.qtbot import QtBot
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.annotation_window_state import AnnotationWindowState
-from ui.annotation.state.node_view_state import NodeViewState
+from ui.annotation.state.node_view_state import NodeTierExtent, NodeViewState
 from ui.base.state import State
 from ui.document.state.annotation_state import (
     AnnotationLabelState,
@@ -29,9 +29,21 @@ def make_window_state(
     )
 
 
+def show_plot_in_layout(plot: AnnotationPlot) -> pg.GraphicsLayoutWidget:
+    layout = pg.GraphicsLayoutWidget()
+    layout.addItem(plot)
+    layout.resize(400, 300)
+    layout.show()
+    return layout
+
+
 def test_populate_computes_visible_nodes_within_start_and_end(qtbot: QtBot):
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
+
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
 
     state = make_window_state(
         nodes={0: -1.0, 1: 0.0, 2: 1.0, 3: 2.0, 4: 5.0},
@@ -71,6 +83,10 @@ def test_populate_filters_labels_outside_visible_range(qtbot: QtBot):
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
 
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+
     state = make_window_state(
         nodes={0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0},
         types=[
@@ -99,6 +115,10 @@ def test_populate_filters_labels_outside_visible_range(qtbot: QtBot):
 def test_populate_clears_previous_items(qtbot: QtBot):
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
+
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
 
     state_with_types = make_window_state(
         nodes={0: 0.0, 1: 1.0},
@@ -153,6 +173,10 @@ def test_view_model_state_change_triggers_populate(qtbot: QtBot):
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
 
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+
     state = make_window_state(
         nodes={0: 0.0, 1: 1.0},
         types=[AnnotationTypeState("word", [AnnotationLabelState(0, 1, "hi")])],
@@ -195,14 +219,12 @@ def test_handle_mouse_press_and_release_on_node(qtbot: QtBot):
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
 
-    layout = pg.GraphicsLayoutWidget()
+    layout = show_plot_in_layout(plot)
     qtbot.addWidget(layout)
-    layout.addItem(plot)
-    layout.resize(400, 300)
-    layout.show()
     qtbot.waitExposed(layout)
 
-    plot.visible_nodes = {7: NodeViewState(0.0, [0])}
+    node_view_state = NodeViewState(7, 0.0, [NodeTierExtent(0)])
+    plot.visible_nodes = {7: node_view_state}
     scene_pos = plot.getViewBox().mapViewToScene(QPointF(0.0, 0.0))
 
     press_event = QMouseEvent(
@@ -213,7 +235,7 @@ def test_handle_mouse_press_and_release_on_node(qtbot: QtBot):
         Qt.KeyboardModifier.NoModifier,
     )
     assert plot.handle_mouse_press(press_event) is True
-    assert plot.dragging_node == 7
+    assert plot.dragging_node == node_view_state
 
     release_event = QMouseEvent(
         QEvent.Type.MouseButtonRelease,
@@ -230,14 +252,11 @@ def test_handle_mouse_press_away_from_node_returns_false(qtbot: QtBot):
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
 
-    layout = pg.GraphicsLayoutWidget()
+    layout = show_plot_in_layout(plot)
     qtbot.addWidget(layout)
-    layout.addItem(plot)
-    layout.resize(400, 300)
-    layout.show()
     qtbot.waitExposed(layout)
 
-    plot.visible_nodes = {7: NodeViewState(0.0, [0])}
+    plot.visible_nodes = {7: NodeViewState(7, 0.0, [NodeTierExtent(0)])}
     far_scene_pos = plot.getViewBox().mapViewToScene(QPointF(100.0, 100.0))
 
     event = QMouseEvent(
@@ -258,14 +277,13 @@ def test_on_mouse_moved_while_dragging_updates_node_state(qtbot: QtBot):
     )
     plot = AnnotationPlot(view_model)
 
-    layout = pg.GraphicsLayoutWidget()
+    layout = show_plot_in_layout(plot)
     qtbot.addWidget(layout)
-    layout.addItem(plot)
-    layout.resize(400, 300)
-    layout.show()
     qtbot.waitExposed(layout)
 
-    plot.dragging_node = 1
+    plot.dragging_node = NodeViewState(
+        1, view_model.annotation_window_state.annotation_state.nodes[1], []
+    )
     scene_pos = plot.getViewBox().mapViewToScene(QPointF(1.5, 0.0))
 
     plot.on_mouse_moved(scene_pos)
@@ -277,11 +295,8 @@ def test_on_mouse_moved_without_dragging_moves_cursor_when_in_control(qtbot: QtB
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
 
-    layout = pg.GraphicsLayoutWidget()
+    layout = show_plot_in_layout(plot)
     qtbot.addWidget(layout)
-    layout.addItem(plot)
-    layout.resize(400, 300)
-    layout.show()
     qtbot.waitExposed(layout)
 
     plot.has_cursor_control = True
