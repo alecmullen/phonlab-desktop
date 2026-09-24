@@ -1,6 +1,7 @@
 import bisect
 import re
 from collections.abc import Iterator
+from io import TextIOWrapper
 
 from core.base.use_case_sync import UseCaseSync
 from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
@@ -26,58 +27,65 @@ class ParseTextGrid(UseCaseSync):
         self.token_regex = re.compile(r'"[^"]*"|\S+')
 
     def invoke(self) -> Annotation:
-        with open(self.filename, mode="r", encoding="utf-8") as tg:
-            text = tg.read()
-            words = iter(re.findall(self.token_regex, text))
+        try:
+            with open(self.filename, mode="r", encoding="utf-8") as tg:
+                return self.read_text_grid(tg)
+        except UnicodeDecodeError:
+            with open(self.filename, mode="r", encoding="utf-16") as tg:
+                return self.read_text_grid(tg)
 
-            _start = self.get_next_float(words)
-            _end = self.get_next_float(words)
+    def read_text_grid(self, open_file: TextIOWrapper) -> Annotation:
+        text = open_file.read()
+        words = iter(re.findall(self.token_regex, text))
 
-            num_tiers = self.get_next_int(words)
+        _start = self.get_next_float(words)
+        _end = self.get_next_float(words)
 
-            node_times: list[float] = []
-            labels: dict[str, list[tuple[str, float, float]]] = {}
+        num_tiers = self.get_next_int(words)
 
-            for _ in range(num_tiers):
-                _tier_type = self.get_next_quoted_string(words)
-                if _tier_type == INTERVAL_TIER_NAME:
-                    tier_name = self.get_next_quoted_string(words)
-                    labels[tier_name] = []
+        node_times: list[float] = []
+        labels: dict[str, list[tuple[str, float, float]]] = {}
 
-                    _tier_start = self.get_next_float(words)
-                    _tier_end = self.get_next_float(words)
+        for _ in range(num_tiers):
+            _tier_type = self.get_next_quoted_string(words)
+            if _tier_type == INTERVAL_TIER_NAME:
+                tier_name = self.get_next_quoted_string(words)
+                labels[tier_name] = []
 
-                    num_intervals = self.get_next_int(words)
+                _tier_start = self.get_next_float(words)
+                _tier_end = self.get_next_float(words)
 
-                    for i in range(num_intervals):
-                        interval_start = self.get_next_float(words)
-                        interval_end = self.get_next_float(words)
-                        interval_label = self.get_next_quoted_string(words)
+                num_intervals = self.get_next_int(words)
 
-                        node_times = get_or_add_node(node_times, interval_start)
-                        node_times = get_or_add_node(node_times, interval_end)
+                for i in range(num_intervals):
+                    interval_start = self.get_next_float(words)
+                    interval_end = self.get_next_float(words)
+                    interval_label = self.get_next_quoted_string(words)
 
-                        labels[tier_name].append(
-                            (interval_label, interval_start, interval_end)
-                        )
-                elif _tier_type == POINT_TIER_NAME:
-                    tier_name = self.get_next_quoted_string(words)
-                    labels[tier_name] = []
+                    node_times = get_or_add_node(node_times, interval_start)
+                    node_times = get_or_add_node(node_times, interval_end)
 
-                    _tier_start = self.get_next_float(words)
-                    _tier_end = self.get_next_float(words)
+                    labels[tier_name].append(
+                        (interval_label, interval_start, interval_end)
+                    )
+            elif _tier_type == POINT_TIER_NAME:
+                tier_name = self.get_next_quoted_string(words)
+                labels[tier_name] = []
 
-                    num_points = self.get_next_int(words)
+                _tier_start = self.get_next_float(words)
+                _tier_end = self.get_next_float(words)
 
-                    for i in range(num_points):
-                        point_time = self.get_next_float(words)
-                        point_label = self.get_next_quoted_string(words)
+                num_points = self.get_next_int(words)
 
-                        node_times = get_or_add_node(node_times, point_time)
+                for i in range(num_points):
+                    point_time = self.get_next_float(words)
+                    point_label = self.get_next_quoted_string(words)
 
-                        labels[tier_name].append((point_label, point_time, point_time))
-                else:
-                    raise ParseTextGridError("Invalid Textgrid")
+                    node_times = get_or_add_node(node_times, point_time)
+
+                    labels[tier_name].append((point_label, point_time, point_time))
+            else:
+                raise ParseTextGridError("Invalid Textgrid")
 
         nodes = {idx: node for idx, node in enumerate(node_times)}
         types = []

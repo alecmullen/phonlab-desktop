@@ -16,7 +16,7 @@ class NodeView(pg.GraphicsObject):
         self.setPos(self.view_rect.left(), self.view_rect.bottom())
 
         xs = [node.x for node in nodes]
-        ys = [node.ys[0] for node in nodes]
+        ys = [node.extents[0].tier for node in nodes]
         circle = pg.PlotDataItem(
             xs, ys, pen=None, symbol="o", symbolPen="b", symbolSize=8
         )
@@ -33,12 +33,18 @@ class NodeView(pg.GraphicsObject):
         for node in self.nodes:
             self.prepareGeometryChange()
             started = False
-            for y in node.ys:
+            for extent in node.extents:
+                y = extent.tier
                 if started and solid_path.currentPosition().y() != y:
                     dotted_path.moveTo(node.x, solid_path.currentPosition().y())
                     dotted_path.lineTo(node.x, y)
+
                 solid_path.moveTo(node.x, y)
-                solid_path.lineTo(node.x, y + 1)
+
+                if extent.has_point_label:
+                    solid_path.lineTo(node.x, y + 0.2)
+                else:
+                    solid_path.lineTo(node.x, y + 1)
 
                 started = True
 

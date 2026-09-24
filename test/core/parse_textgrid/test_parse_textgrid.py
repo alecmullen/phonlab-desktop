@@ -105,10 +105,10 @@ item []:
 
 
 def make_use_case(
-    tmp_path: Path, content: str, name: str = "sample.TextGrid"
+    tmp_path: Path, content: str, name: str = "sample.TextGrid", encoding: str = "utf-8"
 ) -> ParseTextGrid:
     path = tmp_path / name
-    path.write_text(content)
+    path.write_text(content, encoding=encoding)
     return ParseTextGrid(str(path))
 
 
@@ -184,6 +184,20 @@ def test_invoke_raises_syntax_error_for_truncated_file(tmp_path: Path):
 
     with pytest.raises(SyntaxError):
         use_case.invoke()
+
+
+def test_invoke_reads_utf_16_file(tmp_path: Path):
+    use_case = make_use_case(tmp_path, TWO_TIER_TEXTGRID, encoding="utf-16")
+
+    result = use_case.invoke()
+
+    assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
+    assert [t.type for t in result.types] == ["word", "phone"]
+    assert result.types[0].labels == [AnnotationLabel(0, 2, "hi")]
+    assert result.types[1].labels == [
+        AnnotationLabel(0, 1, "h"),
+        AnnotationLabel(1, 2, "ay"),
+    ]
 
 
 # --------------------------- get_next_float / get_next_int / get_next_quoted_string ---------------------------
