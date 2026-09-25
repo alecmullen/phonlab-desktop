@@ -5,11 +5,11 @@ from PyQt6.QtWidgets import QWidget
 
 from res.constants import NODE_H_MARGIN, NODE_V_MARGIN
 from ui.annotation.annotation_view_model import AnnotationViewModel
-from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
-from ui.annotation.state.label_view_state import LabelViewState
-from ui.annotation.state.node_view_state import NodeTierExtent, NodeViewState
+from ui.annotation.state.annotation_label_state import AnnotationLabelState
+from ui.annotation.state.annotation_node_state import AnnotationNodeState
+from ui.annotation.state.annotation_window_state import AnnotationWindowState
 from ui.base.state import State
 from ui.common.cursor_controller import CursorController
 
@@ -55,9 +55,10 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         self.addItem(self.mark_line, ignoreBounds=True)
         self.mark_line.setVisible(False)
 
-        self.visible_nodes: dict[int, NodeViewState] = {}
+        self.visible_nodes: list[AnnotationNodeState]
+        self.visible_labels: list[AnnotationLabelState]
 
-        self.dragging_node: NodeViewState | None = None
+        self.dragging_node: AnnotationNodeState | None = None
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -78,59 +79,27 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
         nodes = window_state.annotation_state.nodes
         types = window_state.annotation_state.types
-        start = window_state.start
-        end = window_state.end
 
         self.setYRange(-0.1, len(types), padding=0)
         self.getAxis("left").setTicks(
             [[(i, type.type) for i, type in enumerate(types)]]
         )
 
-        self.visible_nodes = {}
+        self.visible_nodes = []
+        self.visible_labels = []
         if len(types) == 0:
             return
 
-        label_height = self.getViewBox().viewRect().height() / (1.2 * len(types))
-        node_extents = {node: set[NodeTierExtent]() for node in nodes}
-        for i, type in enumerate(types):
-            label_view_states = []
-            for label in type.labels:
-                if nodes[label.e_node] <= start or nodes[label.s_node] >= end:
-                    continue
-                x_s = max(start, nodes[label.s_node])
-                x_e = min(end, nodes[label.e_node])
+        for type in types:
+            self.visible_labels += [label for label in type.labels if label.is_visible]
 
-                center_x = (x_e - x_s) / 2 + x_s
-                center_y = i + 0.5
-                width = x_e - x_s
+        label_view = LabelView(self.visible_labels, self)
+        label_view.setPos(0, 0)
+        self.addItem(label_view)
 
-                label_view_states.append(
-                    LabelViewState(
-                        (width, label_height), (center_x, center_y), label.label
-                    )
-                )
+        self.visible_nodes = [node for node in nodes.values() if node.is_visible]
 
-                node_extents[label.e_node] = {
-                    extent for extent in node_extents[label.e_node] if extent.tier != i
-                }
-                node_extents[label.s_node] = {
-                    extent for extent in node_extents[label.s_node] if extent.tier != i
-                }
-
-                node_extents[label.e_node].add(NodeTierExtent(i, width == 0))
-                node_extents[label.s_node].add(NodeTierExtent(i, width == 0))
-            label_view = LabelView(label_view_states, self)
-            label_view.setPos(0, 0)
-            self.addItem(label_view)
-
-        for node, loc in nodes.items():
-            if start <= loc <= end:
-                self.visible_nodes[node] = NodeViewState(
-                    node,
-                    loc,
-                    sorted(node_extents[node], key=lambda extent: extent.tier),
-                )
-        node_view = NodeView(list(self.visible_nodes.values()), self)
+        node_view = NodeView(self.visible_nodes, self)
         node_view.setPos(0, 0)
         self.addItem(node_view)
 
@@ -141,7 +110,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
         pos = self.getViewBox().mapSceneToView(event.position())
 
-        for node_view_state in self.visible_nodes.values():
+        for node_view_state in self.visible_nodes:
             node_x = node_view_state.x
             node_y = node_view_state.extents[0].tier
             if abs(pos.x() - node_x) < h_margin and abs(pos.y() - node_y) < v_margin:
@@ -155,6 +124,17 @@ class AnnotationPlot(pg.PlotItem, CursorController):
             self.dragging_node = None
             event.accept()
             return True
+        else:
+            pos = self.getViewBox().mapSceneToView(event.position())
+            for label_view_state in self.visible_labels:
+                label_pos, label_size = label_view_state.pos, label_view_state.size
+                if (
+                    abs(pos.x() - label_pos[0]) < label_size[0] / 2
+                    and abs(pos.y() - label_pos[1]) < label_size[1] / 2
+                ):
+                    self.view_model.select_label(label_view_state)
+                    event.accept()
+                    return True
         return False
 
     @pyqtSlot(object)
