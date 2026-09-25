@@ -19,11 +19,12 @@ from PyQt6.QtWidgets import (
 )
 
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
-from res.constants import DEFAULT_WINDOW_LENGTH
-
-CHANNEL_MODE_MONO = "mono"
-CHANNEL_MODE_STEREO = "stereo"
-CHANNEL_MODE_MULTICHANNEL = "multichannel"
+from res.constants import (
+    CHANNEL_MODE_MONO,
+    CHANNEL_MODE_MULTICHANNEL,
+    CHANNEL_MODE_STEREO,
+    DEFAULT_WINDOW_LENGTH,
+)
 
 DEFAULT_SAMPLE_RATE = 16000
 

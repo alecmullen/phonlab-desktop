@@ -36,6 +36,14 @@ from ui.document.state.status_message_state import StatusMessageState
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.waveform.audio_wave_plot import AudioWavePlot
 
+# Relative row height per plot type; a plot type occupying more than one
+# row (only WAVEFORM, when stereo) applies this weight to each of its rows.
+PLOT_ROW_WEIGHT = {
+    PlotType.WAVEFORM: 1,
+    PlotType.SPECTROGRAM: 2,
+    PlotType.ANNOTATION: 1,
+}
+
 
 class DocumentView(QWidget):
     """A single audio document with its own waveform/spectrogram display"""
@@ -61,6 +69,7 @@ class DocumentView(QWidget):
 
         # Initialize plot items (will be created in plot methods)
         self.wave_plot: AudioWavePlot | None = None
+        self.wave_plot_channel2: AudioWavePlot | None = None
         self.spec_plot: SpectrogramPlot | None = None
         self.annot_plot: AnnotationPlot | None = None
         # Track one plot to have main x-axis others link to
@@ -149,6 +158,18 @@ class DocumentView(QWidget):
         menu.addAction(self.set_mark_action)
         menu.addAction(self.remove_mark_action)
 
+    def _wave_plots(self) -> list[AudioWavePlot]:
+        """The waveform plot(s) currently shown, in channel order - one for
+        mono/multichannel documents, two for stereo."""
+        return [p for p in (self.wave_plot, self.wave_plot_channel2) if p is not None]
+
+    def _wave_plot_at(self, scene_pos: QPointF) -> AudioWavePlot | None:
+        """Whichever waveform row (if any) contains this scene position."""
+        for plot in self._wave_plots():
+            if plot.sceneBoundingRect().contains(scene_pos):
+                return plot
+        return None
+
     @pyqtSlot(object)
     def on_state_change(self, model: State):
         if isinstance(model, AudioLoaded):
@@ -182,10 +203,10 @@ class DocumentView(QWidget):
 
         self.first_plot = None
 
-        if self.wave_plot:
-            self.wave_plot.clear()
-            del self.wave_plot
-            self.wave_plot = None
+        for plot in self._wave_plots():
+            plot.clear()
+        self.wave_plot = None
+        self.wave_plot_channel2 = None
 
         del self.spec_plot
         self.spec_plot = None
@@ -197,8 +218,8 @@ class DocumentView(QWidget):
         """Connect mouse signals to all plots"""
         scene = self.graphics_widget.scene()
         scene.sigMouseMoved.connect(self.on_mouse_moved)
-        if self.wave_plot is not None:
-            scene.sigMouseMoved.connect(self.wave_plot.on_mouse_moved)
+        for plot in self._wave_plots():
+            scene.sigMouseMoved.connect(plot.on_mouse_moved)
         if self.spec_plot is not None:
             scene.sigMouseMoved.connect(self.spec_plot.on_mouse_moved)
         if self.annot_plot is not None:
@@ -217,38 +238,69 @@ class DocumentView(QWidget):
         self.clear_plots()
 
         ordered_plots = sorted(layout_state.plots, key=lambda type: type.value)
-        for i, plot_type in enumerate(ordered_plots):
-            is_bottom = i == len(ordered_plots) - 1
-            plot = self.add_plot(i, plot_type, is_bottom)
-            if self.first_plot is None:
-                self.first_plot = plot
+        row = 0
+        row_weights: list[float] = []
+        for plot_type in ordered_plots:
+            is_last_type = plot_type == ordered_plots[-1]
+            if plot_type == PlotType.WAVEFORM:
+                rows_added = self._add_waveform_plots(row, is_last_type)
+            else:
+                plot = self.add_plot(row, plot_type, is_bottom=is_last_type)
+                if self.first_plot is None:
+                    self.first_plot = plot
+                rows_added = 1
+            row_weights.extend([PLOT_ROW_WEIGHT[plot_type]] * rows_added)
+            row += rows_added
 
-        if len(layout_state.plots) == 2:
-            self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
-            self.graphics_widget.ci.layout.setRowStretchFactor(1, 2)
-        elif len(layout_state.plots) == 3:
-            self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
-            self.graphics_widget.ci.layout.setRowStretchFactor(1, 1)
-            self.graphics_widget.ci.layout.setRowStretchFactor(2, 1)
+        for row_index, weight in enumerate(row_weights):
+            self.graphics_widget.ci.layout.setRowStretchFactor(row_index, weight)
 
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
         self.update_mark(self.view_model.mark_state)
         self.update_document_window(self.view_model.document_window_state)
 
+    def _add_waveform_plots(self, row: int, is_last_type: bool) -> int:
+        """Add one waveform row for channel 0, plus a second row for
+        channel 1 when the document is stereo. Returns the number of rows
+        added (1 or 2)."""
+        stereo = self.view_model.stereo_channels() is not None
+        is_bottom = is_last_type and not stereo
+
+        self.wave_plot = AudioWavePlot(
+            view_model=self.view_model.audio_wave_view_model,
+            linked_plot=self.first_plot,
+            is_bottom_plot=is_bottom,
+        )
+        wave_label = self.tr("Ch 1 Amplitude") if stereo else self.tr("Amplitude")
+        self.wave_plot.setLabel("left", wave_label)
+        self.add_shared_context_menu_actions(self.wave_plot.getViewBox())
+        self.graphics_widget.addItem(self.wave_plot, row=row, col=0)
+        self.wave_plot.show()
+        # Must be set before creating the second wave plot below, which
+        # needs a valid linked_plot to x-link against.
+        if self.first_plot is None:
+            self.first_plot = self.wave_plot
+
+        if not stereo:
+            return 1
+
+        self.wave_plot_channel2 = AudioWavePlot(
+            view_model=self.view_model.audio_wave_view_model_channel2,
+            linked_plot=self.first_plot,
+            is_bottom_plot=is_last_type,
+        )
+        self.wave_plot_channel2.setLabel("left", self.tr("Ch 2 Amplitude"))
+        self.add_shared_context_menu_actions(self.wave_plot_channel2.getViewBox())
+        self.graphics_widget.addItem(self.wave_plot_channel2, row=row + 1, col=0)
+        self.wave_plot_channel2.show()
+        return 2
+
     def add_plot(
         self, row: int, plot_type: PlotType, is_bottom: bool = False
     ) -> pg.PlotItem:
         if plot_type == PlotType.WAVEFORM:
-            self.wave_plot = AudioWavePlot(
-                view_model=self.view_model.audio_wave_view_model,
-                linked_plot=self.first_plot,
-                is_bottom_plot=is_bottom,
-            )
-            self.add_shared_context_menu_actions(self.wave_plot.getViewBox())
-            self.graphics_widget.addItem(self.wave_plot, row=row, col=0)
-            self.wave_plot.show()
-            return self.wave_plot
+            raise ValueError("WAVEFORM is handled by _add_waveform_plots")
         elif plot_type == PlotType.SPECTROGRAM:
             self.spec_plot = SpectrogramPlot(
                 view_model=self.view_model.spectrogram_view_model,
@@ -315,11 +367,10 @@ class DocumentView(QWidget):
         self.view_model.center_on_selection()
 
     def play_window_or_selection(self, scene_pos: QPointF):
-        clicked_plot = None
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.wave_plot
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.spec_plot
+        clicked_plot = self._wave_plot_at(scene_pos)
+        if clicked_plot is None and self.spec_plot is not None:
+            if self.spec_plot.sceneBoundingRect().contains(scene_pos):
+                clicked_plot = self.spec_plot
 
         if not clicked_plot:
             return
@@ -345,8 +396,8 @@ class DocumentView(QWidget):
 
         if self.spec_plot is not None:
             self.spec_plot.update_selection_region(box_left, t_range)
-        if self.wave_plot is not None:
-            self.wave_plot.update_selection_region(box_left, t_range)
+        for plot in self._wave_plots():
+            plot.update_selection_region(box_left, t_range)
 
     def update_document_window(self, doc_window: DocumentWindowState):
         self.update_slider_page_step(doc_window)
@@ -363,15 +414,15 @@ class DocumentView(QWidget):
     def update_mark(self, mark: MarkState):
         if self.spec_plot is not None:
             self.spec_plot.set_mark_position(mark.position, mark.is_set)
-        if self.wave_plot is not None:
-            self.wave_plot.set_mark_position(mark.position, mark.is_set)
+        for plot in self._wave_plots():
+            plot.set_mark_position(mark.position, mark.is_set)
         if self.annot_plot is not None:
             self.annot_plot.set_mark_position(mark.position, mark.is_set)
 
     def update_playback_cursor(self, playback: PlaybackState):
         if playback.is_playing:
-            if self.wave_plot:
-                self.wave_plot.set_cursor_position(playback.position)
+            for plot in self._wave_plots():
+                plot.set_cursor_position(playback.position)
             if self.spec_plot:
                 self.spec_plot.set_cursor_position(playback.position)
             if self.annot_plot:
@@ -389,8 +440,9 @@ class DocumentView(QWidget):
     def on_mouse_moved(self, pos: QPointF):
         # Determine which plot the mouse is over
 
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(pos):
-            mouse_point = self.wave_plot.vb.mapSceneToView(pos)
+        wave_plot = self._wave_plot_at(pos)
+        if wave_plot is not None:
+            mouse_point = wave_plot.vb.mapSceneToView(pos)
             x = mouse_point.x()
             status_msg = self.tr("Cursor time: {:.3f}s").format(x)
 
@@ -450,17 +502,18 @@ class DocumentView(QWidget):
         """Handle left mouse button press"""
         scene_pos = self.graphics_widget.mapToScene(event.pos())
 
-        clicked_plot = None
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.wave_plot
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.spec_plot
-        elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
-            scene_pos
-        ):
-            handled = self.annot_plot.handle_mouse_press(event)
-            if not handled:
-                clicked_plot = self.annot_plot
+        clicked_plot = self._wave_plot_at(scene_pos)
+        if clicked_plot is None:
+            if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
+                scene_pos
+            ):
+                clicked_plot = self.spec_plot
+            elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
+                scene_pos
+            ):
+                handled = self.annot_plot.handle_mouse_press(event)
+                if not handled:
+                    clicked_plot = self.annot_plot
 
         if clicked_plot is None:
             return
@@ -478,11 +531,12 @@ class DocumentView(QWidget):
 
         self.mouse_pressed = False
 
-        clicked_plot = None
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.wave_plot
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.spec_plot
+        clicked_plot = self._wave_plot_at(scene_pos)
+        if clicked_plot is None:
+            if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
+                scene_pos
+            ):
+                clicked_plot = self.spec_plot
 
         if not clicked_plot:
             return
@@ -490,7 +544,7 @@ class DocumentView(QWidget):
         mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
 
-        if clicked_plot == self.wave_plot or clicked_plot == self.spec_plot:
+        if clicked_plot in self._wave_plots() or clicked_plot == self.spec_plot:
             self.view_model.zoom_if_in_selection(x)
 
     def handle_mouse_release(self, event: QMouseEvent):
@@ -581,8 +635,9 @@ class DocumentView(QWidget):
 
         delta = scroll_y
 
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            self.wave_plot.adjust_y_scale(delta)
+        wave_plot = self._wave_plot_at(scene_pos)
+        if wave_plot is not None:
+            wave_plot.adjust_y_scale(delta)
         elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
             self.spec_plot.adjust_gray_scale(is_trackpad, delta)
 
@@ -591,15 +646,16 @@ class DocumentView(QWidget):
     def set_mark(self, scene_pos: QPointF):
         """Shift+Click: place a persistent mark at this time, used as the
         paste insertion point (and available for future uses)."""
-        clicked_plot = None
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.wave_plot
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.spec_plot
-        elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
-            scene_pos
-        ):
-            clicked_plot = self.annot_plot
+        clicked_plot = self._wave_plot_at(scene_pos)
+        if clicked_plot is None:
+            if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
+                scene_pos
+            ):
+                clicked_plot = self.spec_plot
+            elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
+                scene_pos
+            ):
+                clicked_plot = self.annot_plot
 
         if not clicked_plot:
             return
