@@ -4,11 +4,11 @@ from PyQt6.QtGui import QPainter, QPainterPath, QPicture
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
 from res.constants import NODE_H_MARGIN, NODE_V_MARGIN
-from ui.annotation.state.node_view_state import NodeViewState
+from ui.annotation.state.annotation_node_state import AnnotationNodeState
 
 
 class NodeView(pg.GraphicsObject):
-    def __init__(self, nodes: list[NodeViewState], parent_plot: pg.PlotItem):
+    def __init__(self, nodes: list[AnnotationNodeState], parent_plot: pg.PlotItem):
         super().__init__()
         self.nodes = nodes
 

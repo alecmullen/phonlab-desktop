@@ -9,7 +9,6 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
 from core.load_audio.prep_audio import PrepAudio
-from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
 from res.constants import (
@@ -18,10 +17,8 @@ from res.constants import (
     MAX_UNDO_HISTORY,
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
-from ui.annotation.annotation_window_state import AnnotationWindowState
 from ui.base.state import State
 from ui.base.view_model import ViewModel
-from ui.document.state.annotation_state import AnnotationState, to_annotation_state
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
     to_audio_channel_state,
@@ -54,7 +51,6 @@ class DocumentViewModel(ViewModel):
         self.channel_state: ChannelState = ChannelState()
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
-        self.annotation_state: AnnotationState = AnnotationState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
         self.playback_state = PlaybackState()
         self.mark_state: MarkState = MarkState()
@@ -71,6 +67,7 @@ class DocumentViewModel(ViewModel):
 
         self.state_changed.connect(self.on_state_changed)
         self.spectrogram_view_model.state_changed.connect(self.on_sgram_state_change)
+        self.annotation_view_model.state_changed.connect(self.on_annot_state_changed)
 
         self.audio_player = AudioPlayer()
 
@@ -84,6 +81,11 @@ class DocumentViewModel(ViewModel):
         if isinstance(model, LoadProgressState):
             self.state_changed.emit(model)
         if isinstance(model, AudioPrepped):
+            self.state_changed.emit(model)
+
+    @pyqtSlot(object)
+    def on_annot_state_changed(self, model: State):
+        if isinstance(model, StatusMessageState):
             self.state_changed.emit(model)
 
     def toggle_wave(self):
@@ -271,8 +273,7 @@ class DocumentViewModel(ViewModel):
                 self.document_window_state.end,
             )
             fs = primary_channel.fs
-            state = AnnotationWindowState(self.annotation_state, start / fs, end / fs)
-            self.annotation_view_model.set_annotation_state(state)
+            self.annotation_view_model.set_window_state(start / fs, end / fs)
 
     def play_audio(self, x: np.ndarray, fs: int, start: int):
         self.stop_audio()
@@ -702,12 +703,7 @@ class DocumentViewModel(ViewModel):
         self.undo_stack.append(cmd)
 
     def parse_textgrid(self, path: str):
-        use_case = ParseTextGrid(path)
-        try:
-            self.annotation_state = to_annotation_state(use_case.invoke())
-            self.update_annotation_state()
-        except ParseTextGridError as e:
-            self.state_changed.emit(StatusMessageState(str(e)))
+        self.annotation_view_model.parse_textgrid(path)
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

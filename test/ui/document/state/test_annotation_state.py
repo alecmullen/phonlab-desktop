@@ -1,5 +1,5 @@
 from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
-from ui.document.state.annotation_state import (
+from ui.annotation.state.annotation_state import (
     AnnotationLabelState,
     AnnotationTypeState,
     to_annotation_state,

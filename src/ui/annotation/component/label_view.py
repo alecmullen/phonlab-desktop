@@ -4,11 +4,11 @@ from PyQt6.QtGui import QFont, QFontMetrics, QPainter, QPicture, QTextOption
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
 from res.constants import POINT_LABEL_WIDTH
-from ui.annotation.state.label_view_state import LabelViewState
+from ui.annotation.state.annotation_label_state import AnnotationLabelState
 
 
 class LabelView(pg.GraphicsObject):
-    def __init__(self, labels: list[LabelViewState], parent_plot: pg.PlotItem):
+    def __init__(self, labels: list[AnnotationLabelState], parent_plot: pg.PlotItem):
         super().__init__()
         self.labels = labels
 
