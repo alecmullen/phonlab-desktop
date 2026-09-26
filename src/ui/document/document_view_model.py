@@ -4,6 +4,7 @@ import numpy as np
 from PyQt6.QtCore import pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
+from core.edit_audio.entity.audio_clip import AudioClip
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
 from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -671,10 +672,6 @@ class DocumentViewModel(ViewModel):
         else:
             channels = self._stereo_edit_channels()
             result = EditAudio(to_audio_signals(channels), cmd).invoke()
-
-        if result is None:
-            self.state_changed.emit(StatusMessageState(self.tr("No selection to copy")))
-            return None
 
         return to_audio_state(result.new_clip)
 
