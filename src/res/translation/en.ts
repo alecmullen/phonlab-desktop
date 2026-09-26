@@ -117,6 +117,16 @@
         <source>Cursor time: {:.3f}s, frequency: {:.0f} Hz</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="276"/>
+        <source>Ch 1 Amplitude</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="294"/>
+        <source>Ch 2 Amplitude</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DocumentViewModel</name>
@@ -167,6 +177,16 @@
     <message>
         <location filename="../../ui/document/document_view_model.py" line="658"/>
         <source>Set a mark (Shift+Click) before pasting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view_model.py" line="744"/>
+        <source>Pasting stereo audio into a mono document isn&apos;t yet supported</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view_model.py" line="783"/>
+        <source>Pasting mono audio into a stereo document isn&apos;t yet supported</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

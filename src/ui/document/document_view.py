@@ -18,8 +18,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.edit_audio.entity.audio_clip import AudioClip
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
-from core.load_audio.entity.audio_signal import AudioSignal
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
@@ -676,13 +676,13 @@ class DocumentView(QWidget):
         """Play the audio currently visible in the viewport"""
         self.view_model.play_visible_audio()
 
-    def copy_selection(self) -> AudioSignal | None:
+    def copy_selection(self) -> AudioClip | None:
         return self.view_model.copy_selection()
 
-    def cut_selection(self) -> AudioSignal | None:
+    def cut_selection(self) -> AudioClip | None:
         return self.view_model.cut_selection()
 
-    def paste_at_cursor(self, clip: AudioSignal):
+    def paste_at_cursor(self, clip: AudioClip):
         self.view_model.paste_at_mark(clip)
 
     def undo(self):

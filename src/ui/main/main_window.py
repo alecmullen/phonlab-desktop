@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.load_audio.entity.audio_signal import AudioSignal
+from core.edit_audio.entity.audio_clip import AudioClip
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
 from ui.base.state import State
@@ -34,7 +34,7 @@ class MainWindow(QMainWindow):
 
         self.filters = "Sound files and TextGrids (*.wav *.TextGrid)"
         self.splash = None
-        self.clipboard: AudioSignal | None = None
+        self.clipboard: AudioClip | None = None
         self.clip_counters: dict[str, int] = {}
 
         # Create tab widget
@@ -274,7 +274,7 @@ class MainWindow(QMainWindow):
                 if annotation_filename is not None:
                     doc.load_textgrid(annotation_filename)
 
-    def _open_clip_tab(self, source_doc: DocumentView, clip: AudioSignal):
+    def _open_clip_tab(self, source_doc: DocumentView, clip: AudioClip):
         """Open a new tab containing the just-copied/cut samples, without
         stealing focus from source_doc"""
         doc_view_model = DocumentViewModel()
