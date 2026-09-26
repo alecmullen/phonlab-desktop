@@ -127,6 +127,16 @@
         <source>Ch 2 Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="690"/>
+        <source>This clip is stereo, but the destination is mono. Pasting will convert the document to stereo - which channel should the existing audio occupy? The new channel will be filled with a quiet noise placeholder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="697"/>
+        <source>This clip is mono, but the destination is stereo. Which channel should the clip&apos;s audio occupy? The other channel will be filled with a quiet noise placeholder.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DocumentViewModel</name>
@@ -175,18 +185,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="658"/>
+        <location filename="../../ui/document/document_view_model.py" line="611"/>
         <source>Set a mark (Shift+Click) before pasting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/document/document_view_model.py" line="744"/>
-        <source>Pasting stereo audio into a mono document isn&apos;t yet supported</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/document/document_view_model.py" line="783"/>
-        <source>Pasting mono audio into a stereo document isn&apos;t yet supported</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -456,6 +456,24 @@
     <message>
         <location filename="../../ui/main/open_audio_dialog.py" line="111"/>
         <source>Keep as Stereo</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PasteChannelDialog</name>
+    <message>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="17"/>
+        <source>Assign Channel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="20"/>
+        <source>Left Channel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="23"/>
+        <source>Right Channel</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
