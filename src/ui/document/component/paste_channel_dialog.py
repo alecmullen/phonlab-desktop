@@ -7,30 +7,15 @@ class PasteChannelDialog(QDialog):
     quiet noise placeholder."""
 
     @staticmethod
-    def get_channel(parent: QWidget | None, is_clip_stereo: bool) -> int | None:
+    def get_channel(parent: QWidget | None, message: str) -> int | None:
         dlg = PasteChannelDialog(parent)
-        return dlg._ask(is_clip_stereo)
+        return dlg._ask(message)
 
-    def _get_message(self, is_clip_stereo: bool) -> str:
-        if is_clip_stereo:
-            return self.tr(
-                "This clip is stereo, but the destination is mono. Pasting "
-                "will convert the document to stereo - which channel should "
-                "the existing audio occupy? The new channel will be filled "
-                "with a quiet noise placeholder."
-            )
-        else:
-            return self.tr(
-                "This clip is mono, but the destination is stereo. Which "
-                "channel should the clip's audio occupy? The other channel "
-                "will be filled with a quiet noise placeholder."
-            )
-
-    def _ask(self, is_clip_stereo: bool) -> int | None:
+    def _ask(self, message: str) -> int | None:
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Question)
         msg_box.setWindowTitle(self.tr("Assign Channel"))
-        msg_box.setText(self._get_message(is_clip_stereo))
+        msg_box.setText(message)
         left_button = msg_box.addButton(
             self.tr("Left Channel"), QMessageBox.ButtonRole.AcceptRole
         )
