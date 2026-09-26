@@ -418,6 +418,26 @@
         <source>Primary channel:</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../../ui/main/open_audio_dialog.py" line="101"/>
+        <source>Duplicate channels</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/open_audio_dialog.py" line="103"/>
+        <source>This is a stereo file, but it appears that the left and right channels are duplicates of each other.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/open_audio_dialog.py" line="109"/>
+        <source>Open as Mono (Recommended)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/open_audio_dialog.py" line="111"/>
+        <source>Keep as Stereo</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ResampleAudioDialog</name>
@@ -536,19 +556,6 @@
     <message>
         <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="41"/>
         <source>Step size:</source>
-        <translation type="unfinished"></translation>
-    </message>
-</context>
-<context>
-    <name>dlg</name>
-    <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="73"/>
-        <source>Duplicate channels</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="75"/>
-        <source>the channels of this audio file appear to be duplicates of the same audio - we will treat it as a mono audio file.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
