@@ -46,12 +46,24 @@ def _mono_options() -> AudioOpenOptions:
     )
 
 
+def _stereo_options() -> AudioOpenOptions:
+    return AudioOpenOptions(
+        target_fs=DEFAULT_SAMPLE_RATE,
+        channel_mode=CHANNEL_MODE_STEREO,
+        retained_channels=[0, 1],
+        primary_channel=0,
+    )
+
+
 class OpenAudioDialog(QDialog):
     """Lets the user pick channel mode and primary channel for a file about
     to be opened, after reporting its native format. Skipped for
-    single-channel files, and for stereo files whose two channels turn out
-    to be duplicates of each other (those are opened as mono automatically,
-    using the left channel)."""
+    single-channel files; for stereo files whose two channels turn out to
+    be duplicates of each other (those are opened as mono automatically,
+    using the left channel); and for stereo files with two distinct
+    channels (those are opened with both channels active - stereo
+    playback, spectrogram of the summed channels - with the left channel
+    as an arbitrary internal "primary" until the user picks one)."""
 
     @staticmethod
     def get_options(
@@ -79,6 +91,7 @@ class OpenAudioDialog(QDialog):
                     ),
                 )
                 return _mono_options()
+            return _stereo_options()
 
         if dlg.exec() == QDialog.DialogCode.Accepted:
             return dlg.build_options()
