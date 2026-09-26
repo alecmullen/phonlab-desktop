@@ -103,24 +103,36 @@ class EditAudio(UseCaseSync[EditResult | None]):
             )
 
         if self._edit_command.type == EditCommandType.PASTE:
-            x, fs = self._edit_command.clip_x, self._edit_command.clip_fs
-            if x is None or fs is None:
+            clip_x, clip_fs = self._edit_command.clip_x, self._edit_command.clip_fs
+            if clip_x is None or clip_fs is None:
                 raise RuntimeError("Lost copied audio data")
 
-            if self._channel.fs != fs:
-                clip_x = self._resample_signal(x, fs)
-            else:
-                clip_x = x
+            if self._channel.fs != clip_fs:
+                clip_x = self._resample_signal(clip_x, clip_fs)
 
-            start_idx = int(
-                np.clip(self._edit_command.start_time * fs, 0, len(self._channel.x))
-            )
-            if settings.cut_and_paste_at_zero_crossings:
-                start_idx = self._nearest_zero_crossing_boundary(start_idx)
+            if self._edit_command.snapped_start_idx is not None:
+                start_idx = min(
+                    self._edit_command.snapped_start_idx, len(self._channel.x)
+                )
+            else:
+                # start_time is a position in the DESTINATION document's own
+                # timeline (e.g. the paste mark) - convert it using this
+                # channel's fs, not the clip's.
+                start_idx = int(
+                    np.clip(
+                        self._edit_command.start_time * self._channel.fs,
+                        0,
+                        len(self._channel.x),
+                    )
+                )
+                if settings.cut_and_paste_at_zero_crossings:
+                    start_idx = self._nearest_zero_crossing_boundary(start_idx)
 
             new_x = np.concatenate(
                 [self._channel.x[:start_idx], clip_x, self._channel.x[start_idx:]]
             )
             return EditResult(
-                new_channel=AudioSignal(new_x, self._channel.fs), start_idx=start_idx
+                new_channel=AudioSignal(new_x, self._channel.fs),
+                new_clip=AudioSignal(clip_x, self._channel.fs),
+                start_idx=start_idx,
             )
