@@ -131,7 +131,7 @@ class DocumentView(QWidget):
         self.resample_action.triggered.connect(self.open_resample_dialog)
 
         self.set_mark_action = ContextMenuHintAction(
-            self.tr("Set Mark"), self.tr("Shift+Click"), parent=self
+            self.tr("Set Mark"), self.tr("Click"), parent=self
         )
         self.set_mark_action.triggered.connect(
             lambda: (
@@ -575,7 +575,7 @@ class DocumentView(QWidget):
                 self.view_model.play_selected_audio()
             else:
                 if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                    self.set_mark(scene_pos)
+                    self.play_window_or_selection(scene_pos)
                 else:
                     self.pending_single_click = scene_pos
                     if self.click_timer is not None:
@@ -591,7 +591,7 @@ class DocumentView(QWidget):
     def handle_single_click(self):
         if self.pending_single_click is not None:
             scene_pos = self.pending_single_click
-            self.play_window_or_selection(scene_pos)
+            self.set_mark(scene_pos)
 
         self.pending_single_click = None
         self.click_timer = None
