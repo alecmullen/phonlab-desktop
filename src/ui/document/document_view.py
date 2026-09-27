@@ -295,6 +295,20 @@ class DocumentView(QWidget):
         self.add_shared_context_menu_actions(self.wave_plot_channel2.getViewBox())
         self.graphics_widget.addItem(self.wave_plot_channel2, row=row + 1, col=0)
         self.wave_plot_channel2.show()
+
+        # A plot whose bottom axis hides tick labels reports a near-zero
+        # axis height, which skews pyqtgraph's row-height distribution even
+        # with equal row stretch factors (row 0 ends up visibly taller than
+        # row 1). Reserve the same axis height on both rows regardless of
+        # which one actually shows the labels, so the two channels get
+        # equal screen space.
+        bottom_height = max(
+            self.wave_plot.getAxis("bottom").height(),
+            self.wave_plot_channel2.getAxis("bottom").height(),
+        )
+        self.wave_plot.getAxis("bottom").setHeight(bottom_height)
+        self.wave_plot_channel2.getAxis("bottom").setHeight(bottom_height)
+
         return 2
 
     def add_plot(
