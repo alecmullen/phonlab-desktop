@@ -56,13 +56,18 @@
 <context>
     <name>AudioWavePlot</name>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="28"/>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="51"/>
         <source>Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="34"/>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="57"/>
         <source>Time</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="41"/>
+        <source>Active</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -187,6 +192,11 @@
     <message>
         <location filename="../../ui/document/document_view_model.py" line="611"/>
         <source>Set a mark (Shift+Click) before pasting</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view_model.py" line="644"/>
+        <source>At least one channel must stay active</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
