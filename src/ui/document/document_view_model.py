@@ -127,7 +127,9 @@ class DocumentViewModel(ViewModel):
     def load_audio(self, filepath: str, options: AudioOpenOptions):
         self.audio_options = options
         self.channel_state = ChannelState(
-            primary_channel=options.primary_channel, channel_mode=options.channel_mode
+            primary_channel=options.primary_channel,
+            channel_mode=options.channel_mode,
+            active_channels=frozenset(options.retained_channels),
         )
 
         @pyqtSlot(object)
@@ -229,7 +231,9 @@ class DocumentViewModel(ViewModel):
             self.audio_options, channel_mode=channel_mode, retained_channels=indices
         )
         self.channel_state = ChannelState(
-            primary_channel=indices[0], channel_mode=channel_mode
+            primary_channel=indices[0],
+            channel_mode=channel_mode,
+            active_channels=frozenset(indices),
         )
 
         audio_state = {
@@ -274,18 +278,17 @@ class DocumentViewModel(ViewModel):
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
     def prep_audio_spectrogram(self):
-        primary_channel = self.primary_channel()
-        if primary_channel is None:
+        active = self.active_channel_states()
+        if not active:
             return
 
-        stereo = self.stereo_channels()
-        if stereo is not None:
-            ch0, ch1 = stereo
+        if len(active) == 2:
+            ch0, ch1 = active
             min_len = min(len(ch0.x), len(ch1.x))
             x = ch0.x[:min_len] + ch1.x[:min_len]
             fs = ch0.fs
         else:
-            x, fs = primary_channel.x, primary_channel.fs
+            x, fs = active[0].x, active[0].fs
 
         self.spectrogram_view_model.prep_audio(x, fs, self.audio_options.target_fs)
 
@@ -551,9 +554,12 @@ class DocumentViewModel(ViewModel):
         channels are active, else mono (N,). Channel-index order (not
         primary-first) is correct here regardless of which channel is
         "primary" - it's just left/right output order."""
-        stereo = self.stereo_channels()
-        if stereo is not None:
-            ch0, ch1 = stereo
+        active = self.active_channel_states()
+        if not active:
+            return None
+
+        if len(active) == 2:
+            ch0, ch1 = active
             min_len = min(len(ch0.x), len(ch1.x))
             end = min(end, min_len)
             if start >= end:
@@ -561,9 +567,7 @@ class DocumentViewModel(ViewModel):
             section = np.stack([ch0.x[start:end], ch1.x[start:end]], axis=1)
             return section, ch0.fs
 
-        channel = self.primary_channel()
-        if channel is None:
-            return None
+        channel = active[0]
         if start >= end:
             return None
         return channel.x[start:end], channel.fs
@@ -613,6 +617,47 @@ class DocumentViewModel(ViewModel):
         if len(indices) != 2 or not all(idx in self.audio_state for idx in indices):
             return None
         return (self.audio_state[indices[0]], self.audio_state[indices[1]])
+
+    def active_channel_states(self) -> list[AudioChannelState]:
+        """The channel(s) currently active for playback/spectrogram - both,
+        for a stereo document with neither channel deactivated (today's only
+        behavior); just one, if the user deactivated the other via the
+        per-channel checkbox. Unrelated to stereo_channels(), which always
+        returns both real channels of a stereo document regardless of
+        activation - that's used for display (both rows always shown, just
+        grayed when inactive) and editing (unaffected by activation)."""
+        if self.stereo_channels() is None:
+            primary = self.primary_channel()
+            return [primary] if primary is not None else []
+        indices = sorted(self.channel_state.active_channels)
+        return [self.audio_state[idx] for idx in indices if idx in self.audio_state]
+
+    def toggle_channel_active(self, idx: int):
+        """Activate/deactivate channel `idx` for playback/spectrogram
+        purposes - refused if it would leave no channel active. Not tracked
+        by the undo/redo stack, matching resample() and the mono->stereo
+        promotion, which also aren't undoable."""
+        active = self.channel_state.active_channels
+        new_active = (active - {idx}) if idx in active else (active | {idx})
+        if not new_active:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("At least one channel must stay active"))
+            )
+            return
+
+        primary = (
+            next(iter(new_active))
+            if len(new_active) == 1
+            else self.channel_state.primary_channel
+        )
+        self.channel_state = replace(
+            self.channel_state,
+            active_channels=frozenset(new_active),
+            primary_channel=primary,
+        )
+        self.audio_wave_view_model.set_active(0 in new_active)
+        self.audio_wave_view_model_channel2.set_active(1 in new_active)
+        self.prep_audio_spectrogram()
 
     def set_mark(self, x_pos: float):
         self.mark_state = MarkState(position=x_pos, is_set=True)
@@ -922,6 +967,7 @@ class DocumentViewModel(ViewModel):
             self.channel_state,
             channel_mode=CHANNEL_MODE_STEREO,
             primary_channel=channel_choice,
+            active_channels=frozenset({0, 1}),
         )
         self.set_audio(audio_state, channel_choice, reset_window=False)
 
