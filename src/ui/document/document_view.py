@@ -165,6 +165,17 @@ class DocumentView(QWidget):
                 return plot
         return None
 
+    def _channel_checkbox_at(self, scene_pos: QPointF) -> int | None:
+        """The channel index (0 or 1) whose "Active" checkbox contains this
+        scene position, if any. The checkbox is rendering-only (see
+        AudioWavePlot) - clicks on it are hit-tested here rather than
+        delivered natively."""
+        for idx, plot in enumerate(self._wave_plots()):
+            proxy = plot.active_checkbox_proxy
+            if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):
+                return idx
+        return None
+
     @pyqtSlot(object)
     def on_state_change(self, model: State):
         if isinstance(model, AudioLoaded):
@@ -499,6 +510,11 @@ class DocumentView(QWidget):
         """Handle left mouse button press"""
         scene_pos = self.graphics_widget.mapToScene(event.pos())
 
+        channel_idx = self._channel_checkbox_at(scene_pos)
+        if channel_idx is not None:
+            self.view_model.toggle_channel_active(channel_idx)
+            return
+
         clicked_plot = self._wave_plot_at(scene_pos)
         if clicked_plot is None:
             if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
@@ -520,6 +536,9 @@ class DocumentView(QWidget):
     def handle_double_click(self, event: QMouseEvent):
         """Handle double-click"""
         scene_pos = self.graphics_widget.mapToScene(event.pos())
+
+        if self._channel_checkbox_at(scene_pos) is not None:
+            return
 
         if self.click_timer is not None:
             self.click_timer.stop()
