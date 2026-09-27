@@ -13,6 +13,7 @@ from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
 from res.constants import (
+    CHANNEL_MODE_STEREO,
     DEFAULT_WINDOW_LENGTH,
     LATENCY_WARNING_THRESHOLD_S,
     MAX_UNDO_HISTORY,
@@ -66,6 +67,7 @@ class DocumentViewModel(ViewModel):
         self.redo_stack: list[EditCommandState] = []
 
         self.audio_wave_view_model = AudioWaveViewModel()
+        self.audio_wave_view_model_channel2 = AudioWaveViewModel()
         self.spectrogram_view_model = SpectrogramViewModel()
         self.annotation_view_model = AnnotationViewModel()
 
@@ -239,9 +241,16 @@ class DocumentViewModel(ViewModel):
         if primary_channel is None:
             return
 
-        self.spectrogram_view_model.prep_audio(
-            primary_channel.x, primary_channel.fs, self.audio_options.target_fs
-        )
+        stereo = self.stereo_channels()
+        if stereo is not None:
+            ch0, ch1 = stereo
+            min_len = min(len(ch0.x), len(ch1.x))
+            x = ch0.x[:min_len] + ch1.x[:min_len]
+            fs = ch0.fs
+        else:
+            x, fs = primary_channel.x, primary_channel.fs
+
+        self.spectrogram_view_model.prep_audio(x, fs, self.audio_options.target_fs)
 
     def update_spectrogram(self):
         primary_channel = self.primary_channel()
@@ -253,15 +262,25 @@ class DocumentViewModel(ViewModel):
         self.spectrogram_view_model.set_window_state(start, end, primary_channel.fs)
 
     def update_audio_waveform(self):
-        primary_channel = self.primary_channel()
-        if primary_channel is not None:
-            start, end = (
-                self.document_window_state.start,
-                self.document_window_state.end,
-            )
+        start, end = self.document_window_state.start, self.document_window_state.end
+
+        stereo = self.stereo_channels()
+        if stereo is not None:
+            # Rows are assigned by channel index, not by which channel is
+            # "primary" - otherwise picking channel 1 as primary would show
+            # it in both rows and channel 0 would never be displayed.
             self.audio_wave_view_model.set_wave_state(
-                to_audio_wave_state(primary_channel, start, end)
+                to_audio_wave_state(stereo[0], start, end)
             )
+            self.audio_wave_view_model_channel2.set_wave_state(
+                to_audio_wave_state(stereo[1], start, end)
+            )
+        else:
+            primary_channel = self.primary_channel()
+            if primary_channel is not None:
+                self.audio_wave_view_model.set_wave_state(
+                    to_audio_wave_state(primary_channel, start, end)
+                )
 
     def update_annotation_state(self):
         primary_channel = self.primary_channel()
@@ -490,9 +509,30 @@ class DocumentViewModel(ViewModel):
         self.document_window_state = DocumentWindowState(start=0, end=end)
         self.update_document_window(self.document_window_state)
 
+    def _playback_section(self, start: int, end: int) -> tuple[np.ndarray, int] | None:
+        """The samples to play for [start:end), as stereo (N, 2) if both
+        channels are active, else mono (N,). Channel-index order (not
+        primary-first) is correct here regardless of which channel is
+        "primary" - it's just left/right output order."""
+        stereo = self.stereo_channels()
+        if stereo is not None:
+            ch0, ch1 = stereo
+            min_len = min(len(ch0.x), len(ch1.x))
+            end = min(end, min_len)
+            if start >= end:
+                return None
+            section = np.stack([ch0.x[start:end], ch1.x[start:end]], axis=1)
+            return section, ch0.fs
+
+        channel = self.primary_channel()
+        if channel is None:
+            return None
+        if start >= end:
+            return None
+        return channel.x[start:end], channel.fs
+
     def play_selected_audio(self):
         channel = self.primary_channel()
-
         if channel is None:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Audio is still loading, please wait."))
@@ -502,30 +542,47 @@ class DocumentViewModel(ViewModel):
         start = int(self.select_state.sel_start * channel.fs)
         end = int(self.select_state.sel_end * channel.fs)
 
-        if start != end:
-            section = channel.x[start:end]
-            self.play_audio(section, channel.fs, start=start)
+        section = self._playback_section(start, end)
+        if section is not None:
+            self.play_audio(section[0], section[1], start=start)
 
     def play_visible_audio(self):
         start, end = self.document_window_state.start, self.document_window_state.end
 
-        channel = self.primary_channel()
-
-        if channel is None:
+        if self.primary_channel() is None:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Audio is still loading, please wait."))
             )
             return
 
-        if len(channel.x) > 0:
-            section = channel.x[start:end]
-            self.play_audio(section, channel.fs, start=start)
+        section = self._playback_section(start, end)
+        if section is not None:
+            self.play_audio(section[0], section[1], start=start)
 
     def primary_channel(self) -> AudioChannelState | None:
         if self.channel_state.primary_channel in self.audio_state:
             return self.audio_state[self.channel_state.primary_channel]
         else:
             return None
+
+    def stereo_channels(self) -> tuple[AudioChannelState, AudioChannelState] | None:
+        """Both channels of a stereo document, in channel-index order (not
+        primary-first) so which channel is "primary" doesn't affect which
+        waveform row or playback output channel each one is. None outside
+        stereo mode, or if either channel hasn't loaded yet."""
+        if self.channel_state.channel_mode != CHANNEL_MODE_STEREO:
+            return None
+        indices = sorted(self.audio_options.retained_channels)
+        if len(indices) != 2 or not all(idx in self.audio_state for idx in indices):
+            return None
+        return (self.audio_state[indices[0]], self.audio_state[indices[1]])
+
+    def editing_allowed(self) -> bool:
+        """Cut/copy/paste only ever touch the primary channel today; on a
+        stereo document that would desync the two channels' lengths (which
+        then breaks stereo playback/spectrogram). Blocked until per-channel
+        editing semantics are designed."""
+        return self.stereo_channels() is None
 
     def set_mark(self, x_pos: float):
         self.mark_state = MarkState(position=x_pos, is_set=True)
@@ -569,6 +626,13 @@ class DocumentViewModel(ViewModel):
     def copy_selection(self) -> AudioSignal | None:
         if not self._audio_ready():
             return None
+        if not self.editing_allowed():
+            self.state_changed.emit(
+                StatusMessageState(
+                    self.tr("Editing isn't yet supported for stereo documents")
+                )
+            )
+            return None
 
         primary_channel = self.primary_channel()
         if primary_channel is None:
@@ -595,6 +659,13 @@ class DocumentViewModel(ViewModel):
 
     def cut_selection(self) -> AudioSignal | None:
         if not self._audio_ready():
+            return None
+        if not self.editing_allowed():
+            self.state_changed.emit(
+                StatusMessageState(
+                    self.tr("Editing isn't yet supported for stereo documents")
+                )
+            )
             return None
 
         primary_channel = self.primary_channel()
@@ -628,6 +699,13 @@ class DocumentViewModel(ViewModel):
 
     def paste_at(self, start_time: float, clip: AudioSignal) -> AudioSignal | None:
         if not self._audio_ready():
+            return None
+        if not self.editing_allowed():
+            self.state_changed.emit(
+                StatusMessageState(
+                    self.tr("Editing isn't yet supported for stereo documents")
+                )
+            )
             return None
 
         primary_channel = self.primary_channel()

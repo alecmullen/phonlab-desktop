@@ -19,13 +19,17 @@ from PyQt6.QtWidgets import (
 )
 
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
-from res.constants import DEFAULT_WINDOW_LENGTH
-
-CHANNEL_MODE_MONO = "mono"
-CHANNEL_MODE_STEREO = "stereo"
-CHANNEL_MODE_MULTICHANNEL = "multichannel"
+from res.constants import (
+    CHANNEL_MODE_MONO,
+    CHANNEL_MODE_MULTICHANNEL,
+    CHANNEL_MODE_STEREO,
+    DEFAULT_WINDOW_LENGTH,
+)
 
 DEFAULT_SAMPLE_RATE = 16000
+
+_DUPLICATE_CHOICE_MONO = "mono"
+_DUPLICATE_CHOICE_STEREO = "stereo"
 
 
 def _channel_label(index: int, native_channels: int) -> str:
@@ -45,12 +49,24 @@ def _mono_options() -> AudioOpenOptions:
     )
 
 
+def _stereo_options() -> AudioOpenOptions:
+    return AudioOpenOptions(
+        target_fs=DEFAULT_SAMPLE_RATE,
+        channel_mode=CHANNEL_MODE_STEREO,
+        retained_channels=[0, 1],
+        primary_channel=0,
+    )
+
+
 class OpenAudioDialog(QDialog):
     """Lets the user pick channel mode and primary channel for a file about
     to be opened, after reporting its native format. Skipped for
-    single-channel files, and for stereo files whose two channels turn out
-    to be duplicates of each other (those are opened as mono automatically,
-    using the left channel)."""
+    single-channel files; for stereo files whose two channels turn out to
+    be duplicates of each other (those are opened as mono automatically,
+    using the left channel); and for stereo files with two distinct
+    channels (those are opened with both channels active - stereo
+    playback, spectrogram of the summed channels - with the left channel
+    as an arbitrary internal "primary" until the user picks one)."""
 
     @staticmethod
     def get_options(
@@ -68,20 +84,37 @@ class OpenAudioDialog(QDialog):
                 filename, chansel=[0, 1], duration=DEFAULT_WINDOW_LENGTH
             )
             if phon.channels_are_duplicates(chan_a, chan_b):
-                QMessageBox.warning(
-                    parent,
-                    dlg.tr("Duplicate channels"),
-                    dlg.tr(
-                        "the channels of this audio file appear to be "
-                        "duplicates of the same audio - we will treat it as "
-                        "a mono audio file."
-                    ),
-                )
+                if dlg._ask_duplicate_channels() == _DUPLICATE_CHOICE_STEREO:
+                    return _stereo_options()
                 return _mono_options()
+            return _stereo_options()
 
         if dlg.exec() == QDialog.DialogCode.Accepted:
             return dlg.build_options()
         return None
+
+    def _ask_duplicate_channels(self) -> str:
+        """The two channels are duplicates of the same audio - ask whether
+        to open as mono (recommended) or keep both channels as stereo."""
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Question)
+        msg_box.setWindowTitle(self.tr("Duplicate channels"))
+        msg_box.setText(
+            self.tr(
+                "This is a stereo file, but it appears that the left and "
+                "right channels are duplicates of each other."
+            )
+        )
+        mono_button = msg_box.addButton(
+            self.tr("Open as Mono (Recommended)"), QMessageBox.ButtonRole.AcceptRole
+        )
+        msg_box.addButton(self.tr("Keep as Stereo"), QMessageBox.ButtonRole.RejectRole)
+        msg_box.setDefaultButton(mono_button)
+        msg_box.exec()
+
+        if msg_box.clickedButton() == mono_button:
+            return _DUPLICATE_CHOICE_MONO
+        return _DUPLICATE_CHOICE_STEREO
 
     def __init__(self, filename: str, parent: QWidget | None = None):
         super().__init__(parent)
