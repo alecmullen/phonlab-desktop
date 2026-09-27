@@ -3,13 +3,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 import soundfile as sf
-from PyQt6.QtWidgets import QDialog, QMessageBox
+from PyQt6.QtWidgets import QDialog
 from pytestqt.qtbot import QtBot
 
 from ui.main.open_audio_dialog import (
     OpenAudioDialog,
     _channel_label,
     _mono_options,
+    _stereo_options,
 )
 
 
@@ -162,13 +163,13 @@ def test_get_options_skips_dialog_for_single_channel_file(qtbot: QtBot, mono_wav
 
 
 def test_get_options_returns_none_when_dialog_is_cancelled(
-    qtbot: QtBot, stereo_distinct_wav: str, monkeypatch: pytest.MonkeyPatch
+    qtbot: QtBot, three_channel_wav: str, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(
         OpenAudioDialog, "exec", lambda self: QDialog.DialogCode.Rejected
     )
 
-    result = OpenAudioDialog.get_options(stereo_distinct_wav)
+    result = OpenAudioDialog.get_options(three_channel_wav)
 
     assert result is None
 
@@ -186,17 +187,23 @@ def test_get_options_returns_dialog_choice_when_accepted(
     assert result.retained_channels == [0, 1]
 
 
-def test_get_options_auto_selects_mono_for_duplicate_stereo_channels(
+def test_get_options_asks_and_honors_mono_choice_for_duplicate_stereo_channels(
     qtbot: QtBot, stereo_duplicate_wav: str, monkeypatch: pytest.MonkeyPatch
 ):
-    warnings = []
-    monkeypatch.setattr(
-        QMessageBox,
-        "warning",
-        staticmethod(lambda *a, **k: warnings.append(True)),
-    )
+    monkeypatch.setattr(OpenAudioDialog, "_ask_duplicate_channels", lambda self: "mono")
 
     result = OpenAudioDialog.get_options(stereo_duplicate_wav)
 
     assert result == _mono_options()
-    assert warnings == [True]
+
+
+def test_get_options_asks_and_honors_stereo_choice_for_duplicate_stereo_channels(
+    qtbot: QtBot, stereo_duplicate_wav: str, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        OpenAudioDialog, "_ask_duplicate_channels", lambda self: "stereo"
+    )
+
+    result = OpenAudioDialog.get_options(stereo_duplicate_wav)
+
+    assert result == _stereo_options()
