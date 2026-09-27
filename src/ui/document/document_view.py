@@ -368,9 +368,12 @@ class DocumentView(QWidget):
 
     def play_window_or_selection(self, scene_pos: QPointF):
         clicked_plot = self._wave_plot_at(scene_pos)
-        if clicked_plot is None and self.spec_plot is not None:
-            if self.spec_plot.sceneBoundingRect().contains(scene_pos):
-                clicked_plot = self.spec_plot
+        if (
+            clicked_plot is None
+            and self.spec_plot is not None
+            and self.spec_plot.sceneBoundingRect().contains(scene_pos)
+        ):
+            clicked_plot = self.spec_plot
 
         if not clicked_plot:
             return
@@ -532,11 +535,12 @@ class DocumentView(QWidget):
         self.mouse_pressed = False
 
         clicked_plot = self._wave_plot_at(scene_pos)
-        if clicked_plot is None:
-            if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
-                scene_pos
-            ):
-                clicked_plot = self.spec_plot
+        if (
+            clicked_plot is None
+            and self.spec_plot
+            and self.spec_plot.sceneBoundingRect().contains(scene_pos)
+        ):
+            clicked_plot = self.spec_plot
 
         if not clicked_plot:
             return
