@@ -223,7 +223,7 @@ def test_copy_selection_opens_a_clip_tab_and_sets_clipboard(main_window: MainWin
     assert main_window.tab_widget.count() == 2
     assert main_window.tab_widget.tabText(1) == "CLIP 1: source.wav"
     assert main_window.clipboard is not None
-    assert len(main_window.clipboard.x) == 1000
+    assert len(main_window.clipboard.channels[0].x) == 1000
 
 
 def test_cut_selection_opens_a_clip_tab_and_sets_clipboard(main_window: MainWindow):

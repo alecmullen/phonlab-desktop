@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
 import ui.document.document_view_model as dvm_module
+from core.edit_audio.entity.audio_clip import AudioClip
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
@@ -52,7 +53,7 @@ def test_dialog_defaults_to_origin_directory_and_native_rate(
     qtbot: QtBot, document_view: DocumentView
 ):
     document_view.view_model.load_from_samples(
-        AudioSignal(np.arange(5000, dtype=np.float64), 1000)
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 1000)})
     )
     document_view.origin_path = "/home/user/audio/myfile.wav"
 
@@ -69,7 +70,7 @@ def test_dialog_defaults_to_home_directory_without_origin_path(
     qtbot: QtBot, document_view: DocumentView
 ):
     document_view.view_model.load_from_samples(
-        AudioSignal(np.arange(5000, dtype=np.float64), 1000)
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 1000)})
     )
 
     dialog = SaveAudioDialog(document_view, "clip name")
@@ -91,7 +92,7 @@ def test_options_reflects_current_field_values(
     qtbot: QtBot, document_view: DocumentView
 ):
     document_view.view_model.load_from_samples(
-        AudioSignal(np.arange(5000, dtype=np.float64), 1000)
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 1000)})
     )
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
@@ -108,7 +109,7 @@ def test_accept_is_blocked_when_path_is_blank(
     qtbot: QtBot, document_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
     document_view.view_model.load_from_samples(
-        AudioSignal(np.arange(5000, dtype=np.float64), 1000)
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 1000)})
     )
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
@@ -128,7 +129,7 @@ def test_accept_is_blocked_when_path_is_blank(
 
 def test_accept_succeeds_with_a_valid_path(qtbot: QtBot, document_view: DocumentView):
     document_view.view_model.load_from_samples(
-        AudioSignal(np.arange(5000, dtype=np.float64), 1000)
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 1000)})
     )
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
@@ -148,7 +149,7 @@ def test_get_options_returns_none_when_dialog_cancelled(
     qtbot: QtBot, document_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
     document_view.view_model.load_from_samples(
-        AudioSignal(np.arange(5000, dtype=np.float64), 1000)
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 1000)})
     )
     from PyQt6.QtWidgets import QDialog
 
@@ -165,7 +166,7 @@ def test_get_options_returns_options_when_dialog_accepted(
     qtbot: QtBot, document_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
     document_view.view_model.load_from_samples(
-        AudioSignal(np.arange(5000, dtype=np.float64), 1000)
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 1000)})
     )
     document_view.origin_path = "/tmp/myfile.wav"
     from PyQt6.QtWidgets import QDialog
