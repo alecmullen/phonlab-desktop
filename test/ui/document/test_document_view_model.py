@@ -11,6 +11,7 @@ from core.edit_audio.entity.audio_clip import AudioClip
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
+from res.constants import CHANNEL_MODE_MONO
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState
 from ui.document.state.audio_loaded import AudioLoaded
@@ -18,7 +19,7 @@ from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.edit_command_state import EditCommandState
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.mark_state import MarkState
-from ui.document.state.plot_layout_state import PlotType
+from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
 from ui.spectrogram.state.audio_prepped import AudioPrepped
@@ -76,6 +77,19 @@ def load_signal(
         {0: AudioChannelState(np.asarray(x, dtype=np.float64), fs)},
         primary_channel_idx=0,
         reset_window=True,
+    )
+
+
+def load_stereo(
+    view_model: DocumentViewModel, x0: np.ndarray, x1: np.ndarray, fs: int
+) -> None:
+    view_model.load_from_samples(
+        AudioClip(
+            {
+                0: AudioSignal(np.asarray(x0, dtype=np.float64), fs),
+                1: AudioSignal(np.asarray(x1, dtype=np.float64), fs),
+            }
+        )
     )
 
 
@@ -584,6 +598,63 @@ def test_on_sgram_state_change_forwards_load_progress_and_prepped(
     view_model.on_sgram_state_change(StatusMessageState("ignored"))
 
     assert [type(s).__name__ for s in received] == ["LoadProgressState", "AudioPrepped"]
+
+
+# --------------------------- stereo channel deletion ---------------------------
+
+
+def test_delete_channel_converts_to_mono(view_model: DocumentViewModel):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+
+    view_model.delete_channel(1)
+
+    assert view_model.stereo_channels() is None
+    assert view_model.channel_state.channel_mode == CHANNEL_MODE_MONO
+    assert view_model.audio_options.retained_channels == [0]
+    assert view_model.channel_state.primary_channel == 0
+    assert view_model.channel_state.active_channels == frozenset({0})
+
+
+def test_delete_channel_keeps_surviving_channel_data(view_model: DocumentViewModel):
+    x0, x1 = np.arange(1000), np.arange(1000) * -1
+    load_stereo(view_model, x0, x1, fs=1000)
+
+    view_model.delete_channel(0)
+
+    np.testing.assert_array_equal(view_model.primary_channel().x, x1)
+
+
+def test_delete_channel_clears_undo_redo_stacks(view_model: DocumentViewModel):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    view_model.start_selection(0.1)
+    view_model.continue_selection(0.2)
+    view_model.cut_selection()
+    assert view_model.undo_stack != []
+
+    view_model.delete_channel(1)
+
+    assert view_model.undo_stack == []
+    assert view_model.redo_stack == []
+    view_model.undo()  # must not raise
+
+
+def test_delete_channel_reemits_plot_layout(view_model: DocumentViewModel):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.delete_channel(1)
+
+    assert any(isinstance(s, PlotLayoutState) for s in received)
+
+
+def test_delete_channel_noop_when_not_stereo(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(1000), fs=1000)
+
+    view_model.delete_channel(0)
+
+    assert view_model.primary_channel() is not None
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(1000))
 
 
 # --------------------------- misc ---------------------------
