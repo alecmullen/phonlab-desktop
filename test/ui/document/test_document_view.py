@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
 import ui.document.document_view_model as dvm_module
+from core.edit_audio.entity.audio_clip import AudioClip
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view import DocumentView
@@ -56,7 +57,9 @@ def view(qtbot: QtBot, view_model: DocumentViewModel) -> DocumentView:
 
 @pytest.fixture
 def loaded_view(view: DocumentView, view_model: DocumentViewModel) -> DocumentView:
-    view_model.load_from_samples(AudioSignal(np.arange(20000, dtype=np.float64), 1000))
+    view_model.load_from_samples(
+        AudioClip({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
+    )
     QApplication.processEvents()
     return view
 
