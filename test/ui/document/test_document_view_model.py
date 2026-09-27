@@ -7,6 +7,7 @@ from pytestqt.qtbot import QtBot
 
 import ui.base.view_model as view_model_module
 import ui.document.document_view_model as dvm_module
+from core.edit_audio.entity.audio_clip import AudioClip
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
@@ -391,7 +392,7 @@ def test_copy_selection_returns_selected_slice(view_model: DocumentViewModel):
     clip = view_model.copy_selection()
 
     assert clip is not None
-    np.testing.assert_array_equal(clip.x, np.arange(2000, 3000))
+    np.testing.assert_array_equal(clip.channels[0].x, np.arange(2000, 3000))
     assert len(view_model.primary_channel().x) == 10000
 
 
@@ -417,7 +418,7 @@ def test_cut_selection_removes_slice_and_pushes_undo(view_model: DocumentViewMod
     clip = view_model.cut_selection()
 
     assert clip is not None
-    np.testing.assert_array_equal(clip.x, np.arange(2000, 3000))
+    np.testing.assert_array_equal(clip.channels[0].x, np.arange(2000, 3000))
     assert len(view_model.primary_channel().x) == 9000
     assert len(view_model.undo_stack) == 1
     assert view_model.undo_stack[0].type == "cut"
@@ -468,7 +469,7 @@ def test_redo_with_empty_stack_is_a_noop(view_model: DocumentViewModel):
 
 def test_paste_at_mark_inserts_clip_at_mark_position(view_model: DocumentViewModel):
     load_signal(view_model, np.arange(10000), fs=1000)
-    clip = AudioSignal(np.full(500, -1.0), fs=1000)
+    clip = AudioClip({0: AudioSignal(np.full(500, -1.0), fs=1000)})
     view_model.set_mark(1.0)
 
     view_model.paste_at_mark(clip)
@@ -486,7 +487,7 @@ def test_paste_at_mark_shows_message_when_mark_not_set(
     load_signal(view_model, np.arange(10000), fs=1000)
     received = []
     view_model.subscribe(received.append)
-    clip = AudioSignal(np.full(500, -1.0), fs=1000)
+    clip = AudioClip({0: AudioSignal(np.full(500, -1.0), fs=1000)})
 
     view_model.paste_at_mark(clip)
 
