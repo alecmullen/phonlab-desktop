@@ -639,7 +639,10 @@ class DocumentViewModel(ViewModel):
         """Both stereo channels, guaranteed equal length - the invariant every
         stereo edit relies on to apply one resolved range/index to both
         channels without re-deriving it per channel."""
-        ch0, ch1 = self.stereo_channels()
+        stereo = self.stereo_channels()
+        if stereo is None:
+            raise RuntimeError("Missing stereo audio channels")
+        ch0, ch1 = stereo
         if len(ch0.x) != len(ch1.x):
             raise RuntimeError("Stereo channels have desynced lengths")
         return ch0, ch1
@@ -768,6 +771,8 @@ class DocumentViewModel(ViewModel):
                     clip_fs=mono_clip.fs,
                 ),
             ).invoke()
+            if result is None:
+                raise RuntimeError("Paste failed unexpectedly")
 
             self._replace_channels({idx: result.new_channel})
             self._push_undo(
@@ -796,6 +801,9 @@ class DocumentViewModel(ViewModel):
                 EditCommandType.PASTE, start_time, clip_x=clip0.x, clip_fs=clip0.fs
             ),
         ).invoke()
+        if result0 is None:
+            raise RuntimeError("Paste failed unexpectedly")
+
         result1 = EditAudio(
             to_audio_signal(ch1),
             EditCommand(
@@ -806,6 +814,8 @@ class DocumentViewModel(ViewModel):
                 snapped_start_idx=result0.start_idx,
             ),
         ).invoke()
+        if result1 is None:
+            raise RuntimeError("Paste failed unexpectedly")
 
         self._replace_channels({0: result0.new_channel, 1: result1.new_channel})
         self._push_undo(
