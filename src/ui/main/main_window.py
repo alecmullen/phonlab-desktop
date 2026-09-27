@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
         self.save_action.triggered.connect(self.save_audio)
 
         self.audio_info_action = QAction(self.tr("Audio &Info"), self)
+        self.audio_info_action.setShortcut("Ctrl+I")
         self.audio_info_action.setStatusTip(
             self.tr("Show sample rate, duration, and amplitude of the current document")
         )

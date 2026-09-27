@@ -99,7 +99,7 @@
     </message>
     <message>
         <location filename="../../ui/document/document_view.py" line="125"/>
-        <source>Shift+Click</source>
+        <source>Click</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
