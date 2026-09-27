@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 import numpy as np
+import phonlab as phon
 from PyQt6.QtCore import pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
@@ -152,6 +153,27 @@ class DocumentViewModel(ViewModel):
         document_window_state = replace(
             self.document_window_state,
             start=new_start,
+            end=new_end,
+            max_start=max(0, signal_end - window_size),
+        )
+        self.update_document_window(document_window_state)
+
+    def _reveal_pasted_region(self, insertion_end_idx: int):
+        """If a paste placed material past the end of the currently visible
+        window, extend the window so the pasted audio is actually visible
+        instead of only reachable by manually scrolling."""
+        if insertion_end_idx <= self.document_window_state.end:
+            return
+
+        primary_channel = self.primary_channel()
+        if primary_channel is None:
+            return
+
+        signal_end = len(primary_channel.x) - 1
+        new_end = min(insertion_end_idx, signal_end)
+        window_size = new_end - self.document_window_state.start
+        document_window_state = replace(
+            self.document_window_state,
             end=new_end,
             max_start=max(0, signal_end - window_size),
         )
@@ -600,6 +622,18 @@ class DocumentViewModel(ViewModel):
         self.mark_state = MarkState()
         self.state_changed.emit(self.mark_state)
 
+    def mark_position_or_warn(self) -> float | None:
+        """The current mark position, or None (with a status message) if no
+        mark is set. Callers that may need to promote this document to
+        stereo before pasting must capture this BEFORE that happens, since
+        set_audio() clears the mark as a side effect."""
+        if not self.mark_state.is_set:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Set a mark (Shift+Click) before pasting"))
+            )
+            return None
+        return self.mark_state.position
+
     def _audio_ready(self) -> bool:
         if not self.audio_state:
             self.state_changed.emit(
@@ -736,21 +770,17 @@ class DocumentViewModel(ViewModel):
         return AudioClip({0: result0.new_clip, 1: AudioSignal(clip1_x, ch1.fs)})
 
     def paste_at(self, start_time: float, clip: AudioClip) -> AudioClip | None:
+        """Paste `clip`, which must already match this document's channel
+        count - a mono/stereo mismatch has to be resolved first via
+        reconcile_clip_for_paste() (a dialog-driven choice made by the
+        View), not here."""
         if not self._audio_ready():
             return None
 
         stereo = self.stereo_channels()
         if stereo is None:
             if clip.is_stereo:
-                self.state_changed.emit(
-                    StatusMessageState(
-                        self.tr(
-                            "Pasting stereo audio into a mono document isn't yet "
-                            "supported"
-                        )
-                    )
-                )
-                return None
+                raise RuntimeError("Stereo clip pasted without reconciliation")
 
             idx = self.channel_state.primary_channel
             channel = self.primary_channel()
@@ -780,17 +810,11 @@ class DocumentViewModel(ViewModel):
                     EditCommandType.PASTE, result.start_idx, {idx: result.new_clip.x}
                 )
             )
+            self._reveal_pasted_region(result.start_idx + len(result.new_clip.x))
             return AudioClip({idx: result.new_clip})
 
         if not clip.is_stereo:
-            self.state_changed.emit(
-                StatusMessageState(
-                    self.tr(
-                        "Pasting mono audio into a stereo document isn't yet supported"
-                    )
-                )
-            )
-            return None
+            raise RuntimeError("Mono clip pasted without reconciliation")
 
         ch0, ch1 = self._stereo_edit_channels()
         clip0, clip1 = clip.channels[0], clip.channels[1]
@@ -825,15 +849,88 @@ class DocumentViewModel(ViewModel):
                 {0: result0.new_clip.x, 1: result1.new_clip.x},
             )
         )
+        self._reveal_pasted_region(result0.start_idx + len(result0.new_clip.x))
         return AudioClip({0: result0.new_clip, 1: result1.new_clip})
 
     def paste_at_mark(self, clip: AudioClip):
-        if not self.mark_state.is_set:
-            self.state_changed.emit(
-                StatusMessageState(self.tr("Set a mark (Shift+Click) before pasting"))
-            )
+        position = self.mark_position_or_warn()
+        if position is None:
             return
-        self.paste_at(self.mark_state.position, clip)
+        self.paste_at(position, clip)
+
+    def _tiny_noise(self, length: int, fs: int, dtype: np.dtype) -> AudioSignal:
+        """A quiet noise-filled channel for the "empty" side of a synthesized
+        stereo pair - either the non-chosen channel of a mono clip pasted
+        into a stereo document, or a brand-new channel created when
+        promoting a mono document to stereo. phon.prep_audio's
+        add_tiny_noise adds tiny noise to every sample (not just exact
+        zeros, despite its docstring) - harmless here since the input is
+        always all-zero."""
+        zeros = np.zeros(length, dtype=np.float32)
+        x, _ = phon.prep_audio(
+            zeros, fs, target_fs=fs, scale=False, add_tiny_noise=True
+        )
+        return AudioSignal(x.astype(dtype), fs)
+
+    def reconcile_clip_for_paste(
+        self, clip: AudioClip, channel_choice: int
+    ) -> AudioClip:
+        """Resolve a mono/stereo mismatch between `clip` and this document
+        ahead of a paste, given the user's channel_choice (0=left, 1=right)
+        for where the real audio should go. NOT a pure function: for a
+        stereo clip pasted into a mono document, this promotes the document
+        to stereo as a side effect (audio_state, raw_audio_state,
+        channel_state, audio_options) and returns `clip` unchanged; for a
+        mono clip pasted into a stereo document, it returns a synthesized
+        stereo clip instead, with no side effects."""
+        stereo = self.stereo_channels()
+        other = 1 - channel_choice
+
+        if stereo is not None:
+            mono_signal = next(iter(clip.channels.values()))
+            noise = self._tiny_noise(
+                len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
+            )
+            return AudioClip({channel_choice: mono_signal, other: noise})
+
+        old_idx = self.channel_state.primary_channel
+        existing = self.audio_state.get(old_idx)
+        raw_existing = self.raw_audio_state.get(old_idx)
+        if existing is None or raw_existing is None:
+            raise RuntimeError("Missing primary audio channel")
+
+        prepped_noise = self._tiny_noise(len(existing.x), existing.fs, existing.x.dtype)
+        raw_noise = self._tiny_noise(
+            len(raw_existing.x), raw_existing.fs, raw_existing.x.dtype
+        )
+
+        audio_state = {
+            channel_choice: existing,
+            other: to_audio_channel_state(prepped_noise),
+        }
+        self.raw_audio_state = {
+            channel_choice: raw_existing,
+            other: to_audio_channel_state(raw_noise),
+        }
+
+        self.audio_options = replace(
+            self.audio_options,
+            channel_mode=CHANNEL_MODE_STEREO,
+            retained_channels=[0, 1],
+        )
+        self.channel_state = replace(
+            self.channel_state,
+            channel_mode=CHANNEL_MODE_STEREO,
+            primary_channel=channel_choice,
+        )
+        self.set_audio(audio_state, channel_choice, reset_window=False)
+
+        # set_audio() doesn't re-derive plot layout - only AudioLoaded/
+        # PlotLayoutState events do - so re-emit it to rebuild the view with
+        # a second waveform row now that this document is genuinely stereo.
+        self.state_changed.emit(self.plot_layout_state)
+
+        return clip
 
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or

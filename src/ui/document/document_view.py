@@ -23,6 +23,7 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
+from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_loaded import AudioLoaded
@@ -294,6 +295,20 @@ class DocumentView(QWidget):
         self.add_shared_context_menu_actions(self.wave_plot_channel2.getViewBox())
         self.graphics_widget.addItem(self.wave_plot_channel2, row=row + 1, col=0)
         self.wave_plot_channel2.show()
+
+        # A plot whose bottom axis hides tick labels reports a near-zero
+        # axis height, which skews pyqtgraph's row-height distribution even
+        # with equal row stretch factors (row 0 ends up visibly taller than
+        # row 1). Reserve the same axis height on both rows regardless of
+        # which one actually shows the labels, so the two channels get
+        # equal screen space.
+        bottom_height = max(
+            self.wave_plot.getAxis("bottom").height(),
+            self.wave_plot_channel2.getAxis("bottom").height(),
+        )
+        self.wave_plot.getAxis("bottom").setHeight(bottom_height)
+        self.wave_plot_channel2.getAxis("bottom").setHeight(bottom_height)
+
         return 2
 
     def add_plot(
@@ -683,7 +698,31 @@ class DocumentView(QWidget):
         return self.view_model.cut_selection()
 
     def paste_at_cursor(self, clip: AudioClip):
-        self.view_model.paste_at_mark(clip)
+        mark_position = self.view_model.mark_position_or_warn()
+        if mark_position is None:
+            return
+
+        doc_is_stereo = self.view_model.stereo_channels() is not None
+        if doc_is_stereo != clip.is_stereo:
+            if clip.is_stereo:
+                message = self.tr(
+                    "This clip is stereo, but the destination is mono. Pasting "
+                    "will convert the document to stereo - which channel should "
+                    "the existing audio occupy? The new channel will be filled "
+                    "with a quiet noise placeholder."
+                )
+            else:
+                message = self.tr(
+                    "This clip is mono, but the destination is stereo. Which "
+                    "channel should the clip's audio occupy? The other channel "
+                    "will be filled with a quiet noise placeholder."
+                )
+            choice = PasteChannelDialog.get_channel(self, message)
+            if choice is None:
+                return
+            clip = self.view_model.reconcile_clip_for_paste(clip, choice)
+
+        self.view_model.paste_at(mark_position, clip)
 
     def undo(self):
         self.view_model.undo()
