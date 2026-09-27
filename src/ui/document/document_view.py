@@ -253,6 +253,56 @@ class DocumentView(QWidget):
         self.update_mark(self.view_model.mark_state)
         self.update_document_window(self.view_model.document_window_state)
 
+    def _add_waveform_plots(self, row: int, is_last_type: bool) -> int:
+        """Add one waveform row for channel 0, plus a second row for
+        channel 1 when the document is stereo. Returns the number of rows
+        added (1 or 2)."""
+        stereo = self.view_model.stereo_channels() is not None
+        is_bottom = is_last_type and not stereo
+
+        self.wave_plot = AudioWavePlot(
+            view_model=self.view_model.audio_wave_view_model,
+            linked_plot=self.first_plot,
+            is_bottom_plot=is_bottom,
+        )
+        wave_label = self.tr("Ch 1 Amplitude") if stereo else self.tr("Amplitude")
+        self.wave_plot.setLabel("left", wave_label)
+        self.add_shared_context_menu_actions(self.wave_plot.getViewBox())
+        self.graphics_widget.addItem(self.wave_plot, row=row, col=0)
+        self.wave_plot.show()
+        # Must be set before creating the second wave plot below, which
+        # needs a valid linked_plot to x-link against.
+        if self.first_plot is None:
+            self.first_plot = self.wave_plot
+
+        if not stereo:
+            return 1
+
+        self.wave_plot_channel2 = AudioWavePlot(
+            view_model=self.view_model.audio_wave_view_model_channel2,
+            linked_plot=self.first_plot,
+            is_bottom_plot=is_last_type,
+        )
+        self.wave_plot_channel2.setLabel("left", self.tr("Ch 2 Amplitude"))
+        self.add_shared_context_menu_actions(self.wave_plot_channel2.getViewBox())
+        self.graphics_widget.addItem(self.wave_plot_channel2, row=row + 1, col=0)
+        self.wave_plot_channel2.show()
+
+        # A plot whose bottom axis hides tick labels reports a near-zero
+        # axis height, which skews pyqtgraph's row-height distribution even
+        # with equal row stretch factors (row 0 ends up visibly taller than
+        # row 1). Reserve the same axis height on both rows regardless of
+        # which one actually shows the labels, so the two channels get
+        # equal screen space.
+        bottom_height = max(
+            self.wave_plot.getAxis("bottom").height(),
+            self.wave_plot_channel2.getAxis("bottom").height(),
+        )
+        self.wave_plot.getAxis("bottom").setHeight(bottom_height)
+        self.wave_plot_channel2.getAxis("bottom").setHeight(bottom_height)
+
+        return 2
+
     def add_plot(
         self, row: int, plot_type: PlotType, is_bottom: bool = False
     ) -> list[pg.PlotItem]:
