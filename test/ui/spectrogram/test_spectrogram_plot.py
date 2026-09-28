@@ -17,8 +17,8 @@ def make_sgram_state(**overrides: object) -> SpectrogramState:
         "sxx_window": np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]]),
         "is_showing": True,
         "is_loading": False,
-        "min_sxx": 0.0,
-        "max_sxx": 9.0,
+        "low_sxx": 0.0,
+        "high_sxx": 9.0,
         "gray_cutoff": 0.5,
     }
     defaults.update(overrides)
@@ -129,7 +129,7 @@ def test_populate_spectrogram_sets_gray_scale_levels(qtbot: QtBot):
     view_model = SpectrogramViewModel()
     plot = SpectrogramPlot(view_model)
 
-    sgram = make_sgram_state(min_sxx=0.0, max_sxx=10.0, gray_cutoff=0.5)
+    sgram = make_sgram_state(low_sxx=0.0, high_sxx=10.0, gray_cutoff=0.5)
 
     plot.populate_spectrogram(sgram)
 
