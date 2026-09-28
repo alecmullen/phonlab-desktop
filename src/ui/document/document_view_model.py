@@ -983,27 +983,13 @@ class DocumentViewModel(ViewModel):
         )
         return AudioSignal(x.astype(dtype), fs)
 
-    def reconcile_clip_for_paste(
-        self, clip: AudioClip, channel_choice: int
-    ) -> AudioClip:
-        """Resolve a mono/stereo mismatch between `clip` and this document
-        ahead of a paste, given the user's channel_choice (0=left, 1=right)
-        for where the real audio should go. NOT a pure function: for a
-        stereo clip pasted into a mono document, this promotes the document
-        to stereo as a side effect (audio_state, raw_audio_state,
-        channel_state, audio_options) and returns `clip` unchanged; for a
-        mono clip pasted into a stereo document, it returns a synthesized
-        stereo clip instead, with no side effects."""
-        stereo = self.stereo_channels()
-        other = 1 - channel_choice
-
-        if stereo is not None:
-            mono_signal = next(iter(clip.channels.values()))
-            noise = self._tiny_noise(
-                len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
-            )
-            return AudioClip({channel_choice: mono_signal, other: noise})
-
+    def _promote_to_stereo(self, existing_channel_idx: int):
+        """Promote this mono document to stereo, keeping its current audio
+        in existing_channel_idx and filling the other slot with a
+        tiny-noise placeholder of matching length. Shared by
+        reconcile_clip_for_paste()'s stereo-clip-into-mono promotion and
+        paste_special_new_channel()."""
+        other = 1 - existing_channel_idx
         old_idx = self.channel_state.primary_channel
         existing = self.audio_state.get(old_idx)
         raw_existing = self.raw_audio_state.get(old_idx)
@@ -1016,11 +1002,11 @@ class DocumentViewModel(ViewModel):
         )
 
         audio_state = {
-            channel_choice: existing,
+            existing_channel_idx: existing,
             other: to_audio_channel_state(prepped_noise),
         }
         self.raw_audio_state = {
-            channel_choice: raw_existing,
+            existing_channel_idx: raw_existing,
             other: to_audio_channel_state(raw_noise),
         }
 
@@ -1032,17 +1018,66 @@ class DocumentViewModel(ViewModel):
         self.channel_state = replace(
             self.channel_state,
             channel_mode=CHANNEL_MODE_STEREO,
-            primary_channel=channel_choice,
+            primary_channel=existing_channel_idx,
             active_channels=frozenset({0, 1}),
         )
-        self.set_audio(audio_state, channel_choice, reset_window=False)
+        self.set_audio(audio_state, existing_channel_idx, reset_window=False)
 
         # set_audio() doesn't re-derive plot layout - only AudioLoaded/
         # PlotLayoutState events do - so re-emit it to rebuild the view with
         # a second waveform row now that this document is genuinely stereo.
         self.state_changed.emit(self.plot_layout_state)
 
+    def reconcile_clip_for_paste(
+        self, clip: AudioClip, channel_choice: int
+    ) -> AudioClip:
+        """Resolve a mono/stereo mismatch between `clip` and this document
+        ahead of a paste, given the user's channel_choice (0=left, 1=right)
+        for where the real audio should go. NOT a pure function: for a
+        stereo clip pasted into a mono document, this promotes the document
+        to stereo as a side effect (audio_state, raw_audio_state,
+        channel_state, audio_options) and returns `clip` unchanged; for a
+        mono clip pasted into a stereo document, it returns a synthesized
+        stereo clip instead, with no side effects."""
+        stereo = self.stereo_channels()
+
+        if stereo is not None:
+            other = 1 - channel_choice
+            mono_signal = next(iter(clip.channels.values()))
+            noise = self._tiny_noise(
+                len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
+            )
+            return AudioClip({channel_choice: mono_signal, other: noise})
+
+        self._promote_to_stereo(channel_choice)
         return clip
+
+    def paste_special_new_channel(
+        self, new_channel_idx: int, position: float, clip: AudioClip
+    ) -> AudioClip | None:
+        """'Paste Special: New Channel' - promote this mono document to
+        stereo, putting clip's audio in a brand-new channel
+        (new_channel_idx, 0 or 1) while the existing channel moves to the
+        other slot unchanged. The caller (the View) must already have
+        confirmed the document and the clip are both mono, and must have
+        captured `position` via mark_position_or_warn() BEFORE calling
+        this, since promotion clears the mark as a side effect of
+        set_audio() (see that method's docstring)."""
+        if self.stereo_channels() is not None:
+            raise RuntimeError("Document is already stereo")
+        if clip.is_stereo:
+            raise RuntimeError("Paste Special: New Channel needs a mono clip")
+
+        existing_idx = 1 - new_channel_idx
+        self._promote_to_stereo(existing_idx)
+
+        mono_signal = next(iter(clip.channels.values()))
+        noise = self._tiny_noise(
+            len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
+        )
+        synthesized = AudioClip({new_channel_idx: mono_signal, existing_idx: noise})
+
+        return self.paste_at(position, synthesized)
 
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or
