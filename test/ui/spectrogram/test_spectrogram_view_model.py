@@ -460,6 +460,37 @@ def test_compute_spectrogram_mmap_updates_state_on_success(
     assert view_model.sgram_state.min_sxx == 1.0
 
 
+def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
+    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
+):
+    """ComputeSpectrogramMmap over-allocates its mmap buffer by 20% as a
+    safety margin (see init_mmap()), so frames_computed can be smaller than
+    sxx_mmap.shape[1] - the remaining columns are still the memmap's
+    zero-initialized, never-computed tail. Extrema must be scanned only
+    over the valid [:frames_computed] slice, or that zero padding skews
+    min_sxx/max_sxx (this was the root cause of the spectrogram rendering
+    too dark once a long file's background computation finished)."""
+    view_model = SpectrogramViewModel()
+    x = np.arange(1000, dtype=np.float64)
+
+    view_model.compute_spectrogram_mmap(x, 1000)
+
+    manager = view_model.job_managers["sgram_mmap"]
+    job = manager.jobs[0]
+    sgram = SpectrogramMmap(
+        t_mmap=np.array([0.0, 0.1, 0.0, 0.0]),
+        sxx_mmap=np.array([[-10.0, -5.0, 0.0, 0.0]]),
+        frames_per_sec=100.0,
+        frames_computed=2,
+        samples_computed=200,
+    )
+
+    job.on_success(sgram)
+
+    assert view_model.sgram_state.max_sxx == -5.0
+    assert view_model.sgram_state.min_sxx == -10.0
+
+
 def test_compute_spectrogram_mmap_launches_only_once(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):

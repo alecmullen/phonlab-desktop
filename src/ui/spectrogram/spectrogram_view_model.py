@@ -174,7 +174,14 @@ class SpectrogramViewModel(ViewModel):
                 frames_computed=sgram.frames_computed,
                 samples_computed=sgram.samples_computed,
             )
-            self.update_sxx_extrema(sgram.sxx_mmap)
+            # sgram.sxx_mmap is the full pre-allocated buffer (sized with a
+            # 20% safety margin over the estimated frame count - see
+            # ComputeSpectrogramMmap.init_mmap()), so only the first
+            # frames_computed columns hold real data; the rest is still the
+            # memmap's zero-initialized backing. Restrict the extrema scan
+            # to the valid slice so that never-computed (zero) columns
+            # can't skew min_sxx/max_sxx.
+            self.update_sxx_extrema(sgram.sxx_mmap[:, : sgram.frames_computed])
 
         settings = self.spectrogram_settings
         use_case = ComputeSpectrogramMmap(
