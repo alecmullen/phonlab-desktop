@@ -126,6 +126,13 @@ class MainWindow(QMainWindow):
         self.paste_action.setShortcut(QKeySequence.StandardKey.Paste)
         self.paste_action.triggered.connect(self.paste_at_cursor)
 
+        self.paste_special_action = QAction(self.tr("Paste &Special..."), self)
+        self.paste_special_action.setStatusTip(
+            self.tr("Paste the clipboard clip into a new stereo channel")
+        )
+        self.paste_special_action.setShortcut("Ctrl+Shift+V")
+        self.paste_special_action.triggered.connect(self.paste_special)
+
         # Edit Menu
         if mainMenu is not None:
             editMenu = mainMenu.addMenu("&Edit")
@@ -136,6 +143,7 @@ class MainWindow(QMainWindow):
             editMenu.addAction(self.cut_action)
             editMenu.addAction(self.copy_action)
             editMenu.addAction(self.paste_action)
+            editMenu.addAction(self.paste_special_action)
 
         self.waveview_action = QAction(
             QIcon.fromTheme("audio-x-generic"), self.tr("&Wave"), self
@@ -401,6 +409,11 @@ class MainWindow(QMainWindow):
         doc = self.get_current_document()
         if doc and self.clipboard is not None:
             doc.paste_at_cursor(self.clipboard)
+
+    def paste_special(self):
+        doc = self.get_current_document()
+        if doc and self.clipboard is not None:
+            doc.paste_special(self.clipboard)
 
     def undo(self):
         doc = self.get_current_document()

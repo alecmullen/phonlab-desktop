@@ -644,26 +644,6 @@ class DocumentViewModel(ViewModel):
             raise RuntimeError("Cannot save audio that is not loaded")
         SaveAudio(path, channels, target_fs, scale).invoke()
 
-    def active_channel_indices(self) -> frozenset[int]:
-        """Which channel index/indices are currently marked Active - for UI
-        that needs raw indices (e.g. defaulting the save dialog's
-        per-channel checkboxes) rather than the AudioChannelState objects
-        active_channel_states() returns."""
-        return self.channel_state.active_channels
-
-    def primary_channel_index(self) -> int:
-        return self.channel_state.primary_channel
-
-    def channels_for_save(self, indices: list[int]) -> list[AudioSignal]:
-        """AudioSignal objects (core-layer, no ui/ dependency) for the given
-        channel indices, in the order requested - used by main_window.py's
-        save_audio() so it never touches audio_state directly."""
-        return [
-            to_audio_signal(self.audio_state[idx])
-            for idx in indices
-            if idx in self.audio_state
-        ]
-
     def toggle_channel_active(self, idx: int):
         """Activate/deactivate channel `idx` for playback/spectrogram
         purposes - refused if it would leave no channel active."""
@@ -935,7 +915,7 @@ class DocumentViewModel(ViewModel):
         """Resolve a mono/stereo mismatch between `clip` and this document
         ahead of a paste, given the user's channel_choice (0=left, 1=right)
         for where the real audio should go. Promotes the document
-        to stereo if needed"""
+        to stereo if needed."""
         stereo = self.stereo_channels()
 
         if stereo is not None:
@@ -950,11 +930,13 @@ class DocumentViewModel(ViewModel):
                 }
             )
 
-        self._convert_mono_to_stereo(channel_choice)
-
+        self._promote_to_stereo(channel_choice)
         return clip
 
-    def _convert_mono_to_stereo(self, channel_choice: int):
+    def _promote_to_stereo(self, channel_choice: int):
+        """Promote this mono document to stereo, keeping its current audio
+        in existing_channel_idx and filling the other slot with a
+        tiny-noise placeholder of matching length."""
         self.raw_audio_state = self._add_noise_channel_to_mono_state(
             self.raw_audio_state, channel_choice
         )
@@ -987,6 +969,31 @@ class DocumentViewModel(ViewModel):
         new_state.channels[1 - channel_choice] = to_audio_channel_state(noise)
 
         return new_state
+
+    def paste_special_new_channel(
+        self, new_channel_idx: int, position: float, clip: AudioState
+    ) -> AudioState | None:
+        """Promote this mono document to stereo, putting clip's audio in
+        a brand-new channel (new_channel_idx, 0 or 1) while the existing
+        channel moves to the other slot unchanged. Document and clip must
+        both be mono."""
+        if self.stereo_channels() is not None:
+            raise RuntimeError("Document is already stereo")
+        if clip.is_stereo:
+            raise RuntimeError("Paste Special: New Channel needs a mono clip")
+
+        existing_idx = 1 - new_channel_idx
+        self._promote_to_stereo(existing_idx)
+
+        mono_signal = next(iter(clip.channels.values()))
+        noise = self._tiny_noise(
+            len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
+        )
+        synthesized = AudioState(
+            {new_channel_idx: mono_signal, existing_idx: to_audio_channel_state(noise)}
+        )
+
+        return self.paste_at(position, synthesized)
 
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or

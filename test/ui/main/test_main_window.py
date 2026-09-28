@@ -384,6 +384,28 @@ def test_paste_at_cursor_does_nothing_without_a_clipboard(main_window: MainWindo
     assert calls == []
 
 
+def test_paste_special_forwards_clipboard_to_document(main_window: MainWindow):
+    doc = add_document(main_window)
+    calls = []
+    doc.paste_special = lambda clip: calls.append(clip)
+    main_window.clipboard = AudioSignal(np.array([1.0, 2.0]), 1000)
+
+    main_window.paste_special()
+
+    assert len(calls) == 1
+    assert calls[0] is main_window.clipboard
+
+
+def test_paste_special_does_nothing_without_a_clipboard(main_window: MainWindow):
+    doc = add_document(main_window)
+    calls = []
+    doc.paste_special = lambda clip: calls.append(clip)
+
+    main_window.paste_special()
+
+    assert calls == []
+
+
 # --------------------------- keyboard navigation ---------------------------
 
 
