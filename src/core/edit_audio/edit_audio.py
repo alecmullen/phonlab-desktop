@@ -9,6 +9,20 @@ from core.settings.app_settings import settings
 from res.constants import ZERO_CROSSING_SEARCH_MS
 
 
+def resample_to_fs(
+    x: np.ndarray, x_fs: int, target_fs: int, target_dtype: np.dtype
+) -> np.ndarray:
+    """Resample x to target_fs, matching target_dtype - shared by
+    EditAudio's PASTE handling and DocumentViewModel's
+    paste_special_new_channel_without_silence(), which needs the exact
+    same clip-to-destination resampling but outside EditAudio's
+    insert-based flow."""
+    if x_fs == target_fs:
+        return x
+    cd = np.gcd(x_fs, target_fs)
+    return resample_poly(x, up=target_fs // cd, down=x_fs // cd).astype(target_dtype)
+
+
 class EditAudio(UseCaseSync[EditResult | None]):
     def __init__(self, channel: AudioSignal, edit_command: EditCommand):
         super().__init__()
@@ -70,15 +84,6 @@ class EditAudio(UseCaseSync[EditResult | None]):
 
         return start_idx, end_idx
 
-    def _resample_signal(self, clip_x: np.ndarray, clip_fs: int) -> np.ndarray:
-        """Resample clip to the target channel fs."""
-        if clip_fs == self._channel.fs:
-            return clip_x
-        cd = np.gcd(clip_fs, self._channel.fs)
-        return resample_poly(
-            clip_x, up=self._channel.fs // cd, down=clip_fs // cd
-        ).astype(self._channel.x.dtype)
-
     def invoke(self) -> EditResult | None:
         if self._edit_command.type == EditCommandType.COPY:
             range = self._selected_range()
@@ -108,7 +113,9 @@ class EditAudio(UseCaseSync[EditResult | None]):
                 raise RuntimeError("Lost copied audio data")
 
             if self._channel.fs != clip_fs:
-                clip_x = self._resample_signal(clip_x, clip_fs)
+                clip_x = resample_to_fs(
+                    clip_x, clip_fs, self._channel.fs, self._channel.x.dtype
+                )
 
             if self._edit_command.snapped_start_idx is not None:
                 start_idx = min(
