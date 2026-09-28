@@ -560,23 +560,38 @@
 <context>
     <name>PasteSpecialDialog</name>
     <message>
-        <location filename="../../ui/document/component/paste_special_dialog.py" line="20"/>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="31"/>
         <source>Paste Special</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/paste_special_dialog.py" line="22"/>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="33"/>
         <source>New Channel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/paste_special_dialog.py" line="23"/>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="34"/>
         <source>Channel 1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/paste_special_dialog.py" line="24"/>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="35"/>
         <source>Channel 2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="44"/>
+        <source>Silence</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="46"/>
+        <source>Insert silence into original audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="49"/>
+        <source>Don&apos;t insert silence into original audio</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

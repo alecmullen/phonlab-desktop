@@ -3,7 +3,7 @@ from dataclasses import replace
 import numpy as np
 from PyQt6.QtCore import pyqtSlot
 
-from core.edit_audio.edit_audio import EditAudio
+from core.edit_audio.edit_audio import EditAudio, resample_to_fs
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
 from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -970,13 +970,13 @@ class DocumentViewModel(ViewModel):
 
         return new_state
 
-    def paste_special_new_channel(
+    def paste_special_new_channel_with_silence(
         self, new_channel_idx: int, position: float, clip: AudioState
     ) -> AudioState | None:
         """Promote this mono document to stereo, putting clip's audio in
         a brand-new channel (new_channel_idx, 0 or 1) while the existing
-        channel moves to the other slot unchanged. Document and clip must
-        both be mono."""
+        channel moves to the other slot. Adds silence to exisitng channel
+        over clip range. Document and clip must both be mono."""
         if self.stereo_channels() is not None:
             raise RuntimeError("Document is already stereo")
         if clip.is_stereo:
@@ -994,6 +994,71 @@ class DocumentViewModel(ViewModel):
         )
 
         return self.paste_at(position, synthesized)
+
+    def _silence(self, length: int, fs: int, dtype: np.dtype) -> np.ndarray:
+        """Like _tiny_noise(), but returns a plain empty array for length 0
+        instead of running phon.prep_audio on an empty input (untested
+        edge case - easily triggered by pasting exactly at the start or
+        end of a channel)."""
+        if length <= 0:
+            return np.array([], dtype=dtype)
+        return self._tiny_noise(length, fs, dtype).x
+
+    def paste_special_new_channel_without_silence(
+        self, new_channel_idx: int, position: float, clip: AudioState
+    ) -> AudioState | None:
+        """'Paste Special: New Channel' without silence insertion - places
+        clip's audio directly at the mark position in a brand-new channel,
+        flanked by silence, while the existing channel's own audio is left
+        completely untouched (only padded with trailing silence if the
+        clip would otherwise run past its current length). Unlike
+        paste_special_new_channel_with_silence(), this never changes the
+        existing channel's own timeline, so it is not built on paste_at()
+        - and, like every other structural mono->stereo transition in
+        this codebase (_promote_to_stereo(), resample(),
+        toggle_channel_active()), it is not undoable."""
+        if self.stereo_channels() is not None:
+            raise RuntimeError("Document is already stereo")
+        if clip.is_stereo:
+            raise RuntimeError("Paste Special: New Channel needs a mono clip")
+
+        existing_idx = 1 - new_channel_idx
+        existing = self.primary_channel()
+        if existing is None:
+            raise RuntimeError("Missing primary audio channel")
+
+        mono_signal = next(iter(clip.channels.values()))
+        clip_x = resample_to_fs(
+            mono_signal.x, mono_signal.fs, existing.fs, existing.x.dtype
+        )
+
+        mark_idx = int(np.clip(position * existing.fs, 0, len(existing.x)))
+        clip_end_idx = mark_idx + len(clip_x)
+        total_len = max(len(existing.x), clip_end_idx)
+
+        lead = self._silence(mark_idx, existing.fs, existing.x.dtype)
+        trail = self._silence(total_len - clip_end_idx, existing.fs, existing.x.dtype)
+        new_x = np.concatenate([lead, clip_x, trail])
+
+        if total_len > len(existing.x):
+            pad = self._silence(
+                total_len - len(existing.x), existing.fs, existing.x.dtype
+            )
+            existing_x = np.concatenate([existing.x, pad])
+        else:
+            existing_x = existing.x
+
+        self._promote_to_stereo(existing_idx)
+        self._replace_channels(
+            to_audio_state(
+                {
+                    existing_idx: AudioSignal(existing_x, existing.fs),
+                    new_channel_idx: AudioSignal(new_x, existing.fs),
+                }
+            )
+        )
+
+        return clip
 
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or

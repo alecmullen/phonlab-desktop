@@ -746,11 +746,18 @@ class DocumentView(QWidget):
         if mark_position is None:
             return
 
-        new_channel_idx = PasteSpecialDialog.get_new_channel_index(self)
-        if new_channel_idx is None:
+        choice = PasteSpecialDialog.get_choice(self)
+        if choice is None:
             return
 
-        self.view_model.paste_special_new_channel(new_channel_idx, mark_position, clip)
+        if choice.insert_silence:
+            self.view_model.paste_special_new_channel_with_silence(
+                choice.new_channel_idx, mark_position, clip
+            )
+        else:
+            self.view_model.paste_special_new_channel_without_silence(
+                choice.new_channel_idx, mark_position, clip
+            )
 
     def undo(self):
         self.view_model.undo()
