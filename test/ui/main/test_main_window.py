@@ -435,7 +435,7 @@ def test_save_audio_invokes_save_use_case_with_selected_options(
         "get_options",
         staticmethod(
             lambda doc, name, parent=None: SaveOptions(
-                path="/tmp/out.wav", target_fs=8000, scale=True
+                path="/tmp/out.wav", target_fs=8000, scale=True, channels=[0]
             )
         ),
     )
@@ -443,9 +443,9 @@ def test_save_audio_invokes_save_use_case_with_selected_options(
 
     class FakeSaveAudio:
         def __init__(
-            self, path: str, x: np.ndarray, fs: int, target_fs: int, scale: bool
+            self, path: str, channels: list[AudioSignal], target_fs: int, scale: bool
         ):
-            calls.append((path, fs, target_fs, scale))
+            calls.append((path, channels[0].fs, target_fs, scale))
 
         def invoke(self):
             pass
@@ -482,7 +482,7 @@ def test_save_audio_shows_error_dialog_on_failure(
         "get_options",
         staticmethod(
             lambda doc, name, parent=None: SaveOptions(
-                path="/tmp/out.wav", target_fs=8000, scale=True
+                path="/tmp/out.wav", target_fs=8000, scale=True, channels=[0]
             )
         ),
     )
