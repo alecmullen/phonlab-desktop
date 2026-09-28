@@ -657,6 +657,112 @@ def test_delete_channel_noop_when_not_stereo(view_model: DocumentViewModel):
     np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(1000))
 
 
+# --------------------------- paste special / stereo promotion ---------------------------
+
+
+def test_promote_to_stereo_keeps_existing_audio_and_fills_other_with_noise(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = view_model.audio_state.copy()
+
+    view_model._promote_to_stereo(1)
+
+    assert view_model.stereo_channels() is not None
+    np.testing.assert_array_equal(view_model.audio_state[1].x, x)
+    assert len(view_model.audio_state[0].x) == len(x)
+    assert not np.array_equal(view_model.audio_state[0].x, x)
+    assert view_model.channel_state.primary_channel == 1
+
+
+def test_reconcile_clip_for_paste_promotion_still_works(view_model: DocumentViewModel):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = view_model.audio_state.copy()
+    stereo_clip = AudioClip(
+        {0: AudioSignal(np.ones(500), 1000), 1: AudioSignal(np.ones(500) * -1, 1000)}
+    )
+
+    result = view_model.reconcile_clip_for_paste(stereo_clip, channel_choice=0)
+
+    assert result is stereo_clip
+    assert view_model.stereo_channels() is not None
+    np.testing.assert_array_equal(view_model.audio_state[0].x, x)
+    assert view_model.channel_state.primary_channel == 0
+
+
+def test_paste_special_new_channel_puts_clip_in_chosen_channel(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = view_model.audio_state.copy()
+    clip = AudioClip({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    result = view_model.paste_special_new_channel(1, 0.1, clip)
+
+    assert result is not None
+    ch0, ch1 = view_model.stereo_channels()
+    assert len(ch0.x) == len(ch1.x) == len(x) + 50
+    np.testing.assert_array_equal(ch1.x[100:150], np.full(50, 5.0))
+    np.testing.assert_array_equal(ch0.x[:100], x[:100])
+    np.testing.assert_array_equal(ch0.x[150:], x[100:])
+
+
+def test_paste_special_new_channel_moves_existing_to_other_slot(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = view_model.audio_state.copy()
+    clip = AudioClip({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel(0, 0.1, clip)
+
+    ch0, ch1 = view_model.stereo_channels()
+    np.testing.assert_array_equal(ch0.x[100:150], np.full(50, 5.0))
+    np.testing.assert_array_equal(ch1.x[:100], x[:100])
+    np.testing.assert_array_equal(ch1.x[150:], x[100:])
+
+
+def test_paste_special_new_channel_pushes_undo_entry(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = view_model.audio_state.copy()
+    clip = AudioClip({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel(1, 0.1, clip)
+
+    assert len(view_model.undo_stack) == 1
+    view_model.undo()  # must not raise
+
+
+def test_paste_special_new_channel_raises_if_already_stereo(
+    view_model: DocumentViewModel,
+):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    clip = AudioClip({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel(1, 0.1, clip)
+
+
+def test_paste_special_new_channel_raises_if_clip_is_stereo(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = view_model.audio_state.copy()
+    clip = AudioClip(
+        {
+            0: AudioSignal(np.full(50, 5.0), 1000),
+            1: AudioSignal(np.full(50, -5.0), 1000),
+        }
+    )
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel(1, 0.1, clip)
+
+
 # --------------------------- misc ---------------------------
 
 

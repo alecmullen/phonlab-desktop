@@ -165,6 +165,16 @@
         <source>This clip is mono, but the destination is stereo. Which channel should the clip&apos;s audio occupy? The other channel will be filled with a quiet noise placeholder.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="776"/>
+        <source>Paste Special</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="777"/>
+        <source>Paste Special: New Channel only applies when both the document and the clipboard clip are mono.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>DocumentViewModel</name>
@@ -323,6 +333,16 @@
     <message>
         <location filename="../../ui/main/main_window.py" line="125"/>
         <source>Paste audio at the mark</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/main_window.py" line="130"/>
+        <source>Paste &amp;Special...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/main_window.py" line="132"/>
+        <source>Paste the clipboard clip into a new stereo channel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -507,6 +527,29 @@
     <message>
         <location filename="../../ui/document/component/paste_channel_dialog.py" line="23"/>
         <source>Right Channel</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PasteSpecialDialog</name>
+    <message>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="20"/>
+        <source>Paste Special</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="22"/>
+        <source>New Channel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="23"/>
+        <source>Channel 1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="24"/>
+        <source>Channel 2</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

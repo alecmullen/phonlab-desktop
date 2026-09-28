@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QProgressBar,
     QScrollBar,
     QVBoxLayout,
@@ -25,6 +26,7 @@ from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.document.component.delete_channel_dialog import DeleteChannelDialog
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
+from ui.document.component.paste_special_dialog import PasteSpecialDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_loaded import AudioLoaded
@@ -766,6 +768,28 @@ class DocumentView(QWidget):
             clip = self.view_model.reconcile_clip_for_paste(clip, choice)
 
         self.view_model.paste_at(mark_position, clip)
+
+    def paste_special(self, clip: AudioClip):
+        if self.view_model.stereo_channels() is not None or clip.is_stereo:
+            QMessageBox.information(
+                self,
+                self.tr("Paste Special"),
+                self.tr(
+                    "Paste Special: New Channel only applies when both the "
+                    "document and the clipboard clip are mono."
+                ),
+            )
+            return
+
+        mark_position = self.view_model.mark_position_or_warn()
+        if mark_position is None:
+            return
+
+        new_channel_idx = PasteSpecialDialog.get_new_channel_index(self)
+        if new_channel_idx is None:
+            return
+
+        self.view_model.paste_special_new_channel(new_channel_idx, mark_position, clip)
 
     def undo(self):
         self.view_model.undo()
