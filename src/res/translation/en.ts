@@ -536,84 +536,79 @@
 <context>
     <name>SaveAudioDialog</name>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="46"/>
-        <location filename="../../ui/main/save_audio_dialog.py" line="140"/>
-        <location filename="../../ui/main/save_audio_dialog.py" line="149"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="48"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="139"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="148"/>
         <source>Save Audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="60"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="62"/>
         <source>Browse…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="73"/>
-        <source> Hz</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="75"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="74"/>
         <source>Scale to use the full amplitude range</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="80"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="79"/>
         <source>Channel 1 (Left)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="82"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="81"/>
         <source>Channel 2 (Right)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="90"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="89"/>
         <source>Directory:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="91"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="90"/>
         <source>Filename:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="92"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="91"/>
         <source>Sample rate:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="112"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="111"/>
         <source>Select Directory</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="119"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="118"/>
         <source>Will be saved as a stereo file</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="122"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="121"/>
         <source>Will be saved as mono (Channel 1)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="126"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="125"/>
         <source>Will be saved as mono (Channel 2)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="130"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="129"/>
         <source>Choose at least one channel to save</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="141"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="140"/>
         <source>Choose a directory and filename to save to.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="150"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="149"/>
         <source>Choose at least one channel to save.</source>
         <translation type="unfinished"></translation>
     </message>

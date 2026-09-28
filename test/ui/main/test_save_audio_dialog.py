@@ -33,7 +33,7 @@ def document_view(monkeypatch: pytest.MonkeyPatch) -> DocumentView:
 
 def load_mono(document_view: DocumentView):
     document_view.view_model.load_from_samples(
-        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 1000)})
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 16000)})
     )
 
 
@@ -41,8 +41,8 @@ def load_stereo(document_view: DocumentView):
     document_view.view_model.load_from_samples(
         AudioClip(
             {
-                0: AudioSignal(np.arange(5000, dtype=np.float64), 1000),
-                1: AudioSignal(np.arange(5000, dtype=np.float64) * 2, 1000),
+                0: AudioSignal(np.arange(5000, dtype=np.float64), 16000),
+                1: AudioSignal(np.arange(5000, dtype=np.float64) * 2, 16000),
             }
         )
     )
@@ -77,8 +77,21 @@ def test_dialog_defaults_to_origin_directory_and_native_rate(
 
     assert dialog.directory_edit.text() == "/home/user/audio"
     assert dialog.filename_edit.text() == "myfile.wav"
-    assert dialog.rate_spin.value() == 1000
+    assert dialog.rate_dropdown.currentData() == 16000
     assert dialog.scale_check.isChecked() is False
+
+
+def test_rate_dropdown_snaps_to_nearest_standard_rate(
+    qtbot: QtBot, document_view: DocumentView
+):
+    document_view.view_model.load_from_samples(
+        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 13000)})
+    )
+
+    dialog = SaveAudioDialog(document_view, "myfile.wav")
+    qtbot.addWidget(dialog)
+
+    assert dialog.rate_dropdown.currentData() == 12000
 
 
 def test_dialog_defaults_to_home_directory_without_origin_path(
@@ -111,7 +124,7 @@ def test_options_reflects_current_field_values(
     qtbot.addWidget(dialog)
     dialog.directory_edit.setText("  /tmp  ")
     dialog.filename_edit.setText("  out.wav  ")
-    dialog.rate_spin.setValue(22050)
+    dialog.rate_dropdown.setCurrentIndex(dialog.rate_dropdown.findData(22050))
     dialog.scale_check.setChecked(True)
 
     options = dialog.options()
@@ -327,6 +340,6 @@ def test_get_options_returns_options_when_dialog_accepted(
     result = SaveAudioDialog.get_options(document_view, "myfile.wav")
 
     assert result.path == "/tmp/myfile.wav"
-    assert result.target_fs == 1000
+    assert result.target_fs == 16000
     assert result.scale is False
     assert result.channels == [0]
