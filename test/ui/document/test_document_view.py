@@ -9,7 +9,10 @@ import ui.document.document_view_model as dvm_module
 from core.edit_audio.entity.audio_clip import AudioClip
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.component.delete_channel_dialog import DeleteChannelDialog
-from ui.document.component.paste_special_dialog import PasteSpecialDialog
+from ui.document.component.paste_special_dialog import (
+    PasteSpecialChoice,
+    PasteSpecialDialog,
+)
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
@@ -578,8 +581,8 @@ def test_paste_special_shows_message_when_document_already_stereo(
         staticmethod(lambda *a, **k: info_calls.append(True)),
     )
     special_calls = []
-    stereo_loaded_view.view_model.paste_special_new_channel = lambda *a, **k: (
-        special_calls.append(True)
+    stereo_loaded_view.view_model.paste_special_new_channel_with_silence = (
+        lambda *a, **k: special_calls.append(True)
     )
     clip = AudioClip({0: AudioSignal(np.full(50, 1.0), 1000)})
 
@@ -599,7 +602,7 @@ def test_paste_special_shows_message_when_clip_is_stereo(
         staticmethod(lambda *a, **k: info_calls.append(True)),
     )
     special_calls = []
-    loaded_view.view_model.paste_special_new_channel = lambda *a, **k: (
+    loaded_view.view_model.paste_special_new_channel_with_silence = lambda *a, **k: (
         special_calls.append(True)
     )
     clip = AudioClip(
@@ -625,16 +628,57 @@ def test_paste_special_shows_message_when_mark_not_set(loaded_view: DocumentView
     assert any(isinstance(s, StatusMessageState) for s in received)
 
 
-def test_paste_special_forwards_dialog_choice_to_view_model(
+def test_paste_special_forwards_with_silence_choice_to_view_model(
     loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
     loaded_view.view_model.set_mark(1.0)
     monkeypatch.setattr(
-        PasteSpecialDialog, "get_new_channel_index", staticmethod(lambda parent=None: 1)
+        PasteSpecialDialog,
+        "get_choice",
+        staticmethod(
+            lambda parent=None: PasteSpecialChoice(
+                new_channel_idx=1, insert_silence=True
+            )
+        ),
     )
-    calls = []
-    loaded_view.view_model.paste_special_new_channel = (
-        lambda new_channel_idx, position, clip: calls.append(
+    with_silence_calls = []
+    without_silence_calls = []
+    loaded_view.view_model.paste_special_new_channel_with_silence = (
+        lambda new_channel_idx, position, clip: with_silence_calls.append(
+            (new_channel_idx, position, clip)
+        )
+    )
+    loaded_view.view_model.paste_special_new_channel_without_silence = lambda *a, **k: (
+        without_silence_calls.append(True)
+    )
+    clip = AudioClip({0: AudioSignal(np.full(50, 1.0), 1000)})
+
+    loaded_view.paste_special(clip)
+
+    assert with_silence_calls == [(1, 1.0, clip)]
+    assert without_silence_calls == []
+
+
+def test_paste_special_forwards_without_silence_choice_to_view_model(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    loaded_view.view_model.set_mark(1.0)
+    monkeypatch.setattr(
+        PasteSpecialDialog,
+        "get_choice",
+        staticmethod(
+            lambda parent=None: PasteSpecialChoice(
+                new_channel_idx=0, insert_silence=False
+            )
+        ),
+    )
+    with_silence_calls = []
+    without_silence_calls = []
+    loaded_view.view_model.paste_special_new_channel_with_silence = lambda *a, **k: (
+        with_silence_calls.append(True)
+    )
+    loaded_view.view_model.paste_special_new_channel_without_silence = (
+        lambda new_channel_idx, position, clip: without_silence_calls.append(
             (new_channel_idx, position, clip)
         )
     )
@@ -642,7 +686,8 @@ def test_paste_special_forwards_dialog_choice_to_view_model(
 
     loaded_view.paste_special(clip)
 
-    assert calls == [(1, 1.0, clip)]
+    assert without_silence_calls == [(0, 1.0, clip)]
+    assert with_silence_calls == []
 
 
 def test_paste_special_does_nothing_when_dialog_cancelled(
@@ -651,12 +696,15 @@ def test_paste_special_does_nothing_when_dialog_cancelled(
     loaded_view.view_model.set_mark(1.0)
     monkeypatch.setattr(
         PasteSpecialDialog,
-        "get_new_channel_index",
+        "get_choice",
         staticmethod(lambda parent=None: None),
     )
     calls = []
-    loaded_view.view_model.paste_special_new_channel = lambda *a, **k: calls.append(
-        True
+    loaded_view.view_model.paste_special_new_channel_with_silence = lambda *a, **k: (
+        calls.append(True)
+    )
+    loaded_view.view_model.paste_special_new_channel_without_silence = lambda *a, **k: (
+        calls.append(True)
     )
     clip = AudioClip({0: AudioSignal(np.full(50, 1.0), 1000)})
 
