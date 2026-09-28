@@ -23,6 +23,7 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
+from ui.document.component.delete_channel_dialog import DeleteChannelDialog
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
@@ -182,6 +183,17 @@ class DocumentView(QWidget):
                 return idx
         return None
 
+    def _channel_delete_button_at(self, scene_pos: QPointF) -> int | None:
+        """The channel index (0 or 1) whose delete ("x") button contains
+        this scene position, if any. Like the "Active" checkbox, this
+        button is rendering-only - clicks are hit-tested here rather than
+        delivered natively."""
+        for idx, plot in enumerate(self._wave_plots()):
+            proxy = plot.delete_button_proxy
+            if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):
+                return idx
+        return None
+
     @pyqtSlot(object)
     def on_state_change(self, model: State):
         if isinstance(model, AudioLoaded):
@@ -284,6 +296,7 @@ class DocumentView(QWidget):
             linked_plot=self.first_plot,
             is_bottom_plot=is_bottom,
             show_active_checkbox=stereo,
+            show_delete_button=stereo,
         )
         wave_label = self.tr("Ch 1 Amplitude") if stereo else self.tr("Amplitude")
         self.wave_plot.setLabel("left", wave_label)
@@ -303,6 +316,7 @@ class DocumentView(QWidget):
             linked_plot=self.first_plot,
             is_bottom_plot=is_last_type,
             show_active_checkbox=True,
+            show_delete_button=True,
         )
         self.wave_plot_channel2.setLabel("left", self.tr("Ch 2 Amplitude"))
         self.add_shared_context_menu_actions(self.wave_plot_channel2.getViewBox())
@@ -538,6 +552,12 @@ class DocumentView(QWidget):
             self.view_model.toggle_channel_active(channel_idx)
             return
 
+        delete_idx = self._channel_delete_button_at(scene_pos)
+        if delete_idx is not None:
+            if DeleteChannelDialog.confirm(self):
+                self.view_model.delete_channel(delete_idx)
+            return
+
         clicked_plot = self._wave_plot_at(scene_pos)
         if clicked_plot is None:
             if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
@@ -561,6 +581,8 @@ class DocumentView(QWidget):
         scene_pos = self.graphics_widget.mapToScene(event.pos())
 
         if self._channel_checkbox_at(scene_pos) is not None:
+            return
+        if self._channel_delete_button_at(scene_pos) is not None:
             return
 
         if self.click_timer is not None:

@@ -56,18 +56,23 @@
 <context>
     <name>AudioWavePlot</name>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="51"/>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="77"/>
         <source>Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="57"/>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="83"/>
         <source>Time</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="41"/>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="42"/>
         <source>Active</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="64"/>
+        <source>Delete this channel</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -76,6 +81,24 @@
     <message>
         <location filename="../../ui/main/splash.py" line="49"/>
         <source>Click on this card to open a sound file</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>DeleteChannelDialog</name>
+    <message>
+        <location filename="../../ui/document/component/delete_channel_dialog.py" line="17"/>
+        <source>Delete Channel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/delete_channel_dialog.py" line="19"/>
+        <source>Delete this channel and convert the file to mono? This cannot be undone.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/delete_channel_dialog.py" line="25"/>
+        <source>Delete</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
