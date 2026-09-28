@@ -443,21 +443,23 @@ def test_compute_spectrogram_mmap_updates_state_on_success(
 
     manager = view_model.job_managers["sgram_mmap"]
     job = manager.jobs[0]
+    # 11 evenly spaced values (0..10) give exact, interpolation-free 20th/
+    # 80th percentiles (2.0 and 8.0) for a simple, easily-verified fixture.
     sgram = SpectrogramMmap(
-        t_mmap=np.array([0.0, 0.1]),
-        sxx_mmap=np.array([[1.0, 5.0]]),
+        t_mmap=np.arange(11, dtype=np.float64) * 0.01,
+        sxx_mmap=np.array([np.arange(11, dtype=np.float64)]),
         frames_per_sec=100.0,
-        frames_computed=2,
+        frames_computed=11,
         samples_computed=200,
     )
 
     job.on_success(sgram)
 
-    assert view_model.sgram_state.frames_computed == 2
+    assert view_model.sgram_state.frames_computed == 11
     assert view_model.sgram_state.samples_computed == 200
     assert view_model.sgram_state.frames_per_sec == 100.0
-    assert view_model.sgram_state.max_sxx == 5.0
-    assert view_model.sgram_state.min_sxx == 1.0
+    assert view_model.sgram_state.low_sxx == 2.0
+    assert view_model.sgram_state.high_sxx == 8.0
 
 
 def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
@@ -466,10 +468,11 @@ def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
     """ComputeSpectrogramMmap over-allocates its mmap buffer by 20% as a
     safety margin (see init_mmap()), so frames_computed can be smaller than
     sxx_mmap.shape[1] - the remaining columns are still the memmap's
-    zero-initialized, never-computed tail. Extrema must be scanned only
-    over the valid [:frames_computed] slice, or that zero padding skews
-    min_sxx/max_sxx (this was the root cause of the spectrogram rendering
-    too dark once a long file's background computation finished)."""
+    zero-initialized, never-computed tail. The percentile scan must be
+    restricted to the valid [:frames_computed] slice, or that zero padding
+    (or any other never-computed garbage) skews low_sxx/high_sxx (this was
+    the root cause of the spectrogram rendering too dark once a long
+    file's background computation finished)."""
     view_model = SpectrogramViewModel()
     x = np.arange(1000, dtype=np.float64)
 
@@ -477,18 +480,23 @@ def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
 
     manager = view_model.job_managers["sgram_mmap"]
     job = manager.jobs[0]
+    # First 11 columns are valid data (0..10, giving exact percentiles of
+    # 2.0/8.0); the trailing two are the buffer's never-computed tail,
+    # holding a value (-1000) that would badly skew the result if included.
+    valid = np.arange(11, dtype=np.float64)
+    padded = np.concatenate([valid, [-1000.0, -1000.0]])
     sgram = SpectrogramMmap(
-        t_mmap=np.array([0.0, 0.1, 0.0, 0.0]),
-        sxx_mmap=np.array([[-10.0, -5.0, 0.0, 0.0]]),
+        t_mmap=np.concatenate([valid * 0.01, [0.0, 0.0]]),
+        sxx_mmap=np.array([padded]),
         frames_per_sec=100.0,
-        frames_computed=2,
+        frames_computed=11,
         samples_computed=200,
     )
 
     job.on_success(sgram)
 
-    assert view_model.sgram_state.max_sxx == -5.0
-    assert view_model.sgram_state.min_sxx == -10.0
+    assert view_model.sgram_state.low_sxx == 2.0
+    assert view_model.sgram_state.high_sxx == 8.0
 
 
 def test_compute_spectrogram_mmap_launches_only_once(
@@ -569,8 +577,56 @@ def test_update_sxx_extrema_tracks_min_and_max_across_calls(qtbot: QtBot):
     view_model.update_sxx_extrema(np.array([1.0, 5.0, 3.0]))
     view_model.update_sxx_extrema(np.array([-2.0, 4.0]))
 
-    assert view_model.sgram_state.min_sxx == -2.0
-    assert view_model.sgram_state.max_sxx == 5.0
+    assert view_model.sgram_state.low_sxx == -2.0
+    assert view_model.sgram_state.high_sxx == 5.0
+
+
+# --------------------------- update_sxx_percentiles ---------------------------
+
+
+def test_update_sxx_percentiles_computes_20th_and_80th(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+
+    view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64))
+
+    assert view_model.sgram_state.low_sxx == 2.0
+    assert view_model.sgram_state.high_sxx == 8.0
+
+
+def test_update_sxx_percentiles_replaces_rather_than_merges(qtbot: QtBot):
+    """Unlike update_sxx_extrema(), a later call must fully replace the
+    previous result, not widen it - percentiles of separate chunks can't
+    be combined into the percentile of their union, so each call must
+    reflect only the data it was just given."""
+    view_model = SpectrogramViewModel()
+    view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64) - 100)
+
+    view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64))
+
+    assert view_model.sgram_state.low_sxx == 2.0
+    assert view_model.sgram_state.high_sxx == 8.0
+
+
+def test_update_sxx_percentiles_is_not_skewed_by_a_single_outlier(qtbot: QtBot):
+    """A single pathological value (e.g. a fully silent frame, or one
+    over-allocated-but-never-written buffer column) must not dominate the
+    result the way it would with true min/max."""
+    view_model = SpectrogramViewModel()
+    data = np.concatenate([np.arange(11, dtype=np.float64), [-3076.0]])
+
+    view_model.update_sxx_percentiles(data)
+
+    assert view_model.sgram_state.low_sxx > -100
+    assert view_model.sgram_state.high_sxx > 0
+
+
+def test_update_sxx_percentiles_does_nothing_for_empty_input(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    before = view_model.sgram_state
+
+    view_model.update_sxx_percentiles(np.array([]))
+
+    assert view_model.sgram_state is before
 
 
 # --------------------------- invalidate_spectrogram ---------------------------

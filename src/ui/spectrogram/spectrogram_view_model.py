@@ -10,7 +10,12 @@ from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
-from res.constants import MAX_SGRAM_LENGTH, SPECTROGRAM_PRE_EMPHASIS
+from res.constants import (
+    MAX_SGRAM_LENGTH,
+    SPECTROGRAM_HIGH_PERCENTILE,
+    SPECTROGRAM_LOW_PERCENTILE,
+    SPECTROGRAM_PRE_EMPHASIS,
+)
 from ui.base.state import State
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_channel_state import (
@@ -178,10 +183,10 @@ class SpectrogramViewModel(ViewModel):
             # 20% safety margin over the estimated frame count - see
             # ComputeSpectrogramMmap.init_mmap()), so only the first
             # frames_computed columns hold real data; the rest is still the
-            # memmap's zero-initialized backing. Restrict the extrema scan
-            # to the valid slice so that never-computed (zero) columns
-            # can't skew min_sxx/max_sxx.
-            self.update_sxx_extrema(sgram.sxx_mmap[:, : sgram.frames_computed])
+            # memmap's zero-initialized backing. Restrict the scan to the
+            # valid slice so those never-computed (zero) columns can't skew
+            # the result.
+            self.update_sxx_percentiles(sgram.sxx_mmap[:, : sgram.frames_computed])
 
         settings = self.spectrogram_settings
         use_case = ComputeSpectrogramMmap(
@@ -198,10 +203,45 @@ class SpectrogramViewModel(ViewModel):
         self.state_changed.emit(self.sgram_state)
 
     def update_sxx_extrema(self, sxx: np.ndarray | np.memmap):
+        """Widen the running (never-shrinking) low/high reference range
+        with a freshly computed window's true min/max - used only for the
+        short-lived bootstrap phase before any background full-file scan
+        data exists yet (see load_spectrogram_window()). Unlike
+        update_sxx_percentiles(), this accumulates across separate calls,
+        since each call only ever sees one narrow window, never the full
+        picture."""
         self.sgram_state = replace(
             self.sgram_state,
-            min_sxx=min(self.sgram_state.min_sxx, np.min(sxx)),
-            max_sxx=max(self.sgram_state.max_sxx, np.max(sxx)),
+            low_sxx=min(self.sgram_state.low_sxx, np.min(sxx)),
+            high_sxx=max(self.sgram_state.high_sxx, np.max(sxx)),
+        )
+
+    def update_sxx_percentiles(self, sxx: np.ndarray | np.memmap):
+        """Replace (not merge with) the gray-scale reference range, using
+        the SPECTROGRAM_LOW_PERCENTILE/SPECTROGRAM_HIGH_PERCENTILE of the
+        full valid data given. Unlike update_sxx_extrema()'s true min/max,
+        a percentile-based range isn't skewed by a single outlier region
+        (e.g. a fully silent stretch, or one unusually loud transient)
+        somewhere in a long file - and since percentiles of separate
+        chunks can't be combined into the percentile of their union the
+        way min/max can, this always recomputes from the complete valid
+        data available so far (the mmap already holds the full history,
+        so nothing is lost by not accumulating). Called only when the
+        background full-file scan advances (once per chunk in
+        compute_spectrogram_mmap), never on a plain scroll/zoom, so the
+        display stays stable while navigating."""
+        if sxx.size == 0:
+            return
+        # A single call computing both points is meaningfully cheaper than
+        # two separate np.percentile() calls (each does its own partial
+        # sort of the whole array) - matters here since sxx can be the
+        # full valid slice of a long file's spectrogram (hundreds of
+        # millions of elements).
+        low, high = np.percentile(
+            sxx, [SPECTROGRAM_LOW_PERCENTILE, SPECTROGRAM_HIGH_PERCENTILE]
+        )
+        self.sgram_state = replace(
+            self.sgram_state, low_sxx=float(low), high_sxx=float(high)
         )
 
     def invalidate_spectrogram(self):
