@@ -13,14 +13,16 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
+from ui.common.sample_rate_dropdown import SampleRateDropdown
 from ui.document.document_view import DocumentView
 
 _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]')
+
+SAMPLE_RATE_OPTIONS = [10000, 12000, 16000, 22050, 32000, 44100, 48000]
 
 
 def _default_filename(tab_name: str) -> str:
@@ -67,10 +69,7 @@ class SaveAudioDialog(QDialog):
 
         self.filename_edit = QLineEdit(default_filename)
 
-        self.rate_spin = QSpinBox()
-        self.rate_spin.setRange(1000, 384000)
-        self.rate_spin.setValue(raw_fs)
-        self.rate_spin.setSuffix(self.tr(" Hz"))
+        self.rate_dropdown = SampleRateDropdown(SAMPLE_RATE_OPTIONS, raw_fs)
 
         self.scale_check = QCheckBox(self.tr("Scale to use the full amplitude range"))
         self.scale_check.setChecked(False)
@@ -89,7 +88,7 @@ class SaveAudioDialog(QDialog):
         form = QFormLayout()
         form.addRow(self.tr("Directory:"), dir_row)
         form.addRow(self.tr("Filename:"), self.filename_edit)
-        form.addRow(self.tr("Sample rate:"), self.rate_spin)
+        form.addRow(self.tr("Sample rate:"), self.rate_dropdown)
         form.addRow("", self.scale_check)
         if self._stereo:
             form.addRow("", self.channel1_check)
@@ -166,7 +165,7 @@ class SaveAudioDialog(QDialog):
             channels = [self._primary_index]
         return SaveOptions(
             path=path,
-            target_fs=self.rate_spin.value(),
+            target_fs=self.rate_dropdown.currentData(),
             scale=self.scale_check.isChecked(),
             channels=channels,
         )
