@@ -536,45 +536,85 @@
 <context>
     <name>SaveAudioDialog</name>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="44"/>
-        <location filename="../../ui/main/save_audio_dialog.py" line="90"/>
-        <location filename="../../ui/main/save_audio_dialog.py" line="100"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="46"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="140"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="149"/>
         <source>Save Audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="55"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="60"/>
         <source>Browse…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="66"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="73"/>
         <source> Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="68"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="75"/>
         <source>Scale to use the full amplitude range</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="72"/>
-        <source>Save to:</source>
+        <location filename="../../ui/main/save_audio_dialog.py" line="80"/>
+        <source>Channel 1 (Left)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="73"/>
-        <source>Sample rate:</source>
+        <location filename="../../ui/main/save_audio_dialog.py" line="82"/>
+        <source>Channel 2 (Right)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="90"/>
+        <source>Directory:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="91"/>
+        <source>Filename:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../../ui/main/save_audio_dialog.py" line="92"/>
-        <source>Sound files (*.wav)</source>
+        <source>Sample rate:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="100"/>
-        <source>Choose a file to save to.</source>
+        <location filename="../../ui/main/save_audio_dialog.py" line="112"/>
+        <source>Select Directory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="119"/>
+        <source>Will be saved as a stereo file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="122"/>
+        <source>Will be saved as mono (Channel 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="126"/>
+        <source>Will be saved as mono (Channel 2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="130"/>
+        <source>Choose at least one channel to save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="141"/>
+        <source>Choose a directory and filename to save to.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="150"/>
+        <source>Choose at least one channel to save.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

@@ -632,6 +632,26 @@ class DocumentViewModel(ViewModel):
         indices = sorted(self.channel_state.active_channels)
         return [self.audio_state[idx] for idx in indices if idx in self.audio_state]
 
+    def active_channel_indices(self) -> frozenset[int]:
+        """Which channel index/indices are currently marked Active - for UI
+        that needs raw indices (e.g. defaulting the save dialog's
+        per-channel checkboxes) rather than the AudioChannelState objects
+        active_channel_states() returns."""
+        return self.channel_state.active_channels
+
+    def primary_channel_index(self) -> int:
+        return self.channel_state.primary_channel
+
+    def channels_for_save(self, indices: list[int]) -> list[AudioSignal]:
+        """AudioSignal objects (core-layer, no ui/ dependency) for the given
+        channel indices, in the order requested - used by main_window.py's
+        save_audio() so it never touches audio_state directly."""
+        return [
+            to_audio_signal(self.audio_state[idx])
+            for idx in indices
+            if idx in self.audio_state
+        ]
+
     def toggle_channel_active(self, idx: int):
         """Activate/deactivate channel `idx` for playback/spectrogram
         purposes - refused if it would leave no channel active. Not tracked

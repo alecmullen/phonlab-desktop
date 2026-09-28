@@ -315,13 +315,11 @@ class MainWindow(QMainWindow):
         options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
         if options is None:
             return
-        raw = doc.view_model.primary_channel()
+        channels = doc.view_model.channels_for_save(options.channels)
         try:
-            if raw is None:
+            if not channels:
                 raise RuntimeError("Cannot save audio that is not loaded")
-            SaveAudio(
-                options.path, raw.x, raw.fs, options.target_fs, options.scale
-            ).invoke()
+            SaveAudio(options.path, channels, options.target_fs, options.scale).invoke()
         except RuntimeError as err:
             QMessageBox.critical(
                 self,
