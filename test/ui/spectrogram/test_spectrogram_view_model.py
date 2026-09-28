@@ -11,6 +11,7 @@ import ui.spectrogram.spectrogram_view_model as svm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from res.constants import SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
 from ui.base.state import State
 from ui.document.state.audio_channel_state import AudioChannelState
 from ui.document.state.load_progress_state import LoadProgressState
@@ -627,6 +628,65 @@ def test_update_sxx_percentiles_does_nothing_for_empty_input(qtbot: QtBot):
     view_model.update_sxx_percentiles(np.array([]))
 
     assert view_model.sgram_state is before
+
+
+def test_update_sxx_percentiles_estimates_correctly_from_a_large_sample(
+    qtbot: QtBot,
+):
+    """A random sample should still recover close to the true population
+    percentiles for a large, smooth distribution - the whole point of
+    sampling is to make this fast without materially changing the
+    result."""
+    view_model = SpectrogramViewModel()
+    rng = np.random.default_rng(42)
+    data = rng.uniform(-70, -5, size=(257, 500_000)).astype(np.float32)
+
+    view_model.update_sxx_percentiles(data)
+
+    true_low, true_high = np.percentile(data, [20, 80])
+    assert view_model.sgram_state.low_sxx == pytest.approx(true_low, abs=0.5)
+    assert view_model.sgram_state.high_sxx == pytest.approx(true_high, abs=0.5)
+
+
+# --------------------------- _sample_sxx ---------------------------
+
+
+def test_sample_sxx_returns_full_array_at_or_under_threshold(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE, dtype=np.float64)
+
+    sample = view_model._sample_sxx(data)
+
+    np.testing.assert_array_equal(np.sort(sample), data)
+
+
+def test_sample_sxx_caps_size_when_over_threshold(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE + 1, dtype=np.float64)
+
+    sample = view_model._sample_sxx(data)
+
+    assert sample.size == SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
+    assert np.all(np.isin(sample, data))
+
+
+def test_sample_sxx_samples_from_a_2d_array(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    data = np.arange(300 * 400, dtype=np.float64).reshape(300, 400)
+
+    sample = view_model._sample_sxx(data)
+
+    assert sample.size == SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
+    assert np.all(np.isin(sample, data))
+
+
+def test_sample_sxx_is_deterministic_across_fresh_instances(qtbot: QtBot):
+    data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE * 3, dtype=np.float64)
+
+    sample_a = SpectrogramViewModel()._sample_sxx(data)
+    sample_b = SpectrogramViewModel()._sample_sxx(data)
+
+    np.testing.assert_array_equal(sample_a, sample_b)
 
 
 # --------------------------- invalidate_spectrogram ---------------------------

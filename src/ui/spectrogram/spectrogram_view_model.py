@@ -14,6 +14,7 @@ from res.constants import (
     MAX_SGRAM_LENGTH,
     SPECTROGRAM_HIGH_PERCENTILE,
     SPECTROGRAM_LOW_PERCENTILE,
+    SPECTROGRAM_PERCENTILE_SAMPLE_SIZE,
     SPECTROGRAM_PRE_EMPHASIS,
 )
 from ui.base.state import State
@@ -39,6 +40,10 @@ class SpectrogramViewModel(ViewModel):
         self.window_state = SpectrogramWindowState()
 
         self._buffer_generation = 0
+        # Fixed seed: a fresh instance loading the same file always draws
+        # the same sample, so the displayed range is reproducible across
+        # app runs (and in tests) rather than varying randomly each time.
+        self._percentile_rng = np.random.default_rng(0)
 
         self.state_changed.connect(self.on_state_changed)
 
@@ -216,29 +221,45 @@ class SpectrogramViewModel(ViewModel):
             high_sxx=max(self.sgram_state.high_sxx, np.max(sxx)),
         )
 
+    def _sample_sxx(self, sxx: np.ndarray | np.memmap) -> np.ndarray:
+        """A random sample of sxx's elements, capped at
+        SPECTROGRAM_PERCENTILE_SAMPLE_SIZE, so percentile computation stays
+        fast even for a long file's full-size spectrogram (hundreds of
+        millions of elements). Gathers only the sampled elements directly
+        via fancy indexing rather than first materializing/raveling the
+        whole array - sxx can be a non-contiguous memmap slice (the valid
+        [:frames_computed] prefix of an over-allocated buffer), so a plain
+        .ravel() would already force a full copy before sampling even
+        starts, defeating the point."""
+        if sxx.size <= SPECTROGRAM_PERCENTILE_SAMPLE_SIZE:
+            return np.asarray(sxx)
+        flat_indices = self._percentile_rng.integers(
+            0, sxx.size, size=SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
+        )
+        return sxx[np.unravel_index(flat_indices, sxx.shape)]
+
     def update_sxx_percentiles(self, sxx: np.ndarray | np.memmap):
         """Replace (not merge with) the gray-scale reference range, using
-        the SPECTROGRAM_LOW_PERCENTILE/SPECTROGRAM_HIGH_PERCENTILE of the
-        full valid data given. Unlike update_sxx_extrema()'s true min/max,
-        a percentile-based range isn't skewed by a single outlier region
-        (e.g. a fully silent stretch, or one unusually loud transient)
-        somewhere in a long file - and since percentiles of separate
-        chunks can't be combined into the percentile of their union the
-        way min/max can, this always recomputes from the complete valid
-        data available so far (the mmap already holds the full history,
-        so nothing is lost by not accumulating). Called only when the
-        background full-file scan advances (once per chunk in
-        compute_spectrogram_mmap), never on a plain scroll/zoom, so the
-        display stays stable while navigating."""
+        the SPECTROGRAM_LOW_PERCENTILE/SPECTROGRAM_HIGH_PERCENTILE of a
+        random sample of the data given (see _sample_sxx()). Unlike
+        update_sxx_extrema()'s true min/max, a percentile-based range
+        isn't skewed by a single outlier region (e.g. a fully silent
+        stretch, or one unusually loud transient) somewhere in a long
+        file - and since percentiles of separate chunks can't be combined
+        into the percentile of their union the way min/max can, this
+        always recomputes from the complete valid data available so far
+        (the mmap already holds the full history, so nothing is lost by
+        not accumulating). Called only when the background full-file scan
+        advances (once per chunk in compute_spectrogram_mmap), never on a
+        plain scroll/zoom, so the display stays stable while navigating."""
         if sxx.size == 0:
             return
+        sample = self._sample_sxx(sxx)
         # A single call computing both points is meaningfully cheaper than
         # two separate np.percentile() calls (each does its own partial
-        # sort of the whole array) - matters here since sxx can be the
-        # full valid slice of a long file's spectrogram (hundreds of
-        # millions of elements).
+        # sort of the array).
         low, high = np.percentile(
-            sxx, [SPECTROGRAM_LOW_PERCENTILE, SPECTROGRAM_HIGH_PERCENTILE]
+            sample, [SPECTROGRAM_LOW_PERCENTILE, SPECTROGRAM_HIGH_PERCENTILE]
         )
         self.sgram_state = replace(
             self.sgram_state, low_sxx=float(low), high_sxx=float(high)
