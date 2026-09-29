@@ -5,7 +5,6 @@ import phonlab as phon
 from PyQt6.QtCore import pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
-from core.edit_audio.entity.audio_clip import AudioClip
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
 from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -27,6 +26,7 @@ from ui.document.state.annotation_state import AnnotationState, to_annotation_st
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
     AudioState,
+    to_audio_channel_state,
     to_audio_signal,
     to_audio_signals,
     to_audio_state,
@@ -686,6 +686,10 @@ class DocumentViewModel(ViewModel):
             channels = self._stereo_edit_channels()
             result = EditAudio(to_audio_signals(channels), cmd).invoke()
 
+        if result is None:
+            self.state_changed.emit(StatusMessageState(self.tr("No selection to copy")))
+            return None
+
         return to_audio_state(result.new_clip)
 
     def cut_selection(self) -> AudioState | None:
@@ -808,8 +812,8 @@ class DocumentViewModel(ViewModel):
         return AudioSignal(x.astype(dtype), fs)
 
     def reconcile_clip_for_paste(
-        self, clip: AudioClip, channel_choice: int
-    ) -> AudioClip:
+        self, clip: AudioState, channel_choice: int
+    ) -> AudioState:
         """Resolve a mono/stereo mismatch between `clip` and this document
         ahead of a paste, given the user's channel_choice (0=left, 1=right)
         for where the real audio should go. NOT a pure function: for a
@@ -826,11 +830,13 @@ class DocumentViewModel(ViewModel):
             noise = self._tiny_noise(
                 len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
             )
-            return AudioClip({channel_choice: mono_signal, other: noise})
+            return AudioState(
+                {channel_choice: mono_signal, other: to_audio_channel_state(noise)}
+            )
 
         old_idx = self.channel_state.primary_channel
-        existing = self.audio_state.get(old_idx)
-        raw_existing = self.raw_audio_state.get(old_idx)
+        existing = self.audio_state.channels.get(old_idx)
+        raw_existing = self.raw_audio_state.channels.get(old_idx)
         if existing is None or raw_existing is None:
             raise RuntimeError("Missing primary audio channel")
 
@@ -839,23 +845,27 @@ class DocumentViewModel(ViewModel):
             len(raw_existing.x), raw_existing.fs, raw_existing.x.dtype
         )
 
-        audio_state = {
-            channel_choice: existing,
-            other: to_audio_channel_state(prepped_noise),
-        }
-        self.raw_audio_state = {
-            channel_choice: raw_existing,
-            other: to_audio_channel_state(raw_noise),
-        }
+        audio_state = AudioState(
+            {
+                channel_choice: existing,
+                other: to_audio_channel_state(prepped_noise),
+            }
+        )
+        self.raw_audio_state = AudioState(
+            {
+                channel_choice: raw_existing,
+                other: to_audio_channel_state(raw_noise),
+            }
+        )
 
         self.audio_options = replace(
             self.audio_options,
-            channel_mode=CHANNEL_MODE_STEREO,
+            channel_mode=ChannelMode.STEREO,
             retained_channels=[0, 1],
         )
         self.channel_state = replace(
             self.channel_state,
-            channel_mode=CHANNEL_MODE_STEREO,
+            channel_mode=ChannelMode.STEREO,
             primary_channel=channel_choice,
         )
         self.set_audio(audio_state, channel_choice, reset_window=False)

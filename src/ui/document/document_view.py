@@ -18,7 +18,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.edit_audio.entity.audio_clip import AudioClip
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
