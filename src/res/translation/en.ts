@@ -78,7 +78,7 @@
     <name>DocumentView</name>
     <message>
         <location filename="../../ui/document/document_view.py" line="102"/>
-        <location filename="../../ui/document/document_view.py" line="426"/>
+        <location filename="../../ui/document/document_view.py" line="476"/>
         <source>Computing %p%</source>
         <translation type="unfinished"></translation>
     </message>
@@ -103,89 +103,90 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="294"/>
+        <location filename="../../ui/document/document_view.py" line="268"/>
+        <source>Ch 1 Amplitude</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="286"/>
+        <source>Ch 2 Amplitude</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="344"/>
         <source>Ch {} Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="296"/>
+        <location filename="../../ui/document/document_view.py" line="268"/>
+        <location filename="../../ui/document/document_view.py" line="346"/>
         <source>Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="423"/>
+        <location filename="../../ui/document/document_view.py" line="473"/>
         <source>Loading full file…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="435"/>
+        <location filename="../../ui/document/document_view.py" line="485"/>
         <source>Cursor time: {:.3f}s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="441"/>
+        <location filename="../../ui/document/document_view.py" line="491"/>
         <source>Cursor time: {:.3f}s, frequency: {:.0f} Hz</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/document/document_view.py" line="679"/>
-        <source>This clip is stereo, but the destination is mono. Pasting will convert the document to stereo - which channel should the existing audio occupy? The new channel will be filled with a quiet noise placeholder.</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/document/document_view.py" line="686"/>
-        <source>This clip is mono, but the destination is stereo. Which channel should the clip&apos;s audio occupy? The other channel will be filled with a quiet noise placeholder.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>DocumentViewModel</name>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="193"/>
+        <location filename="../../ui/document/document_view_model.py" line="213"/>
         <source>Duration shown {:.3f} seconds, out of {:.3f} seconds</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="317"/>
+        <location filename="../../ui/document/document_view_model.py" line="334"/>
         <source>System audio latency is a little long ({:.0f} ms). Consider using a different audio device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="412"/>
+        <location filename="../../ui/document/document_view_model.py" line="429"/>
         <source>Select: {:.3f} to {:.3f} ({:.3f}s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="448"/>
+        <location filename="../../ui/document/document_view_model.py" line="465"/>
         <source>No selection to center on</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="550"/>
-        <location filename="../../ui/document/document_view_model.py" line="566"/>
-        <location filename="../../ui/document/document_view_model.py" line="623"/>
+        <location filename="../../ui/document/document_view_model.py" line="567"/>
+        <location filename="../../ui/document/document_view_model.py" line="583"/>
+        <location filename="../../ui/document/document_view_model.py" line="638"/>
         <source>Audio is still loading, please wait.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="633"/>
+        <location filename="../../ui/document/document_view_model.py" line="648"/>
         <source>Cannot remove entire selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="666"/>
-        <location filename="../../ui/document/document_view_model.py" line="690"/>
+        <location filename="../../ui/document/document_view_model.py" line="681"/>
+        <location filename="../../ui/document/document_view_model.py" line="705"/>
         <source>No selection to copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="700"/>
-        <location filename="../../ui/document/document_view_model.py" line="724"/>
+        <location filename="../../ui/document/document_view_model.py" line="715"/>
+        <location filename="../../ui/document/document_view_model.py" line="739"/>
         <source>No selection to cut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="615"/>
+        <location filename="../../ui/document/document_view_model.py" line="630"/>
         <source>Set a mark (Shift+Click) before pasting</source>
         <translation type="unfinished"></translation>
     </message>
@@ -463,16 +464,26 @@
     <name>PasteChannelDialog</name>
     <message>
         <location filename="../../ui/document/component/paste_channel_dialog.py" line="17"/>
+        <source>This clip is stereo, but the destination is mono. Pasting will convert the document to stereo - which channel should the existing audio occupy? The new channel will be filled with a quiet noise placeholder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="24"/>
+        <source>This clip is mono, but the destination is stereo. Which channel should the clip&apos;s audio occupy? The other channel will be filled with a quiet noise placeholder.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="32"/>
         <source>Assign Channel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/paste_channel_dialog.py" line="20"/>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="35"/>
         <source>Left Channel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/paste_channel_dialog.py" line="23"/>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="38"/>
         <source>Right Channel</source>
         <translation type="unfinished"></translation>
     </message>
