@@ -200,9 +200,6 @@ class DocumentViewModel(ViewModel):
     def load_from_samples(self, clip: AudioState):
         indices = sorted(clip.channels.keys())
         channel_mode = ChannelMode.STEREO if clip.is_stereo else ChannelMode.MONO
-        self.audio_options = replace(
-            self.audio_options, channel_mode=channel_mode, retained_channels=indices
-        )
         self.channel_state = ChannelState(
             primary_channel=indices[0], channel_mode=channel_mode
         )
@@ -217,7 +214,7 @@ class DocumentViewModel(ViewModel):
         use_case = PrepAudio(
             to_audio_signals(self.raw_audio_state),
             target_fs,
-            self.audio_options.retained_channels,
+            list(self.audio_state.channels.keys()),
         )
         self.state_changed.emit(LoadProgressState(True))
 
@@ -583,7 +580,7 @@ class DocumentViewModel(ViewModel):
         stereo mode, or if either channel hasn't loaded yet."""
         if self.channel_state.channel_mode != ChannelMode.STEREO:
             return None
-        indices = sorted(self.audio_options.retained_channels)
+        indices = sorted(self.audio_state.channels.keys())
         if len(indices) != 2 or not all(
             idx in self.audio_state.channels for idx in indices
         ):
@@ -606,9 +603,7 @@ class DocumentViewModel(ViewModel):
 
     def mark_position_or_warn(self) -> float | None:
         """The current mark position, or None (with a status message) if no
-        mark is set. Callers that may need to promote this document to
-        stereo before pasting must capture this BEFORE that happens, since
-        set_audio() clears the mark as a side effect."""
+        mark is set. ."""
         if not self.mark_state.is_set:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Set a mark (Shift+Click) before pasting"))
@@ -818,7 +813,6 @@ class DocumentViewModel(ViewModel):
         mono clip pasted into a stereo document, it returns a synthesized
         stereo clip instead, with no side effects."""
         stereo = self.stereo_channels()
-        other = 1 - channel_choice
 
         if stereo is not None:
             mono_signal = next(iter(clip.channels.values()))
@@ -826,51 +820,49 @@ class DocumentViewModel(ViewModel):
                 len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
             )
             return AudioState(
-                {channel_choice: mono_signal, other: to_audio_channel_state(noise)}
+                {
+                    channel_choice: mono_signal,
+                    1 - channel_choice: to_audio_channel_state(noise),
+                }
             )
 
-        old_idx = self.channel_state.primary_channel
-        existing = self.audio_state.channels.get(old_idx)
-        raw_existing = self.raw_audio_state.channels.get(old_idx)
-        if existing is None or raw_existing is None:
-            raise RuntimeError("Missing primary audio channel")
+        self._convert_mono_to_stereo(channel_choice)
 
-        prepped_noise = self._tiny_noise(len(existing.x), existing.fs, existing.x.dtype)
-        raw_noise = self._tiny_noise(
-            len(raw_existing.x), raw_existing.fs, raw_existing.x.dtype
-        )
+        return clip
 
-        audio_state = AudioState(
-            {
-                channel_choice: existing,
-                other: to_audio_channel_state(prepped_noise),
-            }
+    def _convert_mono_to_stereo(self, channel_choice: int):
+        self.raw_audio_state = self._add_noise_channel_to_mono_state(
+            self.raw_audio_state, channel_choice
         )
-        self.raw_audio_state = AudioState(
-            {
-                channel_choice: raw_existing,
-                other: to_audio_channel_state(raw_noise),
-            }
+        audio_state = self._add_noise_channel_to_mono_state(
+            self.audio_state, channel_choice
         )
+        self.set_audio(audio_state, channel_choice, reset_window=False)
 
-        self.audio_options = replace(
-            self.audio_options,
-            channel_mode=ChannelMode.STEREO,
-            retained_channels=[0, 1],
-        )
         self.channel_state = replace(
             self.channel_state,
             channel_mode=ChannelMode.STEREO,
             primary_channel=channel_choice,
         )
-        self.set_audio(audio_state, channel_choice, reset_window=False)
-
-        # set_audio() doesn't re-derive plot layout - only AudioLoaded/
-        # PlotLayoutState events do - so re-emit it to rebuild the view with
-        # a second waveform row now that this document is genuinely stereo.
+        self.update_audio_waveform()
         self.state_changed.emit(self.plot_layout_state)
 
-        return clip
+    def _add_noise_channel_to_mono_state(
+        self, state: AudioState, channel_choice: int
+    ) -> AudioState:
+        primary_channel = state.channels[self.channel_state.primary_channel]
+        if primary_channel is None:
+            raise RuntimeError("Missing primary audio channel")
+
+        noise = self._tiny_noise(
+            len(primary_channel.x), primary_channel.fs, primary_channel.x.dtype
+        )
+
+        new_state = AudioState()
+        new_state.channels[channel_choice] = primary_channel
+        new_state.channels[1 - channel_choice] = to_audio_channel_state(noise)
+
+        return new_state
 
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or
