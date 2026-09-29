@@ -154,6 +154,27 @@ class DocumentViewModel(ViewModel):
         )
         self.update_document_window(document_window_state)
 
+    def _reveal_pasted_region(self, insertion_end_idx: int):
+        """If a paste placed material past the end of the currently visible
+        window, extend the window so the pasted audio is actually visible
+        instead of only reachable by manually scrolling."""
+        if insertion_end_idx <= self.document_window_state.end:
+            return
+
+        primary_channel = self.primary_channel()
+        if primary_channel is None:
+            return
+
+        signal_end = len(primary_channel.x) - 1
+        new_end = min(insertion_end_idx, signal_end)
+        window_size = new_end - self.document_window_state.start
+        document_window_state = replace(
+            self.document_window_state,
+            end=new_end,
+            max_start=max(0, signal_end - window_size),
+        )
+        self.update_document_window(document_window_state)
+
     def set_audio(
         self,
         audio: AudioState,
@@ -783,6 +804,8 @@ class DocumentViewModel(ViewModel):
                 {idx: clip.x for idx, clip in result.new_clip.items()},
             )
         )
+        clip_length = len(next(iter(result.new_clip.values())).x)
+        self._reveal_pasted_region(result.start_idx + clip_length)
         return to_audio_state(result.new_clip)
 
     def paste_at_mark(self, clip: AudioState):

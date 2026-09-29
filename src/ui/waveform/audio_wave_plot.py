@@ -99,7 +99,8 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         limit = max(abs(audio_wave.min_x), abs(audio_wave.max_x))
         self.vb.setLimits(yMin=-limit, yMax=limit)
         self.vb.setLimits(xMin=0, xMax=audio_wave.max_t)
-        self.setYRange(-limit, limit, padding=0.05)
+        if self.view_model.audio_wave_scale_state.y_scale == 1.0:
+            self.setYRange(-limit, limit, padding=0.05)
 
     def update_selection_region(self, box_left: float, t_range: float):
         if t_range > 0:

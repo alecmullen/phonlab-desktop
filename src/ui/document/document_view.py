@@ -299,11 +299,20 @@ class DocumentView(QWidget):
             self.add_shared_context_menu_actions(wave_plot.getViewBox())
             self.graphics_widget.addItem(wave_plot, row=row + idx, col=0)
             wave_plot.show()
+
             self.wave_plots.append(wave_plot)
             # Must be set before creating the second wave plot, which
             # needs a valid linked_plot to x-link against.
             if idx == 0 and self.first_plot is None:
                 self.first_plot = wave_plot
+
+        # Adjust for x-axis height so that heights are equal according
+        # to row stretch factor
+        bottom_height = max(
+            wave_plot.getAxis("bottom").height() for wave_plot in self.wave_plots
+        )
+        for wave_plot in self.wave_plots:
+            wave_plot.getAxis("bottom").setHeight(bottom_height)
 
         return self.wave_plots
 
