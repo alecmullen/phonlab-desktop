@@ -3,6 +3,7 @@ import numpy as np
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
+    AudioState,
     to_audio_channel_state,
     to_audio_signal,
     to_audio_signals,
@@ -51,11 +52,11 @@ def test_to_audio_state_converts_all_channels():
 
     states = to_audio_state(signals)
 
-    assert states.keys() == {0, 1}
-    np.testing.assert_array_equal(states[0].x, [1.0, 2.0])
-    assert states[0].fs == 5
-    np.testing.assert_array_equal(states[1].x, [3.0, 4.0, 5.0])
-    assert states[1].fs == 8
+    assert states.channels.keys() == {0, 1}
+    np.testing.assert_array_equal(states.channels[0].x, [1.0, 2.0])
+    assert states.channels[0].fs == 5
+    np.testing.assert_array_equal(states.channels[1].x, [3.0, 4.0, 5.0])
+    assert states.channels[1].fs == 8
 
 
 def test_to_audio_signals_converts_all_channels():
@@ -64,7 +65,7 @@ def test_to_audio_signals_converts_all_channels():
         1: AudioChannelState(np.array([3.0]), fs=8),
     }
 
-    signals = to_audio_signals(states)
+    signals = to_audio_signals(AudioState(states))
 
     assert signals.keys() == {0, 1}
     np.testing.assert_array_equal(signals[0].x, [1.0, 2.0])

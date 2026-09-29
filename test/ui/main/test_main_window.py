@@ -16,7 +16,7 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_channel_state import AudioChannelState
+from ui.document.state.audio_channel_state import AudioChannelState, AudioState
 from ui.main.main_window import MainWindow
 from ui.main.open_audio_dialog import OpenAudioDialog
 from ui.main.save_audio_dialog import SaveOptions
@@ -81,7 +81,7 @@ def add_document(main_window: MainWindow, name: str = "doc.wav") -> DocumentView
 
 def load_signal(doc: DocumentView, x: np.ndarray, fs: int):
     doc.view_model.set_audio(
-        {0: AudioChannelState(np.asarray(x, dtype=np.float64), fs)},
+        AudioState({0: AudioChannelState(np.asarray(x, dtype=np.float64), fs)}),
         primary_channel_idx=0,
         reset_window=True,
     )

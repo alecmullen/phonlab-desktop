@@ -15,7 +15,7 @@ from ui.base.state import State
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
-    to_audio_state,
+    to_audio_channel_state,
 )
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.spectrogram.state.audio_prepped import AudioPrepped
@@ -57,7 +57,7 @@ class SpectrogramViewModel(ViewModel):
 
         @pyqtSlot(object)
         def on_success(prepped: dict[int, AudioSignal]):
-            self.prepped_audio_state = to_audio_state(prepped)[0]
+            self.prepped_audio_state = to_audio_channel_state(prepped[0])
             self.invalidate_spectrogram()
             self.state_changed.emit(LoadProgressState(False))
             self.state_changed.emit(AudioPrepped())
