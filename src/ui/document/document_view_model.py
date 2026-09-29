@@ -25,6 +25,7 @@ from ui.document.state.annotation_state import AnnotationState, to_annotation_st
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
     AudioState,
+    to_audio_channel_state,
     to_audio_signal,
     to_audio_signals,
     to_audio_state,
@@ -199,9 +200,6 @@ class DocumentViewModel(ViewModel):
     def load_from_samples(self, clip: AudioState):
         indices = sorted(clip.channels.keys())
         channel_mode = ChannelMode.STEREO if clip.is_stereo else ChannelMode.MONO
-        self.audio_options = replace(
-            self.audio_options, channel_mode=channel_mode, retained_channels=indices
-        )
         self.channel_state = ChannelState(
             primary_channel=indices[0], channel_mode=channel_mode
         )
@@ -216,7 +214,7 @@ class DocumentViewModel(ViewModel):
         use_case = PrepAudio(
             to_audio_signals(self.raw_audio_state),
             target_fs,
-            self.audio_options.retained_channels,
+            list(self.audio_state.channels.keys()),
         )
         self.state_changed.emit(LoadProgressState(True))
 
@@ -274,11 +272,11 @@ class DocumentViewModel(ViewModel):
 
         stereo = self.stereo_channels()
         if stereo is not None:
-            if len(self.audio_wave_view_models) == 0:
-                self.audio_wave_view_models = [AudioWaveViewModel() for _ in range(2)]
-
             # Rows are assigned by channel index, not by "primary"
             for idx in stereo.channels:
+                if len(self.audio_wave_view_models) <= idx:
+                    self.audio_wave_view_models.append(AudioWaveViewModel())
+
                 self.audio_wave_view_models[idx].set_wave_state(
                     to_audio_wave_state(stereo.channels[idx], start, end)
                 )
@@ -582,7 +580,7 @@ class DocumentViewModel(ViewModel):
         stereo mode, or if either channel hasn't loaded yet."""
         if self.channel_state.channel_mode != ChannelMode.STEREO:
             return None
-        indices = sorted(self.audio_options.retained_channels)
+        indices = sorted(self.audio_state.channels.keys())
         if len(indices) != 2 or not all(
             idx in self.audio_state.channels for idx in indices
         ):
@@ -602,6 +600,16 @@ class DocumentViewModel(ViewModel):
     def remove_mark(self):
         self.mark_state = MarkState()
         self.state_changed.emit(self.mark_state)
+
+    def mark_position_or_warn(self) -> float | None:
+        """The current mark position, or None (with a status message) if no
+        mark is set. ."""
+        if not self.mark_state.is_set:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Set a mark (Shift+Click) before pasting"))
+            )
+            return None
+        return self.mark_state.position
 
     def _audio_ready(self) -> bool:
         if not self.audio_state:
@@ -721,21 +729,17 @@ class DocumentViewModel(ViewModel):
         return to_audio_state(result.new_clip)
 
     def paste_at(self, start_time: float, clip: AudioState) -> AudioState | None:
+        """Paste `clip`, which must already match this document's channel
+        count - a mono/stereo mismatch has to be resolved first via
+        reconcile_clip_for_paste() (a dialog-driven choice made by the
+        View), not here."""
         if not self._audio_ready():
             return None
 
         stereo = self.stereo_channels()
         if stereo is None:
             if clip.is_stereo:
-                self.state_changed.emit(
-                    StatusMessageState(
-                        self.tr(
-                            "Pasting stereo audio into a mono document isn't yet "
-                            "supported"
-                        )
-                    )
-                )
-                return None
+                raise RuntimeError("Stereo clip pasted without reconciliation")
 
             idx = self.channel_state.primary_channel
             channel = self.primary_channel()
@@ -757,14 +761,7 @@ class DocumentViewModel(ViewModel):
             ).invoke()
         else:
             if not clip.is_stereo:
-                self.state_changed.emit(
-                    StatusMessageState(
-                        self.tr(
-                            "Pasting mono audio into a stereo document isn't yet supported"
-                        )
-                    )
-                )
-                return None
+                raise RuntimeError("Mono clip pasted without reconciliation")
 
             channels = self._stereo_edit_channels()
 
@@ -789,12 +786,83 @@ class DocumentViewModel(ViewModel):
         return to_audio_state(result.new_clip)
 
     def paste_at_mark(self, clip: AudioState):
-        if not self.mark_state.is_set:
-            self.state_changed.emit(
-                StatusMessageState(self.tr("Set a mark (Shift+Click) before pasting"))
-            )
+        position = self.mark_position_or_warn()
+        if position is None:
             return
-        self.paste_at(self.mark_state.position, clip)
+        self.paste_at(position, clip)
+
+    def _tiny_noise(self, length: int, fs: int, dtype: np.dtype) -> AudioSignal:
+        zeros = np.zeros(length, dtype=np.float32)
+        noise_audio = PrepAudio(
+            {0: AudioSignal(zeros, fs)},
+            target_fs=fs,
+            retained_channels=[0],
+            scale=False,
+        ).run_sync()
+        return AudioSignal(noise_audio[0].x.astype(dtype), fs)
+
+    def reconcile_clip_for_paste(
+        self, clip: AudioState, channel_choice: int
+    ) -> AudioState:
+        """Resolve a mono/stereo mismatch between `clip` and this document
+        ahead of a paste, given the user's channel_choice (0=left, 1=right)
+        for where the real audio should go. NOT a pure function: for a
+        stereo clip pasted into a mono document, this promotes the document
+        to stereo as a side effect (audio_state, raw_audio_state,
+        channel_state, audio_options) and returns `clip` unchanged; for a
+        mono clip pasted into a stereo document, it returns a synthesized
+        stereo clip instead, with no side effects."""
+        stereo = self.stereo_channels()
+
+        if stereo is not None:
+            mono_signal = next(iter(clip.channels.values()))
+            noise = self._tiny_noise(
+                len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
+            )
+            return AudioState(
+                {
+                    channel_choice: mono_signal,
+                    1 - channel_choice: to_audio_channel_state(noise),
+                }
+            )
+
+        self._convert_mono_to_stereo(channel_choice)
+
+        return clip
+
+    def _convert_mono_to_stereo(self, channel_choice: int):
+        self.raw_audio_state = self._add_noise_channel_to_mono_state(
+            self.raw_audio_state, channel_choice
+        )
+        audio_state = self._add_noise_channel_to_mono_state(
+            self.audio_state, channel_choice
+        )
+        self.set_audio(audio_state, channel_choice, reset_window=False)
+
+        self.channel_state = replace(
+            self.channel_state,
+            channel_mode=ChannelMode.STEREO,
+            primary_channel=channel_choice,
+        )
+        self.update_audio_waveform()
+        self.state_changed.emit(self.plot_layout_state)
+
+    def _add_noise_channel_to_mono_state(
+        self, state: AudioState, channel_choice: int
+    ) -> AudioState:
+        primary_channel = state.channels[self.channel_state.primary_channel]
+        if primary_channel is None:
+            raise RuntimeError("Missing primary audio channel")
+
+        noise = self._tiny_noise(
+            len(primary_channel.x), primary_channel.fs, primary_channel.x.dtype
+        )
+
+        new_state = AudioState()
+        new_state.channels[channel_choice] = primary_channel
+        new_state.channels[1 - channel_choice] = to_audio_channel_state(noise)
+
+        return new_state
 
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or

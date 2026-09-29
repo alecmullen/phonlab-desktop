@@ -43,12 +43,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/audio_info_dialog.py" line="33"/>
+        <location filename="../../ui/main/audio_info_dialog.py" line="37"/>
         <source>Min / max amplitude:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/audio_info_dialog.py" line="34"/>
+        <location filename="../../ui/main/audio_info_dialog.py" line="35"/>
         <source>{:.4g} / {:.4g}</source>
         <translation type="unfinished"></translation>
     </message>
@@ -77,116 +77,116 @@
 <context>
     <name>DocumentView</name>
     <message>
-        <location filename="../../ui/document/document_view.py" line="93"/>
-        <location filename="../../ui/document/document_view.py" line="387"/>
+        <location filename="../../ui/document/document_view.py" line="102"/>
+        <location filename="../../ui/document/document_view.py" line="426"/>
         <source>Computing %p%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="120"/>
+        <location filename="../../ui/document/document_view.py" line="129"/>
         <source>Resample...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="125"/>
+        <location filename="../../ui/document/document_view.py" line="134"/>
         <source>Set Mark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="125"/>
+        <location filename="../../ui/document/document_view.py" line="134"/>
         <source>Shift+Click</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="136"/>
+        <location filename="../../ui/document/document_view.py" line="145"/>
         <source>Remove Mark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="384"/>
+        <location filename="../../ui/document/document_view.py" line="294"/>
+        <source>Ch {} Amplitude</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="296"/>
+        <source>Amplitude</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/document_view.py" line="423"/>
         <source>Loading full file…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="395"/>
+        <location filename="../../ui/document/document_view.py" line="435"/>
         <source>Cursor time: {:.3f}s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="401"/>
+        <location filename="../../ui/document/document_view.py" line="441"/>
         <source>Cursor time: {:.3f}s, frequency: {:.0f} Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="276"/>
-        <source>Ch 1 Amplitude</source>
+        <location filename="../../ui/document/document_view.py" line="679"/>
+        <source>This clip is stereo, but the destination is mono. Pasting will convert the document to stereo - which channel should the existing audio occupy? The new channel will be filled with a quiet noise placeholder.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="294"/>
-        <source>Ch 2 Amplitude</source>
+        <location filename="../../ui/document/document_view.py" line="686"/>
+        <source>This clip is mono, but the destination is stereo. Which channel should the clip&apos;s audio occupy? The other channel will be filled with a quiet noise placeholder.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>DocumentViewModel</name>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="191"/>
+        <location filename="../../ui/document/document_view_model.py" line="193"/>
         <source>Duration shown {:.3f} seconds, out of {:.3f} seconds</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="286"/>
+        <location filename="../../ui/document/document_view_model.py" line="317"/>
         <source>System audio latency is a little long ({:.0f} ms). Consider using a different audio device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="381"/>
+        <location filename="../../ui/document/document_view_model.py" line="412"/>
         <source>Select: {:.3f} to {:.3f} ({:.3f}s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="417"/>
+        <location filename="../../ui/document/document_view_model.py" line="448"/>
         <source>No selection to center on</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="498"/>
-        <location filename="../../ui/document/document_view_model.py" line="516"/>
-        <location filename="../../ui/document/document_view_model.py" line="541"/>
+        <location filename="../../ui/document/document_view_model.py" line="550"/>
+        <location filename="../../ui/document/document_view_model.py" line="566"/>
+        <location filename="../../ui/document/document_view_model.py" line="623"/>
         <source>Audio is still loading, please wait.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="549"/>
+        <location filename="../../ui/document/document_view_model.py" line="633"/>
         <source>Cannot remove entire selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="578"/>
-        <location filename="../../ui/document/document_view_model.py" line="591"/>
+        <location filename="../../ui/document/document_view_model.py" line="666"/>
+        <location filename="../../ui/document/document_view_model.py" line="690"/>
         <source>No selection to copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="605"/>
-        <location filename="../../ui/document/document_view_model.py" line="618"/>
+        <location filename="../../ui/document/document_view_model.py" line="700"/>
+        <location filename="../../ui/document/document_view_model.py" line="724"/>
         <source>No selection to cut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="658"/>
+        <location filename="../../ui/document/document_view_model.py" line="615"/>
         <source>Set a mark (Shift+Click) before pasting</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/document/document_view_model.py" line="744"/>
-        <source>Pasting stereo audio into a mono document isn&apos;t yet supported</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/document/document_view_model.py" line="783"/>
-        <source>Pasting mono audio into a stereo document isn&apos;t yet supported</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -382,102 +382,120 @@
 <context>
     <name>OpenAudioDialog</name>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="98"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="123"/>
         <source>Cannot open file</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="98"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="123"/>
         <source>{filename}
 
 {e}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="102"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="127"/>
         <source>Open Audio File</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="108"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="133"/>
         <source>File:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="110"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="135"/>
         <source>Native format:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="112"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="137"/>
         <source>{} channel(s), {} Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="127"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="152"/>
         <source>Open in visualization:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="134"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="159"/>
         <source>Mono</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="135"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="160"/>
         <source>Stereo</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="136"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="161"/>
         <source>Multichannel</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="163"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="188"/>
         <source>Primary channel:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="101"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="93"/>
         <source>Duplicate channels</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="103"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="96"/>
         <source>This is a stereo file, but it appears that the left and right channels are duplicates of each other.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="109"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="101"/>
         <source>Open as Mono (Recommended)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/open_audio_dialog.py" line="111"/>
+        <location filename="../../ui/main/open_audio_dialog.py" line="103"/>
         <source>Keep as Stereo</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>PasteChannelDialog</name>
+    <message>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="17"/>
+        <source>Assign Channel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="20"/>
+        <source>Left Channel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/document/component/paste_channel_dialog.py" line="23"/>
+        <source>Right Channel</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>ResampleAudioDialog</name>
     <message>
-        <location filename="../../ui/document/component/resample_dialog.py" line="26"/>
+        <location filename="../../ui/document/component/resample_dialog.py" line="25"/>
         <source>Resample Audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/resample_dialog.py" line="35"/>
+        <location filename="../../ui/document/component/resample_dialog.py" line="31"/>
         <source>Target sample rate:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/resample_dialog.py" line="41"/>
+        <location filename="../../ui/document/component/resample_dialog.py" line="37"/>
         <source>Enter custom sample rate</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/resample_dialog.py" line="48"/>
+        <location filename="../../ui/document/component/resample_dialog.py" line="44"/>
         <source> Hz</source>
         <translation type="unfinished"></translation>
     </message>
@@ -558,23 +576,23 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="27"/>
+        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="24"/>
         <source>Sample rate:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="33"/>
-        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="40"/>
+        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="30"/>
+        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="37"/>
         <source> ms</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="34"/>
+        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="31"/>
         <source>Window size:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="41"/>
+        <location filename="../../ui/spectrogram/component/spectrogram_settings_dialog.py" line="38"/>
         <source>Step size:</source>
         <translation type="unfinished"></translation>
     </message>
