@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-import numpy as np
+from core.load_audio.entity.audio_signal import AudioSignal
 
 
 class EditCommandType(StrEnum):
@@ -15,5 +15,4 @@ class EditCommand:
     type: EditCommandType
     start_time: float
     end_time: float | None = None
-    clip_x: np.ndarray | None = None
-    clip_fs: int | None = None
+    clip: dict[int, AudioSignal] | None = None

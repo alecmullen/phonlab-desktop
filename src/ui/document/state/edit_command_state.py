@@ -11,4 +11,4 @@ class EditCommandState(State):
 
     type: str  # "cut" | "paste"
     start_idx: int
-    clip_x: np.ndarray
+    clips: dict[int, np.ndarray]  # one entry per channel touched (1 mono, 2 stereo)

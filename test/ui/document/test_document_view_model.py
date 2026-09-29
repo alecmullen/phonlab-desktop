@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -11,7 +12,11 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_channel_state import AudioChannelState
+from ui.document.state.audio_channel_state import (
+    AudioChannelState,
+    AudioState,
+    to_audio_state,
+)
 from ui.document.state.audio_loaded import AudioLoaded
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.edit_command_state import EditCommandState
@@ -72,7 +77,7 @@ def load_signal(
     view_model: DocumentViewModel, x: np.ndarray, fs: int
 ) -> AudioChannelState:
     return view_model.set_audio(
-        {0: AudioChannelState(np.asarray(x, dtype=np.float64), fs)},
+        AudioState({0: AudioChannelState(np.asarray(x, dtype=np.float64), fs)}),
         primary_channel_idx=0,
         reset_window=True,
     )
@@ -391,7 +396,7 @@ def test_copy_selection_returns_selected_slice(view_model: DocumentViewModel):
     clip = view_model.copy_selection()
 
     assert clip is not None
-    np.testing.assert_array_equal(clip.x, np.arange(2000, 3000))
+    np.testing.assert_array_equal(clip.channels[0].x, np.arange(2000, 3000))
     assert len(view_model.primary_channel().x) == 10000
 
 
@@ -417,7 +422,7 @@ def test_cut_selection_removes_slice_and_pushes_undo(view_model: DocumentViewMod
     clip = view_model.cut_selection()
 
     assert clip is not None
-    np.testing.assert_array_equal(clip.x, np.arange(2000, 3000))
+    np.testing.assert_array_equal(clip.channels[0].x, np.arange(2000, 3000))
     assert len(view_model.primary_channel().x) == 9000
     assert len(view_model.undo_stack) == 1
     assert view_model.undo_stack[0].type == "cut"
@@ -468,7 +473,7 @@ def test_redo_with_empty_stack_is_a_noop(view_model: DocumentViewModel):
 
 def test_paste_at_mark_inserts_clip_at_mark_position(view_model: DocumentViewModel):
     load_signal(view_model, np.arange(10000), fs=1000)
-    clip = AudioSignal(np.full(500, -1.0), fs=1000)
+    clip = to_audio_state({0: AudioSignal(np.full(500, -1.0), fs=1000)})
     view_model.set_mark(1.0)
 
     view_model.paste_at_mark(clip)
@@ -486,7 +491,7 @@ def test_paste_at_mark_shows_message_when_mark_not_set(
     load_signal(view_model, np.arange(10000), fs=1000)
     received = []
     view_model.subscribe(received.append)
-    clip = AudioSignal(np.full(500, -1.0), fs=1000)
+    clip = to_audio_state({0: AudioSignal(np.full(500, -1.0), fs=1000)})
 
     view_model.paste_at_mark(clip)
 
@@ -525,7 +530,7 @@ def test_load_audio_launches_use_case_and_updates_state_on_success(
     job.on_success(signals)
 
     assert view_model.audio_loaded_state == AudioLoaded(is_loaded=True, fs=1000)
-    assert view_model.raw_audio_state.keys() == {0}
+    assert view_model.raw_audio_state.channels.keys() == {0}
     assert any(isinstance(s, AudioLoaded) for s in received)
 
 
@@ -534,7 +539,7 @@ def test_resample_rescales_window_and_updates_primary_fs(
 ):
     monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
     load_signal(view_model, np.arange(20000), fs=1000)
-    view_model.raw_audio_state = view_model.audio_state.copy()
+    view_model.raw_audio_state = replace(view_model.audio_state)
 
     view_model.resample(2000)
 

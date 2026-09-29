@@ -16,7 +16,7 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_channel_state import AudioChannelState
+from ui.document.state.audio_channel_state import AudioChannelState, AudioState
 from ui.main.main_window import MainWindow
 from ui.main.open_audio_dialog import OpenAudioDialog
 from ui.main.save_audio_dialog import SaveOptions
@@ -81,7 +81,7 @@ def add_document(main_window: MainWindow, name: str = "doc.wav") -> DocumentView
 
 def load_signal(doc: DocumentView, x: np.ndarray, fs: int):
     doc.view_model.set_audio(
-        {0: AudioChannelState(np.asarray(x, dtype=np.float64), fs)},
+        AudioState({0: AudioChannelState(np.asarray(x, dtype=np.float64), fs)}),
         primary_channel_idx=0,
         reset_window=True,
     )
@@ -223,7 +223,7 @@ def test_copy_selection_opens_a_clip_tab_and_sets_clipboard(main_window: MainWin
     assert main_window.tab_widget.count() == 2
     assert main_window.tab_widget.tabText(1) == "CLIP 1: source.wav"
     assert main_window.clipboard is not None
-    assert len(main_window.clipboard.x) == 1000
+    assert len(main_window.clipboard.channels[0].x) == 1000
 
 
 def test_cut_selection_opens_a_clip_tab_and_sets_clipboard(main_window: MainWindow):

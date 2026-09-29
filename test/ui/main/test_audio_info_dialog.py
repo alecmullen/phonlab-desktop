@@ -7,6 +7,7 @@ import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
+from ui.document.state.audio_channel_state import to_audio_state
 from ui.main.audio_info_dialog import AudioInfoDialog
 
 
@@ -36,7 +37,7 @@ def test_shows_name_sample_rate_duration_and_amplitude(
     qtbot: QtBot, document_view: DocumentView
 ):
     document_view.view_model.load_from_samples(
-        AudioSignal(np.array([-2.0, -1.0, 0.0, 1.0, 3.0]), 1000)
+        to_audio_state({0: AudioSignal(np.array([-2.0, -1.0, 0.0, 1.0, 3.0]), 1000)})
     )
 
     dialog = AudioInfoDialog(document_view, "mydoc.wav")
@@ -66,7 +67,9 @@ def test_shows_placeholder_values_when_no_audio_is_loaded(
 def test_show_info_static_helper_execs_dialog(
     qtbot: QtBot, document_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
-    document_view.view_model.load_from_samples(AudioSignal(np.array([1.0, 2.0]), 1000))
+    document_view.view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.array([1.0, 2.0]), 1000)})
+    )
     exec_calls = []
     monkeypatch.setattr(AudioInfoDialog, "exec", lambda self: exec_calls.append(True))
 

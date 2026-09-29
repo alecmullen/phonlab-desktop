@@ -10,6 +10,7 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
+from ui.document.state.audio_channel_state import to_audio_state
 from ui.document.state.audio_loaded import AudioLoaded
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
@@ -56,7 +57,9 @@ def view(qtbot: QtBot, view_model: DocumentViewModel) -> DocumentView:
 
 @pytest.fixture
 def loaded_view(view: DocumentView, view_model: DocumentViewModel) -> DocumentView:
-    view_model.load_from_samples(AudioSignal(np.arange(20000, dtype=np.float64), 1000))
+    view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
+    )
     QApplication.processEvents()
     return view
 

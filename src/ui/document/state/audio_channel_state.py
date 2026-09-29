@@ -16,16 +16,25 @@ class AudioChannelState(State):
         object.__setattr__(self, "t", np.arange(len(self.x)) / self.fs)
 
 
-def to_audio_state(channels: dict[int, AudioSignal]) -> dict[int, AudioChannelState]:
+@dataclass(frozen=True)
+class AudioState(State):
+    channels: dict[int, AudioChannelState] = field(default_factory=dict)
+
+    @property
+    def is_stereo(self) -> bool:
+        return len(self.channels) == 2
+
+
+def to_audio_state(channels: dict[int, AudioSignal]) -> AudioState:
     channel_states = {}
     for idx, channel in channels.items():
         channel_states[idx] = to_audio_channel_state(channel)
-    return channel_states
+    return AudioState(channel_states)
 
 
-def to_audio_signals(channels: dict[int, AudioChannelState]) -> dict[int, AudioSignal]:
+def to_audio_signals(audio_state: AudioState) -> dict[int, AudioSignal]:
     signals = {}
-    for idx, channel in channels.items():
+    for idx, channel in audio_state.channels.items():
         signals[idx] = to_audio_signal(channel)
     return signals
 
