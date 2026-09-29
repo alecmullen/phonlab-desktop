@@ -1,7 +1,6 @@
 from dataclasses import replace
 
 import numpy as np
-import phonlab as phon
 from PyQt6.QtCore import pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
@@ -276,11 +275,11 @@ class DocumentViewModel(ViewModel):
 
         stereo = self.stereo_channels()
         if stereo is not None:
-            if len(self.audio_wave_view_models) == 0:
-                self.audio_wave_view_models = [AudioWaveViewModel() for _ in range(2)]
-
             # Rows are assigned by channel index, not by "primary"
             for idx in stereo.channels:
+                if len(self.audio_wave_view_models) <= idx:
+                    self.audio_wave_view_models.append(AudioWaveViewModel())
+
                 self.audio_wave_view_models[idx].set_wave_state(
                     to_audio_wave_state(stereo.channels[idx], start, end)
                 )
@@ -798,18 +797,14 @@ class DocumentViewModel(ViewModel):
         self.paste_at(position, clip)
 
     def _tiny_noise(self, length: int, fs: int, dtype: np.dtype) -> AudioSignal:
-        """A quiet noise-filled channel for the "empty" side of a synthesized
-        stereo pair - either the non-chosen channel of a mono clip pasted
-        into a stereo document, or a brand-new channel created when
-        promoting a mono document to stereo. phon.prep_audio's
-        add_tiny_noise adds tiny noise to every sample (not just exact
-        zeros, despite its docstring) - harmless here since the input is
-        always all-zero."""
         zeros = np.zeros(length, dtype=np.float32)
-        x, _ = phon.prep_audio(
-            zeros, fs, target_fs=fs, scale=False, add_tiny_noise=True
-        )
-        return AudioSignal(x.astype(dtype), fs)
+        noise_audio = PrepAudio(
+            {0: AudioSignal(zeros, fs)},
+            target_fs=fs,
+            retained_channels=[0],
+            scale=False,
+        ).run_sync()
+        return AudioSignal(noise_audio[0].x.astype(dtype), fs)
 
     def reconcile_clip_for_paste(
         self, clip: AudioState, channel_choice: int

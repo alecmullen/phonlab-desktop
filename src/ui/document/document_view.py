@@ -674,20 +674,7 @@ class DocumentView(QWidget):
 
         doc_is_stereo = self.view_model.stereo_channels() is not None
         if doc_is_stereo != clip.is_stereo:
-            if clip.is_stereo:
-                message = self.tr(
-                    "This clip is stereo, but the destination is mono. Pasting "
-                    "will convert the document to stereo - which channel should "
-                    "the existing audio occupy? The new channel will be filled "
-                    "with a quiet noise placeholder."
-                )
-            else:
-                message = self.tr(
-                    "This clip is mono, but the destination is stereo. Which "
-                    "channel should the clip's audio occupy? The other channel "
-                    "will be filled with a quiet noise placeholder."
-                )
-            choice = PasteChannelDialog.get_channel(self, message)
+            choice = PasteChannelDialog.get_channel(self, clip.is_stereo)
             if choice is None:
                 return
             clip = self.view_model.reconcile_clip_for_paste(clip, choice)

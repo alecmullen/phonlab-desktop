@@ -84,11 +84,8 @@ class AudioWavePlot(pg.PlotItem, CursorController):
             self.update_y_range(model.scaled_y_max)
 
     def plot_wave(self, audio_wave: AudioWaveState):
-        limit = max(abs(audio_wave.min_x), abs(audio_wave.max_x))
-        self.setYRange(-limit, limit, padding=0.05)
-        self.vb.setLimits(yMin=-limit, yMax=limit)
-        self.vb.setLimits(xMin=0, xMax=audio_wave.max_t)
         self.enableAutoRange(axis="y", enable=False)
+        self._set_y_limits(audio_wave)
 
         self.wave_curve = self.plot(audio_wave.t, audio_wave.x, pen="b")
         self.wave_curve.setDownsampling(auto=True, method="peak")
@@ -96,6 +93,13 @@ class AudioWavePlot(pg.PlotItem, CursorController):
 
     def update_wave(self, audio_wave: AudioWaveState):
         self.wave_curve.setData(audio_wave.t, audio_wave.x)
+        self._set_y_limits(audio_wave)
+
+    def _set_y_limits(self, audio_wave: AudioWaveState):
+        limit = max(abs(audio_wave.min_x), abs(audio_wave.max_x))
+        self.vb.setLimits(yMin=-limit, yMax=limit)
+        self.vb.setLimits(xMin=0, xMax=audio_wave.max_t)
+        self.setYRange(-limit, limit, padding=0.05)
 
     def update_selection_region(self, box_left: float, t_range: float):
         if t_range > 0:
