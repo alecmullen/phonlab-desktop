@@ -5,7 +5,7 @@ from PyQt6.QtCore import pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
-from core.load_audio.entity.audio_open_options import AudioOpenOptions
+from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
 from core.load_audio.prep_audio import PrepAudio
@@ -13,7 +13,6 @@ from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
 from res.constants import (
-    CHANNEL_MODE_STEREO,
     DEFAULT_WINDOW_LENGTH,
     LATENCY_WARNING_THRESHOLD_S,
     MAX_UNDO_HISTORY,
@@ -66,8 +65,7 @@ class DocumentViewModel(ViewModel):
         self.undo_stack: list[EditCommandState] = []
         self.redo_stack: list[EditCommandState] = []
 
-        self.audio_wave_view_model = AudioWaveViewModel()
-        self.audio_wave_view_model_channel2 = AudioWaveViewModel()
+        self.audio_wave_view_models: list[AudioWaveViewModel] = []
         self.spectrogram_view_model = SpectrogramViewModel()
         self.annotation_view_model = AnnotationViewModel()
 
@@ -266,19 +264,21 @@ class DocumentViewModel(ViewModel):
 
         stereo = self.stereo_channels()
         if stereo is not None:
-            # Rows are assigned by channel index, not by which channel is
-            # "primary" - otherwise picking channel 1 as primary would show
-            # it in both rows and channel 0 would never be displayed.
-            self.audio_wave_view_model.set_wave_state(
-                to_audio_wave_state(stereo[0], start, end)
-            )
-            self.audio_wave_view_model_channel2.set_wave_state(
-                to_audio_wave_state(stereo[1], start, end)
-            )
+            if len(self.audio_wave_view_models) == 0:
+                self.audio_wave_view_models = [AudioWaveViewModel() for _ in range(2)]
+
+            # Rows are assigned by channel index, not by "primary"
+            for idx in range(2):
+                self.audio_wave_view_models[idx].set_wave_state(
+                    to_audio_wave_state(stereo[idx], start, end)
+                )
         else:
+            if len(self.audio_wave_view_models) == 0:
+                self.audio_wave_view_models = [AudioWaveViewModel()]
+
             primary_channel = self.primary_channel()
             if primary_channel is not None:
-                self.audio_wave_view_model.set_wave_state(
+                self.audio_wave_view_models[0].set_wave_state(
                     to_audio_wave_state(primary_channel, start, end)
                 )
 
@@ -570,7 +570,7 @@ class DocumentViewModel(ViewModel):
         primary-first) so which channel is "primary" doesn't affect which
         waveform row or playback output channel each one is. None outside
         stereo mode, or if either channel hasn't loaded yet."""
-        if self.channel_state.channel_mode != CHANNEL_MODE_STEREO:
+        if self.channel_state.channel_mode != ChannelMode.STEREO:
             return None
         indices = sorted(self.audio_options.retained_channels)
         if len(indices) != 2 or not all(idx in self.audio_state for idx in indices):

@@ -62,8 +62,8 @@ def loaded_view(view: DocumentView, view_model: DocumentViewModel) -> DocumentVi
 
 
 def widget_pos_for_time(view: DocumentView, t: float) -> QPoint:
-    y = view.wave_plot.getViewBox().viewRange()[1][0]
-    scene_pos = view.wave_plot.getViewBox().mapViewToScene(QPointF(t, y))
+    y = view.wave_plots[0].getViewBox().viewRange()[1][0]
+    scene_pos = view.wave_plots[0].getViewBox().mapViewToScene(QPointF(t, y))
     return view.graphics_widget.mapFromScene(scene_pos)
 
 
@@ -85,8 +85,8 @@ def mouse_event(
 def test_load_from_samples_builds_wave_plot_and_sets_up_slider(
     loaded_view: DocumentView,
 ):
-    assert loaded_view.wave_plot is not None
-    assert loaded_view.first_plot is loaded_view.wave_plot
+    assert len(loaded_view.wave_plots) > 0
+    assert loaded_view.first_plot is loaded_view.wave_plots[0]
     assert loaded_view.slider.maximum() == 9999
     assert loaded_view.slider.pageStep() == 10000
 
@@ -192,10 +192,10 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
     loaded_view.handle_mouse_press(press)
 
     loaded_view.on_mouse_moved(
-        loaded_view.wave_plot.getViewBox().mapViewToScene(QPointF(2.0, 0))
+        loaded_view.wave_plots[0].getViewBox().mapViewToScene(QPointF(2.0, 0))
     )
     loaded_view.on_mouse_moved(
-        loaded_view.wave_plot.getViewBox().mapViewToScene(QPointF(4.0, 0))
+        loaded_view.wave_plots[0].getViewBox().mapViewToScene(QPointF(4.0, 0))
     )
 
     assert view_model.select_state.sel_start == pytest.approx(2.0, abs=1e-6)
@@ -293,7 +293,7 @@ def test_handle_shift_scroll_zooms_out_on_negative_scroll(view: DocumentView):
 
 def test_handle_control_scroll_adjusts_wave_plot_y_scale(loaded_view: DocumentView):
     calls = []
-    loaded_view.wave_plot.adjust_y_scale = lambda delta: calls.append(delta)
+    loaded_view.wave_plots[0].adjust_y_scale = lambda delta: calls.append(delta)
     pos = QPointF(widget_pos_for_time(loaded_view, 2.0))
     event = QWheelEvent(
         pos,

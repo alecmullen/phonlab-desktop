@@ -18,18 +18,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.load_audio.entity.audio_open_options import AudioOpenOptions
-from res.constants import (
-    CHANNEL_MODE_MONO,
-    CHANNEL_MODE_MULTICHANNEL,
-    CHANNEL_MODE_STEREO,
-    DEFAULT_WINDOW_LENGTH,
-)
+from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
+from res.constants import DEFAULT_WINDOW_LENGTH
 
 DEFAULT_SAMPLE_RATE = 16000
-
-_DUPLICATE_CHOICE_MONO = "mono"
-_DUPLICATE_CHOICE_STEREO = "stereo"
 
 
 def _channel_label(index: int, native_channels: int) -> str:
@@ -43,7 +35,7 @@ def _channel_label(index: int, native_channels: int) -> str:
 def _mono_options() -> AudioOpenOptions:
     return AudioOpenOptions(
         target_fs=DEFAULT_SAMPLE_RATE,
-        channel_mode=CHANNEL_MODE_MONO,
+        channel_mode=ChannelMode.MONO,
         retained_channels=[0],
         primary_channel=0,
     )
@@ -52,7 +44,7 @@ def _mono_options() -> AudioOpenOptions:
 def _stereo_options() -> AudioOpenOptions:
     return AudioOpenOptions(
         target_fs=DEFAULT_SAMPLE_RATE,
-        channel_mode=CHANNEL_MODE_STEREO,
+        channel_mode=ChannelMode.STEREO,
         retained_channels=[0, 1],
         primary_channel=0,
     )
@@ -84,7 +76,7 @@ class OpenAudioDialog(QDialog):
                 filename, chansel=[0, 1], duration=DEFAULT_WINDOW_LENGTH
             )
             if phon.channels_are_duplicates(chan_a, chan_b):
-                if dlg._ask_duplicate_channels() == _DUPLICATE_CHOICE_STEREO:
+                if dlg._ask_duplicate_channels() == ChannelMode.STEREO:
                     return _stereo_options()
                 return _mono_options()
             return _stereo_options()
@@ -113,8 +105,8 @@ class OpenAudioDialog(QDialog):
         msg_box.exec()
 
         if msg_box.clickedButton() == mono_button:
-            return _DUPLICATE_CHOICE_MONO
-        return _DUPLICATE_CHOICE_STEREO
+            return ChannelMode.MONO
+        return ChannelMode.STEREO
 
     def __init__(self, filename: str, parent: QWidget | None = None):
         super().__init__(parent)
@@ -211,17 +203,17 @@ class OpenAudioDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
-    def _current_channel_mode(self) -> str:
+    def _current_channel_mode(self) -> ChannelMode:
         if self.multichannel_radio.isChecked():
-            return CHANNEL_MODE_MULTICHANNEL
+            return ChannelMode.MULTICHANNEL
         if self.stereo_radio.isChecked():
-            return CHANNEL_MODE_STEREO
-        return CHANNEL_MODE_MONO
+            return ChannelMode.STEREO
+        return ChannelMode.MONO
 
     def _retained_channels_for_mode(self, mode: str) -> list[int]:
-        if mode == CHANNEL_MODE_STEREO:
+        if mode == ChannelMode.STEREO:
             return [0, 1]
-        if mode == CHANNEL_MODE_MULTICHANNEL:
+        if mode == ChannelMode.MULTICHANNEL:
             return list(range(self.native_channels))
         return list(range(self.native_channels))  # mono: any channel selectable
 
@@ -244,7 +236,7 @@ class OpenAudioDialog(QDialog):
         channel_mode = self._current_channel_mode()
         primary_channel = self.primary_channel_combo.currentData()
 
-        if channel_mode == CHANNEL_MODE_MONO:
+        if channel_mode == ChannelMode.MONO:
             retained_channels = [primary_channel]
         else:
             retained_channels = self._retained_channels_for_mode(channel_mode)
