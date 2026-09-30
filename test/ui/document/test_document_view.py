@@ -247,7 +247,7 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
     assert len(view_model.audio_player.played) == 1
 
 
-def test_click_sets_mark_at_click_position(loaded_view: DocumentView):
+def test_shift_click_plays_visible_audio(loaded_view: DocumentView):
     view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
     loaded_view.handle_mouse_press(press)
@@ -256,11 +256,13 @@ def test_click_sets_mark_at_click_position(loaded_view: DocumentView):
         loaded_view,
         4.0,
         QEvent.Type.MouseButtonRelease,
+        Qt.KeyboardModifier.ShiftModifier,
     )
     loaded_view.handle_mouse_release(release)
 
-    assert view_model.mark_state.is_set is True
-    assert view_model.mark_state.position == pytest.approx(4.0, abs=0.01)
+    assert loaded_view.pending_single_click is None
+    assert loaded_view.click_timer is None
+    assert len(view_model.audio_player.played) == 1
 
 
 def test_double_click_zooms_to_selection(loaded_view: DocumentView):
@@ -275,7 +277,7 @@ def test_double_click_zooms_to_selection(loaded_view: DocumentView):
     assert view_model.document_window_state.end == 5000
 
 
-def test_shift_click_after_release_plays_visible_window(
+def test_click_after_release_sets_mark_at_click_position(
     qtbot: QtBot, loaded_view: DocumentView
 ):
     view_model = loaded_view.view_model
@@ -283,18 +285,16 @@ def test_shift_click_after_release_plays_visible_window(
     loaded_view.handle_mouse_press(press)
     release = mouse_event(
         loaded_view,
-        2.0,
+        4.0,
         QEvent.Type.MouseButtonRelease,
-        Qt.KeyboardModifier.ControlModifier,
     )
     loaded_view.handle_mouse_release(release)
 
     assert loaded_view.click_timer is not None
     qtbot.wait(400)
 
-    assert loaded_view.pending_single_click is None
-    assert loaded_view.click_timer is None
-    assert len(view_model.audio_player.played) == 1
+    assert view_model.mark_state.is_set is True
+    assert view_model.mark_state.position == pytest.approx(4.0, abs=0.01)
 
 
 # --------------------------- scroll handling ---------------------------
