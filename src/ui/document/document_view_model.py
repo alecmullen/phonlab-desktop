@@ -639,9 +639,9 @@ class DocumentViewModel(ViewModel):
         channel indices, in the order requested - used by main_window.py's
         save_audio() so it never touches audio_state directly."""
         return [
-            to_audio_signal(self.audio_state[idx])
+            to_audio_signal(self.audio_state.channels[idx])
             for idx in indices
-            if idx in self.audio_state
+            if idx in self.audio_state.channels
         ]
 
     def toggle_channel_active(self, idx: int):

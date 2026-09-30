@@ -6,10 +6,10 @@ from PyQt6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
 import ui.document.document_view_model as dvm_module
-from core.edit_audio.entity.audio_clip import AudioClip
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
+from ui.document.state.audio_channel_state import to_audio_state
 from ui.main.save_audio_dialog import SaveAudioDialog, SaveOptions, _default_filename
 
 
@@ -33,13 +33,13 @@ def document_view(monkeypatch: pytest.MonkeyPatch) -> DocumentView:
 
 def load_mono(document_view: DocumentView):
     document_view.view_model.load_from_samples(
-        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 16000)})
+        to_audio_state({0: AudioSignal(np.arange(5000, dtype=np.float64), 16000)})
     )
 
 
 def load_stereo(document_view: DocumentView):
     document_view.view_model.load_from_samples(
-        AudioClip(
+        to_audio_state(
             {
                 0: AudioSignal(np.arange(5000, dtype=np.float64), 16000),
                 1: AudioSignal(np.arange(5000, dtype=np.float64) * 2, 16000),
@@ -85,7 +85,7 @@ def test_rate_dropdown_snaps_to_nearest_standard_rate(
     qtbot: QtBot, document_view: DocumentView
 ):
     document_view.view_model.load_from_samples(
-        AudioClip({0: AudioSignal(np.arange(5000, dtype=np.float64), 13000)})
+        to_audio_state({0: AudioSignal(np.arange(5000, dtype=np.float64), 13000)})
     )
 
     dialog = SaveAudioDialog(document_view, "myfile.wav")
