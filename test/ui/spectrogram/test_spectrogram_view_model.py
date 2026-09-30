@@ -466,14 +466,6 @@ def test_compute_spectrogram_mmap_updates_state_on_success(
 def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    """ComputeSpectrogramMmap over-allocates its mmap buffer by 20% as a
-    safety margin (see init_mmap()), so frames_computed can be smaller than
-    sxx_mmap.shape[1] - the remaining columns are still the memmap's
-    zero-initialized, never-computed tail. The percentile scan must be
-    restricted to the valid [:frames_computed] slice, or that zero padding
-    (or any other never-computed garbage) skews low_sxx/high_sxx (this was
-    the root cause of the spectrogram rendering too dark once a long
-    file's background computation finished)."""
     view_model = SpectrogramViewModel()
     x = np.arange(1000, dtype=np.float64)
 
@@ -481,9 +473,7 @@ def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
 
     manager = view_model.job_managers["sgram_mmap"]
     job = manager.jobs[0]
-    # First 11 columns are valid data (0..10, giving exact percentiles of
-    # 2.0/8.0); the trailing two are the buffer's never-computed tail,
-    # holding a value (-1000) that would badly skew the result if included.
+
     valid = np.arange(11, dtype=np.float64)
     padded = np.concatenate([valid, [-1000.0, -1000.0]])
     sgram = SpectrogramMmap(
@@ -581,11 +571,7 @@ def test_update_sxx_percentiles_computes_20th_and_80th(qtbot: QtBot):
     assert view_model.sgram_state.high_sxx == 8.0
 
 
-def test_update_sxx_percentiles_replaces_rather_than_merges(qtbot: QtBot):
-    """Unlike update_sxx_extrema(), a later call must fully replace the
-    previous result, not widen it - percentiles of separate chunks can't
-    be combined into the percentile of their union, so each call must
-    reflect only the data it was just given."""
+def test_update_sxx_percentiles_replaces_low_and_high(qtbot: QtBot):
     view_model = SpectrogramViewModel()
     view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64) - 100)
 
@@ -596,9 +582,6 @@ def test_update_sxx_percentiles_replaces_rather_than_merges(qtbot: QtBot):
 
 
 def test_update_sxx_percentiles_is_not_skewed_by_a_single_outlier(qtbot: QtBot):
-    """A single pathological value (e.g. a fully silent frame, or one
-    over-allocated-but-never-written buffer column) must not dominate the
-    result the way it would with true min/max."""
     view_model = SpectrogramViewModel()
     data = np.concatenate([np.arange(11, dtype=np.float64), [-3076.0]])
 
@@ -620,10 +603,6 @@ def test_update_sxx_percentiles_does_nothing_for_empty_input(qtbot: QtBot):
 def test_update_sxx_percentiles_estimates_correctly_from_a_large_sample(
     qtbot: QtBot,
 ):
-    """A random sample should still recover close to the true population
-    percentiles for a large, smooth distribution - the whole point of
-    sampling is to make this fast without materially changing the
-    result."""
     view_model = SpectrogramViewModel()
     rng = np.random.default_rng(42)
     data = rng.uniform(-70, -5, size=(257, 500_000)).astype(np.float32)
