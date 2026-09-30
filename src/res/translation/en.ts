@@ -543,13 +543,8 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/component/paste_special_dialog.py" line="34"/>
-        <source>Channel 1</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/document/component/paste_special_dialog.py" line="35"/>
-        <source>Channel 2</source>
+        <location filename="../../ui/document/component/paste_special_dialog.py" line="37"/>
+        <source>Channel {}</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
