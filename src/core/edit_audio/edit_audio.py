@@ -9,20 +9,6 @@ from core.settings.app_settings import settings
 from res.constants import ZERO_CROSSING_SEARCH_MS
 
 
-def resample_to_fs(
-    x: np.ndarray, x_fs: int, target_fs: int, target_dtype: np.dtype
-) -> np.ndarray:
-    """Resample x to target_fs, matching target_dtype - shared by
-    EditAudio's PASTE handling and DocumentViewModel's
-    paste_special_new_channel_without_silence(), which needs the exact
-    same clip-to-destination resampling but outside EditAudio's
-    insert-based flow."""
-    if x_fs == target_fs:
-        return x
-    cd = np.gcd(x_fs, target_fs)
-    return resample_poly(x, up=target_fs // cd, down=x_fs // cd).astype(target_dtype)
-
-
 class EditAudio(UseCaseSync[EditResult | None]):
     def __init__(
         self,
@@ -169,12 +155,7 @@ class EditAudio(UseCaseSync[EditResult | None]):
 
             for idx, clip_channel in clip.items():
                 if self._ref_channel.fs != clip_channel.fs:
-                    clip_x = resample_to_fs(
-                        clip_channel.x,
-                        clip_channel.fs,
-                        self._ref_channel.fs,
-                        self._ref_channel.x.dtype,
-                    )
+                    clip_x = self._resample_signal(clip_channel.x, clip_channel.fs)
                     clip[idx] = AudioSignal(clip_x, self._ref_channel.fs)
 
             start_idx = self._edit_command.start_time * self._ref_channel.fs

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from core.edit_audio.edit_audio import EditAudio, resample_to_fs
+from core.edit_audio.edit_audio import EditAudio
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
@@ -131,26 +131,6 @@ def test_selected_range_does_not_collapse_when_only_one_zero_crossing(
 
     selected_range = use_case._selected_range()
     assert selected_range[0] != selected_range[1]
-
-
-# --------------------------- resample_to_fs ---------------------------
-
-
-def test_resample_to_fs_returns_clip_unchanged_when_fs_matches():
-    clip = np.zeros(50, dtype=np.float64)
-
-    result = resample_to_fs(clip, 8000, 8000, np.float64)
-
-    assert result is clip
-
-
-def test_resample_to_fs_resamples_to_target_length():
-    clip = np.zeros(100, dtype=np.float64)
-
-    result = resample_to_fs(clip, 4000, 8000, np.float64)
-
-    assert len(result) == 200
-    assert result.dtype == np.float64
 
 
 # --------------------------- invoke: COPY ---------------------------

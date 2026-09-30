@@ -3,7 +3,7 @@ from dataclasses import replace
 import numpy as np
 from PyQt6.QtCore import pyqtSlot
 
-from core.edit_audio.edit_audio import EditAudio, resample_to_fs
+from core.edit_audio.edit_audio import EditAudio
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
 from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -900,6 +900,8 @@ class DocumentViewModel(ViewModel):
         self.paste_at(position, clip)
 
     def _tiny_noise(self, length: int, fs: int, dtype: np.dtype) -> AudioSignal:
+        if length <= 0:
+            return AudioSignal()
         zeros = np.zeros(length, dtype=np.float32)
         noise_audio = PrepAudio(
             {0: AudioSignal(zeros, fs)},
@@ -995,15 +997,6 @@ class DocumentViewModel(ViewModel):
 
         return self.paste_at(position, synthesized)
 
-    def _silence(self, length: int, fs: int, dtype: np.dtype) -> np.ndarray:
-        """Like _tiny_noise(), but returns a plain empty array for length 0
-        instead of running phon.prep_audio on an empty input (untested
-        edge case - easily triggered by pasting exactly at the start or
-        end of a channel)."""
-        if length <= 0:
-            return np.array([], dtype=dtype)
-        return self._tiny_noise(length, fs, dtype).x
-
     def paste_special_new_channel_without_silence(
         self, new_channel_idx: int, position: float, clip: AudioState
     ) -> AudioState | None:
@@ -1019,7 +1012,7 @@ class DocumentViewModel(ViewModel):
         toggle_channel_active()), it is not undoable."""
         if self.stereo_channels() is not None:
             raise RuntimeError("Document is already stereo")
-        if clip.is_stereo:
+        if len(clip.channels) > 1:
             raise RuntimeError("Paste Special: New Channel needs a mono clip")
 
         existing_idx = 1 - new_channel_idx
@@ -1027,23 +1020,23 @@ class DocumentViewModel(ViewModel):
         if existing is None:
             raise RuntimeError("Missing primary audio channel")
 
-        mono_signal = next(iter(clip.channels.values()))
-        clip_x = resample_to_fs(
-            mono_signal.x, mono_signal.fs, existing.fs, existing.x.dtype
-        )
+        new_channel = self._tiny_noise(len(existing.x), existing.fs, existing.x.dtype)
+        new_result = EditAudio(
+            {0: new_channel},
+            EditCommand(EditCommandType.PASTE, position, clip=to_audio_signals(clip)),
+        ).invoke()
+        if new_result is None:
+            raise RuntimeError("Paste failed unexpectedly")
+        new_channel = new_result.new_audio[0]
 
-        mark_idx = int(np.clip(position * existing.fs, 0, len(existing.x)))
-        clip_end_idx = mark_idx + len(clip_x)
+        clip_end_idx = new_result.start_idx + len(new_result.new_clip[0].x)
         total_len = max(len(existing.x), clip_end_idx)
-
-        lead = self._silence(mark_idx, existing.fs, existing.x.dtype)
-        trail = self._silence(total_len - clip_end_idx, existing.fs, existing.x.dtype)
-        new_x = np.concatenate([lead, clip_x, trail])
+        new_x = new_channel.x[:total_len]
 
         if total_len > len(existing.x):
-            pad = self._silence(
+            pad = self._tiny_noise(
                 total_len - len(existing.x), existing.fs, existing.x.dtype
-            )
+            ).x
             existing_x = np.concatenate([existing.x, pad])
         else:
             existing_x = existing.x
