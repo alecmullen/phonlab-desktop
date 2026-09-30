@@ -56,12 +56,12 @@
 <context>
     <name>AudioWavePlot</name>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="71"/>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="65"/>
         <source>Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="77"/>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="71"/>
         <source>Time</source>
         <translation type="unfinished"></translation>
     </message>
@@ -71,7 +71,7 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="58"/>
+        <location filename="../../ui/waveform/audio_wave_plot.py" line="52"/>
         <source>Delete this channel</source>
         <translation type="unfinished"></translation>
     </message>
@@ -181,34 +181,34 @@
     <message>
         <location filename="../../ui/document/document_view_model.py" line="569"/>
         <location filename="../../ui/document/document_view_model.py" line="585"/>
-        <location filename="../../ui/document/document_view_model.py" line="723"/>
+        <location filename="../../ui/document/document_view_model.py" line="726"/>
         <source>Audio is still loading, please wait.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="733"/>
+        <location filename="../../ui/document/document_view_model.py" line="736"/>
         <source>Cannot remove entire selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="765"/>
-        <location filename="../../ui/document/document_view_model.py" line="789"/>
+        <location filename="../../ui/document/document_view_model.py" line="768"/>
+        <location filename="../../ui/document/document_view_model.py" line="792"/>
         <source>No selection to copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="799"/>
-        <location filename="../../ui/document/document_view_model.py" line="823"/>
+        <location filename="../../ui/document/document_view_model.py" line="802"/>
+        <location filename="../../ui/document/document_view_model.py" line="826"/>
         <source>No selection to cut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="715"/>
+        <location filename="../../ui/document/document_view_model.py" line="718"/>
         <source>Set a mark (Shift+Click) before pasting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="634"/>
+        <location filename="../../ui/document/document_view_model.py" line="654"/>
         <source>At least one channel must stay active</source>
         <translation type="unfinished"></translation>
     </message>
@@ -391,12 +391,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/main_window.py" line="328"/>
+        <location filename="../../ui/main/main_window.py" line="326"/>
         <source>Save Audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/main_window.py" line="329"/>
+        <location filename="../../ui/main/main_window.py" line="327"/>
         <source>Could not save the file:
 {}</source>
         <translation type="unfinished"></translation>
@@ -536,45 +536,80 @@
 <context>
     <name>SaveAudioDialog</name>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="44"/>
-        <location filename="../../ui/main/save_audio_dialog.py" line="90"/>
-        <location filename="../../ui/main/save_audio_dialog.py" line="100"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="48"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="139"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="148"/>
         <source>Save Audio</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="55"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="62"/>
         <source>Browse…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="66"/>
-        <source> Hz</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="68"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="74"/>
         <source>Scale to use the full amplitude range</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="72"/>
-        <source>Save to:</source>
+        <location filename="../../ui/main/save_audio_dialog.py" line="79"/>
+        <source>Channel 1 (Left)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="73"/>
+        <location filename="../../ui/main/save_audio_dialog.py" line="81"/>
+        <source>Channel 2 (Right)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="89"/>
+        <source>Directory:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="90"/>
+        <source>Filename:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="91"/>
         <source>Sample rate:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="92"/>
-        <source>Sound files (*.wav)</source>
+        <location filename="../../ui/main/save_audio_dialog.py" line="111"/>
+        <source>Select Directory</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/main/save_audio_dialog.py" line="100"/>
-        <source>Choose a file to save to.</source>
+        <location filename="../../ui/main/save_audio_dialog.py" line="118"/>
+        <source>Will be saved as a stereo file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="121"/>
+        <source>Will be saved as mono (Channel 1)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="125"/>
+        <source>Will be saved as mono (Channel 2)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="129"/>
+        <source>Choose at least one channel to save</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="140"/>
+        <source>Choose a directory and filename to save to.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/main/save_audio_dialog.py" line="149"/>
+        <source>Choose at least one channel to save.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

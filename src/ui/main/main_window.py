@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
 from ui.base.state import State
 from ui.document.document_view import DocumentView
@@ -315,13 +314,10 @@ class MainWindow(QMainWindow):
         options = SaveAudioDialog.get_options(doc, self.tab_widget.tabText(index), self)
         if options is None:
             return
-        raw = doc.view_model.primary_channel()
         try:
-            if raw is None:
-                raise RuntimeError("Cannot save audio that is not loaded")
-            SaveAudio(
-                options.path, raw.x, raw.fs, options.target_fs, options.scale
-            ).invoke()
+            doc.view_model.save_audio(
+                options.channels, options.path, options.target_fs, options.scale
+            )
         except RuntimeError as err:
             QMessageBox.critical(
                 self,
