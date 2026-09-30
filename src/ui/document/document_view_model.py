@@ -950,6 +950,7 @@ class DocumentViewModel(ViewModel):
             self.channel_state,
             channel_mode=ChannelMode.STEREO,
             primary_channel=channel_choice,
+            active_channels=self.channel_state.active_channels | {1 - channel_choice},
         )
 
         self.set_audio(audio_state, channel_choice, reset_window=False)
@@ -1000,16 +1001,9 @@ class DocumentViewModel(ViewModel):
     def paste_special_new_channel_without_silence(
         self, new_channel_idx: int, position: float, clip: AudioState
     ) -> AudioState | None:
-        """'Paste Special: New Channel' without silence insertion - places
-        clip's audio directly at the mark position in a brand-new channel,
-        flanked by silence, while the existing channel's own audio is left
-        completely untouched (only padded with trailing silence if the
-        clip would otherwise run past its current length). Unlike
-        paste_special_new_channel_with_silence(), this never changes the
-        existing channel's own timeline, so it is not built on paste_at()
-        - and, like every other structural mono->stereo transition in
-        this codebase (_promote_to_stereo(), resample(),
-        toggle_channel_active()), it is not undoable."""
+        """Promotes mono document to stereo, andputs clip in new channel with
+        silence. Existing channel moves to other slot unchaged, except for
+        silent padding at the end if needed."""
         if self.stereo_channels() is not None:
             raise RuntimeError("Document is already stereo")
         if len(clip.channels) > 1:

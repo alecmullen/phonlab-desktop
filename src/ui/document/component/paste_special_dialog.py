@@ -31,15 +31,15 @@ class PasteSpecialDialog(QDialog):
         self.setWindowTitle(self.tr("Paste Special"))
 
         channel_group_box = QGroupBox(self.tr("New Channel"))
-        self.channel1_radio = QRadioButton(self.tr("Channel 1"))
-        self.channel2_radio = QRadioButton(self.tr("Channel 2"))
-        self.channel2_radio.setChecked(True)
-        self.channel_button_group = QButtonGroup(self)
-        self.channel_button_group.addButton(self.channel1_radio)
-        self.channel_button_group.addButton(self.channel2_radio)
         channel_layout = QVBoxLayout(channel_group_box)
-        channel_layout.addWidget(self.channel1_radio)
-        channel_layout.addWidget(self.channel2_radio)
+        self.channel_button_group = QButtonGroup(self)
+        for idx in range(2):
+            channel_radio = QRadioButton(self.tr("Channel {}").format(idx + 1))
+            if idx == 1:
+                channel_radio.setChecked(True)
+            self.channel_button_group.addButton(channel_radio, id=idx)
+
+            channel_layout.addWidget(channel_radio)
 
         silence_group_box = QGroupBox(self.tr("Silence"))
         self.with_silence_radio = QRadioButton(
@@ -68,8 +68,12 @@ class PasteSpecialDialog(QDialog):
         layout.addWidget(buttons)
 
     def choice(self) -> PasteSpecialChoice:
+        buttons = self.channel_button_group.buttons()
+        new_channel_idx = next(
+            (idx for idx, btn in enumerate(buttons) if btn.isChecked()), 1
+        )
         return PasteSpecialChoice(
-            new_channel_idx=0 if self.channel1_radio.isChecked() else 1,
+            new_channel_idx=new_channel_idx,
             insert_silence=self.with_silence_radio.isChecked(),
         )
 
