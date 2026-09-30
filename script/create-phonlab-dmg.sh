@@ -2,11 +2,13 @@ brew install create-dmg
 
 SOURCE_PATH=$1
 OUT_PATH="${2:-Phonlab-Installer.dmg}"
+VOLICON="$3"
 
 echo "Creating DMG from $SOURCE_PATH"
 
 create-dmg \
     --volname "Phonlab Installer" \
+    ${VOLICON:+--volicon "$VOLICON"} \
     --window-pos 200 120 \
     --window-size 600 400 \
     --icon-size 100 \
