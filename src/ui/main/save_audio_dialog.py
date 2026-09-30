@@ -123,7 +123,7 @@ class SaveAudioDialog(QDialog):
         elif sum(is_checked) == 1:
             idx = is_checked.index(True)
             self.channel_status_label.setText(
-                self.tr("Will be saved as mono (Channel {})").format(idx+1)
+                self.tr("Will be saved as mono (Channel {})").format(idx + 1)
             )
         else:
             self.channel_status_label.setText(
