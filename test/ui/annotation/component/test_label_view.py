@@ -17,8 +17,8 @@ def show_plot_in_layout(plot: pg.PlotItem) -> pg.GraphicsLayoutWidget:
 def test_label_view_stores_input_labels(qtbot: QtBot):
     plot = pg.PlotItem()
     labels = [
-        AnnotationLabelState((1.0, 0.5), (0.5, 0.25), "hello"),
-        AnnotationLabelState((2.0, 0.5), (2.0, 0.25), "world"),
+        AnnotationLabelState(pos=(1.0, 0.5), size=(0.5, 0.25), label="hello"),
+        AnnotationLabelState(pos=(2.0, 0.5), size=(2.0, 0.25), label="world"),
     ]
 
     layout = show_plot_in_layout(plot)
@@ -36,8 +36,8 @@ def test_label_view_creates_text_item_per_label_with_correct_text_and_position(
 ):
     plot = pg.PlotItem()
     labels = [
-        AnnotationLabelState((1.0, 0.5), (0.5, 0.25), "hello"),
-        AnnotationLabelState((2.0, 0.5), (2.0, 1.0), "world"),
+        AnnotationLabelState(size=(1.0, 0.5), pos=(0.5, 0.25), label="hello"),
+        AnnotationLabelState(size=(2.0, 0.5), pos=(2.0, 1.0), label="world"),
     ]
 
     layout = show_plot_in_layout(plot)
@@ -105,7 +105,7 @@ def test_label_view_ellides_long_text(qtbot: QtBot):
     size = (1.0, 0.5)
     label_width = int(max(size[0], 1.0) / pixel_size[0])
 
-    labels = [AnnotationLabelState(size, (0.5, 0.25), long_text)]
+    labels = [AnnotationLabelState(size=size, pos=(0.5, 0.25), label=long_text)]
     label_view = LabelView(labels, plot)
 
     label_text_item = next(
@@ -128,7 +128,7 @@ def test_label_view_removes_line_breaks(qtbot: QtBot):
     for _ in range(1000):
         long_text += "h\n"
 
-    labels = [AnnotationLabelState((1.0, 0.5), (0.5, 0.25), long_text)]
+    labels = [AnnotationLabelState(size=(1.0, 0.5), pos=(0.5, 0.25), label=long_text)]
     label_view = LabelView(labels, plot)
 
     label_text_item = next(

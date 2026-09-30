@@ -55,8 +55,8 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         self.addItem(self.mark_line, ignoreBounds=True)
         self.mark_line.setVisible(False)
 
-        self.visible_nodes: list[AnnotationNodeState]
-        self.visible_labels: list[AnnotationLabelState]
+        self.visible_nodes: list[AnnotationNodeState] = []
+        self.visible_labels: list[AnnotationLabelState] = []
 
         self.dragging_node: AnnotationNodeState | None = None
 
