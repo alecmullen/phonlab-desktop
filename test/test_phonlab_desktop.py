@@ -72,7 +72,11 @@ def fake_run_app_dependencies(
         def __init__(self, argv: list[str]):
             self.argv = argv
             self.exec_called = False
+            self.window_icon = None
             FakeQApplication.instances.append(self)
+
+        def setWindowIcon(self, icon: object) -> None:
+            self.window_icon = icon
 
         def exec(self) -> int:
             self.exec_called = True
@@ -165,6 +169,7 @@ def test_run_app_shows_main_window_and_splash_and_starts_event_loop(
     monkeypatch: pytest.MonkeyPatch,
     mock_librosa_load: list,
     fake_run_app_dependencies: tuple[type, type, type],
+    qapp: object,
 ):
     fake_app_cls, fake_main_window_cls, fake_splash_cls = fake_run_app_dependencies
     monkeypatch.delenv("PHONLAB_WARMUP_ONLY", raising=False)
@@ -182,12 +187,16 @@ def test_run_app_shows_main_window_and_splash_and_starts_event_loop(
     assert main_window.splash is splash
     assert main_window.opened_files is None
     assert fake_app_cls.instances[0].exec_called is True
+    window_icon = fake_app_cls.instances[0].window_icon
+    assert window_icon is not None
+    assert not window_icon.isNull()
 
 
 def test_run_app_opens_files_passed_as_command_line_arguments(
     monkeypatch: pytest.MonkeyPatch,
     mock_librosa_load: list,
     fake_run_app_dependencies: tuple[type, type, type],
+    qapp: object,
 ):
     fake_app_cls, fake_main_window_cls, _ = fake_run_app_dependencies
     monkeypatch.delenv("PHONLAB_WARMUP_ONLY", raising=False)
