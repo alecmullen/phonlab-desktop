@@ -170,7 +170,7 @@ class DocumentView(QWidget):
         scene position, if any. The checkbox is rendering-only (see
         AudioWavePlot) - clicks on it are hit-tested here rather than
         delivered natively."""
-        for idx, plot in enumerate(self._wave_plots()):
+        for idx, plot in enumerate(self.wave_plots):
             proxy = plot.active_checkbox_proxy
             if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):
                 return idx
@@ -300,6 +300,7 @@ class DocumentView(QWidget):
                 view_model=self.view_model.audio_wave_view_models[idx],
                 linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom and idx == num_channels - 1,
+                show_active_checkbox=num_channels > 1,
             )
             wave_label = (
                 self.tr("Ch {} Amplitude").format(idx + 1)

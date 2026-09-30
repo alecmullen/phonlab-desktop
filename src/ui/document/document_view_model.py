@@ -619,24 +619,17 @@ class DocumentViewModel(ViewModel):
         )
 
     def active_channel_states(self) -> list[AudioChannelState]:
-        """The channel(s) currently active for playback/spectrogram - both,
-        for a stereo document with neither channel deactivated (today's only
-        behavior); just one, if the user deactivated the other via the
-        per-channel checkbox. Unrelated to stereo_channels(), which always
-        returns both real channels of a stereo document regardless of
-        activation - that's used for display (both rows always shown, just
-        grayed when inactive) and editing (unaffected by activation)."""
+        """The channel(s) currently active for playback/spectrogram"""
         if self.stereo_channels() is None:
             primary = self.primary_channel()
             return [primary] if primary is not None else []
         indices = sorted(self.channel_state.active_channels)
-        return [self.audio_state[idx] for idx in indices if idx in self.audio_state]
+        all_channels = self.audio_state.channels
+        return [all_channels[idx] for idx in indices if idx in all_channels]
 
     def toggle_channel_active(self, idx: int):
         """Activate/deactivate channel `idx` for playback/spectrogram
-        purposes - refused if it would leave no channel active. Not tracked
-        by the undo/redo stack, matching resample() and the mono->stereo
-        promotion, which also aren't undoable."""
+        purposes - refused if it would leave no channel active."""
         active = self.channel_state.active_channels
         new_active = (active - {idx}) if idx in active else (active | {idx})
         if not new_active:
@@ -655,8 +648,8 @@ class DocumentViewModel(ViewModel):
             active_channels=frozenset(new_active),
             primary_channel=primary,
         )
-        self.audio_wave_view_model.set_active(0 in new_active)
-        self.audio_wave_view_model_channel2.set_active(1 in new_active)
+        for i, view_model in enumerate(self.audio_wave_view_models):
+            view_model.set_active(i in new_active)
         self.prep_audio_spectrogram()
 
     def set_mark(self, x_pos: float):
