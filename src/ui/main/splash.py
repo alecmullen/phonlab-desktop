@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import QSplashScreen
 from ui.main.main_window import MainWindow
 
 
-def _icon_path() -> Path:
+def icon_path() -> Path:
     """Locate icons/phonlab.png in a source checkout or a PyInstaller bundle."""
     if getattr(sys, "frozen", False):
         base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
@@ -43,7 +43,7 @@ class ClickableSplash(QSplashScreen):
         painter.drawRect(0, 0, width - 1, height - 1)
 
         # Draw icon, top center
-        icon = QPixmap(str(_icon_path()))
+        icon = QPixmap(str(icon_path()))
         if not icon.isNull():
             icon = icon.scaledToHeight(
                 90, Qt.TransformationMode.SmoothTransformation
