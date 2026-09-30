@@ -900,6 +900,8 @@ class DocumentViewModel(ViewModel):
         self.paste_at(position, clip)
 
     def _tiny_noise(self, length: int, fs: int, dtype: np.dtype) -> AudioSignal:
+        if length <= 0:
+            return AudioSignal()
         zeros = np.zeros(length, dtype=np.float32)
         noise_audio = PrepAudio(
             {0: AudioSignal(zeros, fs)},
@@ -915,7 +917,7 @@ class DocumentViewModel(ViewModel):
         """Resolve a mono/stereo mismatch between `clip` and this document
         ahead of a paste, given the user's channel_choice (0=left, 1=right)
         for where the real audio should go. Promotes the document
-        to stereo if needed"""
+        to stereo if needed."""
         stereo = self.stereo_channels()
 
         if stereo is not None:
@@ -930,11 +932,13 @@ class DocumentViewModel(ViewModel):
                 }
             )
 
-        self._convert_mono_to_stereo(channel_choice)
-
+        self._promote_to_stereo(channel_choice)
         return clip
 
-    def _convert_mono_to_stereo(self, channel_choice: int):
+    def _promote_to_stereo(self, channel_choice: int):
+        """Promote this mono document to stereo, keeping its current audio
+        in existing_channel_idx and filling the other slot with a
+        tiny-noise placeholder of matching length."""
         self.raw_audio_state = self._add_noise_channel_to_mono_state(
             self.raw_audio_state, channel_choice
         )
@@ -946,6 +950,7 @@ class DocumentViewModel(ViewModel):
             self.channel_state,
             channel_mode=ChannelMode.STEREO,
             primary_channel=channel_choice,
+            active_channels=self.channel_state.active_channels | {1 - channel_choice},
         )
 
         self.set_audio(audio_state, channel_choice, reset_window=False)
@@ -967,6 +972,80 @@ class DocumentViewModel(ViewModel):
         new_state.channels[1 - channel_choice] = to_audio_channel_state(noise)
 
         return new_state
+
+    def paste_special_new_channel_with_silence(
+        self, new_channel_idx: int, position: float, clip: AudioState
+    ) -> AudioState | None:
+        """Promote this mono document to stereo, putting clip's audio in
+        a brand-new channel (new_channel_idx, 0 or 1) while the existing
+        channel moves to the other slot. Adds silence to exisitng channel
+        over clip range. Document and clip must both be mono."""
+        if self.stereo_channels() is not None:
+            raise RuntimeError("Document is already stereo")
+        if clip.is_stereo:
+            raise RuntimeError("Paste Special: New Channel needs a mono clip")
+
+        existing_idx = 1 - new_channel_idx
+        self._promote_to_stereo(existing_idx)
+
+        mono_signal = next(iter(clip.channels.values()))
+        noise = self._tiny_noise(
+            len(mono_signal.x), mono_signal.fs, mono_signal.x.dtype
+        )
+        synthesized = AudioState(
+            {new_channel_idx: mono_signal, existing_idx: to_audio_channel_state(noise)}
+        )
+
+        return self.paste_at(position, synthesized)
+
+    def paste_special_new_channel_without_silence(
+        self, new_channel_idx: int, position: float, clip: AudioState
+    ) -> AudioState | None:
+        """Promotes mono document to stereo, andputs clip in new channel with
+        silence. Existing channel moves to other slot unchaged, except for
+        silent padding at the end if needed."""
+        if self.stereo_channels() is not None:
+            raise RuntimeError("Document is already stereo")
+        if len(clip.channels) > 1:
+            raise RuntimeError("Paste Special: New Channel needs a mono clip")
+
+        existing_idx = 1 - new_channel_idx
+        existing = self.primary_channel()
+        if existing is None:
+            raise RuntimeError("Missing primary audio channel")
+
+        new_channel = self._tiny_noise(len(existing.x), existing.fs, existing.x.dtype)
+        new_result = EditAudio(
+            {0: new_channel},
+            EditCommand(EditCommandType.PASTE, position, clip=to_audio_signals(clip)),
+        ).invoke()
+        if new_result is None:
+            raise RuntimeError("Paste failed unexpectedly")
+        new_channel = new_result.new_audio[0]
+
+        clip_end_idx = new_result.start_idx + len(new_result.new_clip[0].x)
+        total_len = max(len(existing.x), clip_end_idx)
+        new_x = new_channel.x[:total_len]
+
+        if total_len > len(existing.x):
+            pad = self._tiny_noise(
+                total_len - len(existing.x), existing.fs, existing.x.dtype
+            ).x
+            existing_x = np.concatenate([existing.x, pad])
+        else:
+            existing_x = existing.x
+
+        self._promote_to_stereo(existing_idx)
+        self._replace_channels(
+            to_audio_state(
+                {
+                    existing_idx: AudioSignal(existing_x, existing.fs),
+                    new_channel_idx: AudioSignal(new_x, existing.fs),
+                }
+            )
+        )
+
+        return clip
 
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or

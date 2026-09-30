@@ -475,7 +475,7 @@ wheels = [
 
 [[package]]
 name = "phonlab"
-version = "0.0.58"
+version = "0.0.62"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorednoise" },
@@ -489,9 +489,9 @@ dependencies = [
     { name = "scipy" },
     { name = "srt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/52/71/236bf7cf37805dfe0ece6c0b1d74591a83ea379a0eaa0a5b5d26b1a48f68/phonlab-0.0.58.tar.gz", hash = "sha256:414c04b45b8ef575113743c1353d780ff2eadb015f780c1a2b46f8fe5d3de228", size = 9525173, upload-time = "2026-08-25T16:25:18.082Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/3c/fa84994516d639b9bfd1b865fc1fba696984b7d539170608a449b2991f86/phonlab-0.0.62.tar.gz", hash = "sha256:f8d434bef780c359bc44f917de3ec77e8e61c1abe3749a27f8623f27289a6943", size = 9550018, upload-time = "2026-09-24T20:41:50.282Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/f2/05d48fd27c82157c6478be135af5fdca6bc2ada75cee36dbdcc2675ca16a/phonlab-0.0.58-py3-none-any.whl", hash = "sha256:fabdf96409203879a6d3bee109d02ceb55b45bb4c011a2f9b0400f2957094491", size = 9539837, upload-time = "2026-08-25T16:25:10.324Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/f5/3fce7ac9d40d01ac4862008653c64415e4eef46882b652ce1a94b0d072a7/phonlab-0.0.62-py3-none-any.whl", hash = "sha256:873c4c41bb32effb967ea820c743f18aa586a3e4ebfcae334f17e9fcc8b139ba", size = 9549060, upload-time = "2026-09-24T20:41:48.122Z" },
 ]
 
 [[package]]
@@ -528,7 +528,7 @@ requires-dist = [
     { name = "librosa", specifier = "==0.11" },
     { name = "numba", specifier = ">=0.67.0" },
     { name = "numpy", specifier = "==2.4" },
-    { name = "phonlab", specifier = "==0.0.58" },
+    { name = "phonlab", specifier = "==0.0.62" },
     { name = "pyqt6", specifier = "==6.11" },
     { name = "pyqt6-sip", specifier = "==13.12" },
     { name = "pyqtgraph", specifier = "==0.14" },

@@ -660,6 +660,243 @@ def test_delete_channel_noop_when_not_stereo(view_model: DocumentViewModel):
     np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(1000))
 
 
+# --------------------------- paste special / stereo promotion ---------------------------
+
+
+def test_promote_to_stereo_keeps_existing_audio_and_fills_other_with_noise(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+
+    view_model._promote_to_stereo(1)
+
+    assert view_model.stereo_channels() is not None
+    np.testing.assert_array_equal(view_model.audio_state.channels[1].x, x)
+    assert len(view_model.audio_state.channels[0].x) == len(x)
+    assert not np.array_equal(view_model.audio_state.channels[0].x, x)
+    assert view_model.channel_state.primary_channel == 1
+
+
+def test_reconcile_clip_for_paste_promotion_still_works(view_model: DocumentViewModel):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    stereo_clip = AudioState(
+        {0: AudioSignal(np.ones(500), 1000), 1: AudioSignal(np.ones(500) * -1, 1000)}
+    )
+
+    result = view_model.reconcile_clip_for_paste(stereo_clip, channel_choice=0)
+
+    assert result is stereo_clip
+    assert view_model.stereo_channels() is not None
+    np.testing.assert_array_equal(view_model.audio_state.channels[0].x, x)
+    assert view_model.channel_state.primary_channel == 0
+
+
+def test_paste_special_new_channel_with_silence_puts_clip_in_chosen_channel(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = AudioState({0: AudioChannelState(np.full(50, 5.0), 1000)})
+
+    result = view_model.paste_special_new_channel_with_silence(1, 0.1, clip)
+
+    assert result is not None
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    assert len(ch0.x) == len(ch1.x) == len(x) + 50
+    np.testing.assert_array_equal(ch1.x[100:150], np.full(50, 5.0))
+    np.testing.assert_array_equal(ch0.x[:100], x[:100])
+    np.testing.assert_array_equal(ch0.x[150:], x[100:])
+
+
+def test_paste_special_new_channel_with_silence_moves_existing_to_other_slot(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = AudioState({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_with_silence(0, 0.1, clip)
+
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    np.testing.assert_array_equal(ch0.x[100:150], np.full(50, 5.0))
+    np.testing.assert_array_equal(ch1.x[:100], x[:100])
+    np.testing.assert_array_equal(ch1.x[150:], x[100:])
+
+
+def test_paste_special_new_channel_with_silence_pushes_undo_entry(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = AudioState({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_with_silence(1, 0.1, clip)
+
+    assert len(view_model.undo_stack) == 1
+    view_model.undo()  # must not raise
+
+
+def test_paste_special_new_channel_with_silence_raises_if_already_stereo(
+    view_model: DocumentViewModel,
+):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel_with_silence(1, 0.1, clip)
+
+
+def test_paste_special_new_channel_with_silence_raises_if_clip_is_stereo(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state(
+        {
+            0: AudioSignal(np.full(50, 5.0), 1000),
+            1: AudioSignal(np.full(50, -5.0), 1000),
+        }
+    )
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel_with_silence(1, 0.1, clip)
+
+
+def test_paste_special_new_channel_without_silence_leaves_existing_channel_unchanged(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    result = view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+    assert result is not None
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    assert len(ch0.x) == len(ch1.x) == len(x)
+    np.testing.assert_array_equal(ch0.x, x)
+    np.testing.assert_array_equal(ch1.x[100:150], np.full(50, 5.0))
+
+
+def test_paste_special_new_channel_without_silence_moves_existing_to_other_slot(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(0, 0.1, clip)
+
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    np.testing.assert_array_equal(ch1.x, x)
+    np.testing.assert_array_equal(ch0.x[100:150], np.full(50, 5.0))
+
+
+def test_paste_special_new_channel_without_silence_pads_existing_when_clip_runs_past_end(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    # mark at 0.98s (sample 980), clip of 50 samples ends at 1030 > 1000
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(1, 0.98, clip)
+
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    assert len(ch0.x) == len(ch1.x) == 1030
+    np.testing.assert_array_equal(ch0.x[:1000], x)
+    np.testing.assert_array_equal(ch1.x[980:1030], np.full(50, 5.0))
+    assert len(ch1.x) - 1030 == 0  # clip ends exactly at the new total length
+
+
+def test_paste_special_new_channel_without_silence_handles_paste_at_zero(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(1, 0.0, clip)
+
+    channels = view_model.stereo_channels().channels
+    _, ch1 = [channels[idx] for idx in sorted(channels)]
+    np.testing.assert_array_equal(ch1.x[:50], np.full(50, 5.0))
+
+
+def test_paste_special_new_channel_without_silence_resamples_clip(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(100, 5.0), 2000)})  # half the fs
+
+    view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+    channels = view_model.stereo_channels().channels
+    _, ch1 = [channels[idx] for idx in sorted(channels)]
+    # 100 samples at 2000 Hz resample to 50 samples at 1000 Hz, fitting
+    # entirely within the existing channel's length - no extension needed.
+    # resample_poly is a proper FIR filter, not naive decimation, so only
+    # check the resampled segment's length and its steady-state value
+    # (away from the filter's transient edges).
+    assert len(ch1.x) == len(x)
+    np.testing.assert_allclose(ch1.x[115:135], 5.0, atol=1e-6)
+
+
+def test_paste_special_new_channel_without_silence_not_undoable(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+    assert view_model.undo_stack == []
+
+
+def test_paste_special_new_channel_without_silence_raises_if_already_stereo(
+    view_model: DocumentViewModel,
+):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+
+def test_paste_special_new_channel_without_silence_raises_if_clip_is_stereo(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state(
+        {
+            0: AudioSignal(np.full(50, 5.0), 1000),
+            1: AudioSignal(np.full(50, -5.0), 1000),
+        }
+    )
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+
 # --------------------------- misc ---------------------------
 
 

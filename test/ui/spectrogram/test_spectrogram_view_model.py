@@ -11,6 +11,7 @@ import ui.spectrogram.spectrogram_view_model as svm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from res.constants import SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
 from ui.base.state import State
 from ui.document.state.audio_channel_state import AudioChannelState
 from ui.document.state.load_progress_state import LoadProgressState
@@ -443,21 +444,50 @@ def test_compute_spectrogram_mmap_updates_state_on_success(
 
     manager = view_model.job_managers["sgram_mmap"]
     job = manager.jobs[0]
+    # 11 evenly spaced values (0..10) give exact, interpolation-free 20th/
+    # 80th percentiles (2.0 and 8.0) for a simple, easily-verified fixture.
     sgram = SpectrogramMmap(
-        t_mmap=np.array([0.0, 0.1]),
-        sxx_mmap=np.array([[1.0, 5.0]]),
+        t_mmap=np.arange(11, dtype=np.float64) * 0.01,
+        sxx_mmap=np.array([np.arange(11, dtype=np.float64)]),
         frames_per_sec=100.0,
-        frames_computed=2,
+        frames_computed=11,
         samples_computed=200,
     )
 
     job.on_success(sgram)
 
-    assert view_model.sgram_state.frames_computed == 2
+    assert view_model.sgram_state.frames_computed == 11
     assert view_model.sgram_state.samples_computed == 200
     assert view_model.sgram_state.frames_per_sec == 100.0
-    assert view_model.sgram_state.max_sxx == 5.0
-    assert view_model.sgram_state.min_sxx == 1.0
+    assert view_model.sgram_state.low_sxx == 2.0
+    assert view_model.sgram_state.high_sxx == 8.0
+
+
+def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
+    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
+):
+    view_model = SpectrogramViewModel()
+    x = np.arange(1000, dtype=np.float64)
+
+    view_model.compute_spectrogram_mmap(x, 1000)
+
+    manager = view_model.job_managers["sgram_mmap"]
+    job = manager.jobs[0]
+
+    valid = np.arange(11, dtype=np.float64)
+    padded = np.concatenate([valid, [-1000.0, -1000.0]])
+    sgram = SpectrogramMmap(
+        t_mmap=np.concatenate([valid * 0.01, [0.0, 0.0]]),
+        sxx_mmap=np.array([padded]),
+        frames_per_sec=100.0,
+        frames_computed=11,
+        samples_computed=200,
+    )
+
+    job.on_success(sgram)
+
+    assert view_model.sgram_state.low_sxx == 2.0
+    assert view_model.sgram_state.high_sxx == 8.0
 
 
 def test_compute_spectrogram_mmap_launches_only_once(
@@ -529,17 +559,100 @@ def test_adjust_gray_scale_clamps_to_lower_bound(qtbot: QtBot):
     assert view_model.sgram_state.gray_cutoff == 0.0
 
 
-# --------------------------- update_sxx_extrema ---------------------------
+# --------------------------- update_sxx_percentiles ---------------------------
 
 
-def test_update_sxx_extrema_tracks_min_and_max_across_calls(qtbot: QtBot):
+def test_update_sxx_percentiles_computes_20th_and_80th(qtbot: QtBot):
     view_model = SpectrogramViewModel()
 
-    view_model.update_sxx_extrema(np.array([1.0, 5.0, 3.0]))
-    view_model.update_sxx_extrema(np.array([-2.0, 4.0]))
+    view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64))
 
-    assert view_model.sgram_state.min_sxx == -2.0
-    assert view_model.sgram_state.max_sxx == 5.0
+    assert view_model.sgram_state.low_sxx == 2.0
+    assert view_model.sgram_state.high_sxx == 8.0
+
+
+def test_update_sxx_percentiles_replaces_low_and_high(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64) - 100)
+
+    view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64))
+
+    assert view_model.sgram_state.low_sxx == 2.0
+    assert view_model.sgram_state.high_sxx == 8.0
+
+
+def test_update_sxx_percentiles_is_not_skewed_by_a_single_outlier(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    data = np.concatenate([np.arange(11, dtype=np.float64), [-3076.0]])
+
+    view_model.update_sxx_percentiles(data)
+
+    assert view_model.sgram_state.low_sxx > -100
+    assert view_model.sgram_state.high_sxx > 0
+
+
+def test_update_sxx_percentiles_does_nothing_for_empty_input(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    before = view_model.sgram_state
+
+    view_model.update_sxx_percentiles(np.array([]))
+
+    assert view_model.sgram_state is before
+
+
+def test_update_sxx_percentiles_estimates_correctly_from_a_large_sample(
+    qtbot: QtBot,
+):
+    view_model = SpectrogramViewModel()
+    rng = np.random.default_rng(42)
+    data = rng.uniform(-70, -5, size=(257, 500_000)).astype(np.float32)
+
+    view_model.update_sxx_percentiles(data)
+
+    true_low, true_high = np.percentile(data, [20, 80])
+    assert view_model.sgram_state.low_sxx == pytest.approx(true_low, abs=0.5)
+    assert view_model.sgram_state.high_sxx == pytest.approx(true_high, abs=0.5)
+
+
+# --------------------------- _sample_sxx ---------------------------
+
+
+def test_sample_sxx_returns_full_array_at_or_under_threshold(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE, dtype=np.float64)
+
+    sample = view_model._sample_sxx(data)
+
+    np.testing.assert_array_equal(np.sort(sample), data)
+
+
+def test_sample_sxx_caps_size_when_over_threshold(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE + 1, dtype=np.float64)
+
+    sample = view_model._sample_sxx(data)
+
+    assert sample.size == SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
+    assert np.all(np.isin(sample, data))
+
+
+def test_sample_sxx_samples_from_a_2d_array(qtbot: QtBot):
+    view_model = SpectrogramViewModel()
+    data = np.arange(300 * 400, dtype=np.float64).reshape(300, 400)
+
+    sample = view_model._sample_sxx(data)
+
+    assert sample.size == SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
+    assert np.all(np.isin(sample, data))
+
+
+def test_sample_sxx_is_deterministic_across_fresh_instances(qtbot: QtBot):
+    data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE * 3, dtype=np.float64)
+
+    sample_a = SpectrogramViewModel()._sample_sxx(data)
+    sample_b = SpectrogramViewModel()._sample_sxx(data)
+
+    np.testing.assert_array_equal(sample_a, sample_b)
 
 
 # --------------------------- invalidate_spectrogram ---------------------------
