@@ -45,9 +45,7 @@ class ClickableSplash(QSplashScreen):
         # Draw icon, top center
         icon = QPixmap(str(icon_path()))
         if not icon.isNull():
-            icon = icon.scaledToHeight(
-                90, Qt.TransformationMode.SmoothTransformation
-            )
+            icon = icon.scaledToHeight(90, Qt.TransformationMode.SmoothTransformation)
             painter.drawPixmap((width - icon.width()) // 2, 15, icon)
 
         # Draw title
