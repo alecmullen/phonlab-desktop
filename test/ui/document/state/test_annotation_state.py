@@ -1,8 +1,5 @@
 from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
-from ui.annotation.state.annotation_node_state import (
-    AnnotationNodeExtentState,
-    AnnotationNodeState,
-)
+from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_state import (
     AnnotationLabelState,
     AnnotationTypeState,
