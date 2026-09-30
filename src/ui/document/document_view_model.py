@@ -649,6 +649,39 @@ class DocumentViewModel(ViewModel):
             view_model.set_active(i in new_active)
         self.prep_audio_spectrogram()
 
+    def delete_channel(self, idx: int):
+        """Delete channel `idx` from a stereo document, converting it to
+        mono. The surviving channel is renumbered to index 0 (the
+        convention every mono document normally uses) Not undoable."""
+        if self.stereo_channels() is None:
+            return
+
+        surviving_idx = 1 - idx
+        surviving_channel = self.audio_state.channels.get(surviving_idx)
+        if surviving_channel is None:
+            raise RuntimeError(f"Missing channel {surviving_idx}")
+
+        audio_state = AudioState({0: surviving_channel})
+        raw_surviving = self.raw_audio_state.channels.get(surviving_idx)
+        self.raw_audio_state = (
+            AudioState({0: raw_surviving})
+            if raw_surviving is not None
+            else AudioState()
+        )
+
+        self.channel_state = replace(
+            self.channel_state,
+            channel_mode=ChannelMode.MONO,
+            primary_channel=0,
+            active_channels=frozenset({0}),
+        )
+        self._replace_channels(audio_state)
+
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+
+        self.state_changed.emit(self.plot_layout_state)
+
     def set_mark(self, x_pos: float):
         self.mark_state = MarkState(position=x_pos, is_set=True)
         self.state_changed.emit(self.mark_state)
@@ -888,14 +921,14 @@ class DocumentViewModel(ViewModel):
         audio_state = self._add_noise_channel_to_mono_state(
             self.audio_state, channel_choice
         )
-        self.set_audio(audio_state, channel_choice, reset_window=False)
 
         self.channel_state = replace(
             self.channel_state,
             channel_mode=ChannelMode.STEREO,
             primary_channel=channel_choice,
         )
-        self.update_audio_waveform()
+
+        self.set_audio(audio_state, channel_choice, reset_window=False)
         self.state_changed.emit(self.plot_layout_state)
 
     def _add_noise_channel_to_mono_state(

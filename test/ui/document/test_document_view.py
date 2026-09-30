@@ -7,10 +7,15 @@ from pytestqt.qtbot import QtBot
 
 import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
+from ui.document.component.delete_channel_dialog import DeleteChannelDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
-from ui.document.state.audio_channel_state import to_audio_state
+from ui.document.state.audio_channel_state import (
+    AudioChannelState,
+    AudioState,
+    to_audio_state,
+)
 from ui.document.state.audio_loaded import AudioLoaded
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
@@ -64,6 +69,22 @@ def loaded_view(view: DocumentView, view_model: DocumentViewModel) -> DocumentVi
     return view
 
 
+@pytest.fixture
+def stereo_loaded_view(
+    view: DocumentView, view_model: DocumentViewModel
+) -> DocumentView:
+    view_model.load_from_samples(
+        AudioState(
+            {
+                0: AudioChannelState(np.arange(20000, dtype=np.float64), 1000),
+                1: AudioChannelState(np.arange(20000, dtype=np.float64) * -1, 1000),
+            }
+        )
+    )
+    QApplication.processEvents()
+    return view
+
+
 def widget_pos_for_time(view: DocumentView, t: float) -> QPoint:
     y = view.wave_plots[0].getViewBox().viewRange()[1][0]
     scene_pos = view.wave_plots[0].getViewBox().mapViewToScene(QPointF(t, y))
@@ -79,6 +100,19 @@ def mouse_event(
     pos = QPointF(widget_pos_for_time(view, t))
     return QMouseEvent(
         event_type, pos, Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, modifiers
+    )
+
+
+def click_at_scene_pos(
+    view: DocumentView, scene_pos: QPointF, event_type: QEvent.Type
+) -> QMouseEvent:
+    pos = QPointF(view.graphics_widget.mapFromScene(scene_pos))
+    return QMouseEvent(
+        event_type,
+        pos,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
     )
 
 
@@ -213,7 +247,7 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
     assert len(view_model.audio_player.played) == 1
 
 
-def test_shift_click_sets_mark_at_click_position(loaded_view: DocumentView):
+def test_shift_click_plays_visible_audio(loaded_view: DocumentView):
     view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
     loaded_view.handle_mouse_press(press)
@@ -226,8 +260,9 @@ def test_shift_click_sets_mark_at_click_position(loaded_view: DocumentView):
     )
     loaded_view.handle_mouse_release(release)
 
-    assert view_model.mark_state.is_set is True
-    assert view_model.mark_state.position == pytest.approx(4.0, abs=0.01)
+    assert loaded_view.pending_single_click is None
+    assert loaded_view.click_timer is None
+    assert len(view_model.audio_player.played) == 1
 
 
 def test_double_click_zooms_to_selection(loaded_view: DocumentView):
@@ -242,21 +277,24 @@ def test_double_click_zooms_to_selection(loaded_view: DocumentView):
     assert view_model.document_window_state.end == 5000
 
 
-def test_single_click_after_release_plays_visible_window(
+def test_click_after_release_sets_mark_at_click_position(
     qtbot: QtBot, loaded_view: DocumentView
 ):
     view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonPress)
     loaded_view.handle_mouse_press(press)
-    release = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonRelease)
+    release = mouse_event(
+        loaded_view,
+        4.0,
+        QEvent.Type.MouseButtonRelease,
+    )
     loaded_view.handle_mouse_release(release)
 
     assert loaded_view.click_timer is not None
     qtbot.wait(400)
 
-    assert loaded_view.pending_single_click is None
-    assert loaded_view.click_timer is None
-    assert len(view_model.audio_player.played) == 1
+    assert view_model.mark_state.is_set is True
+    assert view_model.mark_state.position == pytest.approx(4.0, abs=0.01)
 
 
 # --------------------------- scroll handling ---------------------------
@@ -435,6 +473,123 @@ def test_open_resample_dialog_does_not_resample_when_dialog_cancelled(
     loaded_view.open_resample_dialog()
 
     assert calls == []
+
+
+# --------------------------- delete channel button ---------------------------
+
+
+def test_delete_button_absent_for_mono(loaded_view: DocumentView):
+    assert loaded_view.wave_plots[0].delete_button_proxy is None
+
+
+def test_delete_button_present_for_stereo(stereo_loaded_view: DocumentView):
+    assert stereo_loaded_view.wave_plots[0].delete_button_proxy is not None
+    assert stereo_loaded_view.wave_plots[1].delete_button_proxy is not None
+
+
+def test_delete_button_click_deletes_correct_channel(
+    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
+    )
+    scene_pos = (
+        stereo_loaded_view.wave_plots[1]
+        .delete_button_proxy.sceneBoundingRect()
+        .center()
+    )
+    press = click_at_scene_pos(
+        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonPress
+    )
+
+    stereo_loaded_view.handle_mouse_press(press)
+
+    assert stereo_loaded_view.view_model.stereo_channels() is None
+    np.testing.assert_array_equal(
+        stereo_loaded_view.view_model.primary_channel().x,
+        np.arange(20000, dtype=np.float64),
+    )
+
+
+def test_delete_button_click_does_not_set_mouse_pressed(
+    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
+    )
+    scene_pos = (
+        stereo_loaded_view.wave_plots[1]
+        .delete_button_proxy.sceneBoundingRect()
+        .center()
+    )
+    press = click_at_scene_pos(
+        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonPress
+    )
+
+    stereo_loaded_view.handle_mouse_press(press)
+
+    assert stereo_loaded_view.mouse_pressed is False
+
+
+def test_delete_button_click_cancelled_dialog_does_nothing(
+    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        DeleteChannelDialog, "confirm", staticmethod(lambda parent: False)
+    )
+    scene_pos = (
+        stereo_loaded_view.wave_plots[1]
+        .delete_button_proxy.sceneBoundingRect()
+        .center()
+    )
+    press = click_at_scene_pos(
+        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonPress
+    )
+
+    stereo_loaded_view.handle_mouse_press(press)
+
+    assert stereo_loaded_view.view_model.stereo_channels() is not None
+
+
+def test_double_click_on_delete_button_does_not_zoom(
+    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    zoom_calls = []
+    stereo_loaded_view.view_model.zoom_if_in_selection = lambda x: zoom_calls.append(x)
+    scene_pos = (
+        stereo_loaded_view.wave_plots[1]
+        .delete_button_proxy.sceneBoundingRect()
+        .center()
+    )
+    dbl_click = click_at_scene_pos(
+        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonDblClick
+    )
+
+    stereo_loaded_view.handle_double_click(dbl_click)
+
+    assert zoom_calls == []
+
+
+def test_layout_collapses_to_one_row_after_delete(
+    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
+    )
+    scene_pos = (
+        stereo_loaded_view.wave_plots[1]
+        .delete_button_proxy.sceneBoundingRect()
+        .center()
+    )
+    press = click_at_scene_pos(
+        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonPress
+    )
+
+    stereo_loaded_view.handle_mouse_press(press)
+    QApplication.processEvents()
+
+    assert len(stereo_loaded_view.wave_plots) < 2
+    assert len(stereo_loaded_view.wave_plots) == 1
 
 
 # --------------------------- cleanup ---------------------------

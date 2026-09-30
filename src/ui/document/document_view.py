@@ -22,6 +22,7 @@ from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
+from ui.document.component.delete_channel_dialog import DeleteChannelDialog
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
@@ -131,7 +132,7 @@ class DocumentView(QWidget):
         self.resample_action.triggered.connect(self.open_resample_dialog)
 
         self.set_mark_action = ContextMenuHintAction(
-            self.tr("Set Mark"), self.tr("Shift+Click"), parent=self
+            self.tr("Set Mark"), self.tr("Click"), parent=self
         )
         self.set_mark_action.triggered.connect(
             lambda: (
@@ -170,6 +171,15 @@ class DocumentView(QWidget):
         scene position, if any"""
         for idx, plot in enumerate(self.wave_plots):
             proxy = plot.active_checkbox_proxy
+            if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):
+                return idx
+        return None
+
+    def _channel_delete_button_at(self, scene_pos: QPointF) -> int | None:
+        """The channel index (0 or 1) whose delete ("x") button contains
+        this scene position, if any"""
+        for idx, plot in enumerate(self.wave_plots):
+            proxy = plot.delete_button_proxy
             if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):
                 return idx
         return None
@@ -291,7 +301,8 @@ class DocumentView(QWidget):
     def _add_waveform_plots(self, row: int, is_bottom: bool) -> list[pg.PlotItem]:
         """Add one waveform row for channel 0, plus a second row for
         channel 1 when the document is stereo. Returns the plots."""
-        num_channels = len(self.view_model.audio_wave_view_models)
+        num_channels = 2 if self.view_model.stereo_channels() is not None else 1
+        self.wave_plots = []
 
         for idx in range(num_channels):
             wave_plot = AudioWavePlot(
@@ -299,6 +310,7 @@ class DocumentView(QWidget):
                 linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom and idx == num_channels - 1,
                 show_active_checkbox=num_channels > 1,
+                show_delete_button=num_channels > 1,
             )
             wave_label = (
                 self.tr("Ch {} Amplitude").format(idx + 1)
@@ -514,6 +526,12 @@ class DocumentView(QWidget):
             self.view_model.toggle_channel_active(channel_idx)
             return
 
+        delete_idx = self._channel_delete_button_at(scene_pos)
+        if delete_idx is not None:
+            if DeleteChannelDialog.confirm(self):
+                self.view_model.delete_channel(delete_idx)
+            return
+
         clicked_plot = self._wave_plot_at(scene_pos)
         if clicked_plot is None:
             if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
@@ -537,6 +555,8 @@ class DocumentView(QWidget):
         scene_pos = self.graphics_widget.mapToScene(event.pos())
 
         if self._channel_checkbox_at(scene_pos) is not None:
+            return
+        if self._channel_delete_button_at(scene_pos) is not None:
             return
 
         if self.click_timer is not None:
@@ -575,7 +595,7 @@ class DocumentView(QWidget):
                 self.view_model.play_selected_audio()
             else:
                 if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                    self.set_mark(scene_pos)
+                    self.play_window_or_selection(scene_pos)
                 else:
                     self.pending_single_click = scene_pos
                     if self.click_timer is not None:
@@ -591,7 +611,7 @@ class DocumentView(QWidget):
     def handle_single_click(self):
         if self.pending_single_click is not None:
             scene_pos = self.pending_single_click
-            self.play_window_or_selection(scene_pos)
+            self.set_mark(scene_pos)
 
         self.pending_single_click = None
         self.click_timer = None

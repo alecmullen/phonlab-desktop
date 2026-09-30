@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtWidgets import QCheckBox, QGraphicsProxyWidget, QWidget
+from PyQt6.QtWidgets import QCheckBox, QGraphicsProxyWidget, QPushButton, QWidget
 from pyqtgraph import PlotDataItem
 
 from ui.base.state import State
@@ -21,6 +21,7 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         linked_plot: pg.PlotItem | None = None,
         is_bottom_plot: bool = False,
         show_active_checkbox: bool = False,
+        show_delete_button: bool = False,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -41,6 +42,25 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         else:
             self.active_checkbox = None
             self.active_checkbox_proxy = None
+
+        if show_delete_button:
+            # Rendering only - clicks handled in DocumentView
+            self.delete_button = QPushButton("✕")
+            self.delete_button.setFixedSize(18, 18)
+            self.delete_button.setFlat(True)
+            self.delete_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self.delete_button.setToolTip(self.tr("Delete this channel"))
+            self.delete_button.setStyleSheet(
+                "QPushButton { border: none; color: #888; font-weight: bold; }"
+                "QPushButton:hover { color: #c00; }"
+            )
+            self.delete_button_proxy = QGraphicsProxyWidget(self)
+            self.delete_button_proxy.setWidget(self.delete_button)
+            self.delete_button_proxy.setZValue(100)
+            self.getViewBox().sigResized.connect(self._reposition_delete_button)
+        else:
+            self.delete_button = None
+            self.delete_button_proxy = None
 
         self.setLabel("left", self.tr("Amplitude"))
         self.showGrid(x=True, y=True, alpha=0.3)
@@ -114,6 +134,11 @@ class AudioWavePlot(pg.PlotItem, CursorController):
     def _reposition_checkbox(self):
         top_left = self.mapFromScene(self.getViewBox().sceneBoundingRect().topLeft())
         self.active_checkbox_proxy.setPos(top_left.x() + 5, top_left.y() + 5)
+
+    def _reposition_delete_button(self):
+        top_right = self.mapFromScene(self.getViewBox().sceneBoundingRect().topRight())
+        width = self.delete_button.width()
+        self.delete_button_proxy.setPos(top_right.x() - width - 5, top_right.y() + 5)
 
     def plot_wave(self, audio_wave: AudioWaveState):
         self.enableAutoRange(axis="y", enable=False)
