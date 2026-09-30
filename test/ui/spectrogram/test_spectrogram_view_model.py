@@ -569,19 +569,6 @@ def test_adjust_gray_scale_clamps_to_lower_bound(qtbot: QtBot):
     assert view_model.sgram_state.gray_cutoff == 0.0
 
 
-# --------------------------- update_sxx_extrema ---------------------------
-
-
-def test_update_sxx_extrema_tracks_min_and_max_across_calls(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
-
-    view_model.update_sxx_extrema(np.array([1.0, 5.0, 3.0]))
-    view_model.update_sxx_extrema(np.array([-2.0, 4.0]))
-
-    assert view_model.sgram_state.low_sxx == -2.0
-    assert view_model.sgram_state.high_sxx == 5.0
-
-
 # --------------------------- update_sxx_percentiles ---------------------------
 
 

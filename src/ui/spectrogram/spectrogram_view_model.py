@@ -40,9 +40,7 @@ class SpectrogramViewModel(ViewModel):
         self.window_state = SpectrogramWindowState()
 
         self._buffer_generation = 0
-        # Fixed seed: a fresh instance loading the same file always draws
-        # the same sample, so the displayed range is reproducible across
-        # app runs (and in tests) rather than varying randomly each time.
+        # Fixed seed: the displayed range is reproducible across app runs and tests
         self._percentile_rng = np.random.default_rng(0)
 
         self.state_changed.connect(self.on_state_changed)
@@ -166,7 +164,7 @@ class SpectrogramViewModel(ViewModel):
             f=f,
             is_showing=True,
         )
-        self.update_sxx_extrema(sxx)
+        self.update_sxx_percentiles(sxx)
         self.state_changed.emit(self.sgram_state)
 
     def compute_spectrogram_mmap(self, x: np.ndarray, fs: int):
@@ -184,13 +182,7 @@ class SpectrogramViewModel(ViewModel):
                 frames_computed=sgram.frames_computed,
                 samples_computed=sgram.samples_computed,
             )
-            # sgram.sxx_mmap is the full pre-allocated buffer (sized with a
-            # 20% safety margin over the estimated frame count - see
-            # ComputeSpectrogramMmap.init_mmap()), so only the first
-            # frames_computed columns hold real data; the rest is still the
-            # memmap's zero-initialized backing. Restrict the scan to the
-            # valid slice so those never-computed (zero) columns can't skew
-            # the result.
+            # Only use computed frames, not zero-pad values
             self.update_sxx_percentiles(sgram.sxx_mmap[:, : sgram.frames_computed])
 
         settings = self.spectrogram_settings
@@ -207,30 +199,9 @@ class SpectrogramViewModel(ViewModel):
         self.sgram_state = replace(self.sgram_state, gray_cutoff=gray_cutoff)
         self.state_changed.emit(self.sgram_state)
 
-    def update_sxx_extrema(self, sxx: np.ndarray | np.memmap):
-        """Widen the running (never-shrinking) low/high reference range
-        with a freshly computed window's true min/max - used only for the
-        short-lived bootstrap phase before any background full-file scan
-        data exists yet (see load_spectrogram_window()). Unlike
-        update_sxx_percentiles(), this accumulates across separate calls,
-        since each call only ever sees one narrow window, never the full
-        picture."""
-        self.sgram_state = replace(
-            self.sgram_state,
-            low_sxx=min(self.sgram_state.low_sxx, np.min(sxx)),
-            high_sxx=max(self.sgram_state.high_sxx, np.max(sxx)),
-        )
-
     def _sample_sxx(self, sxx: np.ndarray | np.memmap) -> np.ndarray:
         """A random sample of sxx's elements, capped at
-        SPECTROGRAM_PERCENTILE_SAMPLE_SIZE, so percentile computation stays
-        fast even for a long file's full-size spectrogram (hundreds of
-        millions of elements). Gathers only the sampled elements directly
-        via fancy indexing rather than first materializing/raveling the
-        whole array - sxx can be a non-contiguous memmap slice (the valid
-        [:frames_computed] prefix of an over-allocated buffer), so a plain
-        .ravel() would already force a full copy before sampling even
-        starts, defeating the point."""
+        SPECTROGRAM_PERCENTILE_SAMPLE_SIZE"""
         if sxx.size <= SPECTROGRAM_PERCENTILE_SAMPLE_SIZE:
             return np.asarray(sxx)
         flat_indices = self._percentile_rng.integers(
@@ -239,25 +210,11 @@ class SpectrogramViewModel(ViewModel):
         return sxx[np.unravel_index(flat_indices, sxx.shape)]
 
     def update_sxx_percentiles(self, sxx: np.ndarray | np.memmap):
-        """Replace (not merge with) the gray-scale reference range, using
-        the SPECTROGRAM_LOW_PERCENTILE/SPECTROGRAM_HIGH_PERCENTILE of a
-        random sample of the data given (see _sample_sxx()). Unlike
-        update_sxx_extrema()'s true min/max, a percentile-based range
-        isn't skewed by a single outlier region (e.g. a fully silent
-        stretch, or one unusually loud transient) somewhere in a long
-        file - and since percentiles of separate chunks can't be combined
-        into the percentile of their union the way min/max can, this
-        always recomputes from the complete valid data available so far
-        (the mmap already holds the full history, so nothing is lost by
-        not accumulating). Called only when the background full-file scan
-        advances (once per chunk in compute_spectrogram_mmap), never on a
-        plain scroll/zoom, so the display stays stable while navigating."""
+        """Update near-extrema estimates for gray-scaling purposes."""
         if sxx.size == 0:
             return
         sample = self._sample_sxx(sxx)
-        # A single call computing both points is meaningfully cheaper than
-        # two separate np.percentile() calls (each does its own partial
-        # sort of the array).
+
         low, high = np.percentile(
             sample, [SPECTROGRAM_LOW_PERCENTILE, SPECTROGRAM_HIGH_PERCENTILE]
         )
