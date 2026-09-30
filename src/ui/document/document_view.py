@@ -177,10 +177,8 @@ class DocumentView(QWidget):
 
     def _channel_delete_button_at(self, scene_pos: QPointF) -> int | None:
         """The channel index (0 or 1) whose delete ("x") button contains
-        this scene position, if any. Like the "Active" checkbox, this
-        button is rendering-only - clicks are hit-tested here rather than
-        delivered natively."""
-        for idx, plot in enumerate(self._wave_plots()):
+        this scene position, if any"""
+        for idx, plot in enumerate(self.wave_plots):
             proxy = plot.delete_button_proxy
             if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):
                 return idx
@@ -303,7 +301,8 @@ class DocumentView(QWidget):
     def _add_waveform_plots(self, row: int, is_bottom: bool) -> list[pg.PlotItem]:
         """Add one waveform row for channel 0, plus a second row for
         channel 1 when the document is stereo. Returns the plots."""
-        num_channels = len(self.view_model.audio_wave_view_models)
+        num_channels = 2 if self.view_model.stereo_channels() is not None else 1
+        self.wave_plots = []
 
         for idx in range(num_channels):
             wave_plot = AudioWavePlot(
@@ -311,6 +310,7 @@ class DocumentView(QWidget):
                 linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom and idx == num_channels - 1,
                 show_active_checkbox=num_channels > 1,
+                show_delete_button=num_channels > 1,
             )
             wave_label = (
                 self.tr("Ch {} Amplitude").format(idx + 1)

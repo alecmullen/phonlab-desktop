@@ -8,10 +8,9 @@ from pytestqt.qtbot import QtBot
 
 import ui.base.view_model as view_model_module
 import ui.document.document_view_model as dvm_module
-from core.load_audio.entity.audio_open_options import AudioOpenOptions
+from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
-from res.constants import CHANNEL_MODE_MONO
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
@@ -88,10 +87,10 @@ def load_stereo(
     view_model: DocumentViewModel, x0: np.ndarray, x1: np.ndarray, fs: int
 ) -> None:
     view_model.load_from_samples(
-        AudioClip(
+        AudioState(
             {
-                0: AudioSignal(np.asarray(x0, dtype=np.float64), fs),
-                1: AudioSignal(np.asarray(x1, dtype=np.float64), fs),
+                0: AudioChannelState(np.asarray(x0, dtype=np.float64), fs),
+                1: AudioChannelState(np.asarray(x1, dtype=np.float64), fs),
             }
         )
     )
@@ -613,7 +612,7 @@ def test_delete_channel_converts_to_mono(view_model: DocumentViewModel):
     view_model.delete_channel(1)
 
     assert view_model.stereo_channels() is None
-    assert view_model.channel_state.channel_mode == CHANNEL_MODE_MONO
+    assert view_model.channel_state.channel_mode == ChannelMode.MONO
     assert view_model.audio_options.retained_channels == [0]
     assert view_model.channel_state.primary_channel == 0
     assert view_model.channel_state.active_channels == frozenset({0})

@@ -664,22 +664,26 @@ class DocumentViewModel(ViewModel):
             return
 
         surviving_idx = 1 - idx
-        surviving_channel = self.audio_state.get(surviving_idx)
+        surviving_channel = self.audio_state.channels.get(surviving_idx)
         if surviving_channel is None:
             raise RuntimeError(f"Missing channel {surviving_idx}")
 
-        audio_state = {0: surviving_channel}
-        raw_surviving = self.raw_audio_state.get(surviving_idx)
-        self.raw_audio_state = {0: raw_surviving} if raw_surviving is not None else {}
+        audio_state = AudioState({0: surviving_channel})
+        raw_surviving = self.raw_audio_state.channels.get(surviving_idx)
+        self.raw_audio_state = (
+            AudioState({0: raw_surviving})
+            if raw_surviving is not None
+            else AudioState()
+        )
 
         self.audio_options = replace(
             self.audio_options,
-            channel_mode=CHANNEL_MODE_MONO,
+            channel_mode=ChannelMode.MONO,
             retained_channels=[0],
         )
         self.channel_state = replace(
             self.channel_state,
-            channel_mode=CHANNEL_MODE_MONO,
+            channel_mode=ChannelMode.MONO,
             primary_channel=0,
             active_channels=frozenset({0}),
         )
