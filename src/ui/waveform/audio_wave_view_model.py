@@ -1,6 +1,7 @@
 from ui.base.view_model import ViewModel
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
 from ui.waveform.state.audio_wave_state import AudioWaveState
+from ui.waveform.state.channel_active_state import ChannelActiveState
 
 
 class AudioWaveViewModel(ViewModel):
@@ -8,6 +9,11 @@ class AudioWaveViewModel(ViewModel):
         super().__init__()
         self.audio_wave_scale_state = AudioWaveScaleState()
         self.audio_wave_state = AudioWaveState()
+        self.channel_active_state = ChannelActiveState()
+
+    def set_active(self, is_active: bool):
+        self.channel_active_state = ChannelActiveState(is_active)
+        self.state_changed.emit(self.channel_active_state)
 
     def update_wave_y_range(self, delta: float):
         if delta < 0:

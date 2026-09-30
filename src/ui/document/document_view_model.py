@@ -123,7 +123,9 @@ class DocumentViewModel(ViewModel):
     def load_audio(self, filepath: str, options: AudioOpenOptions):
         self.audio_options = options
         self.channel_state = ChannelState(
-            primary_channel=options.primary_channel, channel_mode=options.channel_mode
+            primary_channel=options.primary_channel,
+            channel_mode=options.channel_mode,
+            active_channels=frozenset(options.retained_channels),
         )
 
         @pyqtSlot(object)
@@ -222,7 +224,9 @@ class DocumentViewModel(ViewModel):
         indices = sorted(clip.channels.keys())
         channel_mode = ChannelMode.STEREO if clip.is_stereo else ChannelMode.MONO
         self.channel_state = ChannelState(
-            primary_channel=indices[0], channel_mode=channel_mode
+            primary_channel=indices[0],
+            channel_mode=channel_mode,
+            active_channels=frozenset(indices),
         )
 
         primary_channel = self.set_audio(
@@ -264,18 +268,17 @@ class DocumentViewModel(ViewModel):
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
     def prep_audio_spectrogram(self):
-        primary_channel = self.primary_channel()
-        if primary_channel is None:
+        active = self.active_channel_states()
+        if not active:
             return
 
-        stereo = self.stereo_channels()
-        if stereo is not None:
-            ch0, ch1 = stereo.channels.values()
+        if len(active) == 2:
+            ch0, ch1 = active
             min_len = min(len(ch0.x), len(ch1.x))
             x = ch0.x[:min_len] + ch1.x[:min_len]
             fs = ch0.fs
         else:
-            x, fs = primary_channel.x, primary_channel.fs
+            x, fs = active[0].x, active[0].fs
 
         self.spectrogram_view_model.prep_audio(x, fs, self.audio_options.target_fs)
 
@@ -540,12 +543,13 @@ class DocumentViewModel(ViewModel):
 
     def _playback_section(self, start: int, end: int) -> tuple[np.ndarray, int] | None:
         """The samples to play for [start:end), as stereo (N, 2) if both
-        channels are active, else mono (N,). Channel-index order (not
-        primary-first) is correct here regardless of which channel is
-        "primary" - it's just left/right output order."""
-        stereo = self.stereo_channels()
-        if stereo is not None:
-            ch0, ch1 = stereo.channels.values()
+        channels are active, else mono (N,)"""
+        active = self.active_channel_states()
+        if not active:
+            return None
+
+        if len(active) == 2:
+            ch0, ch1 = active
             min_len = min(len(ch0.x), len(ch1.x))
             end = min(end, min_len)
             if start >= end:
@@ -553,9 +557,7 @@ class DocumentViewModel(ViewModel):
             section = np.stack([ch0.x[start:end], ch1.x[start:end]], axis=1)
             return section, ch0.fs
 
-        channel = self.primary_channel()
-        if channel is None:
-            return None
+        channel = active[0]
         if start >= end:
             return None
         return channel.x[start:end], channel.fs
@@ -596,9 +598,8 @@ class DocumentViewModel(ViewModel):
 
     def stereo_channels(self) -> AudioState | None:
         """Both channels of a stereo document, in channel-index order (not
-        primary-first) so which channel is "primary" doesn't affect which
-        waveform row or playback output channel each one is. None outside
-        stereo mode, or if either channel hasn't loaded yet."""
+        primary-first) None outsidevstereo mode, or if either channel hasn't
+        loaded yet."""
         if self.channel_state.channel_mode != ChannelMode.STEREO:
             return None
         indices = sorted(self.audio_state.channels.keys())
@@ -613,6 +614,40 @@ class DocumentViewModel(ViewModel):
                 if idx in indices[:2]
             }
         )
+
+    def active_channel_states(self) -> list[AudioChannelState]:
+        """The channel(s) currently active for playback/spectrogram"""
+        if self.stereo_channels() is None:
+            primary = self.primary_channel()
+            return [primary] if primary is not None else []
+        indices = sorted(self.channel_state.active_channels)
+        all_channels = self.audio_state.channels
+        return [all_channels[idx] for idx in indices if idx in all_channels]
+
+    def toggle_channel_active(self, idx: int):
+        """Activate/deactivate channel `idx` for playback/spectrogram
+        purposes - refused if it would leave no channel active."""
+        active = self.channel_state.active_channels
+        new_active = (active - {idx}) if idx in active else (active | {idx})
+        if not new_active:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("At least one channel must stay active"))
+            )
+            return
+
+        primary = (
+            next(iter(new_active))
+            if len(new_active) == 1
+            else self.channel_state.primary_channel
+        )
+        self.channel_state = replace(
+            self.channel_state,
+            active_channels=frozenset(new_active),
+            primary_channel=primary,
+        )
+        for i, view_model in enumerate(self.audio_wave_view_models):
+            view_model.set_active(i in new_active)
+        self.prep_audio_spectrogram()
 
     def set_mark(self, x_pos: float):
         self.mark_state = MarkState(position=x_pos, is_set=True)
@@ -662,9 +697,8 @@ class DocumentViewModel(ViewModel):
         self.redo_stack.clear()
 
     def _stereo_edit_channels(self) -> AudioState:
-        """Both stereo channels, guaranteed equal length - the invariant every
-        stereo edit relies on to apply one resolved range/index to both
-        channels without re-deriving it per channel."""
+        """Both stereo channels, guaranteed equal length - used
+        for edits; for invariant indices/ranges"""
         stereo = self.stereo_channels()
         if stereo is None:
             raise RuntimeError("Missing stereo audio channels")
@@ -751,9 +785,7 @@ class DocumentViewModel(ViewModel):
 
     def paste_at(self, start_time: float, clip: AudioState) -> AudioState | None:
         """Paste `clip`, which must already match this document's channel
-        count - a mono/stereo mismatch has to be resolved first via
-        reconcile_clip_for_paste() (a dialog-driven choice made by the
-        View), not here."""
+        count"""
         if not self._audio_ready():
             return None
 
@@ -829,12 +861,8 @@ class DocumentViewModel(ViewModel):
     ) -> AudioState:
         """Resolve a mono/stereo mismatch between `clip` and this document
         ahead of a paste, given the user's channel_choice (0=left, 1=right)
-        for where the real audio should go. NOT a pure function: for a
-        stereo clip pasted into a mono document, this promotes the document
-        to stereo as a side effect (audio_state, raw_audio_state,
-        channel_state, audio_options) and returns `clip` unchanged; for a
-        mono clip pasted into a stereo document, it returns a synthesized
-        stereo clip instead, with no side effects."""
+        for where the real audio should go. Promotes the document
+        to stereo if needed"""
         stereo = self.stereo_channels()
 
         if stereo is not None:
@@ -890,9 +918,7 @@ class DocumentViewModel(ViewModel):
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or
         its inverse (forward=False, i.e. undo). A cut removes going
-        forward and re-inserts in reverse; a paste is the opposite. Applies
-        the same start_idx to every channel cmd touched (1 for mono, 2 for
-        stereo), keeping them in sync."""
+        forward and re-inserts in reverse; a paste is the opposite."""
         removing = (cmd.type == "cut") == forward
         new_signals = AudioState()
         for idx, clip_x in cmd.clips.items():

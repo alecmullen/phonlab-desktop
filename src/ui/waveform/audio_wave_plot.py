@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QCheckBox, QGraphicsProxyWidget, QWidget
 from pyqtgraph import PlotDataItem
 
 from ui.base.state import State
@@ -8,6 +8,10 @@ from ui.common.cursor_controller import CursorController
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
 from ui.waveform.state.audio_wave_state import AudioWaveState
+from ui.waveform.state.channel_active_state import ChannelActiveState
+
+ACTIVE_PEN = pg.mkPen("b")
+INACTIVE_PEN = pg.mkPen((160, 160, 160))
 
 
 class AudioWavePlot(pg.PlotItem, CursorController):
@@ -16,6 +20,7 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         view_model: AudioWaveViewModel,
         linked_plot: pg.PlotItem | None = None,
         is_bottom_plot: bool = False,
+        show_active_checkbox: bool = False,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -24,6 +29,18 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         self.view_model.subscribe(self.on_state_change)
 
         self.wave_curve: PlotDataItem | None = None
+
+        if show_active_checkbox:
+            # Rendering only - clicks handled in DocumentView
+            self.active_checkbox = QCheckBox(self.tr("Active"))
+            self.active_checkbox.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self.active_checkbox_proxy = QGraphicsProxyWidget(self)
+            self.active_checkbox_proxy.setWidget(self.active_checkbox)
+            self.active_checkbox_proxy.setZValue(100)
+            self.getViewBox().sigResized.connect(self._reposition_checkbox)
+        else:
+            self.active_checkbox = None
+            self.active_checkbox_proxy = None
 
         self.setLabel("left", self.tr("Amplitude"))
         self.showGrid(x=True, y=True, alpha=0.3)
@@ -69,6 +86,9 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         else:
             self.is_initialized = False
 
+        if self.active_checkbox is not None:
+            self._apply_active_state(self.view_model.channel_active_state.is_active)
+
         self.getViewBox().menu.clear()
         self.ctrlMenu.menuAction().setVisible(False)
 
@@ -82,12 +102,24 @@ class AudioWavePlot(pg.PlotItem, CursorController):
                 self.is_initialized = True
         if isinstance(model, AudioWaveScaleState):
             self.update_y_range(model.scaled_y_max)
+        if isinstance(model, ChannelActiveState):
+            self._apply_active_state(model.is_active)
+
+    def _apply_active_state(self, is_active: bool):
+        if self.active_checkbox is not None:
+            self.active_checkbox.setChecked(is_active)
+        if self.wave_curve is not None:
+            self.wave_curve.setPen(ACTIVE_PEN if is_active else INACTIVE_PEN)
+
+    def _reposition_checkbox(self):
+        top_left = self.mapFromScene(self.getViewBox().sceneBoundingRect().topLeft())
+        self.active_checkbox_proxy.setPos(top_left.x() + 5, top_left.y() + 5)
 
     def plot_wave(self, audio_wave: AudioWaveState):
         self.enableAutoRange(axis="y", enable=False)
         self._set_y_limits(audio_wave)
 
-        self.wave_curve = self.plot(audio_wave.t, audio_wave.x, pen="b")
+        self.wave_curve = self.plot(audio_wave.t, audio_wave.x, pen=ACTIVE_PEN)
         self.wave_curve.setDownsampling(auto=True, method="peak")
         self.wave_curve.setClipToView(True)
 
