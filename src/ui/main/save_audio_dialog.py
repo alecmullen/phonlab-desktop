@@ -76,13 +76,12 @@ class SaveAudioDialog(QDialog):
 
         if self._stereo:
             active = doc.view_model.active_channel_indices()
-            self.channel_checks = []
+            self.channel_checks: list[QCheckBox] = []
             for idx in range(2):
                 self.channel_checks.append(
                     QCheckBox(self.tr("Channel {} (Left)").format(idx + 1))
                 )
                 self.channel_checks[idx].setChecked(idx in active)
-
                 self.channel_checks[idx].toggled.connect(self._update_channel_status)
 
             self.channel_status_label = QLabel()
@@ -118,15 +117,13 @@ class SaveAudioDialog(QDialog):
             self.directory_edit.setText(directory)
 
     def _update_channel_status(self):
-        if all(check.isChecked() for check in self.channel_checks):
+        is_checked = [check.isChecked() for check in self.channel_checks]
+        if all(is_checked):
             self.channel_status_label.setText(self.tr("Will be saved as a stereo file"))
-        elif self.channel_checks[0].isChecked():
+        elif sum(is_checked) == 1:
+            idx = is_checked.index(True)
             self.channel_status_label.setText(
-                self.tr("Will be saved as mono (Channel 1)")
-            )
-        elif self.channel_checks[1].isChecked():
-            self.channel_status_label.setText(
-                self.tr("Will be saved as mono (Channel 2)")
+                self.tr("Will be saved as mono (Channel {})").format(idx+1)
             )
         else:
             self.channel_status_label.setText(
