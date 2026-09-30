@@ -24,7 +24,7 @@ jobs:
         id: create-executable
         run:  |
             uv sync --locked --group build
-            uv run pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --icon icons/phonlab.png --additional-hooks-dir=pyinstaller_hooks
+            uv run pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --icon icons/phonlab.png --add-data icons/phonlab.png:icons --additional-hooks-dir=pyinstaller_hooks
 
       - name: Warm Numba Cache
         run: |
@@ -67,7 +67,7 @@ jobs:
         id: create-executable
         run:  |
             uv sync --locked --group build
-            uv run pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --icon icons/phonlab.png --additional-hooks-dir=pyinstaller_hooks
+            uv run pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --icon icons/phonlab.png --add-data icons/phonlab.png:icons --additional-hooks-dir=pyinstaller_hooks
 
       - name: Warm Numba Cache
         run: |
@@ -105,7 +105,7 @@ jobs:
         id: create-executable
         run:  |
             uv sync --locked --group build
-            uv run pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --icon icons/phonlab.png --additional-hooks-dir=pyinstaller_hooks
+            uv run pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --icon icons/phonlab.png --add-data "icons/phonlab.png;icons" --additional-hooks-dir=pyinstaller_hooks
 
       - name: Warm Numba Cache
         shell: pwsh
@@ -144,7 +144,7 @@ jobs:
         id: create-executable
         run:  |
             uv sync --locked --group build
-            uv run pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --icon icons/phonlab.png --additional-hooks-dir=pyinstaller_hooks
+            uv run pyinstaller src/phonlab_desktop.py --name "Phonlab" --windowed --icon icons/phonlab.png --add-data icons/phonlab.png:icons --additional-hooks-dir=pyinstaller_hooks
 
       - name: Create tarball
         run: |

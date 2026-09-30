@@ -1,8 +1,20 @@
+import sys
+from pathlib import Path
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QMouseEvent, QPainter, QPixmap
 from PyQt6.QtWidgets import QSplashScreen
 
 from ui.main.main_window import MainWindow
+
+
+def _icon_path() -> Path:
+    """Locate icons/phonlab.png in a source checkout or a PyInstaller bundle."""
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    else:
+        base = Path(__file__).resolve().parents[3]
+    return base / "icons" / "phonlab.png"
 
 
 class ClickableSplash(QSplashScreen):
@@ -30,11 +42,19 @@ class ClickableSplash(QSplashScreen):
         painter.setPen(Qt.GlobalColor.darkGray)
         painter.drawRect(0, 0, width - 1, height - 1)
 
+        # Draw icon, top center
+        icon = QPixmap(str(_icon_path()))
+        if not icon.isNull():
+            icon = icon.scaledToHeight(
+                90, Qt.TransformationMode.SmoothTransformation
+            )
+            painter.drawPixmap((width - icon.width()) // 2, 15, icon)
+
         # Draw title
         title_font = QFont("Arial", 24, QFont.Weight.Bold)
         painter.setFont(title_font)
         painter.setPen(Qt.GlobalColor.black)
-        painter.drawText(0, 80, width, 50, Qt.AlignmentFlag.AlignCenter, "Phonlab")
+        painter.drawText(0, 115, width, 50, Qt.AlignmentFlag.AlignCenter, "Phonlab")
 
         # Draw instruction
         instruction_font = QFont("Arial", 16)
@@ -42,7 +62,7 @@ class ClickableSplash(QSplashScreen):
         painter.setPen(Qt.GlobalColor.darkGray)
         painter.drawText(
             0,
-            160,
+            190,
             width,
             30,
             Qt.AlignmentFlag.AlignCenter,
