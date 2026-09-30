@@ -450,7 +450,7 @@ def test_save_audio_invokes_save_use_case_with_selected_options(
         def invoke(self):
             pass
 
-    monkeypatch.setattr(main_window_module, "SaveAudio", FakeSaveAudio)
+    monkeypatch.setattr(dvm_module, "SaveAudio", FakeSaveAudio)
 
     main_window.save_audio()
 
@@ -494,7 +494,7 @@ def test_save_audio_shows_error_dialog_on_failure(
         def invoke(self):
             raise RuntimeError("disk full")
 
-    monkeypatch.setattr(main_window_module, "SaveAudio", FailingSaveAudio)
+    monkeypatch.setattr(dvm_module, "SaveAudio", FailingSaveAudio)
     critical_calls = []
     monkeypatch.setattr(
         main_window_module.QMessageBox,

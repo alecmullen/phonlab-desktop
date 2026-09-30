@@ -76,13 +76,16 @@ class SaveAudioDialog(QDialog):
 
         if self._stereo:
             active = doc.view_model.active_channel_indices()
-            self.channel1_check = QCheckBox(self.tr("Channel 1 (Left)"))
-            self.channel1_check.setChecked(0 in active)
-            self.channel2_check = QCheckBox(self.tr("Channel 2 (Right)"))
-            self.channel2_check.setChecked(1 in active)
+            self.channel_checks = []
+            for idx in range(2):
+                self.channel_checks.append(
+                    QCheckBox(self.tr("Channel {} (Left)").format(idx + 1))
+                )
+                self.channel_checks[idx].setChecked(idx in active)
+
+                self.channel_checks[idx].toggled.connect(self._update_channel_status)
+
             self.channel_status_label = QLabel()
-            self.channel1_check.toggled.connect(self._update_channel_status)
-            self.channel2_check.toggled.connect(self._update_channel_status)
             self._update_channel_status()
 
         form = QFormLayout()
@@ -91,8 +94,9 @@ class SaveAudioDialog(QDialog):
         form.addRow(self.tr("Sample rate:"), self.rate_dropdown)
         form.addRow("", self.scale_check)
         if self._stereo:
-            form.addRow("", self.channel1_check)
-            form.addRow("", self.channel2_check)
+            for idx in range(2):
+                form.addRow("", self.channel_checks[idx])
+                form.addRow("", self.channel_checks[idx])
             form.addRow("", self.channel_status_label)
 
         buttons = QDialogButtonBox(
@@ -114,13 +118,13 @@ class SaveAudioDialog(QDialog):
             self.directory_edit.setText(directory)
 
     def _update_channel_status(self):
-        if self.channel1_check.isChecked() and self.channel2_check.isChecked():
+        if all(check.isChecked() for check in self.channel_checks):
             self.channel_status_label.setText(self.tr("Will be saved as a stereo file"))
-        elif self.channel1_check.isChecked():
+        elif self.channel_checks[0].isChecked():
             self.channel_status_label.setText(
                 self.tr("Will be saved as mono (Channel 1)")
             )
-        elif self.channel2_check.isChecked():
+        elif self.channel_checks[1].isChecked():
             self.channel_status_label.setText(
                 self.tr("Will be saved as mono (Channel 2)")
             )
@@ -140,9 +144,7 @@ class SaveAudioDialog(QDialog):
                 self.tr("Choose a directory and filename to save to."),
             )
             return
-        if self._stereo and not (
-            self.channel1_check.isChecked() or self.channel2_check.isChecked()
-        ):
+        if self._stereo and all(not check.isChecked() for check in self.channel_checks):
             QMessageBox.warning(
                 self,
                 self.tr("Save Audio"),
@@ -157,9 +159,7 @@ class SaveAudioDialog(QDialog):
         )
         if self._stereo:
             channels = [
-                idx
-                for idx, box in ((0, self.channel1_check), (1, self.channel2_check))
-                if box.isChecked()
+                idx for idx, box in enumerate(self.channel_checks) if box.isChecked()
             ]
         else:
             channels = [self._primary_index]

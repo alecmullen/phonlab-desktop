@@ -199,8 +199,7 @@ def test_dialog_shows_channel_checkboxes_for_stereo_document(
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
 
-    assert hasattr(dialog, "channel1_check")
-    assert hasattr(dialog, "channel2_check")
+    assert hasattr(dialog, "channel_checks")
 
 
 def test_dialog_hides_channel_checkboxes_for_mono_document(
@@ -211,8 +210,7 @@ def test_dialog_hides_channel_checkboxes_for_mono_document(
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
 
-    assert hasattr(dialog, "channel1_check") is False
-    assert hasattr(dialog, "channel2_check") is False
+    assert hasattr(dialog, "channel_checks") is False
 
 
 def test_channel_checkboxes_default_from_both_active(
@@ -223,8 +221,7 @@ def test_channel_checkboxes_default_from_both_active(
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
 
-    assert dialog.channel1_check.isChecked() is True
-    assert dialog.channel2_check.isChecked() is True
+    assert all(check.isChecked() for check in dialog.channel_checks)
     assert dialog.channel_status_label.text() == "Will be saved as a stereo file"
 
 
@@ -237,8 +234,8 @@ def test_channel_checkboxes_default_from_single_active(
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
 
-    assert dialog.channel1_check.isChecked() is True
-    assert dialog.channel2_check.isChecked() is False
+    assert dialog.channel_checks[0].isChecked() is True
+    assert dialog.channel_checks[1].isChecked() is False
     assert dialog.channel_status_label.text() == "Will be saved as mono (Channel 1)"
 
 
@@ -249,10 +246,10 @@ def test_channel_status_label_updates_on_toggle(
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
 
-    dialog.channel1_check.setChecked(False)
+    dialog.channel_checks[0].setChecked(False)
     assert dialog.channel_status_label.text() == "Will be saved as mono (Channel 2)"
 
-    dialog.channel2_check.setChecked(False)
+    dialog.channel_checks[1].setChecked(False)
     assert dialog.channel_status_label.text() == "Choose at least one channel to save"
 
 
@@ -262,8 +259,8 @@ def test_accept_is_blocked_when_no_channel_selected(
     load_stereo(document_view)
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
-    dialog.channel1_check.setChecked(False)
-    dialog.channel2_check.setChecked(False)
+    for check in dialog.channel_checks:
+        check.setChecked(False)
     warnings = []
     monkeypatch.setattr(
         QMessageBox, "warning", staticmethod(lambda *a, **k: warnings.append(True))
@@ -293,7 +290,7 @@ def test_options_returns_single_channel_when_one_unchecked(
     load_stereo(document_view)
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)
-    dialog.channel2_check.setChecked(False)
+    dialog.channel_checks[1].setChecked(False)
 
     assert dialog.options().channels == [0]
 

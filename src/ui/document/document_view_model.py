@@ -12,6 +12,7 @@ from core.load_audio.prep_audio import PrepAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
+from core.save_audio.save_audio import SaveAudio
 from res.constants import (
     DEFAULT_WINDOW_LENGTH,
     LATENCY_WARNING_THRESHOLD_S,
@@ -625,24 +626,23 @@ class DocumentViewModel(ViewModel):
         return [all_channels[idx] for idx in indices if idx in all_channels]
 
     def active_channel_indices(self) -> frozenset[int]:
-        """Which channel index/indices are currently marked Active - for UI
-        that needs raw indices (e.g. defaulting the save dialog's
-        per-channel checkboxes) rather than the AudioChannelState objects
-        active_channel_states() returns."""
         return self.channel_state.active_channels
 
     def primary_channel_index(self) -> int:
         return self.channel_state.primary_channel
 
-    def channels_for_save(self, indices: list[int]) -> list[AudioSignal]:
-        """AudioSignal objects (core-layer, no ui/ dependency) for the given
-        channel indices, in the order requested - used by main_window.py's
-        save_audio() so it never touches audio_state directly."""
-        return [
+    def save_audio(
+        self, channels_idx: list[int], path: str, target_fs: int, scale: bool
+    ):
+        channels = [
             to_audio_signal(self.audio_state.channels[idx])
-            for idx in indices
+            for idx in channels_idx
             if idx in self.audio_state.channels
         ]
+
+        if not channels:
+            raise RuntimeError("Cannot save audio that is not loaded")
+        SaveAudio(path, channels, target_fs, scale).invoke()
 
     def toggle_channel_active(self, idx: int):
         """Activate/deactivate channel `idx` for playback/spectrogram
