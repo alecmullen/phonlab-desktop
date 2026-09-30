@@ -167,9 +167,7 @@ class DocumentView(QWidget):
 
     def _channel_checkbox_at(self, scene_pos: QPointF) -> int | None:
         """The channel index (0 or 1) whose "Active" checkbox contains this
-        scene position, if any. The checkbox is rendering-only (see
-        AudioWavePlot) - clicks on it are hit-tested here rather than
-        delivered natively."""
+        scene position, if any"""
         for idx, plot in enumerate(self.wave_plots):
             proxy = plot.active_checkbox_proxy
             if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):

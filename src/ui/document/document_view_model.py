@@ -543,9 +543,7 @@ class DocumentViewModel(ViewModel):
 
     def _playback_section(self, start: int, end: int) -> tuple[np.ndarray, int] | None:
         """The samples to play for [start:end), as stereo (N, 2) if both
-        channels are active, else mono (N,). Channel-index order (not
-        primary-first) is correct here regardless of which channel is
-        "primary" - it's just left/right output order."""
+        channels are active, else mono (N,)"""
         active = self.active_channel_states()
         if not active:
             return None
@@ -600,9 +598,8 @@ class DocumentViewModel(ViewModel):
 
     def stereo_channels(self) -> AudioState | None:
         """Both channels of a stereo document, in channel-index order (not
-        primary-first) so which channel is "primary" doesn't affect which
-        waveform row or playback output channel each one is. None outside
-        stereo mode, or if either channel hasn't loaded yet."""
+        primary-first) None outsidevstereo mode, or if either channel hasn't
+        loaded yet."""
         if self.channel_state.channel_mode != ChannelMode.STEREO:
             return None
         indices = sorted(self.audio_state.channels.keys())
@@ -700,9 +697,8 @@ class DocumentViewModel(ViewModel):
         self.redo_stack.clear()
 
     def _stereo_edit_channels(self) -> AudioState:
-        """Both stereo channels, guaranteed equal length - the invariant every
-        stereo edit relies on to apply one resolved range/index to both
-        channels without re-deriving it per channel."""
+        """Both stereo channels, guaranteed equal length - used
+        for edits; for invariant indices/ranges"""
         stereo = self.stereo_channels()
         if stereo is None:
             raise RuntimeError("Missing stereo audio channels")
@@ -789,9 +785,7 @@ class DocumentViewModel(ViewModel):
 
     def paste_at(self, start_time: float, clip: AudioState) -> AudioState | None:
         """Paste `clip`, which must already match this document's channel
-        count - a mono/stereo mismatch has to be resolved first via
-        reconcile_clip_for_paste() (a dialog-driven choice made by the
-        View), not here."""
+        count"""
         if not self._audio_ready():
             return None
 
@@ -867,12 +861,8 @@ class DocumentViewModel(ViewModel):
     ) -> AudioState:
         """Resolve a mono/stereo mismatch between `clip` and this document
         ahead of a paste, given the user's channel_choice (0=left, 1=right)
-        for where the real audio should go. NOT a pure function: for a
-        stereo clip pasted into a mono document, this promotes the document
-        to stereo as a side effect (audio_state, raw_audio_state,
-        channel_state, audio_options) and returns `clip` unchanged; for a
-        mono clip pasted into a stereo document, it returns a synthesized
-        stereo clip instead, with no side effects."""
+        for where the real audio should go. Promotes the document
+        to stereo if needed"""
         stereo = self.stereo_channels()
 
         if stereo is not None:
@@ -928,9 +918,7 @@ class DocumentViewModel(ViewModel):
     def _apply_command(self, cmd: EditCommandState, forward: bool) -> bool:
         """Apply cmd in its original direction (forward=True, i.e. redo) or
         its inverse (forward=False, i.e. undo). A cut removes going
-        forward and re-inserts in reverse; a paste is the opposite. Applies
-        the same start_idx to every channel cmd touched (1 for mono, 2 for
-        stereo), keeping them in sync."""
+        forward and re-inserts in reverse; a paste is the opposite."""
         removing = (cmd.type == "cut") == forward
         new_signals = AudioState()
         for idx, clip_x in cmd.clips.items():
