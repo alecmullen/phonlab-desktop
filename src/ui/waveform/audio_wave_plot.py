@@ -44,13 +44,7 @@ class AudioWavePlot(pg.PlotItem, CursorController):
             self.active_checkbox_proxy = None
 
         if show_delete_button:
-            # Same rendering-only architecture as active_checkbox above: a
-            # real QPushButton embedded via QGraphicsProxyWidget never
-            # receives clicks because DocumentView's event filter swallows
-            # every left-click on the graphics widget first. DocumentView
-            # hit-tests scene_pos against delete_button_proxy directly and
-            # calls into the view model, so this button's own clicked
-            # signal is never connected to anything.
+            # Rendering only - clicks handled in DocumentView
             self.delete_button = QPushButton("✕")
             self.delete_button.setFixedSize(18, 18)
             self.delete_button.setFlat(True)
@@ -162,21 +156,6 @@ class AudioWavePlot(pg.PlotItem, CursorController):
         limit = max(abs(audio_wave.min_x), abs(audio_wave.max_x))
         self.vb.setLimits(yMin=-limit, yMax=limit)
         self.vb.setLimits(xMin=0, xMax=audio_wave.max_t)
-        if self.view_model.audio_wave_scale_state.y_scale == 1.0:
-            self.setYRange(-limit, limit, padding=0.05)
-
-        # An edit (cut/paste) can change the channel's total length or
-        # amplitude range - refresh the pan/zoom bounds so the display and
-        # playback stay in sync (previously frozen at whatever they were
-        # when the plot was first created, so e.g. audio pasted past the
-        # old end of the file was audible but unreachable in the display).
-        limit = max(abs(audio_wave.min_x), abs(audio_wave.max_x))
-        self.vb.setLimits(yMin=-limit, yMax=limit)
-        self.vb.setLimits(xMin=0, xMax=audio_wave.max_t)
-
-        # Only reset the visible Y-range to the new default when the user
-        # hasn't applied a manual amplitude zoom, so an edit doesn't clobber
-        # their current zoom on every update.
         if self.view_model.audio_wave_scale_state.y_scale == 1.0:
             self.setYRange(-limit, limit, padding=0.05)
 
