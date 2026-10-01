@@ -24,10 +24,8 @@ class AnnotationViewModel(ViewModel):
         self.annotation_view_state = AnnotationState()
 
     def change_node_state(self, drag_node: AnnotationNodeState, new_pos: float):
-        start, end = self.window_state
-
-        if new_pos < start or new_pos > end:
-            return
+        new_pos = max(self.window_state[0], new_pos)
+        new_pos = min(self.window_state[1], new_pos)
 
         if not all(extent.has_point_label for extent in drag_node.extents):
             for node in self.annotation_state.nodes.values():

@@ -90,8 +90,8 @@ def stereo_loaded_view(
 
 
 def widget_pos_for_time(view: DocumentView, t: float) -> QPoint:
-    y = view.wave_plots[0].getViewBox().viewRange()[1][0]
-    scene_pos = view.wave_plots[0].getViewBox().mapViewToScene(QPointF(t, y))
+    y = view.document_plots[0].getViewBox().viewRange()[1][0]
+    scene_pos = view.document_plots[0].getViewBox().mapViewToScene(QPointF(t, y))
     return view.graphics_widget.mapFromScene(scene_pos)
 
 
@@ -126,8 +126,8 @@ def click_at_scene_pos(
 def test_load_from_samples_builds_wave_plot_and_sets_up_slider(
     loaded_view: DocumentView,
 ):
-    assert len(loaded_view.wave_plots) > 0
-    assert loaded_view.first_plot is loaded_view.wave_plots[0]
+    assert len(loaded_view.document_plots) > 0
+    assert loaded_view.first_plot is loaded_view.document_plots[0]
     assert loaded_view.slider.maximum() == 9999
     assert loaded_view.slider.pageStep() == 10000
 
@@ -233,10 +233,10 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
     loaded_view.handle_mouse_press(press)
 
     loaded_view.on_mouse_moved(
-        loaded_view.wave_plots[0].getViewBox().mapViewToScene(QPointF(2.0, 0))
+        loaded_view.document_plots[0].getViewBox().mapViewToScene(QPointF(2.0, 0))
     )
     loaded_view.on_mouse_moved(
-        loaded_view.wave_plots[0].getViewBox().mapViewToScene(QPointF(4.0, 0))
+        loaded_view.document_plots[0].getViewBox().mapViewToScene(QPointF(4.0, 0))
     )
 
     assert view_model.select_state.sel_start == pytest.approx(2.0, abs=1e-6)
@@ -338,7 +338,7 @@ def test_handle_shift_scroll_zooms_out_on_negative_scroll(view: DocumentView):
 
 def test_handle_control_scroll_adjusts_wave_plot_y_scale(loaded_view: DocumentView):
     calls = []
-    loaded_view.wave_plots[0].adjust_y_scale = lambda delta: calls.append(delta)
+    loaded_view.document_plots[0].adjust_y_scale = lambda delta: calls.append(delta)
     pos = QPointF(widget_pos_for_time(loaded_view, 2.0))
     event = QWheelEvent(
         pos,
@@ -483,12 +483,12 @@ def test_open_resample_dialog_does_not_resample_when_dialog_cancelled(
 
 
 def test_delete_button_absent_for_mono(loaded_view: DocumentView):
-    assert loaded_view.wave_plots[0].delete_button_proxy is None
+    assert loaded_view.document_plots[0].delete_button_proxy is None
 
 
 def test_delete_button_present_for_stereo(stereo_loaded_view: DocumentView):
-    assert stereo_loaded_view.wave_plots[0].delete_button_proxy is not None
-    assert stereo_loaded_view.wave_plots[1].delete_button_proxy is not None
+    assert stereo_loaded_view.document_plots[0].delete_button_proxy is not None
+    assert stereo_loaded_view.document_plots[1].delete_button_proxy is not None
 
 
 def test_delete_button_click_deletes_correct_channel(
@@ -498,7 +498,7 @@ def test_delete_button_click_deletes_correct_channel(
         DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
     )
     scene_pos = (
-        stereo_loaded_view.wave_plots[1]
+        stereo_loaded_view.document_plots[1]
         .delete_button_proxy.sceneBoundingRect()
         .center()
     )
@@ -522,7 +522,7 @@ def test_delete_button_click_does_not_set_mouse_pressed(
         DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
     )
     scene_pos = (
-        stereo_loaded_view.wave_plots[1]
+        stereo_loaded_view.document_plots[1]
         .delete_button_proxy.sceneBoundingRect()
         .center()
     )
@@ -542,7 +542,7 @@ def test_delete_button_click_cancelled_dialog_does_nothing(
         DeleteChannelDialog, "confirm", staticmethod(lambda parent: False)
     )
     scene_pos = (
-        stereo_loaded_view.wave_plots[1]
+        stereo_loaded_view.document_plots[1]
         .delete_button_proxy.sceneBoundingRect()
         .center()
     )
@@ -561,7 +561,7 @@ def test_double_click_on_delete_button_does_not_zoom(
     zoom_calls = []
     stereo_loaded_view.view_model.zoom_if_in_selection = lambda x: zoom_calls.append(x)
     scene_pos = (
-        stereo_loaded_view.wave_plots[1]
+        stereo_loaded_view.document_plots[1]
         .delete_button_proxy.sceneBoundingRect()
         .center()
     )
@@ -581,7 +581,7 @@ def test_layout_collapses_to_one_row_after_delete(
         DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
     )
     scene_pos = (
-        stereo_loaded_view.wave_plots[1]
+        stereo_loaded_view.document_plots[1]
         .delete_button_proxy.sceneBoundingRect()
         .center()
     )
@@ -592,8 +592,8 @@ def test_layout_collapses_to_one_row_after_delete(
     stereo_loaded_view.handle_mouse_press(press)
     QApplication.processEvents()
 
-    assert len(stereo_loaded_view.wave_plots) < 2
-    assert len(stereo_loaded_view.wave_plots) == 1
+    assert len(stereo_loaded_view.document_plots) < 2
+    assert len(stereo_loaded_view.document_plots) == 1
 
 
 # --------------------------- paste special ---------------------------

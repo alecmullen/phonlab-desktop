@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, Qt, pyqtSlot
+from PyQt6.QtCore import QPointF, pyqtSlot
 from PyQt6.QtGui import QMouseEvent, QShowEvent
 from PyQt6.QtWidgets import QWidget
 
@@ -11,10 +11,10 @@ from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_state import AnnotationState
 from ui.base.state import State
-from ui.common.cursor_controller import CursorController
+from ui.common.document_plot import DocumentPlot
 
 
-class AnnotationPlot(pg.PlotItem, CursorController):
+class AnnotationPlot(DocumentPlot):
     def __init__(
         self,
         view_model: AnnotationViewModel,
@@ -22,41 +22,22 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         is_bottom_plot: bool = False,
         parent: QWidget | None = None,
     ):
-        super().__init__(parent)
+        super().__init__(parent, linked_plot, is_bottom_plot)
 
         self.view_model = view_model
         self.view_model.subscribe(self.on_state_change)
 
-        if linked_plot is not None:
-            self.getViewBox().setXLink(linked_plot)
-        self.getAxis("left").setWidth(60)
-
-        self.getViewBox().setFlag(
-            self.getViewBox().GraphicsItemFlag.ItemClipsChildrenToShape, False
-        )
-
-        self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen="r")
-        self.addItem(self.cursor_line, ignoreBounds=True)
-
-        if is_bottom_plot:
-            self.setLabel("bottom", self.tr("Time"), units="s")
-            self.getAxis("bottom").enableAutoSIPrefix(False)
-        else:
-            self.getAxis("bottom").setStyle(showValues=False)
+        self.showAxis("top", True)
+        self.getAxis("top").setTicks([])
 
         self.getViewBox().menu.clear()
         self.ctrlMenu.menuAction().setVisible(False)
 
-        self.mark_line = pg.InfiniteLine(
-            angle=90,
-            movable=False,
-            pen=pg.mkPen(color="g", width=2, style=Qt.PenStyle.DashLine),
-        )
-        self.addItem(self.mark_line, ignoreBounds=True)
-        self.mark_line.setVisible(False)
-
         self.visible_nodes: list[AnnotationNodeState] = []
         self.visible_labels: list[AnnotationLabelState] = []
+
+        self.node_view: NodeView | None = None
+        self.label_view: LabelView | None = None
 
         self.dragging_node: AnnotationNodeState | None = None
 
@@ -74,8 +55,18 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         super().showEvent(a0)
         self.populate(self.view_model.annotation_view_state)
 
+    def clear_annotations(self):
+        node_view = self.node_view
+        label_view = self.label_view
+        self.node_view = None
+        self.label_view = None
+        if node_view is not None:
+            self.removeItem(node_view)
+        if label_view is not None:
+            self.removeItem(label_view)
+
     def populate(self, annotation_state: AnnotationState):
-        self.clear()
+        self.clear_annotations()
 
         nodes = annotation_state.nodes
         types = annotation_state.types
@@ -93,15 +84,15 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         for type in types:
             self.visible_labels += [label for label in type.labels if label.is_visible]
 
-        label_view = LabelView(self.visible_labels, self)
-        label_view.setPos(0, 0)
-        self.addItem(label_view)
+        self.label_view = LabelView(self.visible_labels, self)
+        self.label_view.setPos(0, 0)
+        self.addItem(self.label_view)
 
         self.visible_nodes = [node for node in nodes.values() if node.is_visible]
 
-        node_view = NodeView(self.visible_nodes, self)
-        node_view.setPos(0, 0)
-        self.addItem(node_view)
+        self.node_view = NodeView(self.visible_nodes, self)
+        self.node_view.setPos(0, 0)
+        self.addItem(self.node_view)
 
     def handle_mouse_press(self, event: QMouseEvent) -> bool:
         pixel_size = self.getViewBox().viewPixelSize()
@@ -145,13 +136,4 @@ class AnnotationPlot(pg.PlotItem, CursorController):
         if self.dragging_node is not None:
             self.view_model.change_node_state(self.dragging_node, x)
 
-        if self.has_cursor_control:
-            self.cursor_line.setPos(x)
-
-    def set_cursor_position(self, x: float):
-        self.remove_cursor_control()
-        self.cursor_line.setPos(x)
-
-    def set_mark_position(self, x: float, visible: bool):
-        self.mark_line.setPos(x)
-        self.mark_line.setVisible(visible)
+        super().on_mouse_moved(pos)

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
 
@@ -75,28 +76,34 @@ def test_change_point_node_state_can_cross_other_nodes(qtbot: QtBot):
     assert blocker.args[0] is view_model.annotation_view_state
 
 
-def test_change_node_state_ignores_position_before_start(qtbot: QtBot):
-    view_model = make_view_model(MOCK_ANNOTATION_NODES.copy(), start=0.0, end=2.0)
+def test_change_node_state_bounds_position_before_start(qtbot: QtBot):
+    view_model = make_view_model(MOCK_ANNOTATION_NODES.copy(), start=-0.25, end=2.0)
 
     received = []
     view_model.subscribe(received.append)
 
-    view_model.change_node_state(1, -0.5)
+    view_model.change_node_state(MOCK_ANNOTATION_NODES[0], -0.5)
 
-    assert view_model.annotation_state.nodes == MOCK_ANNOTATION_NODES
-    assert received == []
+    expected = MOCK_ANNOTATION_NODES.copy()
+    expected[0] = replace(expected[0], x=-0.25)
+
+    assert view_model.annotation_state.nodes == expected
+    assert received == [view_model.annotation_view_state]
 
 
-def test_change_node_state_ignores_position_after_end(qtbot: QtBot):
-    view_model = make_view_model(MOCK_ANNOTATION_NODES.copy(), start=0.0, end=2.0)
+def test_change_node_state_bounds_position_after_end(qtbot: QtBot):
+    view_model = make_view_model(MOCK_ANNOTATION_NODES.copy(), start=0.0, end=3.0)
 
     received = []
     view_model.subscribe(received.append)
 
-    view_model.change_node_state(1, 5.0)
+    view_model.change_node_state(MOCK_ANNOTATION_NODES[2], 5.0)
 
-    assert view_model.annotation_state.nodes == MOCK_ANNOTATION_NODES
-    assert received == []
+    expected = MOCK_ANNOTATION_NODES.copy()
+    expected[2] = replace(expected[2], x=3.0)
+
+    assert view_model.annotation_state.nodes == expected
+    assert received == [view_model.annotation_view_state]
 
 
 def test_change_interval_node_state_does_not_cross_later_nodes(qtbot: QtBot):
