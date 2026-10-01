@@ -225,7 +225,7 @@ class DocumentView(QWidget):
         _, top, _, bottom = layout.getContentsMargins()
         spacing = PLOT_ROW_SPACING * (len(self.row_weights) - 1)
         axis_height = self.document_plots[-1].getAxis("bottom").height()
-        
+
         total_blankspace = top + bottom + spacing + axis_height
         available = self.graphics_widget.viewport().height() - total_blankspace
         if available <= 0:

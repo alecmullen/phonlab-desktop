@@ -1,9 +1,9 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, pyqtSlot
-from PyQt6.QtGui import QMouseEvent, QShowEvent
+from PyQt6.QtCore import QPointF, Qt, pyqtSlot
+from PyQt6.QtGui import QFont, QFontMetrics, QMouseEvent, QShowEvent
 from PyQt6.QtWidgets import QWidget
 
-from res.constants import NODE_H_MARGIN, NODE_V_MARGIN
+from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
@@ -72,9 +72,19 @@ class AnnotationPlot(DocumentPlot):
         types = annotation_state.types
 
         self.setYRange(-0.1, len(types), padding=0)
-        self.getAxis("left").setTicks(
-            [[(i, type.type) for i, type in enumerate(types)]]
-        )
+
+        font = self.getAxis("left").style.get("tickFont") or QFont()
+        metrics = QFontMetrics(font)
+        ticks = [
+            (
+                i,
+                metrics.elidedText(
+                    type.type, Qt.TextElideMode.ElideRight, LEFT_AXIS_WIDTH
+                ),
+            )
+            for i, type in enumerate(types)
+        ]
+        self.getAxis("left").setTicks([ticks])
 
         self.visible_nodes = []
         self.visible_labels = []

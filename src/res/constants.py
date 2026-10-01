@@ -9,6 +9,9 @@ PLOT_ROW_WEIGHT = {
     PlotType.ANNOTATION: 50,
 }
 
+# -- Document Plot --
+LEFT_AXIS_WIDTH = 70
+
 # -- Audio Editing --
 MAX_UNDO_HISTORY = 10
 ZERO_CROSSING_SEARCH_MS = 5

@@ -2,6 +2,8 @@ import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
+from res.constants import LEFT_AXIS_WIDTH
+
 
 class DocumentPlot(pg.PlotItem):
     """Plot to be used in DocumentView with a shared time axis. Handles
@@ -45,7 +47,7 @@ class DocumentPlot(pg.PlotItem):
 
         self.vb.setMouseEnabled(x=False, y=False)
         self.vb.rbScaleBox.hide()
-        self.getAxis("left").setWidth(60)
+        self.getAxis("left").setWidth(LEFT_AXIS_WIDTH)
 
         if linked_plot is not None:
             self.getViewBox().setXLink(linked_plot)
