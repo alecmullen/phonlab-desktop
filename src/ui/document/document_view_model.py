@@ -18,6 +18,7 @@ from res.constants import (
     MAX_UNDO_HISTORY,
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.base.state import State
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_channel_state import (
@@ -89,6 +90,8 @@ class DocumentViewModel(ViewModel):
     def on_annot_state_changed(self, model: State):
         if isinstance(model, StatusMessageState):
             self.state_changed.emit(model)
+        if isinstance(model, AnnotationSelectedState):
+            self.select_and_play(model.sel_start, model.sel_end)
 
     def toggle_wave(self):
         plots = self.plot_layout_state.plots.copy()
@@ -563,6 +566,11 @@ class DocumentViewModel(ViewModel):
         if start >= end:
             return None
         return channel.x[start:end], channel.fs
+
+    def select_and_play(self, sel_start: float, sel_end: float):
+        self.start_selection(sel_start)
+        self.continue_selection(sel_end)
+        self.play_selected_audio()
 
     def play_selected_audio(self):
         channel = self.primary_channel()

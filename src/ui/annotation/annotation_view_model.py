@@ -4,6 +4,7 @@ from core.parse_textgrid.annotation import Annotation
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
+from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import (
     AnnotationState,
     to_annotation_state,
@@ -70,7 +71,12 @@ class AnnotationViewModel(ViewModel):
         self.update_annotation_change()
 
     def select_label(self, label_view_state: AnnotationLabelState):
-        pass
+        try:
+            sel_start = self.annotation_state.nodes[label_view_state.s_node].x
+            sel_end = self.annotation_state.nodes[label_view_state.e_node].x
+            self.state_changed.emit(AnnotationSelectedState(sel_start, sel_end))
+        except (KeyError, AttributeError):
+            raise ValueError("Missing node in annotation")
 
     def parse_textgrid(self, path: str):
         use_case = ParseTextGrid(path)

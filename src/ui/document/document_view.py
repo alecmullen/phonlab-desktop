@@ -613,7 +613,24 @@ class DocumentView(QWidget):
     def handle_single_click(self):
         if self.pending_single_click is not None:
             scene_pos = self.pending_single_click
-            self.set_mark(scene_pos)
+
+            clicked_plot = self._wave_plot_at(scene_pos)
+            if clicked_plot is None:
+                if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
+                    scene_pos
+                ):
+                    clicked_plot = self.spec_plot
+                elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
+                    scene_pos
+                ):
+                    if self.annot_plot.handle_single_click(scene_pos):
+                        return
+                    clicked_plot = self.annot_plot
+
+            if not clicked_plot:
+                return
+
+            self.set_mark(scene_pos, clicked_plot)
 
         self.pending_single_click = None
         self.click_timer = None
@@ -681,23 +698,9 @@ class DocumentView(QWidget):
 
         return True
 
-    def set_mark(self, scene_pos: QPointF):
-        """Shift+Click: place a persistent mark at this time, used as the
+    def set_mark(self, scene_pos: QPointF, clicked_plot: pg.PlotItem):
+        """Place a persistent mark at this time, used as the
         paste insertion point (and available for future uses)."""
-        clicked_plot = self._wave_plot_at(scene_pos)
-        if clicked_plot is None:
-            if self.spec_plot and self.spec_plot.sceneBoundingRect().contains(
-                scene_pos
-            ):
-                clicked_plot = self.spec_plot
-            elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
-                scene_pos
-            ):
-                clicked_plot = self.annot_plot
-
-        if not clicked_plot:
-            return
-
         mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
         self.view_model.set_mark(x)

@@ -115,7 +115,6 @@ class AnnotationPlot(pg.PlotItem, CursorController):
             node_y = node_view_state.extents[0].tier
             if abs(pos.x() - node_x) < h_margin and abs(pos.y() - node_y) < v_margin:
                 self.dragging_node = node_view_state
-                event.accept()
                 return True
         return False
 
@@ -124,17 +123,19 @@ class AnnotationPlot(pg.PlotItem, CursorController):
             self.dragging_node = None
             event.accept()
             return True
-        else:
-            pos = self.getViewBox().mapSceneToView(event.position())
-            for label_view_state in self.visible_labels:
-                label_pos, label_size = label_view_state.pos, label_view_state.size
-                if (
-                    abs(pos.x() - label_pos[0]) < label_size[0] / 2
-                    and abs(pos.y() - label_pos[1]) < label_size[1] / 2
-                ):
-                    self.view_model.select_label(label_view_state)
-                    event.accept()
-                    return True
+
+        return False
+
+    def handle_single_click(self, scene_pos: QPointF) -> bool:
+        pos = self.getViewBox().mapSceneToView(scene_pos)
+        for label_view_state in self.visible_labels:
+            label_pos, label_size = label_view_state.pos, label_view_state.size
+            if (
+                abs(pos.x() - label_pos[0]) < label_size[0] / 2
+                and abs(pos.y() - label_pos[1]) < label_size[1] / 2
+            ):
+                self.view_model.select_label(label_view_state)
+                return True
         return False
 
     @pyqtSlot(object)
