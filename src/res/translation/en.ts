@@ -99,7 +99,7 @@
 <context>
     <name>DocumentPlot</name>
     <message>
-        <location filename="../../ui/common/document_plot.py" line="54"/>
+        <location filename="../../ui/common/document_plot.py" line="56"/>
         <source>Time</source>
         <translation type="unfinished"></translation>
     </message>
@@ -107,63 +107,63 @@
 <context>
     <name>DocumentView</name>
     <message>
-        <location filename="../../ui/document/document_view.py" line="106"/>
-        <location filename="../../ui/document/document_view.py" line="439"/>
+        <location filename="../../ui/document/document_view.py" line="100"/>
+        <location filename="../../ui/document/document_view.py" line="450"/>
         <source>Computing %p%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="133"/>
+        <location filename="../../ui/document/document_view.py" line="127"/>
         <source>Resample...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="138"/>
+        <location filename="../../ui/document/document_view.py" line="132"/>
         <source>Set Mark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="138"/>
+        <location filename="../../ui/document/document_view.py" line="132"/>
         <source>Click</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="149"/>
+        <location filename="../../ui/document/document_view.py" line="143"/>
         <source>Remove Mark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="306"/>
+        <location filename="../../ui/document/document_view.py" line="325"/>
         <source>Ch {} Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="308"/>
+        <location filename="../../ui/document/document_view.py" line="327"/>
         <source>Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="436"/>
+        <location filename="../../ui/document/document_view.py" line="447"/>
         <source>Loading full file…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="458"/>
+        <location filename="../../ui/document/document_view.py" line="469"/>
         <source>Cursor time: {:.3f}s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="455"/>
+        <location filename="../../ui/document/document_view.py" line="466"/>
         <source>Cursor time: {:.3f}s, frequency: {:.0f} Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="706"/>
+        <location filename="../../ui/document/document_view.py" line="720"/>
         <source>Paste Special</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="708"/>
+        <location filename="../../ui/document/document_view.py" line="722"/>
         <source>Paste Special: New Channel only applies when both the document and the clipboard clip are mono.</source>
         <translation type="unfinished"></translation>
     </message>
