@@ -1,5 +1,13 @@
+from ui.document.state.plot_layout_state import PlotType
+
 # -- Document Window --
 DEFAULT_WINDOW_LENGTH = 10
+PLOT_ROW_SPACING = 8
+PLOT_ROW_WEIGHT = {
+    PlotType.WAVEFORM: 50,
+    PlotType.SPECTROGRAM: 100,
+    PlotType.ANNOTATION: 50,
+}
 
 # -- Audio Editing --
 MAX_UNDO_HISTORY = 10

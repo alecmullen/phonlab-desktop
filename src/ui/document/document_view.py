@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.load_audio.entity.audio_open_options import AudioOpenOptions
+from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
@@ -40,14 +41,6 @@ from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.waveform.audio_wave_plot import AudioWavePlot
-
-# Relative row height per plot type; a plot type occupying more than one
-# row (only WAVEFORM, when stereo) applies this weight to each of its rows.
-PLOT_ROW_WEIGHT = {
-    PlotType.WAVEFORM: 1,
-    PlotType.SPECTROGRAM: 2,
-    PlotType.ANNOTATION: 1,
-}
 
 
 class DocumentView(QWidget):
@@ -74,6 +67,7 @@ class DocumentView(QWidget):
 
         # Initialize plot items (will be created in plot methods)
         self.document_plots: list[DocumentPlot] = []
+        self.row_weights: list[float] = []
         # Waveplots (should all be in document_plots as well)
         self.wave_plots = []
         # Track one plot to have main x-axis others link to
@@ -219,6 +213,31 @@ class DocumentView(QWidget):
         self.document_plots = []
         self.wave_plots = []
 
+    def apply_row_heights(self):
+        """Size plot rows in proportion to their weights. The bottom axis is extra
+        height on the last row, outside the weighted share."""
+        if not self.row_weights or len(self.row_weights) != len(self.document_plots):
+            return
+
+        layout = self.graphics_widget.ci.layout
+        layout.setVerticalSpacing(PLOT_ROW_SPACING)
+
+        _, top, _, bottom = layout.getContentsMargins()
+        spacing = PLOT_ROW_SPACING * (len(self.row_weights) - 1)
+        axis_height = self.document_plots[-1].getAxis("bottom").height()
+        
+        total_blankspace = top + bottom + spacing + axis_height
+        available = self.graphics_widget.viewport().height() - total_blankspace
+        if available <= 0:
+            return
+
+        total_weight = sum(self.row_weights)
+        for row_index, weight in enumerate(self.row_weights):
+            height = available * weight / total_weight
+            if row_index == len(self.row_weights) - 1:
+                height += axis_height
+            layout.setRowFixedHeight(row_index, height)
+
     def connect_plot_signals(self):
         """Connect mouse signals to all plots"""
         scene = self.graphics_widget.scene()
@@ -254,8 +273,8 @@ class DocumentView(QWidget):
             row_weights.extend([PLOT_ROW_WEIGHT[plot_type]] * rows_added)
             row += rows_added
 
-        for row_index, weight in enumerate(row_weights):
-            self.graphics_widget.ci.layout.setRowStretchFactor(row_index, weight)
+        self.row_weights = row_weights
+        self.apply_row_heights()
 
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
@@ -317,14 +336,6 @@ class DocumentView(QWidget):
             # needs a valid linked_plot to x-link against.
             if idx == 0 and self.first_plot is None:
                 self.first_plot = wave_plot
-
-        # Adjust for x-axis height so that heights are equal according
-        # to row stretch factor
-        bottom_height = max(
-            wave_plot.getAxis("bottom").height() for wave_plot in self.wave_plots
-        )
-        for wave_plot in self.wave_plots:
-            wave_plot.getAxis("bottom").setHeight(bottom_height)
 
         return self.wave_plots
 
@@ -492,6 +503,9 @@ class DocumentView(QWidget):
                 if event.button() == Qt.MouseButton.LeftButton:
                     self.handle_mouse_release(event)
                     return True
+
+            elif event.type() == QEvent.Type.Resize:
+                self.apply_row_heights()
 
             elif event.type() == QEvent.Type.Wheel:
                 return self.handle_scroll(cast(QWheelEvent, event))

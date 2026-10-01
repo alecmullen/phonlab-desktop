@@ -1,3 +1,5 @@
+from itertools import pairwise
+
 import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
@@ -15,7 +17,7 @@ from ui.document.component.paste_special_dialog import (
     PasteSpecialDialog,
 )
 from ui.document.component.resample_dialog import ResampleAudioDialog
-from ui.document.document_view import DocumentView
+from ui.document.document_view import PLOT_ROW_SPACING, DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
@@ -1089,3 +1091,27 @@ def test_event_filter_right_press_records_context_position(
     loaded_view.eventFilter(viewport, event)
 
     assert loaded_view.context_pos is not None
+
+
+def test_plot_rows_are_sized_one_two_one(all_plots_view: DocumentView):
+    all_plots_view.resize(900, 700)
+    QApplication.processEvents()
+    wave, spec, annot = [p.getViewBox().height() for p in all_plots_view.document_plots]
+
+    assert spec == pytest.approx(2 * wave, rel=0.03)
+    assert annot == pytest.approx(wave, rel=0.03)
+
+
+def test_apply_row_heights_without_plots_does_nothing(view: DocumentView):
+    view.row_weights = []
+
+    view.apply_row_heights()
+
+
+def test_plot_rows_have_spacing_between_them(all_plots_view: DocumentView):
+    all_plots_view.resize(900, 700)
+    QApplication.processEvents()
+    rects = [p.sceneBoundingRect() for p in all_plots_view.document_plots]
+
+    for upper, lower in pairwise(rects):
+        assert lower.top() - upper.bottom() == pytest.approx(PLOT_ROW_SPACING, abs=1)
