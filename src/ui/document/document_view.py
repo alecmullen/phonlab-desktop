@@ -150,16 +150,19 @@ class DocumentView(QWidget):
         self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add the Resample/Set Mark/Remove Mark actions to a plot's ViewBox menu.
+        """Add the Set Mark/Remove Mark actions to a plot's ViewBox menu.
 
         Added directly to each plot's own menu (rather than via the
         scene-wide contextMenu list) so they're present before the menu
         is ever shown.
         """
         menu = view_box.menu
-        menu.addAction(self.resample_action)
         menu.addAction(self.set_mark_action)
         menu.addAction(self.remove_mark_action)
+
+    def add_waveform_context_menu_actions(self, view_box: pg.ViewBox):
+        """Add the waveform-only actions, which act on the raw audio."""
+        view_box.menu.insertAction(self.set_mark_action, self.resample_action)
 
     def _wave_plot_at(self, scene_pos: QPointF) -> AudioWavePlot | None:
         """Whichever waveform row (if any) contains this scene position."""
@@ -321,6 +324,7 @@ class DocumentView(QWidget):
             )
             wave_plot.setLabel("left", wave_label)
             self.add_shared_context_menu_actions(wave_plot.getViewBox())
+            self.add_waveform_context_menu_actions(wave_plot.getViewBox())
             self.graphics_widget.addItem(wave_plot, row=row + idx, col=0)
             wave_plot.show()
 
