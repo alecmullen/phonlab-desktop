@@ -119,7 +119,7 @@ def test_on_state_changed_ignores_other_states(qtbot: QtBot):
 # --------------------------- prep_audio ---------------------------
 
 
-def test_prep_audio_uses_settings_fs_when_target_not_given(
+def test_prep_audio_uses_settings_fs(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
     view_model = SpectrogramViewModel()
@@ -134,12 +134,10 @@ def test_prep_audio_uses_settings_fs_when_target_not_given(
     assert view_model.raw_audio_state.fs == 1000
 
 
-def test_prep_audio_updates_settings_fs_when_target_given(
-    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
-):
+def test_set_target_fs_updates_settings_fs(qtbot: QtBot):
     view_model = SpectrogramViewModel()
 
-    view_model.prep_audio(np.arange(1000, dtype=np.float64), 1000, target_fs=22050)
+    view_model.set_target_fs(22050)
 
     assert view_model.spectrogram_settings.fs == 22050
 
@@ -762,3 +760,18 @@ def test_on_error_does_not_raise(qtbot: QtBot, capsys: pytest.CaptureFixture):
     view_model.on_error(ValueError("boom"))
 
     assert "boom" in capsys.readouterr().out
+
+
+def test_prep_audio_on_success_rescales_window_when_prepped_fs_changes(
+    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
+):
+    view_model = SpectrogramViewModel()
+    view_model.load_spectrogram = lambda: None
+    view_model.prepped_audio_state = AudioChannelState(np.zeros(32000), 16000)
+    view_model.window_state = SpectrogramWindowState(8000, 31999)
+
+    view_model.prep_audio(np.zeros(16000), 8000)
+    job = view_model.job_managers["prep_audio"].jobs[0]
+    job.on_success({0: AudioSignal(np.zeros(16000), 8000)})
+
+    assert view_model.window_state == SpectrogramWindowState(4000, 15999)

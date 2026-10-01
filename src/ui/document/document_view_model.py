@@ -79,6 +79,9 @@ class DocumentViewModel(ViewModel):
     @pyqtSlot(object)
     def on_state_changed(self, model: State):
         if isinstance(model, AudioLoaded):
+            # A newly loaded file seeds the spectrogram's rate from the open
+            # options; afterwards it is only changed by the spectrogram settings.
+            self.spectrogram_view_model.set_target_fs(self.audio_options.target_fs)
             self.prep_audio_spectrogram()
 
     @pyqtSlot(object)
@@ -269,6 +272,11 @@ class DocumentViewModel(ViewModel):
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
 
     def prep_audio_spectrogram(self):
+        """(Re)build the spectrogram's prepped audio from the raw channels.
+
+        The prepped rate comes from the spectrogram settings, independent of
+        the raw audio's rate (it may even be higher; the extra range is blank).
+        """
         active = self.active_channel_states()
         if not active:
             return
@@ -281,7 +289,7 @@ class DocumentViewModel(ViewModel):
         else:
             x, fs = active[0].x, active[0].fs
 
-        self.spectrogram_view_model.prep_audio(x, fs, self.audio_options.target_fs)
+        self.spectrogram_view_model.prep_audio(x, fs)
 
     def update_spectrogram(self):
         primary_channel = self.primary_channel()
