@@ -2,14 +2,17 @@ from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
 
+import pytest
 from pytestqt.qtbot import QtBot
 
 from core.parse_textgrid.annotation import Annotation
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import (
     AnnotationNodeExtentState,
     AnnotationNodeState,
 )
+from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import AnnotationState
 from ui.document.state.status_message_state import StatusMessageState
 
@@ -255,3 +258,19 @@ def test_parse_textgrid_shows_status_message_on_invalid_tier_type(tmp_path: Path
     assert "Invalid Textgrid" in status_messages[0].message
     assert view_model.annotation_state.nodes == {}
     assert view_model.annotation_state.types == []
+
+
+def test_select_label_emits_selected_state_from_node_positions(qtbot: QtBot):
+    view_model = make_view_model(MOCK_ANNOTATION_NODES.copy(), start=0.0, end=2.0)
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.select_label(AnnotationLabelState(0, 2, "x"))
+
+    assert blocker.args[0] == AnnotationSelectedState(0.0, 2.0)
+
+
+def test_select_label_with_missing_node_raises(qtbot: QtBot):
+    view_model = make_view_model(MOCK_ANNOTATION_NODES.copy(), start=0.0, end=2.0)
+
+    with pytest.raises(ValueError):
+        view_model.select_label(AnnotationLabelState(0, 99, "x"))

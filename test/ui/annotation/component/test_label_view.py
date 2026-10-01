@@ -1,4 +1,5 @@
 import pyqtgraph as pg
+from PyQt6.QtGui import QPainter, QPixmap
 from pytestqt.qtbot import QtBot
 
 from ui.annotation.component.label_view import LabelView
@@ -136,3 +137,33 @@ def test_label_view_removes_line_breaks(qtbot: QtBot):
     )
 
     assert "\n" not in label_text_item.toPlainText()
+
+
+def test_label_view_point_label_uses_default_width(qtbot: QtBot):
+    plot = pg.PlotItem()
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+
+    label_view = LabelView(
+        [AnnotationLabelState(pos=(1.0, 0.5), size=(0.0, 0.25), label="pt")], plot
+    )
+
+    assert label_view.labels[0].size[0] == 0.0
+    assert label_view.pic.boundingRect().width() == 0
+
+
+def test_label_view_paint_draws_picture(qtbot: QtBot):
+    plot = pg.PlotItem()
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    label_view = LabelView(
+        [AnnotationLabelState(pos=(1.0, 0.5), size=(1.0, 0.25), label="a")], plot
+    )
+
+    pixmap = QPixmap(50, 50)
+    painter = QPainter(pixmap)
+    label_view.paint(painter, None, None)
+    label_view.paint(None, None, None)
+    painter.end()

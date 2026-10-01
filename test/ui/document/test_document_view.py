@@ -7,6 +7,8 @@ from pytestqt.qtbot import QtBot
 
 import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
+from ui.annotation.annotation_plot import AnnotationPlot
+from ui.common.document_plot import DocumentPlot
 from ui.document.component.delete_channel_dialog import DeleteChannelDialog
 from ui.document.component.paste_special_dialog import (
     PasteSpecialChoice,
@@ -28,6 +30,7 @@ from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 
 
 class FakeAudioPlayer:
@@ -751,3 +754,338 @@ def test_cleanup_closes_view_model_threads(view: DocumentView):
     view.cleanup()
 
     assert calls == [True]
+
+
+# --------------------------- document plots (spectrogram / annotation) ---------------------------
+
+
+@pytest.fixture
+def all_plots_view(loaded_view: DocumentView) -> DocumentView:
+    loaded_view.view_model.toggle_spectrogram()
+    loaded_view.view_model.toggle_annotations()
+    QApplication.processEvents()
+    return loaded_view
+
+
+def plot_of(view: DocumentView, cls: type) -> DocumentPlot:
+    return next(p for p in view.document_plots if isinstance(p, cls))
+
+
+def scene_center(plot: DocumentPlot) -> QPointF:
+    return plot.sceneBoundingRect().center()
+
+
+def test_update_plot_layout_adds_spectrogram_and_annotation_plots(
+    all_plots_view: DocumentView,
+):
+    types = [type(p) for p in all_plots_view.document_plots]
+
+    assert SpectrogramPlot in types
+    assert AnnotationPlot in types
+    assert len(all_plots_view.document_plots) == 3
+
+
+def test_get_document_plot_at_returns_plot_under_position(
+    all_plots_view: DocumentView,
+):
+    for plot in all_plots_view.document_plots:
+        assert all_plots_view._get_document_plot_at(scene_center(plot)) is plot
+
+
+def test_get_document_plot_at_returns_none_outside_plots(loaded_view: DocumentView):
+    assert loaded_view._get_document_plot_at(QPointF(-1000, -1000)) is None
+
+
+def test_on_mouse_moved_shows_time_status_over_wave_plot(loaded_view: DocumentView):
+    loaded_view.on_mouse_moved(scene_center(loaded_view.document_plots[0]))
+
+    assert loaded_view.message_label.text().startswith("Cursor time:")
+    assert "frequency" not in loaded_view.message_label.text()
+
+
+def test_on_mouse_moved_shows_frequency_status_over_spectrogram(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, SpectrogramPlot)
+
+    all_plots_view.on_mouse_moved(scene_center(plot))
+
+    assert "frequency" in all_plots_view.message_label.text()
+
+
+def test_on_mouse_moved_outside_plots_keeps_message(loaded_view: DocumentView):
+    loaded_view.message_label.setText("unchanged")
+
+    loaded_view.on_mouse_moved(QPointF(-1000, -1000))
+
+    assert loaded_view.message_label.text() == "unchanged"
+
+
+def test_on_mouse_moved_while_pressed_starts_then_continues_selection(
+    loaded_view: DocumentView,
+):
+    loaded_view.mouse_pressed = True
+    plot = loaded_view.document_plots[0]
+
+    loaded_view.on_mouse_moved(scene_center(plot))
+    assert loaded_view.is_dragging is True
+    assert loaded_view.view_model.select_state.is_selected is True
+
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(20, 0))
+    assert loaded_view.view_model.select_state.sel_end > (
+        loaded_view.view_model.select_state.sel_start
+    )
+
+
+def test_mouse_press_on_annotation_plot_handled_does_not_start_drag(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    monkeypatch.setattr(plot, "handle_mouse_press", lambda event: True)
+    event = click_at_scene_pos(
+        all_plots_view, scene_center(plot), QEvent.Type.MouseButtonPress
+    )
+
+    all_plots_view.handle_mouse_press(event)
+
+    assert all_plots_view.mouse_pressed is False
+
+
+def test_mouse_press_on_annotation_plot_unhandled_starts_drag(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    monkeypatch.setattr(plot, "handle_mouse_press", lambda event: False)
+    event = click_at_scene_pos(
+        all_plots_view, scene_center(plot), QEvent.Type.MouseButtonPress
+    )
+
+    all_plots_view.handle_mouse_press(event)
+
+    assert all_plots_view.mouse_pressed is True
+
+
+def test_mouse_press_outside_plots_does_not_start_drag(loaded_view: DocumentView):
+    event = click_at_scene_pos(
+        loaded_view, QPointF(-1000, -1000), QEvent.Type.MouseButtonPress
+    )
+
+    loaded_view.handle_mouse_press(event)
+
+    assert loaded_view.mouse_pressed is False
+
+
+def test_mouse_release_without_press_forwards_to_annotation_plots(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    calls = []
+    monkeypatch.setattr(plot, "handle_mouse_release", lambda e: calls.append(e))
+    event = click_at_scene_pos(
+        all_plots_view, scene_center(plot), QEvent.Type.MouseButtonRelease
+    )
+
+    all_plots_view.handle_mouse_release(event)
+
+    assert calls == [event]
+
+
+def test_single_click_on_label_selects_label_and_sets_no_mark(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    monkeypatch.setattr(plot, "handle_single_click", lambda pos: True)
+    all_plots_view.pending_single_click = scene_center(plot)
+
+    all_plots_view.handle_single_click()
+
+    assert all_plots_view.view_model.mark_state.is_set is False
+    assert all_plots_view.pending_single_click is None
+    assert all_plots_view.click_timer is None
+
+
+def test_single_click_on_annotation_plot_without_label_sets_mark(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    monkeypatch.setattr(plot, "handle_single_click", lambda pos: False)
+    all_plots_view.pending_single_click = scene_center(plot)
+
+    all_plots_view.handle_single_click()
+
+    assert all_plots_view.view_model.mark_state.is_set is True
+
+
+def test_single_click_outside_plots_sets_no_mark(loaded_view: DocumentView):
+    loaded_view.pending_single_click = QPointF(-1000, -1000)
+
+    loaded_view.handle_single_click()
+
+    assert loaded_view.view_model.mark_state.is_set is False
+
+
+def test_control_scroll_adjusts_spectrogram_gray_scale(all_plots_view: DocumentView):
+    plot = plot_of(all_plots_view, SpectrogramPlot)
+    calls = []
+    plot.adjust_gray_scale = lambda is_trackpad, delta: calls.append(
+        (is_trackpad, delta)
+    )
+    pos = all_plots_view.graphics_widget.mapFromScene(scene_center(plot))
+    pos = QPointF(pos)
+    event = QWheelEvent(
+        pos,
+        pos,
+        QPoint(0, 0),
+        QPoint(0, 120),
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.ControlModifier,
+        Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+
+    all_plots_view.handle_control_scroll(event, scroll_y=2.0, is_trackpad=True)
+
+    assert calls == [(True, 2.0)]
+
+
+def test_set_mark_if_in_plot_sets_mark_inside_plot(loaded_view: DocumentView):
+    loaded_view.set_mark_if_in_plot(scene_center(loaded_view.document_plots[0]))
+
+    assert loaded_view.view_model.mark_state.is_set is True
+
+
+def test_set_mark_if_in_plot_ignores_position_outside_plots(
+    loaded_view: DocumentView,
+):
+    loaded_view.set_mark_if_in_plot(QPointF(-1000, -1000))
+
+    assert loaded_view.view_model.mark_state.is_set is False
+
+
+def test_play_window_or_selection_plays_selection_when_click_inside_it(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = loaded_view.view_model
+    view_model.start_selection(2.0)
+    view_model.continue_selection(6.0)
+    calls = []
+    monkeypatch.setattr(view_model, "play_selected_audio", lambda: calls.append("sel"))
+    monkeypatch.setattr(view_model, "play_visible_audio", lambda: calls.append("vis"))
+    plot = loaded_view.document_plots[0]
+    inside = plot.getViewBox().mapViewToScene(QPointF(4.0, 0.0))
+
+    loaded_view.play_window_or_selection(inside)
+
+    assert calls == ["sel"]
+
+
+def test_play_window_or_selection_ignores_click_outside_plots(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(
+        loaded_view.view_model, "play_visible_audio", lambda: calls.append("vis")
+    )
+
+    loaded_view.play_window_or_selection(QPointF(-1000, -1000))
+
+    assert calls == []
+
+
+def test_update_playback_cursor_moves_cursor_on_all_plots(
+    all_plots_view: DocumentView,
+):
+    all_plots_view.update_playback_cursor(PlaybackState(True, 3.0))
+
+    assert all(p.cursor_line.value() == 3.0 for p in all_plots_view.document_plots)
+
+
+def test_update_mark_sets_mark_line_on_all_plots(all_plots_view: DocumentView):
+    all_plots_view.update_mark(MarkState(position=2.0, is_set=True))
+
+    assert all(p.mark_line.value() == 2.0 for p in all_plots_view.document_plots)
+
+
+def test_update_load_progress_toggles_progress_bar(view: DocumentView):
+    view.update_load_progress(LoadProgressState(True))
+    assert view.progress_bar.isVisible()
+
+    view.update_load_progress(LoadProgressState(False))
+    assert not view.progress_bar.isVisible()
+
+
+# --------------------------- delegation / event filter ---------------------------
+
+
+@pytest.mark.parametrize(
+    ("view_method", "vm_method", "args"),
+    [
+        ("go_back", "go_back", ()),
+        ("advance", "advance", ()),
+        ("zoom_out", "zoom_out", (3,)),
+        ("zoom_in", "zoom_in", (3,)),
+        ("show_all", "show_all", ()),
+        ("recenter_on_selection", "center_on_selection", ()),
+        ("undo", "undo", ()),
+        ("redo", "redo", ()),
+    ],
+)
+def test_view_methods_delegate_to_view_model(
+    view: DocumentView,
+    monkeypatch: pytest.MonkeyPatch,
+    view_method: str,
+    vm_method: str,
+    args: tuple,
+):
+    calls = []
+    monkeypatch.setattr(
+        view.view_model, vm_method, lambda *a: calls.append(a), raising=True
+    )
+
+    getattr(view, view_method)(*args)
+
+    assert calls == [args]
+
+
+def test_event_filter_routes_mouse_events_to_handlers(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(
+        loaded_view, "handle_double_click", lambda e: calls.append("double")
+    )
+    monkeypatch.setattr(
+        loaded_view, "handle_mouse_press", lambda e: calls.append("press")
+    )
+    monkeypatch.setattr(
+        loaded_view, "handle_mouse_release", lambda e: calls.append("release")
+    )
+    viewport = loaded_view.graphics_widget.viewport()
+
+    for event_type in (
+        QEvent.Type.MouseButtonDblClick,
+        QEvent.Type.MouseButtonPress,
+        QEvent.Type.MouseButtonRelease,
+    ):
+        event = mouse_event(loaded_view, 2.0, event_type)
+        assert loaded_view.eventFilter(viewport, event) is True
+
+    assert calls == ["double", "press", "release"]
+
+
+def test_event_filter_right_press_records_context_position(
+    loaded_view: DocumentView,
+):
+    viewport = loaded_view.graphics_widget.viewport()
+    pos = QPointF(widget_pos_for_time(loaded_view, 2.0))
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonPress,
+        pos,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+    loaded_view.eventFilter(viewport, event)
+
+    assert loaded_view.context_pos is not None

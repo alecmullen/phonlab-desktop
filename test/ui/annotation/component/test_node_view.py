@@ -1,4 +1,5 @@
 import pyqtgraph as pg
+from PyQt6.QtGui import QPainter, QPixmap
 from pytestqt.qtbot import QtBot
 
 from res.constants import NODE_H_MARGIN, NODE_V_MARGIN
@@ -82,3 +83,16 @@ def test_node_view_position_follows_parent_plot_view(qtbot: QtBot):
 
     assert node_view.pos().x() == view_rect.left()
     assert node_view.pos().y() == view_rect.bottom()
+
+
+def test_node_view_paint_draws_picture(qtbot: QtBot):
+    plot = pg.PlotItem()
+    node_view = NodeView(
+        [AnnotationNodeState(0, 1.0, [AnnotationNodeExtentState(0)])], plot
+    )
+
+    pixmap = QPixmap(50, 50)
+    painter = QPainter(pixmap)
+    node_view.paint(painter, None, None)
+    node_view.paint(None, None, None)
+    painter.end()

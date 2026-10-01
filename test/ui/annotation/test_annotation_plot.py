@@ -3,7 +3,7 @@ from dataclasses import replace
 import pyqtgraph as pg
 import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
-from PyQt6.QtGui import QMouseEvent
+from PyQt6.QtGui import QMouseEvent, QShowEvent
 from pytestqt.qtbot import QtBot
 
 from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
@@ -339,3 +339,56 @@ def test_set_mark_position_moves_line_and_sets_visibility(qtbot: QtBot):
 
     plot.set_mark_position(2.5, False)
     assert plot.mark_line.isVisible() is False
+
+
+def test_show_time_axis_false_leaves_bottom_label_unset(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+
+    plot.show_time_axis(False)
+
+    assert plot.getAxis("bottom").labelText != "Time"
+
+
+def test_handle_single_click_on_label_selects_it(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+
+    label = MOCK_ANNOTATION_STATE.types[0].labels[0]
+    plot.visible_labels = [label]
+    selected = []
+    monkeypatch_select = lambda lbl: selected.append(lbl)
+    view_model.select_label = monkeypatch_select  # type: ignore[method-assign]
+
+    scene_pos = plot.getViewBox().mapViewToScene(QPointF(1.5, 0.5))
+
+    assert plot.handle_single_click(scene_pos) is True
+    assert selected == [label]
+
+
+def test_handle_single_click_outside_labels_returns_false(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+
+    plot.visible_labels = [MOCK_ANNOTATION_STATE.types[0].labels[0]]
+    scene_pos = plot.getViewBox().mapViewToScene(QPointF(50.0, 0.5))
+
+    assert plot.handle_single_click(scene_pos) is False
+
+
+def test_show_event_populates_from_view_model_state(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = AnnotationViewModel()
+    plot = AnnotationPlot(view_model)
+    calls = []
+    monkeypatch.setattr(plot, "populate", lambda state: calls.append(state))
+
+    plot.showEvent(QShowEvent())
+
+    assert calls == [view_model.annotation_view_state]

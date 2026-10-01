@@ -10,6 +10,8 @@ import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
+from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
+from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
@@ -950,3 +952,76 @@ def test_close_threads_stops_audio_player(view_model: DocumentViewModel):
     view_model.close_threads()
 
     assert view_model.audio_player.stopped is True
+
+
+def test_on_annot_state_changed_forwards_status_message(
+    view_model: DocumentViewModel, qtbot: QtBot
+):
+    message = StatusMessageState("bad textgrid")
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.on_annot_state_changed(message)
+
+    assert blocker.args[0] is message
+
+
+def test_on_annot_state_changed_selected_state_selects_and_plays(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(
+        view_model, "select_and_play", lambda s, e: calls.append((s, e))
+    )
+
+    view_model.on_annot_state_changed(AnnotationSelectedState(1.0, 2.5))
+
+    assert calls == [(1.0, 2.5)]
+
+
+def test_on_annot_state_changed_ignores_other_states(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(view_model, "select_and_play", lambda s, e: calls.append(1))
+    view_model.state_changed.connect(lambda s: calls.append(s))
+
+    view_model.on_annot_state_changed(State())
+
+    assert calls == []
+
+
+def test_select_and_play_selects_range_and_plays_it(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(4000), 1000)
+
+    view_model.select_and_play(1.0, 2.0)
+
+    assert view_model.select_state.sel_start == pytest.approx(1.0)
+    assert view_model.select_state.sel_end == pytest.approx(2.0)
+    player = view_model.audio_player
+    assert len(player.played) == 1
+
+
+def test_parse_textgrid_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(
+        view_model.annotation_view_model, "parse_textgrid", lambda p: calls.append(p)
+    )
+
+    view_model.parse_textgrid("a.TextGrid")
+
+    assert calls == ["a.TextGrid"]
+
+
+def test_window_change_updates_annotation_window_in_seconds(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(4000), 1000)
+
+    view_model.annotation_view_model.set_window_state(9.0, 9.0)
+    view_model.update_annotation_state()
+
+    start, end = view_model.annotation_view_model.window_state
+    assert end == pytest.approx(4.0, abs=0.01)
+    assert start == pytest.approx(0.0, abs=0.01)
