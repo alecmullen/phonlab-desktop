@@ -1,3 +1,4 @@
+import threading
 from collections.abc import Generator
 
 from pytestqt.qtbot import QtBot
@@ -96,3 +97,32 @@ def test_call_connects_worker_finished_to_manager_finished(qtbot: QtBot):
 
     with qtbot.waitSignal(manager.signals.finished, timeout=2000):
         manager.worker.signals.finished.emit()
+
+
+def test_finished_is_emitted_for_every_instant_job(qtbot: QtBot):
+    # `finished` must be wired up before the worker starts, or a job that
+    # completes immediately emits it with nobody listening.
+    for _ in range(30):
+        manager = JobManager()
+        job = Job(FakeUseCase([]), lambda r: None, lambda e: None)
+
+        with qtbot.waitSignal(manager.signals.finished, timeout=2000):
+            manager(job)
+
+
+def test_callbacks_run_on_the_main_thread(qtbot: QtBot):
+    # A callback that launches another job must not run on the worker
+    # thread, or the new job's manager never gets its finished signal.
+    manager = JobManager()
+    threads = []
+    job = Job(
+        FakeUseCase([1]),
+        lambda r: threads.append(threading.current_thread()),
+        lambda e: None,
+    )
+
+    with qtbot.waitSignal(manager.signals.finished, timeout=2000):
+        manager(job)
+    qtbot.waitUntil(lambda: len(threads) == 1, timeout=2000)
+
+    assert threads[0] is threading.main_thread()
