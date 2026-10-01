@@ -18,7 +18,6 @@ from ui.annotation.state.annotation_state import (
     AnnotationState,
     AnnotationTypeState,
 )
-from ui.annotation.state.annotation_window_state import AnnotationWindowState
 from ui.base.state import State
 
 MOCK_ANNOTATION_STATE = AnnotationState(
@@ -67,9 +66,7 @@ def test_populate_adds_visible_nodes(qtbot: QtBot):
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
 
-    state = AnnotationWindowState(MOCK_ANNOTATION_STATE, 0.0, 2.0)
-
-    plot.populate(state)
+    plot.populate(MOCK_ANNOTATION_STATE)
 
     assert {node.node for node in plot.visible_nodes} == {1, 2, 3}
 
@@ -78,9 +75,7 @@ def test_populate_with_no_types_sets_empty_y_range_and_no_visible_nodes(qtbot: Q
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
 
-    state = AnnotationWindowState(
-        replace(MOCK_ANNOTATION_STATE, nodes={0: 0.0}, types=[]), start=0.0, end=1.0
-    )
+    state = replace(MOCK_ANNOTATION_STATE, nodes={0: 0.0}, types=[])
 
     plot.populate(state)
 
@@ -96,35 +91,31 @@ def test_populate_filters_invisible_labels(qtbot: QtBot):
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
 
-    state = AnnotationWindowState(
-        replace(
-            MOCK_ANNOTATION_STATE,
-            types=[
-                AnnotationTypeState(
-                    "word",
-                    [
-                        AnnotationLabelState(
-                            0,
-                            1,
-                            "visible",
-                            is_visible=True,
-                            pos=(1.5, 0.5),
-                            size=(1.0, 1.0),
-                        ),
-                        AnnotationLabelState(
-                            2,
-                            3,
-                            "outside",
-                            is_visible=False,
-                            pos=(2.5, 0.5),
-                            size=(3.0, 1.0),
-                        ),
-                    ],
-                )
-            ],
-        ),
-        start=0.0,
-        end=1.0,
+    state = replace(
+        MOCK_ANNOTATION_STATE,
+        types=[
+            AnnotationTypeState(
+                "word",
+                [
+                    AnnotationLabelState(
+                        0,
+                        1,
+                        "visible",
+                        is_visible=True,
+                        pos=(1.5, 0.5),
+                        size=(1.0, 1.0),
+                    ),
+                    AnnotationLabelState(
+                        2,
+                        3,
+                        "outside",
+                        is_visible=False,
+                        pos=(2.5, 0.5),
+                        size=(3.0, 1.0),
+                    ),
+                ],
+            )
+        ],
     )
 
     plot.populate(state)
@@ -145,17 +136,12 @@ def test_populate_clears_previous_items(qtbot: QtBot):
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
 
-    state_with_types = AnnotationWindowState(
-        MOCK_ANNOTATION_STATE,
-        start=0.0,
-        end=1.0,
-    )
+    state_with_types = MOCK_ANNOTATION_STATE
+
     plot.populate(state_with_types)
     assert len(plot.getViewBox().addedItems) > 0
 
-    empty_state = AnnotationWindowState(
-        AnnotationState(nodes={}, types=[]), start=0.0, end=1.0
-    )
+    empty_state = AnnotationState(nodes={}, types=[])
     plot.populate(empty_state)
 
     node_or_label_items = [
@@ -166,7 +152,7 @@ def test_populate_clears_previous_items(qtbot: QtBot):
     assert node_or_label_items == []
 
 
-def test_on_state_change_populates_for_annotation_window_state(
+def test_on_state_change_populates_for_annotation_state(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
     view_model = AnnotationViewModel()
@@ -175,9 +161,9 @@ def test_on_state_change_populates_for_annotation_window_state(
     calls = []
     monkeypatch.setattr(plot, "populate", lambda state: calls.append(state))
 
-    plot.on_state_change(AnnotationWindowState())
+    plot.on_state_change(AnnotationState())
 
-    assert calls == [AnnotationWindowState()]
+    assert calls == [AnnotationState()]
 
 
 def test_on_state_change_ignores_other_state_types(
@@ -296,9 +282,9 @@ def test_handle_mouse_press_away_from_node_returns_false(qtbot: QtBot):
 
 def test_on_mouse_moved_while_dragging_updates_node_state(qtbot: QtBot):
     view_model = AnnotationViewModel()
-    view_model.annotation_window_state = AnnotationWindowState(
-        MOCK_ANNOTATION_STATE, start=0.0, end=2.0
-    )
+    view_model.annotation_view_state = MOCK_ANNOTATION_STATE
+    view_model.annotation_state = MOCK_ANNOTATION_STATE
+    view_model.window_state = (0.0, 2.0)
     plot = AnnotationPlot(view_model)
 
     layout = show_plot_in_layout(plot)
@@ -306,13 +292,13 @@ def test_on_mouse_moved_while_dragging_updates_node_state(qtbot: QtBot):
     qtbot.waitExposed(layout)
 
     plot.dragging_node = AnnotationNodeState(
-        1, view_model.annotation_window_state.annotation_state.nodes[1], []
+        1, view_model.annotation_state.nodes[1], []
     )
     scene_pos = plot.getViewBox().mapViewToScene(QPointF(1.5, 0.0))
 
     plot.on_mouse_moved(scene_pos)
 
-    assert view_model.annotation_window_state.annotation_state.nodes[1].x == 1.5
+    assert view_model.annotation_state.nodes[1].x == 1.5
 
 
 def test_on_mouse_moved_without_dragging_moves_cursor_when_in_control(qtbot: QtBot):

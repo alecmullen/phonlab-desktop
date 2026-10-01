@@ -9,7 +9,7 @@ from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
-from ui.annotation.state.annotation_window_state import AnnotationWindowState
+from ui.annotation.state.annotation_state import AnnotationState
 from ui.base.state import State
 from ui.common.cursor_controller import CursorController
 
@@ -62,7 +62,7 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
-        if isinstance(model, AnnotationWindowState):
+        if isinstance(model, AnnotationState):
             self.populate(model)
 
     def show_time_axis(self, show: bool):
@@ -72,13 +72,13 @@ class AnnotationPlot(pg.PlotItem, CursorController):
 
     def showEvent(self, a0: QShowEvent):
         super().showEvent(a0)
-        self.populate(self.view_model.annotation_window_state)
+        self.populate(self.view_model.annotation_view_state)
 
-    def populate(self, window_state: AnnotationWindowState):
+    def populate(self, annotation_state: AnnotationState):
         self.clear()
 
-        nodes = window_state.annotation_state.nodes
-        types = window_state.annotation_state.types
+        nodes = annotation_state.nodes
+        types = annotation_state.types
 
         self.setYRange(-0.1, len(types), padding=0)
         self.getAxis("left").setTicks(

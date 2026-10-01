@@ -162,7 +162,7 @@ def test_open_files_also_loads_a_paired_textgrid(
     doc = main_window.get_current_document()
     assert {
         node.x
-        for node in doc.view_model.annotation_view_model.annotation_window_state.annotation_state.nodes.values()
+        for node in doc.view_model.annotation_view_model.annotation_state.nodes.values()
     } == {0.0, 1.0}
 
 

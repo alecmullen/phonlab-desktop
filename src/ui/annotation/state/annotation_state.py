@@ -48,7 +48,7 @@ def update_annotation_state_from_window(
 ) -> AnnotationState:
 
     types = []
-    node_extents = {node: set[AnnotationNodeExtentState]() for node in annotation.nodes}
+    node_extents: dict[int, set[AnnotationNodeExtentState]] = {}
 
     for tier, type in enumerate(annotation.types):
         labels = []
@@ -61,22 +61,26 @@ def update_annotation_state_from_window(
                 annotation.nodes[label.e_node].x,
                 tier,
             )
-            labels.append(label_state)
 
             if label_state.is_visible:
+                labels.append(label_state)
+
                 is_point = label.s_node == label.e_node
 
-                node_extents[label.s_node] = update_extent_set(
-                    node_extents[label.s_node], tier, is_point
+                node_extents = update_extent_set(
+                    node_extents, label.s_node, tier, is_point
                 )
-                node_extents[label.e_node] = update_extent_set(
-                    node_extents[label.e_node], tier, is_point
+                node_extents = update_extent_set(
+                    node_extents, label.e_node, tier, is_point
                 )
 
         types.append(AnnotationTypeState(type.type, labels))
 
     nodes = {}
     for node in annotation.nodes.values():
+        if node.node not in node_extents:
+            continue
+
         node_state = to_node_state(
             node.node, node.x, node_extents[node.node], start, end
         )
@@ -86,17 +90,21 @@ def update_annotation_state_from_window(
 
 
 def update_extent_set(
-    extents: set[AnnotationNodeExtentState], tier: int, is_point: bool
-) -> set[AnnotationNodeExtentState]:
-    extents = extents.copy()
+    extents: dict[int, set[AnnotationNodeExtentState]],
+    node: int,
+    tier: int,
+    is_point: bool,
+) -> dict[int, set[AnnotationNodeExtentState]]:
+    if node not in extents:
+        extents[node] = set()
 
-    for extent in extents:
+    for extent in extents[node]:
         if extent.tier == tier:
-            extents.remove(extent)
-            extents.add(
+            extents[node].remove(extent)
+            extents[node].add(
                 AnnotationNodeExtentState(tier, extent.has_point_label or is_point)
             )
             return extents
 
-    extents.add(AnnotationNodeExtentState(tier, is_point))
+    extents[node].add(AnnotationNodeExtentState(tier, is_point))
     return extents
