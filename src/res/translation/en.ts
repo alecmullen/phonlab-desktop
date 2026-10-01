@@ -4,8 +4,7 @@
 <context>
     <name>AnnotationPlot</name>
     <message>
-        <location filename="../../ui/annotation/annotation_plot.py" line="42"/>
-        <location filename="../../ui/annotation/annotation_plot.py" line="70"/>
+        <location filename="../../ui/annotation/annotation_plot.py" line="51"/>
         <source>Time</source>
         <translation type="unfinished"></translation>
     </message>
@@ -61,11 +60,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/waveform/audio_wave_plot.py" line="71"/>
-        <source>Time</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../../ui/waveform/audio_wave_plot.py" line="36"/>
         <source>Active</source>
         <translation type="unfinished"></translation>
@@ -103,65 +97,73 @@
     </message>
 </context>
 <context>
+    <name>DocumentPlot</name>
+    <message>
+        <location filename="../../ui/common/document_plot.py" line="54"/>
+        <source>Time</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>DocumentView</name>
     <message>
-        <location filename="../../ui/document/document_view.py" line="105"/>
-        <location filename="../../ui/document/document_view.py" line="459"/>
+        <location filename="../../ui/document/document_view.py" line="106"/>
+        <location filename="../../ui/document/document_view.py" line="439"/>
         <source>Computing %p%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="132"/>
+        <location filename="../../ui/document/document_view.py" line="133"/>
         <source>Resample...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="137"/>
+        <location filename="../../ui/document/document_view.py" line="138"/>
         <source>Set Mark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="137"/>
+        <location filename="../../ui/document/document_view.py" line="138"/>
         <source>Click</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="148"/>
+        <location filename="../../ui/document/document_view.py" line="149"/>
         <source>Remove Mark</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="318"/>
+        <location filename="../../ui/document/document_view.py" line="306"/>
         <source>Ch {} Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="320"/>
+        <location filename="../../ui/document/document_view.py" line="308"/>
         <source>Amplitude</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="456"/>
+        <location filename="../../ui/document/document_view.py" line="436"/>
         <source>Loading full file…</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="468"/>
+        <location filename="../../ui/document/document_view.py" line="458"/>
         <source>Cursor time: {:.3f}s</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="474"/>
+        <location filename="../../ui/document/document_view.py" line="455"/>
         <source>Cursor time: {:.3f}s, frequency: {:.0f} Hz</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="737"/>
+        <location filename="../../ui/document/document_view.py" line="706"/>
         <source>Paste Special</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view.py" line="739"/>
+        <location filename="../../ui/document/document_view.py" line="708"/>
         <source>Paste Special: New Channel only applies when both the document and the clipboard clip are mono.</source>
         <translation type="unfinished"></translation>
     </message>
@@ -169,56 +171,56 @@
 <context>
     <name>DocumentViewModel</name>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="218"/>
+        <location filename="../../ui/document/document_view_model.py" line="221"/>
         <source>Duration shown {:.3f} seconds, out of {:.3f} seconds</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="339"/>
+        <location filename="../../ui/document/document_view_model.py" line="342"/>
         <source>System audio latency is a little long ({:.0f} ms). Consider using a different audio device.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="434"/>
+        <location filename="../../ui/document/document_view_model.py" line="437"/>
         <source>Select: {:.3f} to {:.3f} ({:.3f}s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="470"/>
+        <location filename="../../ui/document/document_view_model.py" line="473"/>
         <source>No selection to center on</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="571"/>
-        <location filename="../../ui/document/document_view_model.py" line="587"/>
-        <location filename="../../ui/document/document_view_model.py" line="727"/>
+        <location filename="../../ui/document/document_view_model.py" line="579"/>
+        <location filename="../../ui/document/document_view_model.py" line="595"/>
+        <location filename="../../ui/document/document_view_model.py" line="735"/>
         <source>Audio is still loading, please wait.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="737"/>
+        <location filename="../../ui/document/document_view_model.py" line="745"/>
         <source>Cannot remove entire selection</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="769"/>
-        <location filename="../../ui/document/document_view_model.py" line="793"/>
+        <location filename="../../ui/document/document_view_model.py" line="777"/>
+        <location filename="../../ui/document/document_view_model.py" line="801"/>
         <source>No selection to copy</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="803"/>
-        <location filename="../../ui/document/document_view_model.py" line="827"/>
+        <location filename="../../ui/document/document_view_model.py" line="811"/>
+        <location filename="../../ui/document/document_view_model.py" line="835"/>
         <source>No selection to cut</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="719"/>
+        <location filename="../../ui/document/document_view_model.py" line="727"/>
         <source>Set a mark (Shift+Click) before pasting</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/document/document_view_model.py" line="655"/>
+        <location filename="../../ui/document/document_view_model.py" line="663"/>
         <source>At least one channel must stay active</source>
         <translation type="unfinished"></translation>
     </message>
@@ -664,17 +666,12 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/spectrogram/spectrogram_plot.py" line="35"/>
-        <source>Time</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../../ui/spectrogram/spectrogram_plot.py" line="74"/>
+        <location filename="../../ui/spectrogram/spectrogram_plot.py" line="42"/>
         <source>Zoom to a chunk of {} seconds or shorter to see spectrogram</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../../ui/spectrogram/spectrogram_plot.py" line="91"/>
+        <location filename="../../ui/spectrogram/spectrogram_plot.py" line="59"/>
         <source>Spectrogram settings...</source>
         <translation type="unfinished"></translation>
     </message>
