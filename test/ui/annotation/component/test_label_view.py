@@ -1,8 +1,9 @@
 import pyqtgraph as pg
+from PyQt6.QtGui import QPainter, QPixmap
 from pytestqt.qtbot import QtBot
 
 from ui.annotation.component.label_view import LabelView
-from ui.annotation.state.label_view_state import LabelViewState
+from ui.annotation.state.annotation_label_state import AnnotationLabelState
 
 
 def show_plot_in_layout(plot: pg.PlotItem) -> pg.GraphicsLayoutWidget:
@@ -17,8 +18,8 @@ def show_plot_in_layout(plot: pg.PlotItem) -> pg.GraphicsLayoutWidget:
 def test_label_view_stores_input_labels(qtbot: QtBot):
     plot = pg.PlotItem()
     labels = [
-        LabelViewState((1.0, 0.5), (0.5, 0.25), "hello"),
-        LabelViewState((2.0, 0.5), (2.0, 0.25), "world"),
+        AnnotationLabelState(pos=(1.0, 0.5), size=(0.5, 0.25), label="hello"),
+        AnnotationLabelState(pos=(2.0, 0.5), size=(2.0, 0.25), label="world"),
     ]
 
     layout = show_plot_in_layout(plot)
@@ -36,8 +37,8 @@ def test_label_view_creates_text_item_per_label_with_correct_text_and_position(
 ):
     plot = pg.PlotItem()
     labels = [
-        LabelViewState((1.0, 0.5), (0.5, 0.25), "hello"),
-        LabelViewState((2.0, 0.5), (2.0, 1.0), "world"),
+        AnnotationLabelState(size=(1.0, 0.5), pos=(0.5, 0.25), label="hello"),
+        AnnotationLabelState(size=(2.0, 0.5), pos=(2.0, 1.0), label="world"),
     ]
 
     layout = show_plot_in_layout(plot)
@@ -105,7 +106,7 @@ def test_label_view_ellides_long_text(qtbot: QtBot):
     size = (1.0, 0.5)
     label_width = int(max(size[0], 1.0) / pixel_size[0])
 
-    labels = [LabelViewState(size, (0.5, 0.25), long_text)]
+    labels = [AnnotationLabelState(size=size, pos=(0.5, 0.25), label=long_text)]
     label_view = LabelView(labels, plot)
 
     label_text_item = next(
@@ -128,7 +129,7 @@ def test_label_view_removes_line_breaks(qtbot: QtBot):
     for _ in range(1000):
         long_text += "h\n"
 
-    labels = [LabelViewState((1.0, 0.5), (0.5, 0.25), long_text)]
+    labels = [AnnotationLabelState(size=(1.0, 0.5), pos=(0.5, 0.25), label=long_text)]
     label_view = LabelView(labels, plot)
 
     label_text_item = next(
@@ -136,3 +137,33 @@ def test_label_view_removes_line_breaks(qtbot: QtBot):
     )
 
     assert "\n" not in label_text_item.toPlainText()
+
+
+def test_label_view_point_label_uses_default_width(qtbot: QtBot):
+    plot = pg.PlotItem()
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+
+    label_view = LabelView(
+        [AnnotationLabelState(pos=(1.0, 0.5), size=(0.0, 0.25), label="pt")], plot
+    )
+
+    assert label_view.labels[0].size[0] == 0.0
+    assert label_view.pic.boundingRect().width() == 0
+
+
+def test_label_view_paint_draws_picture(qtbot: QtBot):
+    plot = pg.PlotItem()
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    label_view = LabelView(
+        [AnnotationLabelState(pos=(1.0, 0.5), size=(1.0, 0.25), label="a")], plot
+    )
+
+    pixmap = QPixmap(50, 50)
+    painter = QPainter(pixmap)
+    label_view.paint(painter, None, None)
+    label_view.paint(None, None, None)
+    painter.end()

@@ -1,5 +1,4 @@
 from dataclasses import replace
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -11,6 +10,8 @@ import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
+from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
+from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
@@ -900,114 +901,6 @@ def test_paste_special_new_channel_without_silence_raises_if_clip_is_stereo(
 # --------------------------- misc ---------------------------
 
 
-TEXTGRID_FIXTURE = """File type = "ooTextFile"
-Object class = "TextGrid"
-xmin = 0
-xmax = 1.0
-tiers? <exists>
-size = 1
-item []:
-    item [1]:
-        class = "IntervalTier"
-        name = "word"
-        xmin = 0
-        xmax = 1.0
-        intervals: size = 2
-        intervals [1]:
-            xmin = 0
-            xmax = 0.5
-            text = "hello"
-        intervals [2]:
-            xmin = 0.5
-            xmax = 1.0
-            text = "world"
-"""
-
-
-def test_parse_textgrid_loads_annotation_state(
-    view_model: DocumentViewModel, tmp_path: Path
-):
-    load_signal(view_model, np.arange(5000), fs=1000)
-    view_model.update_annotation_state = lambda: None
-    textgrid = tmp_path / "sample.TextGrid"
-    textgrid.write_text(TEXTGRID_FIXTURE)
-
-    view_model.parse_textgrid(str(textgrid))
-
-    assert view_model.annotation_state.nodes == {0: 0.0, 1: 0.5, 2: 1.0}
-    assert [t.type for t in view_model.annotation_state.types] == ["word"]
-    assert [label.label for label in view_model.annotation_state.types[0].labels] == [
-        "hello",
-        "world",
-    ]
-
-
-POINT_TIER_TEXTGRID = """File type = "ooTextFile"
-Object class = "TextGrid"
-xmin = 0
-xmax = 1.0
-tiers? <exists>
-size = 1
-item []:
-    item [1]:
-        class = "TextTier"
-        name = "mark"
-        xmin = 0
-        xmax = 1.0
-        points: size = 1
-        points [1]:
-            number = 0.5
-            mark = "click"
-"""
-
-
-def test_parse_textgrid_loads_point_tier(view_model: DocumentViewModel, tmp_path: Path):
-    load_signal(view_model, np.arange(5000), fs=1000)
-    view_model.update_annotation_state = lambda: None
-    textgrid = tmp_path / "point.TextGrid"
-    textgrid.write_text(POINT_TIER_TEXTGRID)
-
-    view_model.parse_textgrid(str(textgrid))
-
-    assert view_model.annotation_state.nodes == {0: 0.5}
-    assert [t.type for t in view_model.annotation_state.types] == ["mark"]
-    assert [label.label for label in view_model.annotation_state.types[0].labels] == [
-        "click"
-    ]
-
-
-BROKEN_TIER_TEXTGRID = """File type = "ooTextFile"
-Object class = "TextGrid"
-xmin = 0
-xmax = 1.0
-tiers? <exists>
-size = 1
-item []:
-    item [1]:
-        class = "UnknownTier"
-        name = "word"
-        xmin = 0
-        xmax = 1.0
-"""
-
-
-def test_parse_textgrid_shows_status_message_on_invalid_tier_type(
-    view_model: DocumentViewModel, tmp_path: Path
-):
-    textgrid = tmp_path / "broken.TextGrid"
-    textgrid.write_text(BROKEN_TIER_TEXTGRID)
-    received = []
-    view_model.subscribe(received.append)
-
-    view_model.parse_textgrid(str(textgrid))
-
-    status_messages = [s for s in received if isinstance(s, StatusMessageState)]
-    assert len(status_messages) == 1
-    assert "Invalid Textgrid" in status_messages[0].message
-    assert view_model.annotation_state.nodes == {}
-    assert view_model.annotation_state.types == []
-
-
 def test_play_selected_audio_plays_selection(view_model: DocumentViewModel):
     load_signal(view_model, np.arange(10000), fs=1000)
     view_model.start_selection(2.0)
@@ -1069,3 +962,76 @@ def test_audio_loaded_seeds_spectrogram_fs_from_open_options(
     view_model.on_state_changed(AudioLoaded(True, 1000))
 
     assert view_model.spectrogram_view_model.spectrogram_settings.fs == 22050
+    
+    
+def test_on_annot_state_changed_forwards_status_message(
+    view_model: DocumentViewModel, qtbot: QtBot
+):
+    message = StatusMessageState("bad textgrid")
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.on_annot_state_changed(message)
+
+    assert blocker.args[0] is message
+
+
+def test_on_annot_state_changed_selected_state_selects_and_plays(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(
+        view_model, "select_and_play", lambda s, e: calls.append((s, e))
+    )
+
+    view_model.on_annot_state_changed(AnnotationSelectedState(1.0, 2.5))
+
+    assert calls == [(1.0, 2.5)]
+
+
+def test_on_annot_state_changed_ignores_other_states(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(view_model, "select_and_play", lambda s, e: calls.append(1))
+    view_model.state_changed.connect(lambda s: calls.append(s))
+
+    view_model.on_annot_state_changed(State())
+
+    assert calls == []
+
+
+def test_select_and_play_selects_range_and_plays_it(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(4000), 1000)
+
+    view_model.select_and_play(1.0, 2.0)
+
+    assert view_model.select_state.sel_start == pytest.approx(1.0)
+    assert view_model.select_state.sel_end == pytest.approx(2.0)
+    player = view_model.audio_player
+    assert len(player.played) == 1
+
+
+def test_parse_textgrid_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(
+        view_model.annotation_view_model, "parse_textgrid", lambda p: calls.append(p)
+    )
+
+    view_model.parse_textgrid("a.TextGrid")
+
+    assert calls == ["a.TextGrid"]
+
+
+def test_window_change_updates_annotation_window_in_seconds(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(4000), 1000)
+
+    view_model.annotation_view_model.set_window_state(9.0, 9.0)
+    view_model.update_annotation_state()
+
+    start, end = view_model.annotation_view_model.window_state
+    assert end == pytest.approx(4.0, abs=0.01)
+    assert start == pytest.approx(0.0, abs=0.01)

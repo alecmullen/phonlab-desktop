@@ -4,7 +4,6 @@ from ui.base.state import State
 
 
 @dataclass(frozen=True)
-class LabelViewState(State):
-    size: tuple
-    pos: tuple
-    label: str
+class AnnotationSelectedState(State):
+    sel_start: float
+    sel_end: float

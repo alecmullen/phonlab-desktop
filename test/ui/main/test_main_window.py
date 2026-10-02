@@ -160,7 +160,10 @@ def test_open_files_also_loads_a_paired_textgrid(
     main_window.open_files([str(wav_path), str(textgrid_path)])
 
     doc = main_window.get_current_document()
-    assert doc.view_model.annotation_state.nodes == {0: 0.0, 1: 1.0}
+    assert {
+        node.x
+        for node in doc.view_model.annotation_view_model.annotation_state.nodes.values()
+    } == {0.0, 1.0}
 
 
 def test_open_files_does_nothing_when_dialog_is_cancelled(
