@@ -1,5 +1,16 @@
+from ui.document.state.plot_layout_state import PlotType
+
 # -- Document Window --
 DEFAULT_WINDOW_LENGTH = 10
+PLOT_ROW_SPACING = 8
+PLOT_ROW_WEIGHT = {
+    PlotType.WAVEFORM: 50,
+    PlotType.SPECTROGRAM: 100,
+    PlotType.ANNOTATION: 50,
+}
+
+# -- Document Plot --
+LEFT_AXIS_WIDTH = 70
 
 # -- Audio Editing --
 MAX_UNDO_HISTORY = 10
@@ -20,3 +31,4 @@ SPECTROGRAM_PERCENTILE_SAMPLE_SIZE = 100_000
 NODE_V_MARGIN = 7
 NODE_H_MARGIN = 5
 POINT_LABEL_WIDTH = 100
+LABEL_HEIGHT_RATIO = 0.8

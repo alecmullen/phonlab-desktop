@@ -1,5 +1,6 @@
 from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
-from ui.document.state.annotation_state import (
+from ui.annotation.state.annotation_node_state import AnnotationNodeState
+from ui.annotation.state.annotation_state import (
     AnnotationLabelState,
     AnnotationTypeState,
     to_annotation_state,
@@ -22,7 +23,11 @@ def test_to_annotation_state_converts_nodes_and_types():
 
     state = to_annotation_state(annotation)
 
-    assert state.nodes == {0: 0.0, 1: 0.5, 2: 1.0}
+    assert state.nodes == {
+        0: AnnotationNodeState(0, 0.0),
+        1: AnnotationNodeState(1, 0.5),
+        2: AnnotationNodeState(2, 1.0),
+    }
     assert state.types == [
         AnnotationTypeState(
             "word",
