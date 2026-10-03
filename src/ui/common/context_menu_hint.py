@@ -26,7 +26,6 @@ class ContextMenuHint(QWidget):
 
         self.label_title = QLabel(action_text)
         layout.addWidget(self.label_title)
-
         if hint_text is not None:
             self.label_hint = QLabel(hint_text)
             self.label_hint.setStyleSheet("color: gray;")

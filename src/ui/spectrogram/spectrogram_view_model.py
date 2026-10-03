@@ -50,12 +50,15 @@ class SpectrogramViewModel(ViewModel):
         if isinstance(model, AudioPrepped) and self.sgram_state.is_showing:
             self.load_spectrogram()
 
+    def set_target_fs(self, target_fs: int):
+        """Set the prepped sample rate used for the next prep_audio."""
+        self.spectrogram_settings = replace(self.spectrogram_settings, fs=target_fs)
+
     @pyqtSlot(object, object)
-    def prep_audio(self, x: np.ndarray, fs: int, target_fs: int | None = None):
-        if target_fs is None:
-            target_fs = self.spectrogram_settings.fs
-        else:
-            self.spectrogram_settings = replace(self.spectrogram_settings, fs=target_fs)
+    def prep_audio(self, x: np.ndarray, fs: int):
+        """Prepare the raw audio at the spectrogram settings' sample rate,
+        which is independent of (and may exceed) the raw rate."""
+        target_fs = self.spectrogram_settings.fs
 
         self.raw_audio_state = AudioChannelState(x, fs)
         use_case = PrepAudio(
@@ -65,12 +68,26 @@ class SpectrogramViewModel(ViewModel):
 
         @pyqtSlot(object)
         def on_success(prepped: dict[int, AudioSignal]):
-            self.prepped_audio_state = to_audio_channel_state(prepped[0])
+            new_state = to_audio_channel_state(prepped[0])
+            self._rescale_window(self.prepped_audio_state, new_state)
+            self.prepped_audio_state = new_state
             self.invalidate_spectrogram()
             self.state_changed.emit(LoadProgressState(False))
             self.state_changed.emit(AudioPrepped())
 
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
+
+    def _rescale_window(self, old: AudioChannelState | None, new: AudioChannelState):
+        """Window indices are prepped-audio samples, so a change of the
+        prepped sample rate must carry them to the new units."""
+        if old is None or old.fs == new.fs:
+            return
+        ratio = new.fs / old.fs
+        last = max(len(new.x) - 1, 0)
+        self.window_state = SpectrogramWindowState(
+            min(int(self.window_state.start * ratio), last),
+            min(int(self.window_state.end * ratio), last),
+        )
 
     @pyqtSlot()
     def load_spectrogram(self):

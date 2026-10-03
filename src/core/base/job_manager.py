@@ -16,12 +16,14 @@ class JobManager:
         if self.thread_pool is None:
             raise RuntimeError("Thread pool not initialized")
 
-        self.thread_pool.start(self.worker)
-
+        # Connect before starting: a fast job can finish (and emit
+        # `finished`) before start() returns, and that emit would be lost.
         self.worker.signals.finished.connect(self.signals.finished)
 
         self.signals.job.connect(self.worker.slots.queue_job)
         self.signals.should_stop.connect(self.worker.slots.stop)
+
+        self.thread_pool.start(self.worker)
 
     def queue_job(self, job: Job):
         self.signals.job.emit(job)
