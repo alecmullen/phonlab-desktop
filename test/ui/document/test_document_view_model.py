@@ -962,8 +962,8 @@ def test_audio_loaded_seeds_spectrogram_fs_from_open_options(
     view_model.on_state_changed(AudioLoaded(True, 1000))
 
     assert view_model.spectrogram_view_model.spectrogram_settings.fs == 22050
-    
-    
+
+
 def test_on_annot_state_changed_forwards_status_message(
     view_model: DocumentViewModel, qtbot: QtBot
 ):

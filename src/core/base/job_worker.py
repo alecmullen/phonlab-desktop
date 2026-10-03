@@ -14,8 +14,6 @@ class JobWorker(QRunnable):
 
     def _connect_callbacks(self, job: Job | None):
         # Must run on the thread that owns the callbacks (the main thread):
-        # connecting from run() would make them execute on the worker thread,
-        # where any job they launch gets a manager with no event loop.
         if job is not None:
             self.signals.result.connect(job.on_success)
             self.signals.error.connect(job.on_error)
