@@ -1,7 +1,7 @@
 from typing import cast
 
 import pyqtgraph as pg
-from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import (
     QDragEnterEvent,
     QDropEvent,
@@ -26,9 +26,11 @@ from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.delete_channel_dialog import DeleteChannelDialog
+from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.paste_special_dialog import PasteSpecialDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
+from ui.document.component.scale_dialog import ScaleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
 from ui.document.state.audio_loaded import AudioLoaded
@@ -45,6 +47,10 @@ from ui.waveform.audio_wave_plot import AudioWavePlot
 
 class DocumentView(QWidget):
     """A single audio document with its own waveform/spectrogram display"""
+
+    # Emitted by the context menu; the main window owns the dialog since it
+    # knows the tab name.
+    audio_info_requested = pyqtSignal()
 
     def __init__(self, view_model: DocumentViewModel, parent: QWidget | None = None):
         super().__init__(parent)
@@ -123,10 +129,40 @@ class DocumentView(QWidget):
     def set_up_menu(self):
         self.graphics_widget.scene().contextMenu = []
 
+        self.audio_info_action = ContextMenuHintAction(
+            self.tr("Audio Info"), parent=self
+        )
+        self.audio_info_action.triggered.connect(self.audio_info_requested)
+
         self.resample_action = ContextMenuHintAction(
             self.tr("Resample..."), parent=self
         )
         self.resample_action.triggered.connect(self.open_resample_dialog)
+
+        self.scale_action = ContextMenuHintAction(self.tr("Scale..."), parent=self)
+        self.scale_action.triggered.connect(self.open_scale_dialog)
+
+        self.reverse_action = ContextMenuHintAction(self.tr("Reverse"), parent=self)
+        self.reverse_action.triggered.connect(self.view_model.reverse_audio)
+
+        self.recenter_action = ContextMenuHintAction(self.tr("Recenter"), parent=self)
+        self.recenter_action.triggered.connect(self.recenter_on_selection)
+
+        self.filter_action = ContextMenuHintAction(self.tr("Filter..."), parent=self)
+        self.filter_action.triggered.connect(self.open_filter_dialog)
+
+        self.revert_action = ContextMenuHintAction(
+            self.tr("Revert to Original"), parent=self
+        )
+        self.revert_action.triggered.connect(self.view_model.revert_to_original)
+
+        self.zoom_to_selection_action = ContextMenuHintAction(
+            self.tr("Zoom to Selection"), self.tr("Double-click"), parent=self
+        )
+        self.zoom_to_selection_action.triggered.connect(
+            self.view_model.zoom_to_selection
+        )
+        self.zoom_to_selection_action.setVisible(False)
 
         self.set_mark_action = ContextMenuHintAction(
             self.tr("Set Mark"), self.tr("Click"), parent=self
@@ -145,19 +181,33 @@ class DocumentView(QWidget):
         self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add the Set Mark/Remove Mark actions to a plot's ViewBox menu.
+        """Add Zoom to Selection and the Set Mark/Remove Mark actions to a
+        plot's ViewBox menu.
 
         Added directly to each plot's own menu (rather than via the
         scene-wide contextMenu list) so they're present before the menu
         is ever shown.
         """
         menu = view_box.menu
+        menu.addAction(self.zoom_to_selection_action)
         menu.addAction(self.set_mark_action)
         menu.addAction(self.remove_mark_action)
 
     def add_waveform_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add the waveform-only actions, which act on the raw audio."""
-        view_box.menu.insertAction(self.set_mark_action, self.resample_action)
+        """Add the waveform-only actions, which act on the raw audio, after
+        the shared ones."""
+        menu = view_box.menu
+        menu.addSeparator()
+        for action in (
+            self.audio_info_action,
+            self.resample_action,
+            self.scale_action,
+            self.reverse_action,
+            self.recenter_action,
+            self.filter_action,
+            self.revert_action,
+        ):
+            menu.addAction(action)
 
     def _channel_checkbox_at(self, scene_pos: QPointF) -> int | None:
         """The channel index (0 or 1) whose "Active" checkbox contains this
@@ -422,6 +472,8 @@ class DocumentView(QWidget):
 
         for plot in self.document_plots:
             plot.update_selection_region(box_left, t_range)
+
+        self.zoom_to_selection_action.setVisible(select_state.is_selected)
 
     def update_document_window(self, doc_window: DocumentWindowState):
         self.update_slider_page_step(doc_window)
@@ -779,6 +831,27 @@ class DocumentView(QWidget):
         target_fs = ResampleAudioDialog.get_target_fs(primary_channel.fs)
         if target_fs is not None:
             self.view_model.resample(target_fs)
+
+    @pyqtSlot()
+    def open_scale_dialog(self):
+        if self.view_model.primary_channel() is None:
+            return
+
+        scale = ScaleAudioDialog.get_scale_value(
+            applies_to_selection=self.view_model.select_state.is_selected
+        )
+        if scale is not None:
+            self.view_model.scale_audio(scale)
+
+    @pyqtSlot()
+    def open_filter_dialog(self):
+        primary_channel = self.view_model.primary_channel()
+        if primary_channel is None:
+            return
+
+        spec = FilterAudioDialog.get_filter_spec(primary_channel.fs)
+        if spec is not None:
+            self.view_model.filter_audio(spec)
 
     def cleanup(self):
         """Clean up resources when closing document"""

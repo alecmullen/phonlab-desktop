@@ -180,7 +180,9 @@ class MainWindow(QMainWindow):
         self.recenter_action = QAction(
             QIcon.fromTheme("mail-send"), self.tr("Re-center"), self
         )
-        self.recenter_action.setStatusTip(self.tr("Center view on selection"))
+        self.recenter_action.setStatusTip(
+            self.tr("Center view on the selection, or the mark if nothing is selected")
+        )
         self.recenter_action.triggered.connect(self.recenter_on_selection)
 
         # View Menu
@@ -264,6 +266,7 @@ class MainWindow(QMainWindow):
                 doc_view_model = DocumentViewModel()
                 doc_view_model.subscribe(self.on_doc_state_change)
                 doc = DocumentView(doc_view_model)
+                doc.audio_info_requested.connect(self.show_audio_info)
                 doc.origin_name = Path(audio_filename).name
                 doc.origin_path = audio_filename
 
@@ -288,6 +291,7 @@ class MainWindow(QMainWindow):
         doc_view_model = DocumentViewModel()
         doc_view_model.subscribe(self.on_doc_state_change)
         doc = DocumentView(doc_view_model)
+        doc.audio_info_requested.connect(self.show_audio_info)
 
         # Always name after the ORIGINAL source file
         origin_name = source_doc.origin_name
