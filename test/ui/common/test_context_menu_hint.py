@@ -49,6 +49,18 @@ def test_leave_event_unhighlights_widget(qtbot: QtBot):
     assert widget.autoFillBackground() is False
 
 
+def test_hiding_widget_clears_highlight(qtbot: QtBot):
+    widget = ContextMenuHint("Copy")
+    qtbot.addWidget(widget)
+    widget.show()
+    widget.enterEvent(None)
+
+    widget.hide()  # as when a menu closes after a click: no leave event
+
+    assert widget.backgroundRole() == QPalette.ColorRole.Window
+    assert widget.autoFillBackground() is False
+
+
 def test_action_stores_text_and_hint(qtbot: QtBot):
     action = ContextMenuHintAction("Copy", "Ctrl+C")
 

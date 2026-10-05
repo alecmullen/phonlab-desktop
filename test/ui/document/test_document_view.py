@@ -1124,7 +1124,11 @@ def test_plot_rows_have_spacing_between_them(all_plots_view: DocumentView):
 
 
 def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
-    actions = loaded_view.wave_plots[0].getViewBox().menu.actions()
+    loaded_view.view_model.start_selection(2.0)
+    loaded_view.view_model.continue_selection(3.0)
+    menu = loaded_view.wave_plots[0].getViewBox().menu
+    menu.aboutToShow.emit()
+    actions = menu.actions()
 
     ordered = [
         loaded_view.zoom_to_selection_action,
@@ -1142,7 +1146,7 @@ def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
     assert positions == sorted(positions)
 
 
-def test_non_waveform_plots_only_get_zoom_and_mark_actions(loaded_view: DocumentView):
+def test_non_waveform_plots_only_get_mark_actions(loaded_view: DocumentView):
     loaded_view.view_model.toggle_spectrogram()
     QApplication.processEvents()
     spec = next(
@@ -1150,22 +1154,46 @@ def test_non_waveform_plots_only_get_zoom_and_mark_actions(loaded_view: Document
     )
     actions = spec.getViewBox().menu.actions()
 
-    assert loaded_view.zoom_to_selection_action in actions
     assert loaded_view.set_mark_action in actions
     assert loaded_view.scale_action not in actions
 
 
-def test_zoom_to_selection_action_visible_only_with_selection(
+def test_zoom_to_selection_action_present_only_with_selection(
     loaded_view: DocumentView,
 ):
-    assert not loaded_view.zoom_to_selection_action.isVisible()
+    menu = loaded_view.wave_plots[0].getViewBox().menu
+
+    menu.aboutToShow.emit()
+    assert loaded_view.zoom_to_selection_action not in menu.actions()
 
     loaded_view.view_model.start_selection(2.0)
     loaded_view.view_model.continue_selection(3.0)
-    assert loaded_view.zoom_to_selection_action.isVisible()
+    menu.aboutToShow.emit()
+    assert loaded_view.zoom_to_selection_action in menu.actions()
+    menu.aboutToShow.emit()  # idempotent
+    assert menu.actions().count(loaded_view.zoom_to_selection_action) == 1
 
     loaded_view.view_model.remove_selection()
-    assert not loaded_view.zoom_to_selection_action.isVisible()
+    menu.aboutToShow.emit()
+    assert loaded_view.zoom_to_selection_action not in menu.actions()
+
+
+def test_menu_rows_do_not_overlap_with_selection(loaded_view: DocumentView):
+    loaded_view.view_model.start_selection(2.0)
+    loaded_view.view_model.continue_selection(3.0)
+    menu = loaded_view.wave_plots[0].getViewBox().menu
+    menu.popup(loaded_view.mapToGlobal(loaded_view.rect().center()))
+    QApplication.processEvents()
+
+    rects = [
+        menu.actionGeometry(a)
+        for a in menu.actions()
+        if not a.isSeparator() and a.isVisible()
+    ]
+    rects.sort(key=lambda r: r.top())
+    for upper, lower in pairwise(rects):
+        assert upper.bottom() < lower.top()
+    menu.hide()
 
 
 def test_audio_info_action_emits_signal(loaded_view: DocumentView, qtbot: QtBot):

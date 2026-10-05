@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QScrollBar,
@@ -162,7 +163,6 @@ class DocumentView(QWidget):
         self.zoom_to_selection_action.triggered.connect(
             self.view_model.zoom_to_selection
         )
-        self.zoom_to_selection_action.setVisible(False)
 
         self.set_mark_action = ContextMenuHintAction(
             self.tr("Set Mark"), self.tr("Click"), parent=self
@@ -189,9 +189,21 @@ class DocumentView(QWidget):
         is ever shown.
         """
         menu = view_box.menu
-        menu.addAction(self.zoom_to_selection_action)
         menu.addAction(self.set_mark_action)
         menu.addAction(self.remove_mark_action)
+        menu.aboutToShow.connect(lambda: self.sync_zoom_to_selection_action(menu))
+
+    def sync_zoom_to_selection_action(self, menu: QMenu):
+        """Put Zoom to Selection at the top of `menu` only while a selection
+        exists. Adding/removing it as the menu opens (rather than toggling the
+        action's visibility) makes Qt lay the rows out afresh, so it can't be
+        drawn over its neighbour."""
+        present = self.zoom_to_selection_action in menu.actions()
+        wanted = self.view_model.select_state.is_selected
+        if wanted and not present:
+            menu.insertAction(self.set_mark_action, self.zoom_to_selection_action)
+        elif present and not wanted:
+            menu.removeAction(self.zoom_to_selection_action)
 
     def add_waveform_context_menu_actions(self, view_box: pg.ViewBox):
         """Add the waveform-only actions, which act on the raw audio, after
@@ -472,8 +484,6 @@ class DocumentView(QWidget):
 
         for plot in self.document_plots:
             plot.update_selection_region(box_left, t_range)
-
-        self.zoom_to_selection_action.setVisible(select_state.is_selected)
 
     def update_document_window(self, doc_window: DocumentWindowState):
         self.update_slider_page_step(doc_window)
