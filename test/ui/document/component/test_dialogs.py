@@ -97,3 +97,13 @@ def test_paste_special_get_choice_returns_none_when_rejected(
     )
 
     assert PasteSpecialDialog.get_choice(None) is None
+
+
+def test_paste_special_dialog_reverse_option(qtbot: QtBot):
+    dlg = PasteSpecialDialog()
+    qtbot.addWidget(dlg)
+    assert dlg.choice().reverse is False
+
+    dlg.reverse_check_box.setChecked(True)
+
+    assert dlg.choice() == PasteSpecialChoice(1, True, reverse=True)
