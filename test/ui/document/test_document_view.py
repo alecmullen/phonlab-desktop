@@ -1256,3 +1256,27 @@ def test_open_filter_dialog_cancelled_does_nothing(
     loaded_view.open_filter_dialog()
 
     assert calls == []
+
+
+def test_wave_y_range_stays_centered_when_layout_rebuilds_after_y_zoom(
+    view: DocumentView, view_model: DocumentViewModel
+):
+    """Paste Special (mono -> stereo) and Delete Channel (stereo -> mono)
+    rebuild the wave plots; a persisted y zoom must not leave the new plot
+    with pyqtgraph's default range pushed off-center by the limits."""
+    view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.sin(np.arange(20000) / 10) * 0.8, 1000)})
+    )
+    QApplication.processEvents()
+    view.wave_plots[0].adjust_y_scale(-1)
+    QApplication.processEvents()
+    zoomed = view.wave_plots[0].getViewBox().viewRange()[1]
+
+    clip = AudioState({0: AudioChannelState(np.sin(np.arange(2000) / 10) * 0.3, 1000)})
+    view_model.paste_special_new_channel_with_silence(1, 1.0, clip)
+    QApplication.processEvents()
+    assert view.wave_plots[0].getViewBox().viewRange()[1] == pytest.approx(zoomed)
+
+    view_model.delete_channel(1)
+    QApplication.processEvents()
+    assert view.wave_plots[0].getViewBox().viewRange()[1] == pytest.approx(zoomed)
