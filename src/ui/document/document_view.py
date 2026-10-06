@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
-    QMessageBox,
     QProgressBar,
     QScrollBar,
     QVBoxLayout,
@@ -774,6 +773,11 @@ class DocumentView(QWidget):
         if mark_position is None:
             return
 
+        self._paste_matching_channels(mark_position, clip)
+
+    def _paste_matching_channels(self, mark_position: float, clip: AudioState):
+        """Paste `clip` at the mark, asking how to reconcile a mono/stereo
+        mismatch between the document and the clip."""
         doc_is_stereo = self.view_model.stereo_channels() is not None
         if doc_is_stereo != clip.is_stereo:
             choice = PasteChannelDialog.get_channel(self, clip.is_stereo)
@@ -784,26 +788,25 @@ class DocumentView(QWidget):
         self.view_model.paste_at(mark_position, clip)
 
     def paste_special(self, clip: AudioState):
-        if self.view_model.stereo_channels() is not None or clip.is_stereo:
-            QMessageBox.information(
-                self,
-                self.tr("Paste Special"),
-                self.tr(
-                    "Paste Special: New Channel only applies when both the "
-                    "document and the clipboard clip are mono."
-                ),
-            )
-            return
-
         mark_position = self.view_model.mark_position_or_warn()
         if mark_position is None:
             return
 
-        choice = PasteSpecialDialog.get_choice(self)
+        new_channel_available = (
+            self.view_model.stereo_channels() is None and not clip.is_stereo
+        )
+        choice = PasteSpecialDialog.get_choice(
+            self, new_channel_available=new_channel_available
+        )
         if choice is None:
             return
 
-        if choice.insert_silence:
+        if choice.reverse:
+            clip = self.view_model.reversed_clip(clip)
+
+        if not (choice.new_channel and new_channel_available):
+            self._paste_matching_channels(mark_position, clip)
+        elif choice.insert_silence:
             self.view_model.paste_special_new_channel_with_silence(
                 choice.new_channel_idx, mark_position, clip
             )
