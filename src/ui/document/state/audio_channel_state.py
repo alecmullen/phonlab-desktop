@@ -25,6 +25,12 @@ class AudioState(State):
         return len(self.channels) == 2
 
 
+def peak_dbfs(x: np.ndarray) -> float:
+    """Peak level of `x` in dBFS (full scale = 1.0); -inf for silence."""
+    peak = float(np.max(np.abs(x))) if len(x) else 0.0
+    return 20 * np.log10(peak) if peak > 0 else float("-inf")
+
+
 def to_audio_state(channels: dict[int, AudioSignal]) -> AudioState:
     channel_states = {}
     for idx, channel in channels.items():

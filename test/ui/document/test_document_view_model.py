@@ -1289,3 +1289,20 @@ def test_revert_removes_channel_added_by_paste_special(
     assert view_model.audio_state.channels.keys() == {0}
     np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(1000))
     assert view_model.channel_state.active_channels == frozenset({0})
+
+
+def test_peak_dbfs_whole_signal_and_selection(view_model: DocumentViewModel):
+    x = np.concatenate([np.full(1000, 0.1), np.full(1000, 0.5), np.full(1000, 0.1)])
+    load_signal(view_model, x, fs=1000)
+
+    np.testing.assert_allclose(view_model.peak_dbfs(), [20 * np.log10(0.5)])
+
+    view_model.start_selection(0.0)
+    view_model.continue_selection(0.5)
+    np.testing.assert_allclose(view_model.peak_dbfs(), [20 * np.log10(0.1)])
+
+
+def test_peak_dbfs_silence_is_negative_infinity(view_model: DocumentViewModel):
+    load_signal(view_model, np.zeros(1000), fs=1000)
+
+    assert view_model.peak_dbfs() == [float("-inf")]

@@ -14,7 +14,9 @@ DEFAULT_SCALE_DBFS = -1.0
 class ScaleAudioDialog(QDialog):
     """Asks for the peak level, in dBFS, to scale the audio to."""
 
-    def __init__(self, applies_to_selection: bool = False):
+    def __init__(
+        self, applies_to_selection: bool = False, peaks_dbfs: list[float] | None = None
+    ):
         super().__init__()
         self.setWindowTitle(self.tr("Scale Audio"))
 
@@ -27,6 +29,10 @@ class ScaleAudioDialog(QDialog):
         layout.addRow(
             QLabel(self.tr("Scale the peak amplitude of {} to:").format(target))
         )
+
+        if peaks_dbfs:
+            levels = " / ".join(f"{p:.2f}" for p in peaks_dbfs)
+            layout.addRow(QLabel(self.tr("Current peak level: {} dBFS").format(levels)))
 
         self.scale_edit = QLineEdit(str(DEFAULT_SCALE_DBFS))
         validator = QDoubleValidator(-200.0, 200.0, 4, self.scale_edit)
@@ -57,8 +63,10 @@ class ScaleAudioDialog(QDialog):
         return float(self.scale_edit.text())
 
     @staticmethod
-    def get_scale_value(applies_to_selection: bool = False) -> float | None:
-        dialog = ScaleAudioDialog(applies_to_selection)
+    def get_scale_value(
+        applies_to_selection: bool = False, peaks_dbfs: list[float] | None = None
+    ) -> float | None:
+        dialog = ScaleAudioDialog(applies_to_selection, peaks_dbfs)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             return dialog.get_scale()
         return None
