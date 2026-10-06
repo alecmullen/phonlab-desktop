@@ -264,7 +264,7 @@ def test_select_label_emits_selected_state_from_node_positions(qtbot: QtBot):
     view_model = make_view_model(MOCK_ANNOTATION_NODES.copy(), start=0.0, end=2.0)
 
     with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
-        view_model.select_label(AnnotationLabelState(0, 2, "x"))
+        view_model.select_label(AnnotationLabelState(s_node=0, e_node=2, label="x"))
 
     assert blocker.args[0] == AnnotationSelectedState(0.0, 2.0)
 
@@ -273,4 +273,4 @@ def test_select_label_with_missing_node_raises(qtbot: QtBot):
     view_model = make_view_model(MOCK_ANNOTATION_NODES.copy(), start=0.0, end=2.0)
 
     with pytest.raises(ValueError):
-        view_model.select_label(AnnotationLabelState(0, 99, "x"))
+        view_model.select_label(AnnotationLabelState(s_node=0, e_node=99, label="x"))

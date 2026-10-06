@@ -39,10 +39,10 @@ MOCK_ANNOTATION_STATE = AnnotationState(
             "word",
             [
                 AnnotationLabelState(
-                    1, 2, "one", is_visible=True, pos=(1.5, 0.5), size=(1.0, 1.0)
+                    1, 1, 2, "one", is_visible=True, pos=(1.5, 0.5), size=(1.0, 1.0)
                 ),
                 AnnotationLabelState(
-                    2, 3, "two", is_visible=True, pos=(2.5, 0.5), size=(3.0, 1.0)
+                    2, 2, 3, "two", is_visible=True, pos=(2.5, 0.5), size=(3.0, 1.0)
                 ),
             ],
         )
@@ -98,6 +98,7 @@ def test_populate_filters_invisible_labels(qtbot: QtBot):
                 "word",
                 [
                     AnnotationLabelState(
+                        1,
                         0,
                         1,
                         "visible",
@@ -106,6 +107,7 @@ def test_populate_filters_invisible_labels(qtbot: QtBot):
                         size=(1.0, 1.0),
                     ),
                     AnnotationLabelState(
+                        2,
                         2,
                         3,
                         "outside",

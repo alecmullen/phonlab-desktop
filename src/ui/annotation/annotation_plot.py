@@ -94,7 +94,7 @@ class AnnotationPlot(DocumentPlot):
         for type in types:
             self.visible_labels += [label for label in type.labels if label.is_visible]
 
-        self.label_view = LabelView(self.visible_labels, self)
+        self.label_view = LabelView(self.visible_labels, self.on_label_edit, self)
         self.label_view.setPos(0, 0)
         self.addItem(self.label_view)
 
@@ -138,6 +138,10 @@ class AnnotationPlot(DocumentPlot):
                 self.view_model.select_label(label_view_state)
                 return True
         return False
+
+    @pyqtSlot(int, str)
+    def on_label_edit(self, label_id: int, text: str):
+        self.view_model.change_label_text(label_id, text)
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos: QPointF):

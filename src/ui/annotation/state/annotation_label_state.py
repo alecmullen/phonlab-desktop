@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from res.constants import LABEL_HEIGHT_RATIO
 from ui.base.state import State
@@ -6,6 +6,8 @@ from ui.base.state import State
 
 @dataclass(frozen=True)
 class AnnotationLabelState(State):
+    id: int = 0
+
     s_node: int = 0
     e_node: int = 0
     label: str = ""
@@ -24,7 +26,7 @@ def update_label_state(
     tier: int,
 ) -> AnnotationLabelState:
     if end <= win_start or start >= win_end:
-        return AnnotationLabelState(label.s_node, label.e_node, label.label, False)
+        return replace(label, is_visible=False)
 
     x_s = max(win_start, start)
     x_e = min(win_end, end)
@@ -33,11 +35,9 @@ def update_label_state(
     center_y = tier + 0.5
     width = x_e - x_s
 
-    return AnnotationLabelState(
-        label.s_node,
-        label.e_node,
-        label.label,
-        True,
-        (center_x, center_y),
-        (width, LABEL_HEIGHT_RATIO),
+    return replace(
+        label,
+        is_visible=True,
+        pos=(center_x, center_y),
+        size=(width, LABEL_HEIGHT_RATIO),
     )
