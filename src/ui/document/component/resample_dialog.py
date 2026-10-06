@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 
 from ui.common.sample_rate_dropdown import SampleRateDropdown
 
-SAMPLE_RATE_OPTIONS = [4000, 8000, 16000, 22050, 32000, 44100, 48000, 96000]
+SAMPLE_RATE_OPTIONS = [4000, 8000, 10000, 16000, 22050, 32000, 44100, 48000]
 
 
 class ResampleAudioDialog(QDialog):
