@@ -14,6 +14,8 @@ def test_dropdown_is_populated_with_sorted_sample_rate_options(qtbot: QtBot):
 
     items = [dialog.fs_dropdown.itemData(i) for i in range(dialog.fs_dropdown.count())]
     assert items == sorted(SAMPLE_RATE_OPTIONS)
+    assert 96000 not in items
+    assert 10000 in items and 22050 in items
 
 
 def test_dropdown_selects_exact_match_for_current_fs(qtbot: QtBot):
