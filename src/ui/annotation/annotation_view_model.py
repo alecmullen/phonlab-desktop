@@ -81,5 +81,7 @@ class AnnotationViewModel(ViewModel):
         try:
             annotation = use_case.invoke()
             self.set_annotation_state(annotation)
-        except ParseTextGridError as e:
-            self.state_changed.emit(StatusMessageState(str(e)))
+        except ParseTextGridError:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Error parsing TextGrid"))
+            )

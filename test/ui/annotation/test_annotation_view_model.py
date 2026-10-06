@@ -255,7 +255,7 @@ def test_parse_textgrid_shows_status_message_on_invalid_tier_type(tmp_path: Path
 
     status_messages = [s for s in received if isinstance(s, StatusMessageState)]
     assert len(status_messages) == 1
-    assert "Invalid Textgrid" in status_messages[0].message
+    assert "Error parsing TextGrid" in status_messages[0].message
     assert view_model.annotation_state.nodes == {}
     assert view_model.annotation_state.types == []
 
