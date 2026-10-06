@@ -817,7 +817,8 @@ class DocumentView(QWidget):
             return
 
         scale = ScaleAudioDialog.get_scale_value(
-            applies_to_selection=self.view_model.select_state.is_selected
+            applies_to_selection=self.view_model.select_state.is_selected,
+            peaks_dbfs=self.view_model.peak_dbfs(),
         )
         if scale is not None:
             self.view_model.scale_audio(scale)

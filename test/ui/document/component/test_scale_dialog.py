@@ -48,3 +48,13 @@ def test_get_scale_value_returns_value_when_accepted(monkeypatch: pytest.MonkeyP
     )
 
     assert ScaleAudioDialog.get_scale_value() == DEFAULT_SCALE_DBFS
+
+
+def test_shows_current_peak_levels(qtbot: QtBot):
+    from PyQt6.QtWidgets import QLabel
+
+    dialog = ScaleAudioDialog(peaks_dbfs=[-4.1234, -6.0])
+    qtbot.addWidget(dialog)
+
+    texts = [label.text() for label in dialog.findChildren(QLabel)]
+    assert any("-4.12 / -6.00 dBFS" in t for t in texts)
