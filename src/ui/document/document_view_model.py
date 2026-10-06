@@ -1040,7 +1040,7 @@ class DocumentViewModel(ViewModel):
         """Peak level, in dBFS, of what a scale would act on (the selection
         if any, else the whole signal): one value per target channel.
         -inf for silence."""
-        targets = self._transform_targets()
+        targets = self.active_channels()
         if not targets:
             return []
         ref = next(iter(targets.values()))

@@ -836,7 +836,12 @@ class DocumentView(QWidget):
     @pyqtSlot()
     def open_audio_info(self):
         origin_name = self.origin_name if self.origin_name is not None else ""
-        AudioInfoDialog.show_info(self.view_model.primary_channel(), origin_name, self)
+        AudioInfoDialog.show_info(
+            self.view_model.primary_channel(),
+            self.view_model.stereo_channels(),
+            origin_name,
+            self,
+        )
 
     def cleanup(self):
         """Clean up resources when closing document"""
