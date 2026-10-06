@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.document.document_view import DocumentView
-from ui.document.state.audio_channel_state import AudioChannelState
+from ui.document.state.audio_channel_state import AudioChannelState, peak_dbfs
 
 
 class AudioInfoDialog(QDialog):
@@ -29,12 +29,28 @@ class AudioInfoDialog(QDialog):
         form.addRow(
             self.tr("Duration:"), QLabel(self.tr("{:.3f} s").format(raw_duration))
         )
-        min_max_label = None
-        if len(raw.x) > 0:
-            min_max_label = QLabel(
-                self.tr("{:.4g} / {:.4g}").format(min(raw.x), max(raw.x))
+        stereo = doc.view_model.stereo_channels()
+        if stereo is None:
+            self._add_level_rows(
+                form,
+                raw,
+                self.tr("Min / max amplitude:"),
+                self.tr("Peak level:"),
             )
-        form.addRow(self.tr("Min / max amplitude:"), min_max_label)
+        else:
+            left, right = (stereo.channels[idx] for idx in sorted(stereo.channels))
+            self._add_level_rows(
+                form,
+                left,
+                self.tr("Left min / max amplitude:"),
+                self.tr("Left peak level:"),
+            )
+            self._add_level_rows(
+                form,
+                right,
+                self.tr("Right min / max amplitude:"),
+                self.tr("Right peak level:"),
+            )
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         buttons.accepted.connect(self.accept)
@@ -42,6 +58,26 @@ class AudioInfoDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(buttons)
+
+    def _add_level_rows(
+        self,
+        form: QFormLayout,
+        channel: AudioChannelState,
+        min_max_title: str,
+        peak_title: str,
+    ):
+        """Min / max amplitude and peak level rows; blank (no peak row) when
+        the channel has no samples."""
+        if len(channel.x) == 0:
+            form.addRow(min_max_title, None)
+            return
+        form.addRow(
+            min_max_title,
+            QLabel(self.tr("{:.4g} / {:.4g}").format(min(channel.x), max(channel.x))),
+        )
+        form.addRow(
+            peak_title, QLabel(self.tr("{:.2f} dBFS").format(peak_dbfs(channel.x)))
+        )
 
     @staticmethod
     def show_info(doc: DocumentView, tab_name: str, parent: QWidget | None = None):

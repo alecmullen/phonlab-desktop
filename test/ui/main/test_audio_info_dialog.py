@@ -76,3 +76,40 @@ def test_show_info_static_helper_execs_dialog(
     AudioInfoDialog.show_info(document_view, "mydoc.wav")
 
     assert exec_calls == [True]
+
+
+def test_shows_peak_level_in_dbfs(qtbot: QtBot, document_view: DocumentView):
+    document_view.view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.array([-0.5, 0.25, 0.0]), 1000)})
+    )
+
+    dialog = AudioInfoDialog(document_view, "mydoc.wav")
+    qtbot.addWidget(dialog)
+
+    texts = label_texts(dialog)
+    assert "Peak level:" in texts
+    assert "-6.02 dBFS" in texts
+
+
+def test_shows_levels_for_both_stereo_channels(
+    qtbot: QtBot, document_view: DocumentView
+):
+    document_view.view_model.load_from_samples(
+        to_audio_state(
+            {
+                0: AudioSignal(np.array([-0.5, 0.25]), 1000),
+                1: AudioSignal(np.array([-1.0, 0.1]), 1000),
+            }
+        )
+    )
+
+    dialog = AudioInfoDialog(document_view, "stereo.wav")
+    qtbot.addWidget(dialog)
+
+    texts = label_texts(dialog)
+    assert "Left min / max amplitude:" in texts
+    assert "Right min / max amplitude:" in texts
+    assert "-0.5 / 0.25" in texts
+    assert "-1 / 0.1" in texts
+    assert "-6.02 dBFS" in texts
+    assert "0.00 dBFS" in texts
