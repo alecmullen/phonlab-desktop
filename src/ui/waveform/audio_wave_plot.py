@@ -122,11 +122,11 @@ class AudioWavePlot(DocumentPlot):
         self.revert_action.triggered.connect(self.view_model.revert_to_original)
 
         for action in (
+            self.recenter_action,
             self.audio_info_action,
             self.resample_action,
             self.scale_action,
             self.reverse_action,
-            self.recenter_action,
             self.filter_action,
             self.revert_action,
         ):

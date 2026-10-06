@@ -140,6 +140,9 @@ class DocumentView(QWidget):
             self.view_model.zoom_to_selection
         )
 
+        self.deselect_action = ContextMenuHintAction(self.tr("Deselect"), parent=self)
+        self.deselect_action.triggered.connect(self.view_model.remove_selection)
+
         self.set_mark_action = ContextMenuHintAction(
             self.tr("Set Mark"), self.tr("Click"), parent=self
         )
@@ -157,8 +160,8 @@ class DocumentView(QWidget):
         self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add Zoom to Selection and the Set Mark/Remove Mark actions to a
-        plot's ViewBox menu.
+        """Add the navigation actions (Zoom to Selection, Deselect, Set Mark,
+        Remove Mark) to a plot's ViewBox menu.
 
         Added directly to each plot's own menu (rather than via the
         scene-wide contextMenu list) so they're present before the menu
@@ -166,6 +169,7 @@ class DocumentView(QWidget):
         """
         menu = view_box.menu
         first_action = menu.actions()[0] if len(menu.actions()) > 0 else None
+        menu.insertAction(first_action, self.deselect_action)
         menu.insertAction(first_action, self.set_mark_action)
         menu.insertAction(first_action, self.remove_mark_action)
         menu.aboutToShow.connect(lambda: self.sync_zoom_to_selection_action(menu))
@@ -179,7 +183,7 @@ class DocumentView(QWidget):
         present = self.zoom_to_selection_action in menu.actions()
         wanted = self.view_model.select_state.is_selected
         if wanted and not present:
-            menu.insertAction(self.set_mark_action, self.zoom_to_selection_action)
+            menu.insertAction(self.deselect_action, self.zoom_to_selection_action)
         elif present and not wanted:
             menu.removeAction(self.zoom_to_selection_action)
 
