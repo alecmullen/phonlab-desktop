@@ -164,6 +164,9 @@ class DocumentView(QWidget):
             self.view_model.zoom_to_selection
         )
 
+        self.deselect_action = ContextMenuHintAction(self.tr("Deselect"), parent=self)
+        self.deselect_action.triggered.connect(self.view_model.remove_selection)
+
         self.set_mark_action = ContextMenuHintAction(
             self.tr("Set Mark"), self.tr("Click"), parent=self
         )
@@ -181,14 +184,15 @@ class DocumentView(QWidget):
         self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add Zoom to Selection and the Set Mark/Remove Mark actions to a
-        plot's ViewBox menu.
+        """Add the navigation actions (Zoom to Selection, Deselect, Set Mark,
+        Remove Mark) to a plot's ViewBox menu.
 
         Added directly to each plot's own menu (rather than via the
         scene-wide contextMenu list) so they're present before the menu
         is ever shown.
         """
         menu = view_box.menu
+        menu.addAction(self.deselect_action)
         menu.addAction(self.set_mark_action)
         menu.addAction(self.remove_mark_action)
         menu.aboutToShow.connect(lambda: self.sync_zoom_to_selection_action(menu))
@@ -201,21 +205,21 @@ class DocumentView(QWidget):
         present = self.zoom_to_selection_action in menu.actions()
         wanted = self.view_model.select_state.is_selected
         if wanted and not present:
-            menu.insertAction(self.set_mark_action, self.zoom_to_selection_action)
+            menu.insertAction(self.deselect_action, self.zoom_to_selection_action)
         elif present and not wanted:
             menu.removeAction(self.zoom_to_selection_action)
 
     def add_waveform_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add the waveform-only actions, which act on the raw audio, after
-        the shared ones."""
+        """Add Recenter to the navigation block, then the waveform-only actions
+        that act on the raw audio, after the shared ones."""
         menu = view_box.menu
+        menu.addAction(self.recenter_action)
         menu.addSeparator()
         for action in (
             self.audio_info_action,
             self.resample_action,
             self.scale_action,
             self.reverse_action,
-            self.recenter_action,
             self.filter_action,
             self.revert_action,
         ):

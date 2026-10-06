@@ -1132,18 +1132,29 @@ def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
 
     ordered = [
         loaded_view.zoom_to_selection_action,
+        loaded_view.deselect_action,
         loaded_view.set_mark_action,
         loaded_view.remove_mark_action,
+        loaded_view.recenter_action,
         loaded_view.audio_info_action,
         loaded_view.resample_action,
         loaded_view.scale_action,
         loaded_view.reverse_action,
-        loaded_view.recenter_action,
         loaded_view.filter_action,
         loaded_view.revert_action,
     ]
     positions = [actions.index(a) for a in ordered]
     assert positions == sorted(positions)
+
+
+def test_deselect_action_clears_selection(loaded_view: DocumentView):
+    loaded_view.view_model.start_selection(2.0)
+    loaded_view.view_model.continue_selection(3.0)
+    assert loaded_view.view_model.select_state.is_selected
+
+    loaded_view.deselect_action.trigger()
+
+    assert not loaded_view.view_model.select_state.is_selected
 
 
 def test_non_waveform_plots_only_get_mark_actions(loaded_view: DocumentView):
