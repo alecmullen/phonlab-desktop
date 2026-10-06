@@ -3,18 +3,20 @@ from PyQt6.QtWidgets import QDialog
 from pytestqt.qtbot import QtBot
 
 from ui.spectrogram.component.spectrogram_settings_dialog import (
-    SAMPLE_RATE_OPTIONS,
+    TOP_FREQUENCY_OPTIONS,
     SpectrogramSettingsDialog,
 )
 from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
 
 
-def test_dropdown_is_populated_with_sorted_sample_rate_options(qtbot: QtBot):
+def test_dropdown_is_populated_with_sorted_top_frequency_options(qtbot: QtBot):
     dialog = SpectrogramSettingsDialog(SpectrogramSettingsState())
     qtbot.addWidget(dialog)
 
-    items = [dialog.fs_dropdown.itemData(i) for i in range(dialog.fs_dropdown.count())]
-    assert items == sorted(SAMPLE_RATE_OPTIONS)
+    dropdown = dialog.top_frequency_dropdown
+    items = [dropdown.itemData(i) for i in range(dropdown.count())]
+    assert items == sorted(TOP_FREQUENCY_OPTIONS)
+    assert items == [4000, 5000, 8000, 12000, 16000]
 
 
 def test_fields_are_initialized_from_settings(qtbot: QtBot):
@@ -22,7 +24,7 @@ def test_fields_are_initialized_from_settings(qtbot: QtBot):
     dialog = SpectrogramSettingsDialog(settings)
     qtbot.addWidget(dialog)
 
-    assert dialog.fs_dropdown.currentData() == 32000
+    assert dialog.top_frequency_dropdown.currentData() == 16000
     assert dialog.window_spin.value() == 20
     assert dialog.step_spin.value() == 2
 
@@ -31,7 +33,8 @@ def test_open_spectrogram_settings_returns_updated_settings_when_accepted(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
     def fake_exec(self: SpectrogramSettingsDialog) -> QDialog.DialogCode:
-        self.fs_dropdown.setCurrentIndex(self.fs_dropdown.findData(44100))
+        dropdown = self.top_frequency_dropdown
+        dropdown.setCurrentIndex(dropdown.findData(12000))
         self.window_spin.setValue(15)
         self.step_spin.setValue(3)
         return QDialog.DialogCode.Accepted
@@ -41,7 +44,7 @@ def test_open_spectrogram_settings_returns_updated_settings_when_accepted(
 
     result = SpectrogramSettingsDialog.open_spectrogram_settings(original)
 
-    assert result.fs == 44100
+    assert result.fs == 24000  # twice the top frequency
     assert result.window_size == pytest.approx(0.015)
     assert result.step_size == pytest.approx(0.003)
 
