@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from PyQt6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QGroupBox,
@@ -15,6 +16,7 @@ from PyQt6.QtWidgets import (
 class PasteSpecialChoice:
     new_channel_idx: int
     insert_silence: bool
+    reverse: bool = False
 
 
 class PasteSpecialDialog(QDialog):
@@ -56,6 +58,8 @@ class PasteSpecialDialog(QDialog):
         silence_layout.addWidget(self.with_silence_radio)
         silence_layout.addWidget(self.without_silence_radio)
 
+        self.reverse_check_box = QCheckBox(self.tr("Reverse the audio before pasting"))
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -65,6 +69,7 @@ class PasteSpecialDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(channel_group_box)
         layout.addWidget(silence_group_box)
+        layout.addWidget(self.reverse_check_box)
         layout.addWidget(buttons)
 
     def choice(self) -> PasteSpecialChoice:
@@ -75,6 +80,7 @@ class PasteSpecialDialog(QDialog):
         return PasteSpecialChoice(
             new_channel_idx=new_channel_idx,
             insert_silence=self.with_silence_radio.isChecked(),
+            reverse=self.reverse_check_box.isChecked(),
         )
 
     @staticmethod

@@ -1287,3 +1287,29 @@ def test_wave_y_range_stays_centered_when_layout_rebuilds_after_y_zoom(
     view_model.delete_channel(1)
     QApplication.processEvents()
     assert view.wave_plots[0].getViewBox().viewRange()[1] == pytest.approx(zoomed)
+
+
+def test_paste_special_reverses_clip_when_requested(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    loaded_view.view_model.set_mark(1.0)
+    monkeypatch.setattr(
+        PasteSpecialDialog,
+        "get_choice",
+        staticmethod(
+            lambda parent=None: PasteSpecialChoice(
+                new_channel_idx=1, insert_silence=True, reverse=True
+            )
+        ),
+    )
+    pasted = []
+    loaded_view.view_model.paste_special_new_channel_with_silence = (
+        lambda new_channel_idx, position, clip: pasted.append(clip)
+    )
+    original = np.array([1.0, 2.0, 3.0])
+    clip = AudioState({0: AudioChannelState(original.copy(), 1000)})
+
+    loaded_view.paste_special(clip)
+
+    np.testing.assert_array_equal(pasted[0].channels[0].x, original[::-1])
+    np.testing.assert_array_equal(clip.channels[0].x, original)  # not mutated

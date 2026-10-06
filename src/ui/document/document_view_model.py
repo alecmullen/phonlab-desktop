@@ -1064,6 +1064,16 @@ class DocumentViewModel(ViewModel):
             scale_samples, self.tr("Scaled to {:g} dBFS").format(scale)
         )
 
+    @staticmethod
+    def reversed_clip(clip: AudioState) -> AudioState:
+        """A copy of `clip` with each channel's samples in reverse order."""
+        return AudioState(
+            {
+                idx: AudioChannelState(ReverseAudio(channel.x).invoke(), channel.fs)
+                for idx, channel in clip.channels.items()
+            }
+        )
+
     def reverse_audio(self) -> bool:
         return self._transform_samples(
             lambda x, fs: x[::-1].copy(), self.tr("Reversed")

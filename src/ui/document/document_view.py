@@ -772,6 +772,9 @@ class DocumentView(QWidget):
         if choice is None:
             return
 
+        if choice.reverse:
+            clip = self.view_model.reversed_clip(clip)
+
         if choice.insert_silence:
             self.view_model.paste_special_new_channel_with_silence(
                 choice.new_channel_idx, mark_position, clip
