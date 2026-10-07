@@ -56,6 +56,8 @@ from ui.waveform.state.audio_wave_action import (
     AudioScaleAction,
 )
 from ui.waveform.state.audio_wave_state import to_audio_wave_state
+from ui.waveform.state.channel_active_state import ChannelActiveState
+from ui.waveform.state.delete_channel_state import DeleteChannelState
 
 
 class DocumentViewModel(ViewModel):
@@ -120,6 +122,10 @@ class DocumentViewModel(ViewModel):
             self.revert_to_original()
         elif isinstance(model, AudioRecenterAction):
             self.center_on_selection()
+        if isinstance(model, DeleteChannelState):
+            self.delete_channel(model.idx)
+        if isinstance(model, ChannelActiveState):
+            self.toggle_channel_active(model.idx, model.is_active)
 
     def toggle_wave(self):
         plots = self.plot_layout_state.plots.copy()
@@ -715,11 +721,11 @@ class DocumentViewModel(ViewModel):
             raise RuntimeError("Cannot save audio that is not loaded")
         SaveAudio(path, channels, target_fs, scale).invoke()
 
-    def toggle_channel_active(self, idx: int):
+    def toggle_channel_active(self, idx: int, is_active: bool):
         """Activate/deactivate channel `idx` for playback/spectrogram
         purposes - refused if it would leave no channel active."""
         active = self.channel_state.active_channels
-        new_active = (active - {idx}) if idx in active else (active | {idx})
+        new_active = (active - {idx}) if not is_active else (active | {idx})
         if not new_active:
             self.state_changed.emit(
                 StatusMessageState(self.tr("At least one channel must stay active"))
@@ -736,8 +742,6 @@ class DocumentViewModel(ViewModel):
             active_channels=frozenset(new_active),
             primary_channel=primary,
         )
-        for i, view_model in enumerate(self.audio_wave_view_models):
-            view_model.set_active(i in new_active)
         self.prep_audio_spectrogram()
 
     def delete_channel(self, idx: int):

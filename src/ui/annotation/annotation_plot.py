@@ -1,7 +1,7 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtGui import QFont, QFontMetrics, QMouseEvent, QShowEvent
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtGui import QFont, QFontMetrics, QShowEvent
+from PyQt6.QtWidgets import QGraphicsSceneMouseEvent, QWidget
 
 from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
 from ui.annotation.annotation_view_model import AnnotationViewModel
@@ -104,28 +104,33 @@ class AnnotationPlot(DocumentPlot):
         self.node_view.setPos(0, 0)
         self.addItem(self.node_view)
 
-    def handle_mouse_press(self, event: QMouseEvent) -> bool:
+    def mousePressEvent(self, a0: QGraphicsSceneMouseEvent | None):
+        if a0 is None:
+            return
         pixel_size = self.getViewBox().viewPixelSize()
         h_margin = NODE_H_MARGIN * pixel_size[0]
         v_margin = NODE_V_MARGIN * pixel_size[1]
 
-        pos = self.getViewBox().mapSceneToView(event.position())
+        pos = self.getViewBox().mapSceneToView(a0.scenePos())
 
         for node_view_state in self.visible_nodes:
             node_x = node_view_state.x
             node_y = node_view_state.extents[0].tier
             if abs(pos.x() - node_x) < h_margin and abs(pos.y() - node_y) < v_margin:
                 self.dragging_node = node_view_state
-                return True
-        return False
+                a0.accept()
+                return
 
-    def handle_mouse_release(self, event: QMouseEvent) -> bool:
+        a0.ignore()
+
+    def mouseReleaseEvent(self, a0: QGraphicsSceneMouseEvent | None):
+        if a0 is None:
+            return
         if self.dragging_node is not None:
             self.dragging_node = None
-            event.accept()
-            return True
-
-        return False
+            a0.accept()
+        else:
+            a0.ignore()
 
     def handle_single_click(self, scene_pos: QPointF) -> bool:
         pos = self.getViewBox().mapSceneToView(scene_pos)

@@ -229,7 +229,7 @@ def test_channel_checkboxes_default_from_single_active(
     qtbot: QtBot, document_view: DocumentView
 ):
     load_stereo(document_view)
-    document_view.view_model.toggle_channel_active(1)
+    document_view.view_model.toggle_channel_active(1, False)
 
     dialog = SaveAudioDialog(document_view, "myfile.wav")
     qtbot.addWidget(dialog)

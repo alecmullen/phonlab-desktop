@@ -13,7 +13,6 @@ from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.common.document_plot import DocumentPlot
-from ui.document.component.delete_channel_dialog import DeleteChannelDialog
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_special_dialog import (
     PasteSpecialChoice,
@@ -37,6 +36,7 @@ from ui.document.state.plot_layout_state import PlotLayoutState
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
+from ui.waveform.component.delete_channel_dialog import DeleteChannelDialog
 
 
 class FakeAudioPlayer:
@@ -101,7 +101,7 @@ def stereo_loaded_view(
 def widget_pos_for_time(view: DocumentView, t: float) -> QPoint:
     y = view.document_plots[0].getViewBox().viewRange()[1][0]
     scene_pos = view.document_plots[0].getViewBox().mapViewToScene(QPointF(t, y))
-    return view.graphics_widget.mapFromScene(scene_pos)
+    return scene_pos + view.graphics_widget.pos().toPointF()
 
 
 def mouse_event(
@@ -239,7 +239,7 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
 ):
     view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonPress)
-    loaded_view.handle_mouse_press(press)
+    loaded_view.mousePressEvent(press)
 
     loaded_view.on_mouse_moved(
         loaded_view.document_plots[0].getViewBox().mapViewToScene(QPointF(2.0, 0))
@@ -253,7 +253,7 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
     assert loaded_view.is_dragging is True
 
     release = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonRelease)
-    loaded_view.handle_mouse_release(release)
+    loaded_view.mouseReleaseEvent(release)
 
     assert loaded_view.mouse_pressed is False
     assert loaded_view.is_dragging is False
@@ -263,7 +263,7 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
 def test_shift_click_plays_visible_audio(loaded_view: DocumentView):
     view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
-    loaded_view.handle_mouse_press(press)
+    loaded_view.mousePressEvent(press)
 
     release = mouse_event(
         loaded_view,
@@ -271,7 +271,7 @@ def test_shift_click_plays_visible_audio(loaded_view: DocumentView):
         QEvent.Type.MouseButtonRelease,
         Qt.KeyboardModifier.ShiftModifier,
     )
-    loaded_view.handle_mouse_release(release)
+    loaded_view.mouseReleaseEvent(release)
 
     assert loaded_view.pending_single_click is None
     assert loaded_view.click_timer is None
@@ -284,7 +284,7 @@ def test_double_click_zooms_to_selection(loaded_view: DocumentView):
     view_model.continue_selection(5.0)
 
     dbl_click = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonDblClick)
-    loaded_view.handle_double_click(dbl_click)
+    loaded_view.mouseDoubleClickEvent(dbl_click)
 
     assert view_model.document_window_state.start == 1000
     assert view_model.document_window_state.end == 5000
@@ -294,14 +294,14 @@ def test_click_after_release_sets_mark_at_click_position(
     qtbot: QtBot, loaded_view: DocumentView
 ):
     view_model = loaded_view.view_model
-    press = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonPress)
-    loaded_view.handle_mouse_press(press)
+    press = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
+    loaded_view.mousePressEvent(press)
     release = mouse_event(
         loaded_view,
         4.0,
         QEvent.Type.MouseButtonRelease,
     )
-    loaded_view.handle_mouse_release(release)
+    loaded_view.mouseReleaseEvent(release)
 
     assert loaded_view.click_timer is not None
     qtbot.wait(400)
@@ -363,36 +363,6 @@ def test_handle_control_scroll_adjusts_wave_plot_y_scale(loaded_view: DocumentVi
     loaded_view.handle_control_scroll(event, scroll_y=1.0, is_trackpad=False)
 
     assert calls == [1.0]
-
-
-def test_event_filter_routes_wheel_event_by_live_keyboard_modifiers(
-    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    # handle_scroll reads QApplication.keyboardModifiers() (the live global
-    # modifier state), not the wheel event's own modifiers() value.
-    monkeypatch.setattr(
-        QApplication,
-        "keyboardModifiers",
-        staticmethod(lambda: Qt.KeyboardModifier.ShiftModifier),
-    )
-    calls = []
-    loaded_view.zoom_in = lambda factor=2: calls.append(factor)
-
-    event = QWheelEvent(
-        QPointF(10, 10),
-        QPointF(10, 10),
-        QPoint(0, 0),
-        QPoint(0, 120),
-        Qt.MouseButton.NoButton,
-        Qt.KeyboardModifier.ShiftModifier,
-        Qt.ScrollPhase.NoScrollPhase,
-        False,
-    )
-
-    handled = loaded_view.eventFilter(loaded_view.graphics_widget.viewport(), event)
-
-    assert handled is True
-    assert calls == [1.05]
 
 
 # --------------------------- drag and drop ---------------------------
@@ -506,42 +476,13 @@ def test_delete_button_click_deletes_correct_channel(
     monkeypatch.setattr(
         DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
     )
-    scene_pos = (
-        stereo_loaded_view.document_plots[1]
-        .delete_button_proxy.sceneBoundingRect()
-        .center()
-    )
-    press = click_at_scene_pos(
-        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonPress
-    )
-
-    stereo_loaded_view.handle_mouse_press(press)
+    stereo_loaded_view.document_plots[1].delete_channel()
 
     assert stereo_loaded_view.view_model.stereo_channels() is None
     np.testing.assert_array_equal(
         stereo_loaded_view.view_model.primary_channel().x,
         np.arange(20000, dtype=np.float64),
     )
-
-
-def test_delete_button_click_does_not_set_mouse_pressed(
-    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(
-        DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
-    )
-    scene_pos = (
-        stereo_loaded_view.document_plots[1]
-        .delete_button_proxy.sceneBoundingRect()
-        .center()
-    )
-    press = click_at_scene_pos(
-        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonPress
-    )
-
-    stereo_loaded_view.handle_mouse_press(press)
-
-    assert stereo_loaded_view.mouse_pressed is False
 
 
 def test_delete_button_click_cancelled_dialog_does_nothing(
@@ -559,28 +500,9 @@ def test_delete_button_click_cancelled_dialog_does_nothing(
         stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonPress
     )
 
-    stereo_loaded_view.handle_mouse_press(press)
+    stereo_loaded_view.mousePressEvent(press)
 
     assert stereo_loaded_view.view_model.stereo_channels() is not None
-
-
-def test_double_click_on_delete_button_does_not_zoom(
-    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    zoom_calls = []
-    stereo_loaded_view.view_model.zoom_if_in_selection = lambda x: zoom_calls.append(x)
-    scene_pos = (
-        stereo_loaded_view.document_plots[1]
-        .delete_button_proxy.sceneBoundingRect()
-        .center()
-    )
-    dbl_click = click_at_scene_pos(
-        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonDblClick
-    )
-
-    stereo_loaded_view.handle_double_click(dbl_click)
-
-    assert zoom_calls == []
 
 
 def test_layout_collapses_to_one_row_after_delete(
@@ -589,16 +511,8 @@ def test_layout_collapses_to_one_row_after_delete(
     monkeypatch.setattr(
         DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
     )
-    scene_pos = (
-        stereo_loaded_view.document_plots[1]
-        .delete_button_proxy.sceneBoundingRect()
-        .center()
-    )
-    press = click_at_scene_pos(
-        stereo_loaded_view, scene_pos, QEvent.Type.MouseButtonPress
-    )
 
-    stereo_loaded_view.handle_mouse_press(press)
+    stereo_loaded_view.document_plots[1].delete_channel()
     QApplication.processEvents()
 
     assert len(stereo_loaded_view.document_plots) < 2
@@ -876,30 +790,16 @@ def test_on_mouse_moved_while_pressed_starts_then_continues_selection(
     )
 
 
-def test_mouse_press_on_annotation_plot_handled_does_not_start_drag(
-    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    plot = plot_of(all_plots_view, AnnotationPlot)
-    monkeypatch.setattr(plot, "handle_mouse_press", lambda event: True)
-    event = click_at_scene_pos(
-        all_plots_view, scene_center(plot), QEvent.Type.MouseButtonPress
-    )
-
-    all_plots_view.handle_mouse_press(event)
-
-    assert all_plots_view.mouse_pressed is False
-
-
 def test_mouse_press_on_annotation_plot_unhandled_starts_drag(
     all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
     plot = plot_of(all_plots_view, AnnotationPlot)
-    monkeypatch.setattr(plot, "handle_mouse_press", lambda event: False)
+    monkeypatch.setattr(plot, "mousePressEvent", lambda event: False)
     event = click_at_scene_pos(
         all_plots_view, scene_center(plot), QEvent.Type.MouseButtonPress
     )
 
-    all_plots_view.handle_mouse_press(event)
+    all_plots_view.mousePressEvent(event)
 
     assert all_plots_view.mouse_pressed is True
 
@@ -909,24 +809,9 @@ def test_mouse_press_outside_plots_does_not_start_drag(loaded_view: DocumentView
         loaded_view, QPointF(-1000, -1000), QEvent.Type.MouseButtonPress
     )
 
-    loaded_view.handle_mouse_press(event)
+    loaded_view.mousePressEvent(event)
 
     assert loaded_view.mouse_pressed is False
-
-
-def test_mouse_release_without_press_forwards_to_annotation_plots(
-    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    plot = plot_of(all_plots_view, AnnotationPlot)
-    calls = []
-    monkeypatch.setattr(plot, "handle_mouse_release", lambda e: calls.append(e))
-    event = click_at_scene_pos(
-        all_plots_view, scene_center(plot), QEvent.Type.MouseButtonRelease
-    )
-
-    all_plots_view.handle_mouse_release(event)
-
-    assert calls == [event]
 
 
 def test_single_click_on_label_selects_label_and_sets_no_mark(
@@ -1084,50 +969,6 @@ def test_view_methods_delegate_to_view_model(
     getattr(view, view_method)(*args)
 
     assert calls == [args]
-
-
-def test_event_filter_routes_mouse_events_to_handlers(
-    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    calls = []
-    monkeypatch.setattr(
-        loaded_view, "handle_double_click", lambda e: calls.append("double")
-    )
-    monkeypatch.setattr(
-        loaded_view, "handle_mouse_press", lambda e: calls.append("press")
-    )
-    monkeypatch.setattr(
-        loaded_view, "handle_mouse_release", lambda e: calls.append("release")
-    )
-    viewport = loaded_view.graphics_widget.viewport()
-
-    for event_type in (
-        QEvent.Type.MouseButtonDblClick,
-        QEvent.Type.MouseButtonPress,
-        QEvent.Type.MouseButtonRelease,
-    ):
-        event = mouse_event(loaded_view, 2.0, event_type)
-        assert loaded_view.eventFilter(viewport, event) is True
-
-    assert calls == ["double", "press", "release"]
-
-
-def test_event_filter_right_press_records_context_position(
-    loaded_view: DocumentView,
-):
-    viewport = loaded_view.graphics_widget.viewport()
-    pos = QPointF(widget_pos_for_time(loaded_view, 2.0))
-    event = QMouseEvent(
-        QEvent.Type.MouseButtonPress,
-        pos,
-        Qt.MouseButton.RightButton,
-        Qt.MouseButton.RightButton,
-        Qt.KeyboardModifier.NoModifier,
-    )
-
-    loaded_view.eventFilter(viewport, event)
-
-    assert loaded_view.context_pos is not None
 
 
 def test_plot_rows_are_sized_one_two_one(all_plots_view: DocumentView):

@@ -1,7 +1,8 @@
+from typing import cast
+
 import pyqtgraph as pg
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
 from PyQt6.QtGui import (
-    QFocusEvent,
     QFont,
     QFontMetrics,
     QKeyEvent,
@@ -57,6 +58,8 @@ class EditableLabelItem(pg.TextItem):
         self.setTextWidth(label_width)
         self.setPos(*label.pos)
 
+        self.textItem.installEventFilter(self)
+
     def mouseDoubleClickEvent(self, a0: QMouseEvent | None):
         if a0 is None:
             return
@@ -84,23 +87,24 @@ class EditableLabelItem(pg.TextItem):
 
             self.editing_finished.emit(self.label_id, self.textItem.toPlainText())
 
-    def focusOutEvent(self, a0: QFocusEvent | None):
-        # Save changes when the user clicks away
-        self.setEditable(False)
-        super().focusOutEvent(a0)
-
-    def keyPressEvent(self, a0: QKeyEvent | None):
-        # Stop editing if user presses Enter/Return (without Shift) or Escape
-        if a0 is None:
-            return
-        if a0.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            if not (a0.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+    def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
+        event = a1
+        if event is None:
+            return False
+        if event.type() == QEvent.Type.KeyPress:
+            event = cast(QKeyEvent, event)
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                if not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
+                    self.textItem.clearFocus()
+                    event.accept()
+                    return True
+            elif event.key() == Qt.Key.Key_Escape:
                 self.setEditable(False)
-                a0.accept()
-                return
-        elif a0.key() == Qt.Key.Key_Escape:
+                event.accept()
+                return True
+        if event.type() == QEvent.Type.FocusOut:
             self.setEditable(False)
-            a0.accept()
-            return
-
-        super().keyPressEvent(a0)
+            event.accept()
+            return True
+        event.ignore()
+        return False

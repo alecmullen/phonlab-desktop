@@ -1116,7 +1116,7 @@ def test_scale_selection_only_and_undo(view_model: DocumentViewModel):
 def test_reverse_stereo_applies_only_to_active_channels(view_model: DocumentViewModel):
     x0, x1 = np.arange(1000), np.arange(1000) * -1
     load_stereo(view_model, x0, x1, fs=1000)
-    view_model.toggle_channel_active(1)  # leaves only channel 0 active
+    view_model.toggle_channel_active(1, False)  # leaves only channel 0 active
 
     view_model.reverse_audio()
 
@@ -1264,7 +1264,7 @@ def test_filter_stereo_only_affects_active_channels(view_model: DocumentViewMode
     t = np.arange(fs) / fs
     x = np.sin(2 * np.pi * 3000 * t)
     load_stereo(view_model, x, x, fs=fs)
-    view_model.toggle_channel_active(1)  # only channel 0 stays active
+    view_model.toggle_channel_active(1, False)  # only channel 0 stays active
 
     view_model.filter_audio(FilterSpec(FilterType.LOWPASS, high=500.0))
 

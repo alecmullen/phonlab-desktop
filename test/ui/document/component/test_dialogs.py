@@ -2,12 +2,12 @@ import pytest
 from PyQt6.QtWidgets import QDialog, QMessageBox
 from pytestqt.qtbot import QtBot
 
-from ui.document.component.delete_channel_dialog import DeleteChannelDialog
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.paste_special_dialog import (
     PasteSpecialChoice,
     PasteSpecialDialog,
 )
+from ui.waveform.component.delete_channel_dialog import DeleteChannelDialog
 
 
 def click_button_with_text(monkeypatch: pytest.MonkeyPatch, text: str | None):

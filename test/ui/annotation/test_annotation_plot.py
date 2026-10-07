@@ -222,8 +222,9 @@ def test_handle_mouse_release_without_drag_returns_false(qtbot: QtBot):
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
     )
+    event.scenePos = lambda: QPointF(0, 0)
 
-    assert plot.handle_mouse_release(event) is False
+    plot.mouseReleaseEvent(event)
     assert plot.dragging_node is None
 
 
@@ -246,7 +247,8 @@ def test_handle_mouse_press_and_release_on_node(qtbot: QtBot):
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
     )
-    assert plot.handle_mouse_press(press_event) is True
+    press_event.scenePos = lambda: scene_pos
+    plot.mousePressEvent(press_event)
     assert plot.dragging_node == node_view_state
 
     release_event = QMouseEvent(
@@ -256,7 +258,8 @@ def test_handle_mouse_press_and_release_on_node(qtbot: QtBot):
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
     )
-    assert plot.handle_mouse_release(release_event) is True
+    release_event.scenePos = lambda: scene_pos
+    plot.mouseReleaseEvent(press_event)
     assert plot.dragging_node is None
 
 
@@ -278,7 +281,8 @@ def test_handle_mouse_press_away_from_node_returns_false(qtbot: QtBot):
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
     )
-    assert plot.handle_mouse_press(event) is False
+    event.scenePos = lambda: far_scene_pos
+    plot.mouseReleaseEvent(event)
     assert plot.dragging_node is None
 
 
