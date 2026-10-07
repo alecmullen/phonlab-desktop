@@ -36,9 +36,6 @@ class AnnotationPlot(DocumentPlot):
         self.visible_nodes: list[AnnotationNodeState] = []
         self.visible_labels: list[AnnotationLabelState] = []
 
-        self.node_view: NodeView | None = None
-        self.label_view: LabelView | None = None
-
         self.dragging_node: AnnotationNodeState | None = None
 
     @pyqtSlot(object)
@@ -56,14 +53,9 @@ class AnnotationPlot(DocumentPlot):
         self.populate(self.view_model.annotation_view_state)
 
     def clear_annotations(self):
-        node_view = self.node_view
-        label_view = self.label_view
-        self.node_view = None
-        self.label_view = None
-        if node_view is not None:
-            self.removeItem(node_view)
-        if label_view is not None:
-            self.removeItem(label_view)
+        for item in self.allChildItems():
+            if isinstance(item, (LabelView, NodeView)):
+                self.removeItem(item)
 
     def populate(self, annotation_state: AnnotationState):
         self.clear_annotations()
@@ -94,15 +86,15 @@ class AnnotationPlot(DocumentPlot):
         for type in types:
             self.visible_labels += [label for label in type.labels if label.is_visible]
 
-        self.label_view = LabelView(self.visible_labels, self.on_label_edit, self)
-        self.label_view.setPos(0, 0)
-        self.addItem(self.label_view)
+        label_view = LabelView(self.visible_labels, self.on_label_edit, self)
+        label_view.setPos(0, 0)
+        self.addItem(label_view)
 
         self.visible_nodes = [node for node in nodes.values() if node.is_visible]
 
-        self.node_view = NodeView(self.visible_nodes, self)
-        self.node_view.setPos(0, 0)
-        self.addItem(self.node_view)
+        node_view = NodeView(self.visible_nodes, self)
+        node_view.setPos(0, 0)
+        self.addItem(node_view)
 
     def mousePressEvent(self, a0: QGraphicsSceneMouseEvent | None):
         if a0 is None:

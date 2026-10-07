@@ -60,17 +60,31 @@ class EditableLabelItem(pg.TextItem):
 
         self.textItem.installEventFilter(self)
 
-    def mouseDoubleClickEvent(self, a0: QMouseEvent | None):
+        self.right_mouse_pressed: bool = False
+        self.text_at_edit_start: str | None = None
+
+    def mousePressEvent(self, a0: QMouseEvent | None):
         if a0 is None:
             return
-        if a0.button() == Qt.MouseButton.LeftButton:
-            self.setEditable(True)
+        if a0.button() == Qt.MouseButton.RightButton:
+            self.right_mouse_pressed = True
             a0.accept()
         else:
-            super().mouseDoubleClickEvent(a0)
+            a0.ignore()
+
+    def mouseReleaseEvent(self, a0: QMouseEvent | None):
+        if a0 is None:
+            return
+        if a0.button() == Qt.MouseButton.RightButton and self.right_mouse_pressed:
+            self.setEditable(True)
+            a0.accept()
+            self.right_mouse_pressed = False
+        else:
+            a0.ignore()
 
     def setEditable(self, editable: bool):
         if editable:
+            self.text_at_edit_start = self.textItem.toPlainText()
             self.textItem.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextEditorInteraction
             )
@@ -80,12 +94,22 @@ class EditableLabelItem(pg.TextItem):
             cursor.select(QTextCursor.SelectionType.Document)
             self.textItem.setTextCursor(cursor)
         else:
+            start_text = self.text_at_edit_start
+            self.text_at_edit_start = None
+
             self.textItem.setTextInteractionFlags(
                 Qt.TextInteractionFlag.NoTextInteraction
             )
+
+            cursor = self.textItem.textCursor()
+            cursor.clearSelection()
+            self.textItem.setTextCursor(cursor)
+
             self.textItem.clearFocus()
 
-            self.editing_finished.emit(self.label_id, self.textItem.toPlainText())
+            new_text = self.textItem.toPlainText()
+            if new_text != start_text:
+                self.editing_finished.emit(self.label_id, new_text)
 
     def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
         event = a1

@@ -94,8 +94,6 @@ class AnnotationViewModel(ViewModel):
             label_id, text, self.annotation_view_state
         )
 
-        self.state_changed.emit(self.annotation_view_state)
-
     def _change_label_text_in_state(
         self, label_id: int, text: str, annotation: AnnotationState
     ) -> AnnotationState:
