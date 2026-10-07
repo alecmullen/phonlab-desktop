@@ -117,13 +117,11 @@ class EditableLabelItem(pg.TextItem):
             return False
         if event.type() == QEvent.Type.KeyPress:
             event = cast(QKeyEvent, event)
-            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                if not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
-                    self.textItem.clearFocus()
-                    event.accept()
-                    return True
-            elif event.key() == Qt.Key.Key_Escape:
-                self.setEditable(False)
+            if (
+                event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+                and not (event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+            ) or event.key() == Qt.Key.Key_Escape:
+                self.textItem.clearFocus()
                 event.accept()
                 return True
         if event.type() == QEvent.Type.FocusOut:
