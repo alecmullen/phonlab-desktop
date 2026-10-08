@@ -1,12 +1,24 @@
+from PyQt6.QtCore import pyqtSlot
+
 from ui.base.view_model import ViewModel
+from ui.waveform.state.audio_wave_action import (
+    AudioFilterAction,
+    AudioInfoAction,
+    AudioRecenterAction,
+    AudioResampleAction,
+    AudioReverseAction,
+    AudioRevertToOriginalAction,
+    AudioScaleAction,
+)
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
 from ui.waveform.state.audio_wave_state import AudioWaveState
 from ui.waveform.state.channel_active_state import ChannelActiveState
 
 
 class AudioWaveViewModel(ViewModel):
-    def __init__(self):
+    def __init__(self, channel_idx: int = 0):
         super().__init__()
+        self.channel_idx: int = channel_idx
         self.audio_wave_scale_state = AudioWaveScaleState()
         self.audio_wave_state = AudioWaveState()
         self.channel_active_state = ChannelActiveState()
@@ -33,3 +45,31 @@ class AudioWaveViewModel(ViewModel):
     def set_wave_state(self, state: AudioWaveState):
         self.audio_wave_state = state
         self.state_changed.emit(state)
+
+    @pyqtSlot()
+    def scale_audio(self):
+        self.state_changed.emit(AudioScaleAction())
+
+    @pyqtSlot()
+    def filter_audio(self):
+        self.state_changed.emit(AudioFilterAction())
+
+    @pyqtSlot()
+    def resample_audio(self):
+        self.state_changed.emit(AudioResampleAction())
+
+    @pyqtSlot()
+    def open_audio_info(self):
+        self.state_changed.emit(AudioInfoAction())
+
+    @pyqtSlot()
+    def recenter_on_selection(self):
+        self.state_changed.emit(AudioRecenterAction())
+
+    @pyqtSlot()
+    def revert_to_original(self):
+        self.state_changed.emit(AudioRevertToOriginalAction())
+
+    @pyqtSlot()
+    def reverse_audio(self):
+        self.state_changed.emit(AudioReverseAction())

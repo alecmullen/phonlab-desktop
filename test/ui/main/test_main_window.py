@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
 import ui.base.view_model as view_model_module
+import ui.document.document_view as doc_view_module
 import ui.document.document_view_model as dvm_module
 import ui.main.main_window as main_window_module
 from core.load_audio.entity.audio_signal import AudioSignal
@@ -539,7 +540,7 @@ def test_show_audio_info_execs_dialog_for_current_document(
     load_signal(doc, np.arange(5000), fs=1000)
     calls = []
     monkeypatch.setattr(
-        main_window_module.AudioInfoDialog,
+        doc_view_module.AudioInfoDialog,
         "show_info",
         staticmethod(lambda doc, name, parent=None: calls.append(name)),
     )
@@ -554,7 +555,7 @@ def test_show_audio_info_does_nothing_without_a_current_document(
 ):
     calls = []
     monkeypatch.setattr(
-        main_window_module.AudioInfoDialog,
+        doc_view_module.AudioInfoDialog,
         "show_info",
         staticmethod(lambda doc, name, parent=None: calls.append(name)),
     )

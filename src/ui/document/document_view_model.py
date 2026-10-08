@@ -44,6 +44,15 @@ from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
+from ui.waveform.state.audio_wave_action import (
+    AudioFilterAction,
+    AudioInfoAction,
+    AudioRecenterAction,
+    AudioResampleAction,
+    AudioReverseAction,
+    AudioRevertToOriginalAction,
+    AudioScaleAction,
+)
 from ui.waveform.state.audio_wave_state import to_audio_wave_state
 
 
@@ -86,17 +95,29 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_sgram_state_change(self, model: State):
-        if isinstance(model, LoadProgressState):
-            self.state_changed.emit(model)
-        if isinstance(model, AudioPrepped):
+        if isinstance(model, (LoadProgressState, AudioPrepped)):
             self.state_changed.emit(model)
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
         if isinstance(model, StatusMessageState):
             self.state_changed.emit(model)
-        if isinstance(model, AnnotationSelectedState):
+        elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
+
+    @pyqtSlot(object)
+    def on_wave_state_changed(self, model: State):
+        if isinstance(
+            model,
+            (AudioScaleAction, AudioResampleAction, AudioFilterAction, AudioInfoAction),
+        ):
+            self.state_changed.emit(model)
+        elif isinstance(model, AudioReverseAction):
+            self.reverse_audio()
+        elif isinstance(model, AudioRevertToOriginalAction):
+            self.revert_to_original()
+        elif isinstance(model, AudioRecenterAction):
+            self.center_on_selection()
 
     def toggle_wave(self):
         plots = self.plot_layout_state.plots.copy()
@@ -324,20 +345,31 @@ class DocumentViewModel(ViewModel):
             # Rows are assigned by channel index, not by "primary"
             for idx in stereo.channels:
                 if len(self.audio_wave_view_models) <= idx:
-                    self.audio_wave_view_models.append(AudioWaveViewModel())
+                    self.audio_wave_view_models.append(AudioWaveViewModel(idx))
 
                 self.audio_wave_view_models[idx].set_wave_state(
                     to_audio_wave_state(stereo.channels[idx], start, end)
                 )
         else:
             if len(self.audio_wave_view_models) == 0:
-                self.audio_wave_view_models = [AudioWaveViewModel()]
+                self.audio_wave_view_models = [
+                    AudioWaveViewModel(self.channel_state.primary_channel)
+                ]
 
             primary_channel = self.primary_channel()
             if primary_channel is not None:
                 self.audio_wave_view_models[0].set_wave_state(
                     to_audio_wave_state(primary_channel, start, end)
                 )
+
+        for audio_wave_view_model in self.audio_wave_view_models:
+            try:
+                audio_wave_view_model.state_changed.disconnect(
+                    self.on_wave_state_changed
+                )
+            except TypeError:
+                pass
+            audio_wave_view_model.state_changed.connect(self.on_wave_state_changed)
 
     def update_annotation_state(self):
         primary_channel = self.primary_channel()

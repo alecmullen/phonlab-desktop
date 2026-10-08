@@ -1134,13 +1134,13 @@ def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
         loaded_view.zoom_to_selection_action,
         loaded_view.set_mark_action,
         loaded_view.remove_mark_action,
-        loaded_view.audio_info_action,
-        loaded_view.resample_action,
-        loaded_view.scale_action,
-        loaded_view.reverse_action,
-        loaded_view.recenter_action,
-        loaded_view.filter_action,
-        loaded_view.revert_action,
+        loaded_view.wave_plots[0].audio_info_action,
+        loaded_view.wave_plots[0].resample_action,
+        loaded_view.wave_plots[0].scale_action,
+        loaded_view.wave_plots[0].reverse_action,
+        loaded_view.wave_plots[0].recenter_action,
+        loaded_view.wave_plots[0].filter_action,
+        loaded_view.wave_plots[0].revert_action,
     ]
     positions = [actions.index(a) for a in ordered]
     assert positions == sorted(positions)
@@ -1155,7 +1155,7 @@ def test_non_waveform_plots_only_get_mark_actions(loaded_view: DocumentView):
     actions = spec.getViewBox().menu.actions()
 
     assert loaded_view.set_mark_action in actions
-    assert loaded_view.scale_action not in actions
+    assert loaded_view.wave_plots[0].scale_action not in actions
 
 
 def test_zoom_to_selection_action_present_only_with_selection(
@@ -1194,11 +1194,6 @@ def test_menu_rows_do_not_overlap_with_selection(loaded_view: DocumentView):
     for upper, lower in pairwise(rects):
         assert upper.bottom() < lower.top()
     menu.hide()
-
-
-def test_audio_info_action_emits_signal(loaded_view: DocumentView, qtbot: QtBot):
-    with qtbot.waitSignal(loaded_view.audio_info_requested, timeout=1000):
-        loaded_view.audio_info_action.trigger()
 
 
 def test_open_scale_dialog_scales_when_accepted(

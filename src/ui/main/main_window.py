@@ -18,7 +18,6 @@ from ui.base.state import State
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
-from ui.main.audio_info_dialog import AudioInfoDialog
 from ui.main.open_audio_dialog import OpenAudioDialog
 from ui.main.save_audio_dialog import SaveAudioDialog
 from ui.spectrogram.state.audio_prepped import AudioPrepped
@@ -266,7 +265,6 @@ class MainWindow(QMainWindow):
                 doc_view_model = DocumentViewModel()
                 doc_view_model.subscribe(self.on_doc_state_change)
                 doc = DocumentView(doc_view_model)
-                doc.audio_info_requested.connect(self.show_audio_info)
                 doc.origin_name = Path(audio_filename).name
                 doc.origin_path = audio_filename
 
@@ -291,7 +289,6 @@ class MainWindow(QMainWindow):
         doc_view_model = DocumentViewModel()
         doc_view_model.subscribe(self.on_doc_state_change)
         doc = DocumentView(doc_view_model)
-        doc.audio_info_requested.connect(self.show_audio_info)
 
         # Always name after the ORIGINAL source file
         origin_name = source_doc.origin_name
@@ -340,8 +337,7 @@ class MainWindow(QMainWindow):
     def show_audio_info(self):
         doc = self.get_current_document()
         if doc:
-            index = self.tab_widget.indexOf(doc)
-            AudioInfoDialog.show_info(doc, self.tab_widget.tabText(index), self)
+            doc.open_audio_info()
 
     def close_tab(self, index: int):
         """Close a tab"""

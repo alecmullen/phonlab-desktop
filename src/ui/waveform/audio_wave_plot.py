@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QCheckBox, QGraphicsProxyWidget, QPushButton, QWidge
 from pyqtgraph import PlotDataItem
 
 from ui.base.state import State
+from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
@@ -77,6 +78,7 @@ class AudioWavePlot(DocumentPlot):
 
         self.getViewBox().menu.clear()
         self.ctrlMenu.menuAction().setVisible(False)
+        self._setup_menu()
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -90,6 +92,45 @@ class AudioWavePlot(DocumentPlot):
             self.update_y_range(model.scaled_y_max)
         if isinstance(model, ChannelActiveState):
             self._apply_active_state(model.is_active)
+
+    def _setup_menu(self):
+        self.audio_info_action = ContextMenuHintAction(
+            self.tr("Audio Info"), parent=self
+        )
+        self.audio_info_action.triggered.connect(self.view_model.open_audio_info)
+
+        self.resample_action = ContextMenuHintAction(
+            self.tr("Resample..."), parent=self
+        )
+        self.resample_action.triggered.connect(self.view_model.resample_audio)
+
+        self.scale_action = ContextMenuHintAction(self.tr("Scale..."), parent=self)
+        self.scale_action.triggered.connect(self.view_model.scale_audio)
+
+        self.reverse_action = ContextMenuHintAction(self.tr("Reverse"), parent=self)
+        self.reverse_action.triggered.connect(self.view_model.reverse_audio)
+
+        self.recenter_action = ContextMenuHintAction(self.tr("Recenter"), parent=self)
+        self.recenter_action.triggered.connect(self.view_model.recenter_on_selection)
+
+        self.filter_action = ContextMenuHintAction(self.tr("Filter..."), parent=self)
+        self.filter_action.triggered.connect(self.view_model.filter_audio)
+
+        self.revert_action = ContextMenuHintAction(
+            self.tr("Revert to Original"), parent=self
+        )
+        self.revert_action.triggered.connect(self.view_model.revert_to_original)
+
+        for action in (
+            self.audio_info_action,
+            self.resample_action,
+            self.scale_action,
+            self.reverse_action,
+            self.recenter_action,
+            self.filter_action,
+            self.revert_action,
+        ):
+            self.getViewBox().menu.addAction(action)
 
     def _apply_active_state(self, is_active: bool):
         if self.active_checkbox is not None:
