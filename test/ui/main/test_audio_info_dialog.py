@@ -5,10 +5,10 @@ from pytestqt.qtbot import QtBot
 
 import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
+from ui.document.component.audio_info_dialog import AudioInfoDialog
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import to_audio_state
-from ui.main.audio_info_dialog import AudioInfoDialog
 
 
 class FakeAudioPlayer:
@@ -40,7 +40,9 @@ def test_shows_name_sample_rate_duration_and_amplitude(
         to_audio_state({0: AudioSignal(np.array([-2.0, -1.0, 0.0, 1.0, 3.0]), 1000)})
     )
 
-    dialog = AudioInfoDialog(document_view, "mydoc.wav")
+    dialog = AudioInfoDialog(
+        document_view.view_model.primary_channel(), "mydoc.wav", document_view
+    )
     qtbot.addWidget(dialog)
 
     texts = label_texts(dialog)
@@ -53,7 +55,9 @@ def test_shows_name_sample_rate_duration_and_amplitude(
 def test_shows_placeholder_values_when_no_audio_is_loaded(
     qtbot: QtBot, document_view: DocumentView
 ):
-    dialog = AudioInfoDialog(document_view, "empty.wav")
+    dialog = AudioInfoDialog(
+        document_view.view_model.primary_channel(), "empty.wav", document_view
+    )
     qtbot.addWidget(dialog)
 
     texts = label_texts(dialog)
@@ -73,6 +77,8 @@ def test_show_info_static_helper_execs_dialog(
     exec_calls = []
     monkeypatch.setattr(AudioInfoDialog, "exec", lambda self: exec_calls.append(True))
 
-    AudioInfoDialog.show_info(document_view, "mydoc.wav")
+    AudioInfoDialog.show_info(
+        document_view.view_model.primary_channel(), "mydoc.wav", document_view
+    )
 
     assert exec_calls == [True]

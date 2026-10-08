@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QEvent, QObject, Qt
-from PyQt6.QtGui import QEnterEvent, QPalette
+from PyQt6.QtGui import QEnterEvent, QHideEvent, QPalette
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -41,6 +41,12 @@ class ContextMenuHint(QWidget):
 
     def leaveEvent(self, a0: QEvent | None):
         self.highlight(False)
+
+    def hideEvent(self, a0: QHideEvent | None):
+        # Closing the menu on a click delivers no leave event, which would
+        # leave the row highlighted the next time the menu opens.
+        self.highlight(False)
+        super().hideEvent(a0)
 
     def highlight(self, value: bool):
         if value:

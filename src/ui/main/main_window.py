@@ -18,7 +18,6 @@ from ui.base.state import State
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
-from ui.main.audio_info_dialog import AudioInfoDialog
 from ui.main.open_audio_dialog import OpenAudioDialog
 from ui.main.save_audio_dialog import SaveAudioDialog
 from ui.spectrogram.state.audio_prepped import AudioPrepped
@@ -180,7 +179,9 @@ class MainWindow(QMainWindow):
         self.recenter_action = QAction(
             QIcon.fromTheme("mail-send"), self.tr("Re-center"), self
         )
-        self.recenter_action.setStatusTip(self.tr("Center view on selection"))
+        self.recenter_action.setStatusTip(
+            self.tr("Center view on the selection, or the mark if nothing is selected")
+        )
         self.recenter_action.triggered.connect(self.recenter_on_selection)
 
         # View Menu
@@ -336,8 +337,7 @@ class MainWindow(QMainWindow):
     def show_audio_info(self):
         doc = self.get_current_document()
         if doc:
-            index = self.tab_widget.indexOf(doc)
-            AudioInfoDialog.show_info(doc, self.tab_widget.tabText(index), self)
+            doc.open_audio_info()
 
     def close_tab(self, index: int):
         """Close a tab"""

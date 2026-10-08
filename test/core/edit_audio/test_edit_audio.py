@@ -291,3 +291,73 @@ def test_paste_snaps_insertion_point_to_zero_crossing_when_enabled(
 
     assert result.start_idx == 18
     np.testing.assert_array_equal(result.new_audio[0].x[18:20], [5.0, 5.0])
+
+
+# --------------------------------- REPLACE ---------------------------------
+
+
+def make_replace(
+    channels: dict[int, AudioSignal], clip: dict[int, AudioSignal], start: int
+) -> EditAudio:
+    return EditAudio(
+        channels,
+        EditCommand(EditCommandType.REPLACE, 0.0, clip=clip, start_idx=start),
+        ref_channel=next(iter(channels)),
+    )
+
+
+def test_replace_overwrites_samples_and_reports_previous():
+    channel = make_channel([1, 2, 3, 4, 5])
+
+    result = make_replace({0: channel}, {0: make_channel([9, 8])}, 1).invoke()
+
+    np.testing.assert_array_equal(result.new_audio[0].x, [1, 9, 8, 4, 5])
+    np.testing.assert_array_equal(result.new_clip[0].x, [9, 8])
+    np.testing.assert_array_equal(result.replaced_clip[0].x, [2, 3])
+    assert result.start_idx == 1
+
+
+def test_replace_does_not_mutate_input():
+    channel = make_channel([1, 2, 3])
+
+    make_replace({0: channel}, {0: make_channel([0, 0])}, 0).invoke()
+
+    np.testing.assert_array_equal(channel.x, [1, 2, 3])
+
+
+def test_replace_leaves_channels_outside_clip_untouched():
+    left, right = make_channel([1, 2, 3]), make_channel([4, 5, 6])
+
+    result = make_replace({0: left, 1: right}, {1: make_channel([0, 0])}, 1).invoke()
+
+    np.testing.assert_array_equal(result.new_audio[0].x, [1, 2, 3])
+    np.testing.assert_array_equal(result.new_audio[1].x, [4, 0, 0])
+
+
+def test_replace_ignores_zero_crossing_snapping(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "cut_and_paste_at_zero_crossings", True)
+    channel = make_channel([1, 1, -1, -1, 1])
+
+    result = make_replace({0: channel}, {0: make_channel([7])}, 1).invoke()
+
+    assert result.start_idx == 1
+    np.testing.assert_array_equal(result.new_audio[0].x, [1, 7, -1, -1, 1])
+
+
+def test_replace_past_end_raises():
+    with pytest.raises(ValueError):
+        make_replace({0: make_channel([1, 2])}, {0: make_channel([1, 2])}, 1).invoke()
+
+
+def test_replace_unknown_channel_raises():
+    with pytest.raises(ValueError):
+        make_replace({0: make_channel([1, 2])}, {1: make_channel([1])}, 0).invoke()
+
+
+def test_replace_needs_clip_and_start_index():
+    use_case = EditAudio(
+        {0: make_channel([1, 2])}, EditCommand(EditCommandType.REPLACE, 0.0)
+    )
+
+    with pytest.raises(RuntimeError):
+        use_case.invoke()

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import replace
 
 import numpy as np
@@ -5,13 +6,14 @@ from PyQt6.QtCore import pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
-from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
+from core.edit_audio.entity.edit_result import EditResult
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
-from core.load_audio.prep_audio import PrepAudio
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
 from core.save_audio.save_audio import SaveAudio
+from core.transform_audio.filter_audio import FilterAudio, FilterSpec
+from core.transform_audio.prep_audio import PrepAudio
 from res.constants import (
     DEFAULT_WINDOW_LENGTH,
     LATENCY_WARNING_THRESHOLD_S,
@@ -39,9 +41,19 @@ from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
+from ui.waveform.state.audio_wave_action import (
+    AudioFilterAction,
+    AudioInfoAction,
+    AudioRecenterAction,
+    AudioResampleAction,
+    AudioReverseAction,
+    AudioRevertToOriginalAction,
+    AudioScaleAction,
+)
 from ui.waveform.state.audio_wave_state import to_audio_wave_state
 
 
@@ -59,7 +71,7 @@ class DocumentViewModel(ViewModel):
         self.mark_state: MarkState = MarkState()
         self.audio_loaded_state: AudioLoaded = AudioLoaded()
 
-        self.audio_options: AudioOpenOptions = AudioOpenOptions()
+        self.audio_options: AudioOpenOptionsState = AudioOpenOptionsState()
 
         self.undo_stack: list[EditCommandState] = []
         self.redo_stack: list[EditCommandState] = []
@@ -84,17 +96,29 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_sgram_state_change(self, model: State):
-        if isinstance(model, LoadProgressState):
-            self.state_changed.emit(model)
-        if isinstance(model, AudioPrepped):
+        if isinstance(model, (LoadProgressState, AudioPrepped)):
             self.state_changed.emit(model)
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
         if isinstance(model, StatusMessageState):
             self.state_changed.emit(model)
-        if isinstance(model, AnnotationSelectedState):
+        elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
+
+    @pyqtSlot(object)
+    def on_wave_state_changed(self, model: State):
+        if isinstance(
+            model,
+            (AudioScaleAction, AudioResampleAction, AudioFilterAction, AudioInfoAction),
+        ):
+            self.state_changed.emit(model)
+        elif isinstance(model, AudioReverseAction):
+            self.reverse_audio()
+        elif isinstance(model, AudioRevertToOriginalAction):
+            self.revert_to_original()
+        elif isinstance(model, AudioRecenterAction):
+            self.center_on_selection()
 
     def toggle_wave(self):
         plots = self.plot_layout_state.plots.copy()
@@ -129,7 +153,7 @@ class DocumentViewModel(ViewModel):
         self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
         self.state_changed.emit(self.plot_layout_state)
 
-    def load_audio(self, filepath: str, options: AudioOpenOptions):
+    def load_audio(self, filepath: str, options: AudioOpenOptionsState):
         self.audio_options = options
         self.channel_state = ChannelState(
             primary_channel=options.primary_channel,
@@ -244,34 +268,42 @@ class DocumentViewModel(ViewModel):
         self.raw_audio_state = replace(self.audio_state)
         self.state_changed.emit(AudioLoaded(True, primary_channel.fs))
 
+    def _commit_audio_rescaling_window(self, audio: AudioState):
+        """Make `audio` current, scaling the view window by the change in
+        sample rate (a no-op ratio when the rate is unchanged)."""
+        current = self.primary_channel()
+        new_primary = audio.channels.get(self.channel_state.primary_channel)
+        if current is None or new_primary is None:
+            raise RuntimeError("Missing primary audio channel")
+
+        ratio = new_primary.fs / current.fs
+        self.document_window_state = replace(
+            self.document_window_state,
+            start=int(self.document_window_state.start * ratio),
+            end=int(self.document_window_state.end * ratio),
+            max_start=int(self.document_window_state.max_start * ratio),
+        )
+        self.set_audio(audio, self.channel_state.primary_channel, False)
+        self.prep_audio_spectrogram()
+
     def resample(self, target_fs: int):
+        # Resamples the current audio (not the file's original), so earlier
+        # edits are kept, and keeps the peak amplitude as it is. Like
+        # filtering it is not undoable (history is cleared, since its sample
+        # indices are for the old rate); `revert_to_original` goes back.
         use_case = PrepAudio(
-            to_audio_signals(self.raw_audio_state),
+            to_audio_signals(self.audio_state),
             target_fs,
             list(self.audio_state.channels.keys()),
+            scale=False,
         )
         self.state_changed.emit(LoadProgressState(True))
 
         @pyqtSlot(object)
         def on_success(prepped: dict[int, AudioSignal]):
-            current_primary_channel = self.primary_channel()
-            if current_primary_channel is None:
-                raise RuntimeError("Missing primary audio channel")
-
-            ratio = target_fs / current_primary_channel.fs
-            self.document_window_state = replace(
-                self.document_window_state,
-                start=int(self.document_window_state.start * ratio),
-                end=int(self.document_window_state.end * ratio),
-                max_start=int(self.document_window_state.max_start * ratio),
-            )
-
-            self.set_audio(
-                to_audio_state(prepped), self.channel_state.primary_channel, False
-            )
-
-            self.prep_audio_spectrogram()
-
+            self._commit_audio_rescaling_window(to_audio_state(prepped))
+            self.undo_stack.clear()
+            self.redo_stack.clear()
             self.state_changed.emit(LoadProgressState(False))
 
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
@@ -282,17 +314,18 @@ class DocumentViewModel(ViewModel):
         The prepped rate comes from the spectrogram settings, independent of
         the raw audio's rate (it may even be higher; the extra range is blank).
         """
-        active = self.active_channel_states()
+        active = self.active_channels()
         if not active:
             return
 
         if len(active) == 2:
-            ch0, ch1 = active
+            ch0, ch1 = active.values()
             min_len = min(len(ch0.x), len(ch1.x))
             x = ch0.x[:min_len] + ch1.x[:min_len]
             fs = ch0.fs
         else:
-            x, fs = active[0].x, active[0].fs
+            channel = next(iter(active.values()))
+            x, fs = channel.x, channel.fs
 
         self.spectrogram_view_model.prep_audio(x, fs)
 
@@ -313,20 +346,31 @@ class DocumentViewModel(ViewModel):
             # Rows are assigned by channel index, not by "primary"
             for idx in stereo.channels:
                 if len(self.audio_wave_view_models) <= idx:
-                    self.audio_wave_view_models.append(AudioWaveViewModel())
+                    self.audio_wave_view_models.append(AudioWaveViewModel(idx))
 
                 self.audio_wave_view_models[idx].set_wave_state(
                     to_audio_wave_state(stereo.channels[idx], start, end)
                 )
         else:
             if len(self.audio_wave_view_models) == 0:
-                self.audio_wave_view_models = [AudioWaveViewModel()]
+                self.audio_wave_view_models = [
+                    AudioWaveViewModel(self.channel_state.primary_channel)
+                ]
 
             primary_channel = self.primary_channel()
             if primary_channel is not None:
                 self.audio_wave_view_models[0].set_wave_state(
                     to_audio_wave_state(primary_channel, start, end)
                 )
+
+        for audio_wave_view_model in self.audio_wave_view_models:
+            try:
+                audio_wave_view_model.state_changed.disconnect(
+                    self.on_wave_state_changed
+                )
+            except TypeError:
+                pass
+            audio_wave_view_model.state_changed.connect(self.on_wave_state_changed)
 
     def update_annotation_state(self):
         primary_channel = self.primary_channel()
@@ -452,46 +496,51 @@ class DocumentViewModel(ViewModel):
         self.state_changed.emit(self.select_state)
 
     def zoom_if_in_selection(self, x_pos: float):
+        sel_start, sel_end = self.select_state.sel_start, self.select_state.sel_end
+        if sel_end > x_pos > sel_start:
+            self.zoom_to_selection()
+
+    def zoom_to_selection(self):
         primary_channel = self.primary_channel()
-        if primary_channel is None:
+        if primary_channel is None or not self.select_state.is_selected:
             return
         x, fs = primary_channel.x, primary_channel.fs
 
         max_end = len(x) - 1
-        sel_start, sel_end = self.select_state.sel_start, self.select_state.sel_end
-        if sel_end > x_pos > sel_start:
-            start = int(sel_start * fs)
-            end = int(sel_end * fs)
-            window_length = end - start
-            document_window_state = replace(
-                self.document_window_state,
-                start=start,
-                end=end,
-                max_start=max_end - window_length,
-            )
-            self.update_document_window(document_window_state)
+        start = int(self.select_state.sel_start * fs)
+        end = int(self.select_state.sel_end * fs)
+        window_length = end - start
+        document_window_state = replace(
+            self.document_window_state,
+            start=start,
+            end=end,
+            max_start=max_end - window_length,
+        )
+        self.update_document_window(document_window_state)
 
-            self.remove_selection()
+        self.remove_selection()
 
     def center_on_selection(self):
+        """Center the window on the selection's midpoint, or on the mark when
+        nothing is selected."""
         primary_channel = self.primary_channel()
         if primary_channel is None:
             return
-        if not self.select_state.is_selected:
-            msg = self.tr("No selection to center on")
+
+        fs = primary_channel.fs
+        if self.select_state.is_selected:
+            sel_start_samples = int(self.select_state.sel_start * fs)
+            sel_end_samples = int(self.select_state.sel_end * fs)
+            center_samples = (sel_start_samples + sel_end_samples) // 2
+        elif self.mark_state.is_set:
+            center_samples = int(self.mark_state.position * fs)
+        else:
+            msg = self.tr("No selection or mark to center on")
             self.state_changed.emit(StatusMessageState(msg))
             return
 
-        # Calculate the center of the selection in samples
-        sel_start_samples = int(self.select_state.sel_start * primary_channel.fs)
-        sel_end_samples = int(self.select_state.sel_end * primary_channel.fs)
-        sel_center_samples = (sel_start_samples + sel_end_samples) // 2
-
-        # Calculate new window bounds centered on selection
         window_size = self.document_window_state.end - self.document_window_state.start
-        new_start = sel_center_samples - (window_size // 2)
-
-        self.move_start(new_start)
+        self.move_start(center_samples - (window_size // 2))
 
     def zoom_out(self, factor: float = 2):
         primary_channel = self.primary_channel()
@@ -557,12 +606,12 @@ class DocumentViewModel(ViewModel):
     def _playback_section(self, start: int, end: int) -> tuple[np.ndarray, int] | None:
         """The samples to play for [start:end), as stereo (N, 2) if both
         channels are active, else mono (N,)"""
-        active = self.active_channel_states()
+        active = self.active_channels()
         if not active:
             return None
 
         if len(active) == 2:
-            ch0, ch1 = active
+            ch0, ch1 = active.values()
             min_len = min(len(ch0.x), len(ch1.x))
             end = min(end, min_len)
             if start >= end:
@@ -570,7 +619,7 @@ class DocumentViewModel(ViewModel):
             section = np.stack([ch0.x[start:end], ch1.x[start:end]], axis=1)
             return section, ch0.fs
 
-        channel = active[0]
+        channel = next(iter(active.values()))
         if start >= end:
             return None
         return channel.x[start:end], channel.fs
@@ -633,14 +682,18 @@ class DocumentViewModel(ViewModel):
             }
         )
 
-    def active_channel_states(self) -> list[AudioChannelState]:
+    def active_channels(self) -> dict[int, AudioChannelState]:
         """The channel(s) currently active for playback/spectrogram"""
         if self.stereo_channels() is None:
             primary = self.primary_channel()
-            return [primary] if primary is not None else []
+            return (
+                {self.channel_state.primary_channel: primary}
+                if primary is not None
+                else {}
+            )
         indices = sorted(self.channel_state.active_channels)
         all_channels = self.audio_state.channels
-        return [all_channels[idx] for idx in indices if idx in all_channels]
+        return {idx: all_channels[idx] for idx in indices if idx in all_channels}
 
     def active_channel_indices(self) -> frozenset[int]:
         return self.channel_state.active_channels
@@ -843,15 +896,12 @@ class DocumentViewModel(ViewModel):
             self.state_changed.emit(StatusMessageState(self.tr("No selection to cut")))
             return None
 
+        new_clip = to_audio_state(result.new_clip)
         self._replace_channels(to_audio_state(result.new_audio))
         self._push_undo(
-            EditCommandState(
-                EditCommandType.CUT,
-                result.start_idx,
-                {idx: clip.x for idx, clip in result.new_clip.items()},
-            )
+            EditCommandState(EditCommandType.CUT, result.start_idx, new_clip)
         )
-        return to_audio_state(result.new_clip)
+        return new_clip
 
     def paste_at(self, start_time: float, clip: AudioState) -> AudioState | None:
         """Paste `clip`, which must already match this document's channel
@@ -901,9 +951,7 @@ class DocumentViewModel(ViewModel):
         self._replace_channels(to_audio_state(result.new_audio))
         self._push_undo(
             EditCommandState(
-                EditCommandType.PASTE,
-                result.start_idx,
-                {idx: clip.x for idx, clip in result.new_clip.items()},
+                EditCommandType.PASTE, result.start_idx, to_audio_state(result.new_clip)
             )
         )
         clip_length = len(next(iter(result.new_clip.values())).x)
@@ -915,6 +963,157 @@ class DocumentViewModel(ViewModel):
         if position is None:
             return
         self.paste_at(position, clip)
+
+    def _transform_range(self, length: int, fs: int) -> tuple[int, int]:
+        """Sample range a transform covers: the selection if there is one,
+        otherwise the whole signal."""
+        if not self.select_state.is_selected:
+            return 0, length
+        start = int(np.clip(int(self.select_state.sel_start * fs), 0, length))
+        end = int(np.clip(int(self.select_state.sel_end * fs), 0, length))
+        return start, end
+
+    def _transform_samples(
+        self, transform: Callable[[np.ndarray, int], np.ndarray], status: str
+    ) -> bool:
+        """Apply `transform(x, fs) -> x'` to the target channels (over the
+        selection, if any) as one undoable edit."""
+        targets = self.active_channels()
+        if not targets:
+            return False
+
+        ref = next(iter(targets.values()))
+        start, end = self._transform_range(len(ref.x), ref.fs)
+        if end <= start:
+            return False
+
+        replacements = AudioState(
+            {
+                idx: AudioChannelState(transform(ch.x[start:end], ch.fs), ch.fs)
+                for idx, ch in targets.items()
+            }
+        )
+
+        result = self._replace_samples(start, replacements)
+        if result is None:
+            return False
+        self._push_undo(
+            EditCommandState(
+                "replace",
+                start,
+                to_audio_state(result.new_clip),
+                to_audio_state(result.replaced_clip),
+            )
+        )
+        self.state_changed.emit(StatusMessageState(status))
+        return True
+
+    def _replace_samples(self, start: int, clip: AudioState) -> EditResult | None:
+        """Overwrite each channel's samples from `start` with `clip`, keeping
+        the selection. Returns None if the edit was rejected."""
+        result = EditAudio(
+            to_audio_signals(self.audio_state),
+            EditCommand(
+                EditCommandType.REPLACE,
+                0,
+                clip=to_audio_signals(clip),
+                start_idx=start,
+            ),
+            ref_channel=next(iter(self.audio_state.channels)),
+        ).invoke()
+        if result is None:
+            return None
+
+        selection = self.select_state
+        if not self._replace_channels(to_audio_state(result.new_audio)):
+            return None
+        self._restore_selection(selection)
+        return result
+
+    def _restore_selection(self, selection: SelectState):
+        if selection.is_selected:
+            self.select_state = selection
+            self.state_changed.emit(self.select_state)
+
+    def scale_audio(self, scale: float) -> bool:
+        """Scale the peak to `scale` dBFS (see phon.prep_audio)."""
+
+        def scale_samples(x: np.ndarray, fs: int) -> np.ndarray:
+            scaled = PrepAudio(
+                {0: AudioSignal(x, fs)},
+                target_fs=fs,
+                retained_channels=[0],
+                scale=scale,
+                add_tiny_noise=False,
+            ).run_sync()
+            return scaled[0].x.astype(x.dtype, copy=False)
+
+        return self._transform_samples(
+            scale_samples, self.tr("Scaled to {:g} dBFS").format(scale)
+        )
+
+    def reverse_audio(self) -> bool:
+        return self._transform_samples(
+            lambda x, fs: x[::-1].copy(), self.tr("Reversed")
+        )
+
+    def filter_audio(self, spec: FilterSpec) -> bool:
+        """Filter the active channels' whole signal. Not undoable: history is
+        cleared (earlier entries would splice unfiltered samples back in);
+        `revert_to_original` restores the file's audio."""
+        if not self._audio_ready():
+            return False
+
+        targets = self.active_channels()
+        if not targets:
+            return False
+
+        try:
+            filtered = to_audio_state(
+                FilterAudio(to_audio_signals(AudioState(targets)), spec).invoke()
+            )
+        except ValueError as err:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Could not filter: {}").format(err))
+            )
+            return False
+
+        if self._replace_samples(0, filtered) is None:
+            return False
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self.state_changed.emit(StatusMessageState(self.tr("Filtered")))
+        return True
+
+    def revert_to_original(self) -> bool:
+        """Restore the audio as loaded from the file, discarding every edit,
+        resample, filter and any channel added by Paste Special. Not
+        undoable."""
+        original = self.raw_audio_state
+        if not original.channels:
+            return False
+
+        was_stereo = self.stereo_channels() is not None
+        if original.channels.keys() != self.audio_state.channels.keys():
+            # Paste Special promoted a mono file to stereo; drop back to mono
+            only_idx = next(iter(original.channels))
+            self.channel_state = replace(
+                self.channel_state,
+                channel_mode=ChannelMode.MONO,
+                primary_channel=only_idx,
+                active_channels=frozenset({only_idx}),
+            )
+
+        self._commit_audio_rescaling_window(original)
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+
+        if was_stereo != (self.stereo_channels() is not None):
+            self.state_changed.emit(self.plot_layout_state)
+        self.state_changed.emit(
+            StatusMessageState(self.tr("Reverted to the original audio"))
+        )
+        return True
 
     def _tiny_noise(self, length: int, fs: int, dtype: np.dtype) -> AudioSignal:
         if length <= 0:
@@ -956,9 +1155,6 @@ class DocumentViewModel(ViewModel):
         """Promote this mono document to stereo, keeping its current audio
         in existing_channel_idx and filling the other slot with a
         tiny-noise placeholder of matching length."""
-        self.raw_audio_state = self._add_noise_channel_to_mono_state(
-            self.raw_audio_state, channel_choice
-        )
         audio_state = self._add_noise_channel_to_mono_state(
             self.audio_state, channel_choice
         )
@@ -1068,9 +1264,12 @@ class DocumentViewModel(ViewModel):
         """Apply cmd in its original direction (forward=True, i.e. redo) or
         its inverse (forward=False, i.e. undo). A cut removes going
         forward and re-inserts in reverse; a paste is the opposite."""
+        if cmd.type == "replace":
+            return self._apply_replace(cmd, forward)
+
         removing = (cmd.type == "cut") == forward
         new_signals = AudioState()
-        for idx, clip_x in cmd.clips.items():
+        for idx, clip in cmd.new_clip.channels.items():
             channel = self.audio_state.channels.get(idx)
             if channel is None:
                 raise RuntimeError(f"Missing channel {idx} for undo/redo")
@@ -1079,16 +1278,25 @@ class DocumentViewModel(ViewModel):
                 new_x = np.concatenate(
                     [
                         channel.x[: cmd.start_idx],
-                        channel.x[cmd.start_idx + len(clip_x) :],
+                        channel.x[cmd.start_idx + len(clip.x) :],
                     ]
                 )
             else:
                 new_x = np.concatenate(
-                    [channel.x[: cmd.start_idx], clip_x, channel.x[cmd.start_idx :]]
+                    [channel.x[: cmd.start_idx], clip.x, channel.x[cmd.start_idx :]]
                 )
             new_signals.channels[idx] = AudioChannelState(new_x, channel.fs)
 
         return self._replace_channels(new_signals)
+
+    def _apply_replace(self, cmd: EditCommandState, forward: bool) -> bool:
+        """Overwrite the samples a "replace" command touched with their new
+        (forward) or previous (inverse) values."""
+        source = cmd.new_clip if forward else cmd.replaced_clip
+        if source is None:
+            raise RuntimeError("Replace command has no previous samples")
+
+        return self._replace_samples(cmd.start_idx, source) is not None
 
     def undo(self):
         if not self.undo_stack:

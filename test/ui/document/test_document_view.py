@@ -9,14 +9,18 @@ from pytestqt.qtbot import QtBot
 
 import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
+from core.transform_audio.entity.filter_spec import FilterType
+from core.transform_audio.filter_audio import FilterSpec
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.delete_channel_dialog import DeleteChannelDialog
+from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_special_dialog import (
     PasteSpecialChoice,
     PasteSpecialDialog,
 )
 from ui.document.component.resample_dialog import ResampleAudioDialog
+from ui.document.component.scale_dialog import ScaleAudioDialog
 from ui.document.document_view import PLOT_ROW_SPACING, DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import (
@@ -1115,3 +1119,136 @@ def test_plot_rows_have_spacing_between_them(all_plots_view: DocumentView):
 
     for upper, lower in pairwise(rects):
         assert lower.top() - upper.bottom() == pytest.approx(PLOT_ROW_SPACING, abs=1)
+
+
+# --------------------------- waveform context menu actions ---------------------------
+
+
+def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
+    loaded_view.view_model.start_selection(2.0)
+    loaded_view.view_model.continue_selection(3.0)
+    menu = loaded_view.wave_plots[0].getViewBox().menu
+    menu.aboutToShow.emit()
+    actions = menu.actions()
+
+    ordered = [
+        loaded_view.zoom_to_selection_action,
+        loaded_view.set_mark_action,
+        loaded_view.remove_mark_action,
+        loaded_view.wave_plots[0].audio_info_action,
+        loaded_view.wave_plots[0].resample_action,
+        loaded_view.wave_plots[0].scale_action,
+        loaded_view.wave_plots[0].reverse_action,
+        loaded_view.wave_plots[0].recenter_action,
+        loaded_view.wave_plots[0].filter_action,
+        loaded_view.wave_plots[0].revert_action,
+    ]
+    positions = [actions.index(a) for a in ordered]
+    assert positions == sorted(positions)
+
+
+def test_non_waveform_plots_only_get_mark_actions(loaded_view: DocumentView):
+    loaded_view.view_model.toggle_spectrogram()
+    QApplication.processEvents()
+    spec = next(
+        p for p in loaded_view.document_plots if p not in loaded_view.wave_plots
+    )
+    actions = spec.getViewBox().menu.actions()
+
+    assert loaded_view.set_mark_action in actions
+    assert loaded_view.wave_plots[0].scale_action not in actions
+
+
+def test_zoom_to_selection_action_present_only_with_selection(
+    loaded_view: DocumentView,
+):
+    menu = loaded_view.wave_plots[0].getViewBox().menu
+
+    menu.aboutToShow.emit()
+    assert loaded_view.zoom_to_selection_action not in menu.actions()
+
+    loaded_view.view_model.start_selection(2.0)
+    loaded_view.view_model.continue_selection(3.0)
+    menu.aboutToShow.emit()
+    assert loaded_view.zoom_to_selection_action in menu.actions()
+    menu.aboutToShow.emit()  # idempotent
+    assert menu.actions().count(loaded_view.zoom_to_selection_action) == 1
+
+    loaded_view.view_model.remove_selection()
+    menu.aboutToShow.emit()
+    assert loaded_view.zoom_to_selection_action not in menu.actions()
+
+
+def test_menu_rows_do_not_overlap_with_selection(loaded_view: DocumentView):
+    loaded_view.view_model.start_selection(2.0)
+    loaded_view.view_model.continue_selection(3.0)
+    menu = loaded_view.wave_plots[0].getViewBox().menu
+    menu.popup(loaded_view.mapToGlobal(loaded_view.rect().center()))
+    QApplication.processEvents()
+
+    rects = [
+        menu.actionGeometry(a)
+        for a in menu.actions()
+        if not a.isSeparator() and a.isVisible()
+    ]
+    rects.sort(key=lambda r: r.top())
+    for upper, lower in pairwise(rects):
+        assert upper.bottom() < lower.top()
+    menu.hide()
+
+
+def test_open_scale_dialog_scales_when_accepted(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        ScaleAudioDialog, "get_scale_value", staticmethod(lambda **kw: -3.0)
+    )
+    calls = []
+    loaded_view.view_model.scale_audio = lambda s: calls.append(s)
+
+    loaded_view.open_scale_dialog()
+
+    assert calls == [-3.0]
+
+
+def test_open_scale_dialog_cancelled_or_unloaded(
+    view: DocumentView, loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        ScaleAudioDialog, "get_scale_value", staticmethod(lambda **kw: None)
+    )
+    calls = []
+    loaded_view.view_model.scale_audio = lambda s: calls.append(s)
+
+    loaded_view.open_scale_dialog()
+
+    assert calls == []
+
+
+def test_open_filter_dialog_filters_when_accepted(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    spec = FilterSpec(FilterType.LOWPASS, high=100.0)
+    monkeypatch.setattr(
+        FilterAudioDialog, "get_filter_spec", staticmethod(lambda fs: spec)
+    )
+    calls = []
+    loaded_view.view_model.filter_audio = lambda s: calls.append(s)
+
+    loaded_view.open_filter_dialog()
+
+    assert calls == [spec]
+
+
+def test_open_filter_dialog_cancelled_does_nothing(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        FilterAudioDialog, "get_filter_spec", staticmethod(lambda fs: None)
+    )
+    calls = []
+    loaded_view.view_model.filter_audio = lambda s: calls.append(s)
+
+    loaded_view.open_filter_dialog()
+
+    assert calls == []

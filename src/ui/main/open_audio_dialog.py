@@ -18,8 +18,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from res.constants import DEFAULT_WINDOW_LENGTH
+from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
 
 DEFAULT_SAMPLE_RATE = 16000
 
@@ -32,8 +32,8 @@ def _channel_label(index: int, native_channels: int) -> str:
     return f"Channel {index + 1}"
 
 
-def _mono_options() -> AudioOpenOptions:
-    return AudioOpenOptions(
+def _mono_options() -> AudioOpenOptionsState:
+    return AudioOpenOptionsState(
         target_fs=DEFAULT_SAMPLE_RATE,
         channel_mode=ChannelMode.MONO,
         retained_channels=[0],
@@ -41,8 +41,8 @@ def _mono_options() -> AudioOpenOptions:
     )
 
 
-def _stereo_options() -> AudioOpenOptions:
-    return AudioOpenOptions(
+def _stereo_options() -> AudioOpenOptionsState:
+    return AudioOpenOptionsState(
         target_fs=DEFAULT_SAMPLE_RATE,
         channel_mode=ChannelMode.STEREO,
         retained_channels=[0, 1],
@@ -63,7 +63,7 @@ class OpenAudioDialog(QDialog):
     @staticmethod
     def get_options(
         filename: str, parent: QWidget | None = None
-    ) -> AudioOpenOptions | None:
+    ) -> AudioOpenOptionsState | None:
         dlg = OpenAudioDialog(filename, parent)
         if not dlg.is_valid:
             return None
@@ -232,7 +232,7 @@ class OpenAudioDialog(QDialog):
                 candidates.index(previous_channel)
             )
 
-    def build_options(self) -> AudioOpenOptions:
+    def build_options(self) -> AudioOpenOptionsState:
         channel_mode = self._current_channel_mode()
         primary_channel = self.primary_channel_combo.currentData()
 
@@ -241,7 +241,7 @@ class OpenAudioDialog(QDialog):
         else:
             retained_channels = self._retained_channels_for_mode(channel_mode)
 
-        return AudioOpenOptions(
+        return AudioOpenOptionsState(
             target_fs=DEFAULT_SAMPLE_RATE,
             channel_mode=channel_mode,
             retained_channels=retained_channels,

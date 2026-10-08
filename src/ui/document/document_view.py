@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QScrollBar,
@@ -19,16 +20,18 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
+from ui.document.component.audio_info_dialog import AudioInfoDialog
 from ui.document.component.delete_channel_dialog import DeleteChannelDialog
+from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.paste_special_dialog import PasteSpecialDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
+from ui.document.component.scale_dialog import ScaleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
 from ui.document.state.audio_loaded import AudioLoaded
@@ -39,8 +42,15 @@ from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.main.state.audio_open_options import AudioOpenOptionsState
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.waveform.audio_wave_plot import AudioWavePlot
+from ui.waveform.state.audio_wave_action import (
+    AudioFilterAction,
+    AudioInfoAction,
+    AudioResampleAction,
+    AudioScaleAction,
+)
 
 
 class DocumentView(QWidget):
@@ -123,10 +133,12 @@ class DocumentView(QWidget):
     def set_up_menu(self):
         self.graphics_widget.scene().contextMenu = []
 
-        self.resample_action = ContextMenuHintAction(
-            self.tr("Resample..."), parent=self
+        self.zoom_to_selection_action = ContextMenuHintAction(
+            self.tr("Zoom to Selection"), self.tr("Double-click"), parent=self
         )
-        self.resample_action.triggered.connect(self.open_resample_dialog)
+        self.zoom_to_selection_action.triggered.connect(
+            self.view_model.zoom_to_selection
+        )
 
         self.set_mark_action = ContextMenuHintAction(
             self.tr("Set Mark"), self.tr("Click"), parent=self
@@ -145,19 +157,31 @@ class DocumentView(QWidget):
         self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add the Set Mark/Remove Mark actions to a plot's ViewBox menu.
+        """Add Zoom to Selection and the Set Mark/Remove Mark actions to a
+        plot's ViewBox menu.
 
         Added directly to each plot's own menu (rather than via the
         scene-wide contextMenu list) so they're present before the menu
         is ever shown.
         """
         menu = view_box.menu
-        menu.addAction(self.set_mark_action)
-        menu.addAction(self.remove_mark_action)
+        first_action = menu.actions()[0] if len(menu.actions()) > 0 else None
+        menu.insertAction(first_action, self.set_mark_action)
+        menu.insertAction(first_action, self.remove_mark_action)
+        menu.aboutToShow.connect(lambda: self.sync_zoom_to_selection_action(menu))
+        menu.insertSeparator(first_action)
 
-    def add_waveform_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add the waveform-only actions, which act on the raw audio."""
-        view_box.menu.insertAction(self.set_mark_action, self.resample_action)
+    def sync_zoom_to_selection_action(self, menu: QMenu):
+        """Put Zoom to Selection at the top of `menu` only while a selection
+        exists. Adding/removing it as the menu opens (rather than toggling the
+        action's visibility) makes Qt lay the rows out afresh, so it can't be
+        drawn over its neighbour."""
+        present = self.zoom_to_selection_action in menu.actions()
+        wanted = self.view_model.select_state.is_selected
+        if wanted and not present:
+            menu.insertAction(self.set_mark_action, self.zoom_to_selection_action)
+        elif present and not wanted:
+            menu.removeAction(self.zoom_to_selection_action)
 
     def _channel_checkbox_at(self, scene_pos: QPointF) -> int | None:
         """The channel index (0 or 1) whose "Active" checkbox contains this
@@ -196,8 +220,16 @@ class DocumentView(QWidget):
             self.update_plot_layout(model)
         elif isinstance(model, MarkState):
             self.update_mark(model)
+        elif isinstance(model, AudioScaleAction):
+            self.open_scale_dialog()
+        elif isinstance(model, AudioResampleAction):
+            self.open_resample_dialog()
+        elif isinstance(model, AudioFilterAction):
+            self.open_filter_dialog()
+        elif isinstance(model, AudioInfoAction):
+            self.open_audio_info()
 
-    def load_audio(self, filename: str, options: AudioOpenOptions):
+    def load_audio(self, filename: str, options: AudioOpenOptionsState):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
@@ -331,7 +363,6 @@ class DocumentView(QWidget):
             )
             wave_plot.setLabel("left", wave_label)
             self.add_shared_context_menu_actions(wave_plot.getViewBox())
-            self.add_waveform_context_menu_actions(wave_plot.getViewBox())
             self.graphics_widget.addItem(wave_plot, row=row + idx, col=0)
             wave_plot.show()
 
@@ -779,6 +810,32 @@ class DocumentView(QWidget):
         target_fs = ResampleAudioDialog.get_target_fs(primary_channel.fs)
         if target_fs is not None:
             self.view_model.resample(target_fs)
+
+    @pyqtSlot()
+    def open_scale_dialog(self):
+        if self.view_model.primary_channel() is None:
+            return
+
+        scale = ScaleAudioDialog.get_scale_value(
+            applies_to_selection=self.view_model.select_state.is_selected
+        )
+        if scale is not None:
+            self.view_model.scale_audio(scale)
+
+    @pyqtSlot()
+    def open_filter_dialog(self):
+        primary_channel = self.view_model.primary_channel()
+        if primary_channel is None:
+            return
+
+        spec = FilterAudioDialog.get_filter_spec(primary_channel.fs)
+        if spec is not None:
+            self.view_model.filter_audio(spec)
+
+    @pyqtSlot()
+    def open_audio_info(self):
+        origin_name = self.origin_name if self.origin_name is not None else ""
+        AudioInfoDialog.show_info(self.view_model.primary_channel(), origin_name, self)
 
     def cleanup(self):
         """Clean up resources when closing document"""

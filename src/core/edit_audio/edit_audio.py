@@ -124,6 +124,25 @@ class EditAudio(UseCaseSync[EditResult | None]):
             for idx, channel in self._channels.items()
         }
 
+    def _replace_clip(
+        self, clip: dict[int, AudioSignal], start: int
+    ) -> dict[int, AudioSignal]:
+        """Overwrite samples from `start` with `clip`; channels not in `clip`
+        are untouched."""
+        if not clip.keys() <= self._channels.keys():
+            raise ValueError("Replace not supported; channel mismatch")
+
+        result = dict(self._channels)
+        for idx, clip_channel in clip.items():
+            channel = self._channels[idx]
+            end = start + len(clip_channel.x)
+            if start < 0 or end > len(channel.x):
+                raise ValueError("Replace range is outside the audio")
+            new_x = channel.x.copy()
+            new_x[start:end] = clip_channel.x
+            result[idx] = AudioSignal(new_x, channel.fs)
+        return result
+
     def invoke(self) -> EditResult | None:
         if self._edit_command.type == EditCommandType.COPY:
             range = self._selected_range()
@@ -167,4 +186,25 @@ class EditAudio(UseCaseSync[EditResult | None]):
                 new_audio=self._paste_clip(clip, start_idx),
                 new_clip=clip,
                 start_idx=start_idx,
+            )
+
+        if self._edit_command.type == EditCommandType.REPLACE:
+            clip = self._edit_command.clip
+            start_idx = self._edit_command.start_idx
+            if clip is None or start_idx is None:
+                raise RuntimeError("Replace needs a clip and a start index")
+
+            new_audio = self._replace_clip(clip, start_idx)
+            replaced_clip = {
+                idx: AudioSignal(
+                    self._channels[idx].x[start_idx : start_idx + len(c.x)].copy(),
+                    self._channels[idx].fs,
+                )
+                for idx, c in clip.items()
+            }
+            return EditResult(
+                new_audio=new_audio,
+                new_clip=clip,
+                start_idx=start_idx,
+                replaced_clip=replaced_clip,
             )
