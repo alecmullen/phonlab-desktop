@@ -150,6 +150,7 @@ class AudioWavePlot(DocumentPlot):
     def plot_wave(self, audio_wave: AudioWaveState):
         self.enableAutoRange(axis="y", enable=False)
         self._set_y_limits(audio_wave)
+        self._apply_persisted_y_zoom(audio_wave)
 
         self.wave_curve = self.plot(audio_wave.t, audio_wave.x, pen=ACTIVE_PEN)
         self.wave_curve.setDownsampling(auto=True, method="peak")
@@ -165,6 +166,15 @@ class AudioWavePlot(DocumentPlot):
         self.vb.setLimits(xMin=0, xMax=audio_wave.max_t)
         if self.view_model.audio_wave_scale_state.y_scale == 1.0:
             self.setYRange(-limit, limit, padding=0.05)
+
+    def _apply_persisted_y_zoom(self, audio_wave: AudioWaveState):
+        """A new plot (e.g. after the layout is rebuilt) starts with
+        pyqtgraph's default y range, which the limits then push off-center. If
+        the view model carries a y zoom from earlier, restore it, centered on 0."""
+        y_scale = self.view_model.audio_wave_scale_state.y_scale
+        if y_scale != 1.0:
+            limit = max(abs(audio_wave.min_x), abs(audio_wave.max_x))
+            self.setYRange(-limit / y_scale, limit / y_scale, padding=0)
 
     def adjust_y_scale(self, delta: float):
         self.view_model.update_wave_y_range(delta)
