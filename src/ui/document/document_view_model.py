@@ -6,6 +6,7 @@ from PyQt6.QtCore import pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
+from core.edit_audio.entity.edit_result import EditResult
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
 from core.play_audio.audio_player import AudioPlayer
@@ -895,15 +896,12 @@ class DocumentViewModel(ViewModel):
             self.state_changed.emit(StatusMessageState(self.tr("No selection to cut")))
             return None
 
+        new_clip = to_audio_state(result.new_clip)
         self._replace_channels(to_audio_state(result.new_audio))
         self._push_undo(
-            EditCommandState(
-                EditCommandType.CUT,
-                result.start_idx,
-                {idx: clip.x for idx, clip in result.new_clip.items()},
-            )
+            EditCommandState(EditCommandType.CUT, result.start_idx, new_clip)
         )
-        return to_audio_state(result.new_clip)
+        return new_clip
 
     def paste_at(self, start_time: float, clip: AudioState) -> AudioState | None:
         """Paste `clip`, which must already match this document's channel
@@ -953,9 +951,7 @@ class DocumentViewModel(ViewModel):
         self._replace_channels(to_audio_state(result.new_audio))
         self._push_undo(
             EditCommandState(
-                EditCommandType.PASTE,
-                result.start_idx,
-                {idx: clip.x for idx, clip in result.new_clip.items()},
+                EditCommandType.PASTE, result.start_idx, to_audio_state(result.new_clip)
             )
         )
         clip_length = len(next(iter(result.new_clip.values())).x)
@@ -982,9 +978,6 @@ class DocumentViewModel(ViewModel):
     ) -> bool:
         """Apply `transform(x, fs) -> x'` to the target channels (over the
         selection, if any) as one undoable edit."""
-        if not self._audio_ready():
-            return False
-
         targets = self.active_channels()
         if not targets:
             return False
@@ -994,34 +987,48 @@ class DocumentViewModel(ViewModel):
         if end <= start:
             return False
 
-        previous = {idx: ch.x[start:end].copy() for idx, ch in targets.items()}
-        replaced = {
-            idx: transform(ch.x[start:end], ch.fs) for idx, ch in targets.items()
-        }
+        replacements = AudioState(
+            {
+                idx: AudioChannelState(transform(ch.x[start:end], ch.fs), ch.fs)
+                for idx, ch in targets.items()
+            }
+        )
 
-        if not self._overwrite_samples(start, replaced):
+        result = self._replace_samples(start, replacements)
+        if result is None:
             return False
-        self._push_undo(EditCommandState("replace", start, replaced, previous))
+        self._push_undo(
+            EditCommandState(
+                "replace",
+                start,
+                to_audio_state(result.new_clip),
+                to_audio_state(result.replaced_clip),
+            )
+        )
         self.state_changed.emit(StatusMessageState(status))
         return True
 
-    def _overwrite_samples(self, start: int, samples: dict[int, np.ndarray]) -> bool:
-        """Overwrite each channel's samples from `start` with `samples`,
-        keeping the selection."""
-        selection = self.select_state
-        new_channels = dict(self.audio_state.channels)
-        for idx, new_samples in samples.items():
-            channel = self.audio_state.channels.get(idx)
-            if channel is None:
-                raise RuntimeError(f"Missing channel {idx} for undo/redo")
-            new_x = channel.x.copy()
-            new_x[start : start + len(new_samples)] = new_samples
-            new_channels[idx] = AudioChannelState(new_x, channel.fs)
+    def _replace_samples(self, start: int, clip: AudioState) -> EditResult | None:
+        """Overwrite each channel's samples from `start` with `clip`, keeping
+        the selection. Returns None if the edit was rejected."""
+        result = EditAudio(
+            to_audio_signals(self.audio_state),
+            EditCommand(
+                EditCommandType.REPLACE,
+                0,
+                clip=to_audio_signals(clip),
+                start_idx=start,
+            ),
+            ref_channel=next(iter(self.audio_state.channels)),
+        ).invoke()
+        if result is None:
+            return None
 
-        if not self._replace_channels(AudioState(new_channels)):
-            return False
+        selection = self.select_state
+        if not self._replace_channels(to_audio_state(result.new_audio)):
+            return None
         self._restore_selection(selection)
-        return True
+        return result
 
     def _restore_selection(self, selection: SelectState):
         if selection.is_selected:
@@ -1062,17 +1069,16 @@ class DocumentViewModel(ViewModel):
             return False
 
         try:
-            filtered = {
-                idx: FilterAudio(ch.x, ch.fs, spec).invoke()
-                for idx, ch in targets.items()
-            }
+            filtered = to_audio_state(
+                FilterAudio(to_audio_signals(AudioState(targets)), spec).invoke()
+            )
         except ValueError as err:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Could not filter: {}").format(err))
             )
             return False
 
-        if not self._overwrite_samples(0, filtered):
+        if self._replace_samples(0, filtered) is None:
             return False
         self.undo_stack.clear()
         self.redo_stack.clear()
@@ -1263,7 +1269,7 @@ class DocumentViewModel(ViewModel):
 
         removing = (cmd.type == "cut") == forward
         new_signals = AudioState()
-        for idx, clip_x in cmd.clips.items():
+        for idx, clip in cmd.new_clip.channels.items():
             channel = self.audio_state.channels.get(idx)
             if channel is None:
                 raise RuntimeError(f"Missing channel {idx} for undo/redo")
@@ -1272,12 +1278,12 @@ class DocumentViewModel(ViewModel):
                 new_x = np.concatenate(
                     [
                         channel.x[: cmd.start_idx],
-                        channel.x[cmd.start_idx + len(clip_x) :],
+                        channel.x[cmd.start_idx + len(clip.x) :],
                     ]
                 )
             else:
                 new_x = np.concatenate(
-                    [channel.x[: cmd.start_idx], clip_x, channel.x[cmd.start_idx :]]
+                    [channel.x[: cmd.start_idx], clip.x, channel.x[cmd.start_idx :]]
                 )
             new_signals.channels[idx] = AudioChannelState(new_x, channel.fs)
 
@@ -1286,11 +1292,11 @@ class DocumentViewModel(ViewModel):
     def _apply_replace(self, cmd: EditCommandState, forward: bool) -> bool:
         """Overwrite the samples a "replace" command touched with their new
         (forward) or previous (inverse) values."""
-        source = cmd.clips if forward else cmd.previous
+        source = cmd.new_clip if forward else cmd.replaced_clip
         if source is None:
             raise RuntimeError("Replace command has no previous samples")
 
-        return self._overwrite_samples(cmd.start_idx, source)
+        return self._replace_samples(cmd.start_idx, source) is not None
 
     def undo(self):
         if not self.undo_stack:

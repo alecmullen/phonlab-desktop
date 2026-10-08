@@ -538,10 +538,10 @@ def test_paste_at_mark_shows_message_when_mark_not_set(
 
 
 def test_push_undo_caps_history_and_clears_redo(view_model: DocumentViewModel):
-    view_model.redo_stack.append(EditCommandState("cut", 0, np.array([])))
+    view_model.redo_stack.append(EditCommandState("cut", 0, AudioState()))
 
     for i in range(15):
-        view_model._push_undo(EditCommandState("cut", i, np.array([])))
+        view_model._push_undo(EditCommandState("cut", i, AudioState()))
 
     assert len(view_model.undo_stack) == 10
     assert view_model.undo_stack[0].start_idx == 5
