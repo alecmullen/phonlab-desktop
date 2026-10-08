@@ -1069,7 +1069,7 @@ class DocumentViewModel(ViewModel):
         """A copy of `clip` with each channel's samples in reverse order."""
         return AudioState(
             {
-                idx: AudioChannelState(ReverseAudio(channel.x).invoke(), channel.fs)
+                idx: AudioChannelState(channel.x[::-1].copy(), channel.fs)
                 for idx, channel in clip.channels.items()
             }
         )
