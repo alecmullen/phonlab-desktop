@@ -1,3 +1,4 @@
+import numpy as np
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -40,7 +41,7 @@ class AudioInfoDialog(QDialog):
         if len(primary_channel.x) > 0:
             min_max_label = QLabel(
                 self.tr("{:.4g} / {:.4g}").format(
-                    min(primary_channel.x), max(primary_channel.x)
+                    np.min(primary_channel.x), np.max(primary_channel.x)
                 )
             )
         form.addRow(self.tr("Min / max amplitude:"), min_max_label)
