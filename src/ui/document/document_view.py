@@ -140,6 +140,9 @@ class DocumentView(QWidget):
             self.view_model.zoom_to_selection
         )
 
+        self.deselect_action = ContextMenuHintAction(self.tr("Deselect"), parent=self)
+        self.deselect_action.triggered.connect(self.view_model.remove_selection)
+
         self.set_mark_action = ContextMenuHintAction(
             self.tr("Set Mark"), self.tr("Click"), parent=self
         )
@@ -157,8 +160,8 @@ class DocumentView(QWidget):
         self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add Zoom to Selection and the Set Mark/Remove Mark actions to a
-        plot's ViewBox menu.
+        """Add the navigation actions (Zoom to Selection, Deselect, Set Mark,
+        Remove Mark) to a plot's ViewBox menu.
 
         Added directly to each plot's own menu (rather than via the
         scene-wide contextMenu list) so they're present before the menu
@@ -166,6 +169,7 @@ class DocumentView(QWidget):
         """
         menu = view_box.menu
         first_action = menu.actions()[0] if len(menu.actions()) > 0 else None
+        menu.insertAction(first_action, self.deselect_action)
         menu.insertAction(first_action, self.set_mark_action)
         menu.insertAction(first_action, self.remove_mark_action)
         menu.aboutToShow.connect(lambda: self.sync_zoom_to_selection_action(menu))
@@ -179,7 +183,7 @@ class DocumentView(QWidget):
         present = self.zoom_to_selection_action in menu.actions()
         wanted = self.view_model.select_state.is_selected
         if wanted and not present:
-            menu.insertAction(self.set_mark_action, self.zoom_to_selection_action)
+            menu.insertAction(self.deselect_action, self.zoom_to_selection_action)
         elif present and not wanted:
             menu.removeAction(self.zoom_to_selection_action)
 
@@ -817,7 +821,8 @@ class DocumentView(QWidget):
             return
 
         scale = ScaleAudioDialog.get_scale_value(
-            applies_to_selection=self.view_model.select_state.is_selected
+            applies_to_selection=self.view_model.select_state.is_selected,
+            peaks_dbfs=self.view_model.peak_dbfs(),
         )
         if scale is not None:
             self.view_model.scale_audio(scale)
@@ -835,7 +840,12 @@ class DocumentView(QWidget):
     @pyqtSlot()
     def open_audio_info(self):
         origin_name = self.origin_name if self.origin_name is not None else ""
-        AudioInfoDialog.show_info(self.view_model.primary_channel(), origin_name, self)
+        AudioInfoDialog.show_info(
+            self.view_model.primary_channel(),
+            self.view_model.stereo_channels(),
+            origin_name,
+            self,
+        )
 
     def cleanup(self):
         """Clean up resources when closing document"""

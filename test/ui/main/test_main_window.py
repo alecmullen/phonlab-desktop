@@ -542,7 +542,11 @@ def test_show_audio_info_execs_dialog_for_current_document(
     monkeypatch.setattr(
         doc_view_module.AudioInfoDialog,
         "show_info",
-        staticmethod(lambda doc, name, parent=None: calls.append(name)),
+        staticmethod(
+            lambda primary_channel, stereo_channels, name, parent=None: calls.append(
+                name
+            )
+        ),
     )
 
     main_window.show_audio_info()

@@ -26,6 +26,7 @@ from ui.base.view_model import ViewModel
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
     AudioState,
+    peak_dbfs,
     to_audio_channel_state,
     to_audio_signal,
     to_audio_signals,
@@ -1034,6 +1035,17 @@ class DocumentViewModel(ViewModel):
         if selection.is_selected:
             self.select_state = selection
             self.state_changed.emit(self.select_state)
+
+    def peak_dbfs(self) -> list[float]:
+        """Peak level, in dBFS, of what a scale would act on (the selection
+        if any, else the whole signal): one value per target channel.
+        -inf for silence."""
+        targets = self.active_channels()
+        if not targets:
+            return []
+        ref = next(iter(targets.values()))
+        start, end = self._transform_range(len(ref.x), ref.fs)
+        return [peak_dbfs(channel.x[start:end]) for channel in targets.values()]
 
     def scale_audio(self, scale: float) -> bool:
         """Scale the peak to `scale` dBFS (see phon.prep_audio)."""

@@ -1298,3 +1298,20 @@ def test_scale_silence_is_left_alone(view_model: DocumentViewModel):
     view_model.scale_audio(-1)
 
     np.testing.assert_array_equal(view_model.primary_channel().x, np.zeros(1000))
+
+
+def test_peak_dbfs_whole_signal_and_selection(view_model: DocumentViewModel):
+    x = np.concatenate([np.full(1000, 0.1), np.full(1000, 0.5), np.full(1000, 0.1)])
+    load_signal(view_model, x, fs=1000)
+
+    np.testing.assert_allclose(view_model.peak_dbfs(), [20 * np.log10(0.5)])
+
+    view_model.start_selection(0.0)
+    view_model.continue_selection(0.5)
+    np.testing.assert_allclose(view_model.peak_dbfs(), [20 * np.log10(0.1)])
+
+
+def test_peak_dbfs_silence_is_negative_infinity(view_model: DocumentViewModel):
+    load_signal(view_model, np.zeros(1000), fs=1000)
+
+    assert view_model.peak_dbfs() == [float("-inf")]

@@ -8,7 +8,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.document.state.audio_channel_state import AudioChannelState
+from ui.document.state.audio_channel_state import (
+    AudioChannelState,
+    AudioState,
+    peak_dbfs,
+)
 
 
 class AudioInfoDialog(QDialog):
@@ -17,6 +21,7 @@ class AudioInfoDialog(QDialog):
     def __init__(
         self,
         primary_channel: AudioChannelState | None,
+        stereo_channels: AudioState | None,
         origin_name: str,
         parent: QWidget | None = None,
     ):
@@ -37,14 +42,30 @@ class AudioInfoDialog(QDialog):
         form.addRow(
             self.tr("Duration:"), QLabel(self.tr("{:.3f} s").format(raw_duration))
         )
-        min_max_label = None
-        if len(primary_channel.x) > 0:
-            min_max_label = QLabel(
-                self.tr("{:.4g} / {:.4g}").format(
-                    np.min(primary_channel.x), np.max(primary_channel.x)
-                )
+        if stereo_channels is None:
+            self._add_level_rows(
+                form,
+                primary_channel,
+                self.tr("Min / max amplitude:"),
+                self.tr("Peak level:"),
             )
-        form.addRow(self.tr("Min / max amplitude:"), min_max_label)
+        else:
+            left, right = (
+                stereo_channels.channels[idx]
+                for idx in sorted(stereo_channels.channels)
+            )
+            self._add_level_rows(
+                form,
+                left,
+                self.tr("Left min / max amplitude:"),
+                self.tr("Left peak level:"),
+            )
+            self._add_level_rows(
+                form,
+                right,
+                self.tr("Right min / max amplitude:"),
+                self.tr("Right peak level:"),
+            )
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         buttons.accepted.connect(self.accept)
@@ -53,11 +74,34 @@ class AudioInfoDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(buttons)
 
+    def _add_level_rows(
+        self,
+        form: QFormLayout,
+        channel: AudioChannelState,
+        min_max_title: str,
+        peak_title: str,
+    ):
+        """Min / max amplitude and peak level rows; blank (no peak row) when
+        the channel has no samples."""
+        if len(channel.x) == 0:
+            form.addRow(min_max_title, None)
+            return
+        form.addRow(
+            min_max_title,
+            QLabel(
+                self.tr("{:.4g} / {:.4g}").format(np.min(channel.x), np.max(channel.x))
+            ),
+        )
+        form.addRow(
+            peak_title, QLabel(self.tr("{:.2f} dBFS").format(peak_dbfs(channel.x)))
+        )
+
     @staticmethod
     def show_info(
         primary_channel: AudioChannelState | None,
+        stereo_channels: AudioState | None,
         origin_name: str,
         parent: QWidget | None = None,
     ):
-        dlg = AudioInfoDialog(primary_channel, origin_name, parent)
+        dlg = AudioInfoDialog(primary_channel, stereo_channels, origin_name, parent)
         dlg.exec()
