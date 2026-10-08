@@ -7,10 +7,9 @@ from pytestqt.qtbot import QtBot
 
 import ui.base.view_model as view_model_module
 import ui.document.document_view_model as dvm_module
-from core.edit_audio.filter_audio import FilterSpec, FilterType
-from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
+from core.transform_audio.filter_audio import FilterSpec, FilterType
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
@@ -27,6 +26,7 @@ from ui.document.state.mark_state import MarkState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
@@ -556,7 +556,7 @@ def test_load_audio_launches_use_case_and_updates_state_on_success(
     monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
     received = []
     view_model.subscribe(received.append)
-    options = AudioOpenOptions(primary_channel=0, channel_mode="mono")
+    options = AudioOpenOptionsState(primary_channel=0, channel_mode="mono")
 
     view_model.load_audio("/fake/path.wav", options)
 
@@ -1289,3 +1289,11 @@ def test_revert_removes_channel_added_by_paste_special(
     assert view_model.audio_state.channels.keys() == {0}
     np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(1000))
     assert view_model.channel_state.active_channels == frozenset({0})
+
+
+def test_scale_silence_is_left_alone(view_model: DocumentViewModel):
+    load_signal(view_model, np.zeros(1000), fs=1000)
+
+    view_model.scale_audio(-1)
+
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.zeros(1000))

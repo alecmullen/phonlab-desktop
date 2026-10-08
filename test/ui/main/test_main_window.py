@@ -11,7 +11,6 @@ from pytestqt.qtbot import QtBot
 import ui.base.view_model as view_model_module
 import ui.document.document_view_model as dvm_module
 import ui.main.main_window as main_window_module
-from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
@@ -20,6 +19,7 @@ from ui.document.state.audio_channel_state import AudioChannelState, AudioState
 from ui.main.main_window import MainWindow
 from ui.main.open_audio_dialog import OpenAudioDialog
 from ui.main.save_audio_dialog import SaveOptions
+from ui.main.state.audio_open_options import AudioOpenOptionsState
 
 
 class FakeAudioPlayer:
@@ -116,7 +116,7 @@ def test_open_files_creates_a_tab_and_loads_audio(
     monkeypatch.setattr(
         OpenAudioDialog,
         "get_options",
-        staticmethod(lambda filename, parent=None: AudioOpenOptions()),
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
     )
 
     main_window.open_files([str(wav_path)])
@@ -154,7 +154,7 @@ def test_open_files_also_loads_a_paired_textgrid(
     monkeypatch.setattr(
         OpenAudioDialog,
         "get_options",
-        staticmethod(lambda filename, parent=None: AudioOpenOptions()),
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
     )
 
     main_window.open_files([str(wav_path), str(textgrid_path)])
@@ -199,7 +199,7 @@ def test_open_files_closes_splash_screen(
     monkeypatch.setattr(
         OpenAudioDialog,
         "get_options",
-        staticmethod(lambda filename, parent=None: AudioOpenOptions()),
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
     )
     closed = []
     main_window.splash = type(

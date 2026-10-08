@@ -20,7 +20,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.load_audio.entity.audio_open_options import AudioOpenOptions
 from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
@@ -42,6 +41,7 @@ from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.main.state.audio_open_options import AudioOpenOptionsState
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.waveform.audio_wave_plot import AudioWavePlot
 
@@ -259,7 +259,7 @@ class DocumentView(QWidget):
         elif isinstance(model, MarkState):
             self.update_mark(model)
 
-    def load_audio(self, filename: str, options: AudioOpenOptions):
+    def load_audio(self, filename: str, options: AudioOpenOptionsState):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 

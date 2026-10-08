@@ -5,11 +5,11 @@ import numpy as np
 from PyQt6.QtCore import pyqtSlot
 
 from core.load_audio.entity.audio_signal import AudioSignal
-from core.load_audio.prep_audio import PrepAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from core.transform_audio.prep_audio import PrepAudio
 from res.constants import (
     MAX_SGRAM_LENGTH,
     SPECTROGRAM_HIGH_PERCENTILE,

@@ -9,7 +9,11 @@ from PyQt6.QtWidgets import (
     QSpinBox,
 )
 
-from core.edit_audio.filter_audio import DEFAULT_FILTER_ORDER, FilterSpec, FilterType
+from core.transform_audio.filter_audio import (
+    DEFAULT_FILTER_ORDER,
+    FilterSpec,
+    FilterType,
+)
 
 
 class FilterAudioDialog(QDialog):

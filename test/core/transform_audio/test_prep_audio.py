@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-import core.load_audio.prep_audio as prep_audio_module
+import core.transform_audio.prep_audio as prep_audio_module
 from core.load_audio.entity.audio_signal import AudioSignal
-from core.load_audio.prep_audio import PrepAudio
+from core.transform_audio.prep_audio import PrepAudio
 
 
 def make_fake_prep_audio(

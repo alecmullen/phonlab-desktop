@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from ui.base.state import State
+
 
 class ChannelMode(StrEnum):
     MONO = "mono"
@@ -9,7 +11,7 @@ class ChannelMode(StrEnum):
 
 
 @dataclass
-class AudioOpenOptions:
+class AudioOpenOptionsState(State):
     target_fs: int = 16000
     channel_mode: ChannelMode = ChannelMode.MONO
     retained_channels: list[int] = field(default_factory=lambda: [0])

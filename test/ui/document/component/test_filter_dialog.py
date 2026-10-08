@@ -2,7 +2,7 @@ import pytest
 from PyQt6.QtWidgets import QDialog, QDialogButtonBox
 from pytestqt.qtbot import QtBot
 
-from core.edit_audio.filter_audio import FilterType
+from core.transform_audio.filter_audio import FilterType
 from ui.document.component.filter_dialog import FilterAudioDialog
 
 

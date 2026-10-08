@@ -6,15 +6,13 @@ from PyQt6.QtCore import pyqtSlot
 
 from core.edit_audio.edit_audio import EditAudio
 from core.edit_audio.entity.edit_command import EditCommand, EditCommandType
-from core.edit_audio.filter_audio import FilterAudio, FilterSpec
-from core.edit_audio.transform_audio import ReverseAudio, ScaleAudio
-from core.load_audio.entity.audio_open_options import AudioOpenOptions, ChannelMode
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.load_audio.load_audio import LoadAudio
-from core.load_audio.prep_audio import PrepAudio
 from core.play_audio.audio_player import AudioPlayer
 from core.play_audio.entity.playback_poll import PlaybackPoll
 from core.save_audio.save_audio import SaveAudio
+from core.transform_audio.filter_audio import FilterAudio, FilterSpec
+from core.transform_audio.prep_audio import PrepAudio
 from res.constants import (
     DEFAULT_WINDOW_LENGTH,
     LATENCY_WARNING_THRESHOLD_S,
@@ -42,6 +40,7 @@ from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
@@ -62,7 +61,7 @@ class DocumentViewModel(ViewModel):
         self.mark_state: MarkState = MarkState()
         self.audio_loaded_state: AudioLoaded = AudioLoaded()
 
-        self.audio_options: AudioOpenOptions = AudioOpenOptions()
+        self.audio_options: AudioOpenOptionsState = AudioOpenOptionsState()
 
         self.undo_stack: list[EditCommandState] = []
         self.redo_stack: list[EditCommandState] = []
@@ -132,7 +131,7 @@ class DocumentViewModel(ViewModel):
         self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
         self.state_changed.emit(self.plot_layout_state)
 
-    def load_audio(self, filepath: str, options: AudioOpenOptions):
+    def load_audio(self, filepath: str, options: AudioOpenOptionsState):
         self.audio_options = options
         self.channel_state = ChannelState(
             primary_channel=options.primary_channel,
@@ -293,17 +292,18 @@ class DocumentViewModel(ViewModel):
         The prepped rate comes from the spectrogram settings, independent of
         the raw audio's rate (it may even be higher; the extra range is blank).
         """
-        active = self.active_channel_states()
+        active = self.active_channels()
         if not active:
             return
 
         if len(active) == 2:
-            ch0, ch1 = active
+            ch0, ch1 = active.values()
             min_len = min(len(ch0.x), len(ch1.x))
             x = ch0.x[:min_len] + ch1.x[:min_len]
             fs = ch0.fs
         else:
-            x, fs = active[0].x, active[0].fs
+            channel = next(iter(active.values()))
+            x, fs = channel.x, channel.fs
 
         self.spectrogram_view_model.prep_audio(x, fs)
 
@@ -573,12 +573,12 @@ class DocumentViewModel(ViewModel):
     def _playback_section(self, start: int, end: int) -> tuple[np.ndarray, int] | None:
         """The samples to play for [start:end), as stereo (N, 2) if both
         channels are active, else mono (N,)"""
-        active = self.active_channel_states()
+        active = self.active_channels()
         if not active:
             return None
 
         if len(active) == 2:
-            ch0, ch1 = active
+            ch0, ch1 = active.values()
             min_len = min(len(ch0.x), len(ch1.x))
             end = min(end, min_len)
             if start >= end:
@@ -586,7 +586,7 @@ class DocumentViewModel(ViewModel):
             section = np.stack([ch0.x[start:end], ch1.x[start:end]], axis=1)
             return section, ch0.fs
 
-        channel = active[0]
+        channel = next(iter(active.values()))
         if start >= end:
             return None
         return channel.x[start:end], channel.fs
@@ -649,14 +649,18 @@ class DocumentViewModel(ViewModel):
             }
         )
 
-    def active_channel_states(self) -> list[AudioChannelState]:
+    def active_channels(self) -> dict[int, AudioChannelState]:
         """The channel(s) currently active for playback/spectrogram"""
         if self.stereo_channels() is None:
             primary = self.primary_channel()
-            return [primary] if primary is not None else []
+            return (
+                {self.channel_state.primary_channel: primary}
+                if primary is not None
+                else {}
+            )
         indices = sorted(self.channel_state.active_channels)
         all_channels = self.audio_state.channels
-        return [all_channels[idx] for idx in indices if idx in all_channels]
+        return {idx: all_channels[idx] for idx in indices if idx in all_channels}
 
     def active_channel_indices(self) -> frozenset[int]:
         return self.channel_state.active_channels
@@ -932,20 +936,6 @@ class DocumentViewModel(ViewModel):
             return
         self.paste_at(position, clip)
 
-    def _transform_targets(self) -> dict[int, AudioChannelState]:
-        """Channels a scale/reverse applies to: the active channels of a
-        stereo document, otherwise the primary channel."""
-        if self.stereo_channels() is None:
-            primary = self.primary_channel()
-            if primary is None:
-                return {}
-            return {self.channel_state.primary_channel: primary}
-        return {
-            idx: self.audio_state.channels[idx]
-            for idx in sorted(self.channel_state.active_channels)
-            if idx in self.audio_state.channels
-        }
-
     def _transform_range(self, length: int, fs: int) -> tuple[int, int]:
         """Sample range a transform covers: the selection if there is one,
         otherwise the whole signal."""
@@ -963,7 +953,7 @@ class DocumentViewModel(ViewModel):
         if not self._audio_ready():
             return False
 
-        targets = self._transform_targets()
+        targets = self.active_channels()
         if not targets:
             return False
 
@@ -972,24 +962,33 @@ class DocumentViewModel(ViewModel):
         if end <= start:
             return False
 
-        previous: dict[int, np.ndarray] = {}
-        replaced: dict[int, np.ndarray] = {}
+        previous = {idx: ch.x[start:end].copy() for idx, ch in targets.items()}
+        replaced = {
+            idx: transform(ch.x[start:end], ch.fs) for idx, ch in targets.items()
+        }
+
+        if not self._overwrite_samples(start, replaced):
+            return False
+        self._push_undo(EditCommandState("replace", start, replaced, previous))
+        self.state_changed.emit(StatusMessageState(status))
+        return True
+
+    def _overwrite_samples(self, start: int, samples: dict[int, np.ndarray]) -> bool:
+        """Overwrite each channel's samples from `start` with `samples`,
+        keeping the selection."""
+        selection = self.select_state
         new_channels = dict(self.audio_state.channels)
-        for idx, channel in targets.items():
-            segment = channel.x[start:end]
-            new_segment = transform(segment, channel.fs)
-            previous[idx] = segment.copy()
-            replaced[idx] = new_segment
+        for idx, new_samples in samples.items():
+            channel = self.audio_state.channels.get(idx)
+            if channel is None:
+                raise RuntimeError(f"Missing channel {idx} for undo/redo")
             new_x = channel.x.copy()
-            new_x[start:end] = new_segment
+            new_x[start : start + len(new_samples)] = new_samples
             new_channels[idx] = AudioChannelState(new_x, channel.fs)
 
-        selection = self.select_state
         if not self._replace_channels(AudioState(new_channels)):
             return False
         self._restore_selection(selection)
-        self._push_undo(EditCommandState("replace", start, replaced, previous))
-        self.state_changed.emit(StatusMessageState(status))
         return True
 
     def _restore_selection(self, selection: SelectState):
@@ -999,14 +998,24 @@ class DocumentViewModel(ViewModel):
 
     def scale_audio(self, scale: float) -> bool:
         """Scale the peak to `scale` dBFS (see phon.prep_audio)."""
+
+        def scale_samples(x: np.ndarray, fs: int) -> np.ndarray:
+            scaled = PrepAudio(
+                {0: AudioSignal(x, fs)},
+                target_fs=fs,
+                retained_channels=[0],
+                scale=scale,
+                add_tiny_noise=False,
+            ).run_sync()
+            return scaled[0].x.astype(x.dtype, copy=False)
+
         return self._transform_samples(
-            lambda x, fs: ScaleAudio(x, fs, scale).invoke(),
-            self.tr("Scaled to {:g} dBFS").format(scale),
+            scale_samples, self.tr("Scaled to {:g} dBFS").format(scale)
         )
 
     def reverse_audio(self) -> bool:
         return self._transform_samples(
-            lambda x, fs: ReverseAudio(x).invoke(), self.tr("Reversed")
+            lambda x, fs: x[::-1].copy(), self.tr("Reversed")
         )
 
     def filter_audio(self, spec: FilterSpec) -> bool:
@@ -1016,25 +1025,23 @@ class DocumentViewModel(ViewModel):
         if not self._audio_ready():
             return False
 
-        targets = self._transform_targets()
+        targets = self.active_channels()
         if not targets:
             return False
 
-        new_channels = dict(self.audio_state.channels)
         try:
-            for idx, channel in targets.items():
-                new_x = FilterAudio(channel.x, channel.fs, spec).invoke()
-                new_channels[idx] = AudioChannelState(new_x, channel.fs)
+            filtered = {
+                idx: FilterAudio(ch.x, ch.fs, spec).invoke()
+                for idx, ch in targets.items()
+            }
         except ValueError as err:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Could not filter: {}").format(err))
             )
             return False
 
-        selection = self.select_state
-        if not self._replace_channels(AudioState(new_channels)):
+        if not self._overwrite_samples(0, filtered):
             return False
-        self._restore_selection(selection)
         self.undo_stack.clear()
         self.redo_stack.clear()
         self.state_changed.emit(StatusMessageState(self.tr("Filtered")))
@@ -1251,20 +1258,7 @@ class DocumentViewModel(ViewModel):
         if source is None:
             raise RuntimeError("Replace command has no previous samples")
 
-        selection = self.select_state
-        new_channels = dict(self.audio_state.channels)
-        for idx, samples in source.items():
-            channel = self.audio_state.channels.get(idx)
-            if channel is None:
-                raise RuntimeError(f"Missing channel {idx} for undo/redo")
-            new_x = channel.x.copy()
-            new_x[cmd.start_idx : cmd.start_idx + len(samples)] = samples
-            new_channels[idx] = AudioChannelState(new_x, channel.fs)
-
-        if not self._replace_channels(AudioState(new_channels)):
-            return False
-        self._restore_selection(selection)
-        return True
+        return self._overwrite_samples(cmd.start_idx, source)
 
     def undo(self):
         if not self.undo_stack:

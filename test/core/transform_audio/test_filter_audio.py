@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from core.edit_audio.filter_audio import FilterAudio, FilterSpec, FilterType
+from core.transform_audio.filter_audio import FilterAudio, FilterSpec, FilterType
 
 FS = 8000
 
