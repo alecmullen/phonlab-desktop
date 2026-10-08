@@ -88,7 +88,9 @@ class AudioInfoDialog(QDialog):
             return
         form.addRow(
             min_max_title,
-            QLabel(self.tr("{:.4g} / {:.4g}").format(np.min(channel.x), np.max(channel.x))),
+            QLabel(
+                self.tr("{:.4g} / {:.4g}").format(np.min(channel.x), np.max(channel.x))
+            ),
         )
         form.addRow(
             peak_title, QLabel(self.tr("{:.2f} dBFS").format(peak_dbfs(channel.x)))
