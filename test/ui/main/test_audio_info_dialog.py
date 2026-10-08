@@ -41,7 +41,10 @@ def test_shows_name_sample_rate_duration_and_amplitude(
     )
 
     dialog = AudioInfoDialog(
-        document_view.view_model.primary_channel(), "mydoc.wav", document_view
+        document_view.view_model.primary_channel(),
+        document_view.view_model.stereo_channels(),
+        "mydoc.wav",
+        document_view,
     )
     qtbot.addWidget(dialog)
 
@@ -56,7 +59,10 @@ def test_shows_placeholder_values_when_no_audio_is_loaded(
     qtbot: QtBot, document_view: DocumentView
 ):
     dialog = AudioInfoDialog(
-        document_view.view_model.primary_channel(), "empty.wav", document_view
+        document_view.view_model.primary_channel(),
+        document_view.view_model.stereo_channels(),
+        "empty.wav",
+        document_view,
     )
     qtbot.addWidget(dialog)
 
@@ -78,7 +84,10 @@ def test_show_info_static_helper_execs_dialog(
     monkeypatch.setattr(AudioInfoDialog, "exec", lambda self: exec_calls.append(True))
 
     AudioInfoDialog.show_info(
-        document_view.view_model.primary_channel(), "mydoc.wav", document_view
+        document_view.view_model.primary_channel(),
+        document_view.view_model.stereo_channels(),
+        "mydoc.wav",
+        document_view,
     )
 
     assert exec_calls == [True]
@@ -89,7 +98,12 @@ def test_shows_peak_level_in_dbfs(qtbot: QtBot, document_view: DocumentView):
         to_audio_state({0: AudioSignal(np.array([-0.5, 0.25, 0.0]), 1000)})
     )
 
-    dialog = AudioInfoDialog(document_view, "mydoc.wav")
+    dialog = AudioInfoDialog(
+        document_view.view_model.primary_channel(),
+        document_view.view_model.stereo_channels(),
+        "mydoc.wav",
+        document_view,
+    )
     qtbot.addWidget(dialog)
 
     texts = label_texts(dialog)
@@ -109,7 +123,12 @@ def test_shows_levels_for_both_stereo_channels(
         )
     )
 
-    dialog = AudioInfoDialog(document_view, "stereo.wav")
+    dialog = AudioInfoDialog(
+        document_view.view_model.primary_channel(),
+        document_view.view_model.stereo_channels(),
+        "mydoc.wav",
+        document_view,
+    )
     qtbot.addWidget(dialog)
 
     texts = label_texts(dialog)
