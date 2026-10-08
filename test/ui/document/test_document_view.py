@@ -9,7 +9,8 @@ from pytestqt.qtbot import QtBot
 
 import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
-from core.transform_audio.filter_audio import FilterSpec, FilterType
+from core.transform_audio.entity.filter_spec import FilterType
+from core.transform_audio.filter_audio import FilterSpec
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.delete_channel_dialog import DeleteChannelDialog

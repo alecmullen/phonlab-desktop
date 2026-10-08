@@ -9,7 +9,8 @@ import ui.base.view_model as view_model_module
 import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
-from core.transform_audio.filter_audio import FilterSpec, FilterType
+from core.transform_audio.entity.filter_spec import FilterType
+from core.transform_audio.filter_audio import FilterSpec
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
