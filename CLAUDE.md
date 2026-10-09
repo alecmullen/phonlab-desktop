@@ -25,17 +25,7 @@ has corrected earlier AI-written code. Background: `docs/upstream-refactor-revie
 ## How components talk
 
 - Data flows up as `State` via the view model's single `state_changed` signal and
-  down via method calls from parent VM to child VM. **Do not add new
-  `pyqtSignal`s between views.**
-- Context-menu commands follow one pattern: `QAction.triggered` -> slot on the
-  plot's own view model -> VM emits a payload-free `*Action(State)`
-  (`ui/waveform/state/audio_wave_action.py`) -> `DocumentViewModel.on_wave_state_changed`
-  handles it or relays it -> `DocumentView.on_state_change` opens the dialog and
-  calls the document VM with the result. To add a command, add an `*Action`
-  state; don't wire the view straight to the document VM.
-- Child view models carry their identity (e.g. `AudioWaveViewModel.channel_idx`)
-  and include it in emitted states. The parent reacts; it should not push
-  mirrored state into children by position.
+  down via method calls from parent VM to child VM.
 
 ## Entities and layers
 
