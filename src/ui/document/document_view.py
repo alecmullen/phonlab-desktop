@@ -1,11 +1,10 @@
-from typing import cast
-
 import pyqtgraph as pg
-from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
     QDragEnterEvent,
     QDropEvent,
     QMouseEvent,
+    QResizeEvent,
     QWheelEvent,
 )
 from PyQt6.QtWidgets import (
@@ -25,7 +24,6 @@ from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.audio_info_dialog import AudioInfoDialog
-from ui.document.component.delete_channel_dialog import DeleteChannelDialog
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.paste_special_dialog import PasteSpecialDialog
@@ -72,7 +70,6 @@ class DocumentView(QWidget):
 
         # Create graphics layout widget
         self.graphics_widget = pg.GraphicsLayoutWidget()
-        self.graphics_widget.viewport().installEventFilter(self)
 
         # Initialize plot items (will be created in plot methods)
         self.document_plots: list[DocumentPlot] = []
@@ -185,24 +182,6 @@ class DocumentView(QWidget):
             menu.insertAction(self.deselect_action, self.zoom_to_selection_action)
         elif present and not wanted:
             menu.removeAction(self.zoom_to_selection_action)
-
-    def _channel_checkbox_at(self, scene_pos: QPointF) -> int | None:
-        """The channel index (0 or 1) whose "Active" checkbox contains this
-        scene position, if any"""
-        for idx, plot in enumerate(self.wave_plots):
-            proxy = plot.active_checkbox_proxy
-            if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):
-                return idx
-        return None
-
-    def _channel_delete_button_at(self, scene_pos: QPointF) -> int | None:
-        """The channel index (0 or 1) whose delete ("x") button contains
-        this scene position, if any"""
-        for idx, plot in enumerate(self.wave_plots):
-            proxy = plot.delete_button_proxy
-            if proxy is not None and proxy.sceneBoundingRect().contains(scene_pos):
-                return idx
-        return None
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -487,6 +466,9 @@ class DocumentView(QWidget):
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setFormat(self.tr("Computing %p%"))
 
+    def map_scene_to_graphics_widget(self, pos: QPointF) -> QPointF:
+        return pos - self.graphics_widget.pos().toPointF()
+
     def on_mouse_moved(self, pos: QPointF):
         # Determine which plot the mouse is over
 
@@ -518,73 +500,32 @@ class DocumentView(QWidget):
         else:
             self.message_label.setText(status_msg)
 
-    def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
-        """Filter mouse events from the graphics widget"""
-        obj, event = a0, a1
-        if obj == self.graphics_widget.viewport() and event is not None:
-            if event.type() == QEvent.Type.MouseButtonDblClick:
-                event = cast(QMouseEvent, event)
-                if event.button() == Qt.MouseButton.LeftButton:
-                    self.handle_double_click(event)
-                    return True
-
-            elif event.type() == QEvent.Type.MouseButtonPress:
-                event = cast(QMouseEvent, event)
-                if event.button() == Qt.MouseButton.LeftButton:
-                    self.handle_mouse_press(event)
-                    return True
-                else:
-                    self.context_pos = self.graphics_widget.mapToScene(event.pos())
-
-            elif event.type() == QEvent.Type.MouseButtonRelease:
-                event = cast(QMouseEvent, event)
-                if event.button() == Qt.MouseButton.LeftButton:
-                    self.handle_mouse_release(event)
-                    return True
-
-            elif event.type() == QEvent.Type.Resize:
-                self.apply_row_heights()
-
-            elif event.type() == QEvent.Type.Wheel:
-                return self.handle_scroll(cast(QWheelEvent, event))
-
-        return super().eventFilter(obj, event)
-
-    def handle_mouse_press(self, event: QMouseEvent):
+    def mousePressEvent(self, a0: QMouseEvent | None):
         """Handle left mouse button press"""
-        scene_pos = self.graphics_widget.mapToScene(event.pos())
-
-        channel_idx = self._channel_checkbox_at(scene_pos)
-        if channel_idx is not None:
-            self.view_model.toggle_channel_active(channel_idx)
+        if a0 is None:
+            return
+        if a0.button() == Qt.MouseButton.RightButton:
+            self.context_pos = self.map_scene_to_graphics_widget(a0.position())
             return
 
-        delete_idx = self._channel_delete_button_at(scene_pos)
-        if delete_idx is not None:
-            if DeleteChannelDialog.confirm(self):
-                self.view_model.delete_channel(delete_idx)
-            return
+        scene_pos = self.map_scene_to_graphics_widget(a0.position())
 
         clicked_plot = self._get_document_plot_at(scene_pos)
-
-        if isinstance(clicked_plot, AnnotationPlot):
-            handled = clicked_plot.handle_mouse_press(event)
-            if handled:
-                return
 
         if clicked_plot is None:
             return
 
         self.mouse_pressed = True
+        a0.accept()
 
-    def handle_double_click(self, event: QMouseEvent):
+    def mouseDoubleClickEvent(self, a0: QMouseEvent | None):
         """Handle double-click"""
-        scene_pos = self.graphics_widget.mapToScene(event.pos())
+        if a0 is None:
+            return
+        if a0.button() != Qt.MouseButton.LeftButton:
+            return
 
-        if self._channel_checkbox_at(scene_pos) is not None:
-            return
-        if self._channel_delete_button_at(scene_pos) is not None:
-            return
+        scene_pos = self.map_scene_to_graphics_widget(a0.position())
 
         if self.click_timer is not None:
             self.click_timer.stop()
@@ -602,10 +543,16 @@ class DocumentView(QWidget):
         x = mouse_point.x()
 
         self.view_model.zoom_if_in_selection(x)
+        a0.accept()
 
-    def handle_mouse_release(self, event: QMouseEvent):
+    def mouseReleaseEvent(self, a0: QMouseEvent | None):
         """Handle left mouse button release"""
-        scene_pos = self.graphics_widget.mapToScene(event.pos())
+        if a0 is None:
+            return
+        if a0.button() != Qt.MouseButton.LeftButton:
+            return
+
+        scene_pos = self.map_scene_to_graphics_widget(a0.position())
 
         if self.mouse_pressed:
             self.mouse_pressed = False
@@ -614,7 +561,7 @@ class DocumentView(QWidget):
                 self.is_dragging = False
                 self.view_model.play_selected_audio()
             else:
-                if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+                if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
                     self.play_window_or_selection(scene_pos)
                 else:
                     self.pending_single_click = scene_pos
@@ -624,10 +571,8 @@ class DocumentView(QWidget):
                     self.click_timer.setSingleShot(True)
                     self.click_timer.timeout.connect(self.handle_single_click)
                     self.click_timer.start(250)
-        else:
-            for plot in self.document_plots:
-                if isinstance(plot, AnnotationPlot):
-                    plot.handle_mouse_release(event)
+
+        a0.accept()
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
@@ -646,11 +591,20 @@ class DocumentView(QWidget):
         self.pending_single_click = None
         self.click_timer = None
 
-    def handle_scroll(self, event: QWheelEvent) -> bool:
-        angle_x = event.angleDelta().x()
-        angle_y = event.angleDelta().y()
-        pixel_x = event.pixelDelta().x()
-        pixel_y = event.pixelDelta().y()
+    def resizeEvent(self, a0: QResizeEvent | None):
+        if a0 is None:
+            return
+        self.apply_row_heights()
+        a0.accept()
+
+    def wheelEvent(self, a0: QWheelEvent | None):
+        if a0 is None:
+            return
+
+        angle_x = a0.angleDelta().x()
+        angle_y = a0.angleDelta().y()
+        pixel_x = a0.pixelDelta().x()
+        pixel_y = a0.pixelDelta().y()
 
         modifiers = QApplication.keyboardModifiers()
 
@@ -664,40 +618,40 @@ class DocumentView(QWidget):
             is_trackpad = False
 
         if modifiers == Qt.KeyboardModifier.ControlModifier:
-            return self.handle_control_scroll(event, scroll_y, is_trackpad)
+            self.handle_control_scroll(a0, scroll_y, is_trackpad)
+            a0.accept()
+            return
 
         scroll = max(scroll_x, scroll_y, key=abs)
 
         if abs(scroll) > 0:
             # shift vertical scroll motion
             if modifiers == Qt.KeyboardModifier.ShiftModifier:
-                return self.handle_shift_scroll(scroll)
+                self.handle_shift_scroll(scroll)
             else:
-                return self.handle_plain_scroll(scroll, is_trackpad)
+                self.handle_plain_scroll(scroll, is_trackpad)
 
-        return False
+            a0.accept()
 
-    def handle_shift_scroll(self, scroll: float) -> bool:
+    def handle_shift_scroll(self, scroll: float):
         if scroll > 0:
             self.zoom_in(1.05)
         else:
             self.zoom_out(1.05)
-        return True
 
-    def handle_plain_scroll(self, scroll: float, is_trackpad: bool) -> bool:
+    def handle_plain_scroll(self, scroll: float, is_trackpad: bool):
         if is_trackpad:
             scroll_fraction = -scroll * 0.002
         else:
             scroll_fraction = -scroll * 0.1
 
         self.view_model.move_start_by_fraction(scroll_fraction)
-        return True
 
     def handle_control_scroll(
         self, event: QWheelEvent, scroll_y: float, is_trackpad: bool
-    ) -> bool:
+    ):
         mouse_pos = event.position() if hasattr(event, "position") else event.pos()
-        scene_pos = self.graphics_widget.mapToScene(mouse_pos.toPoint())
+        scene_pos = self.map_scene_to_graphics_widget(mouse_pos)
 
         delta = scroll_y
 
@@ -706,8 +660,6 @@ class DocumentView(QWidget):
             plot.adjust_y_scale(delta)
         elif isinstance(plot, SpectrogramPlot):
             plot.adjust_gray_scale(is_trackpad, delta)
-
-        return True
 
     def set_mark_if_in_plot(self, scene_pos: QPointF):
         """Set mark if position is in a document plot."""

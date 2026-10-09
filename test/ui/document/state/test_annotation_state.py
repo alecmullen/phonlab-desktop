@@ -32,8 +32,8 @@ def test_to_annotation_state_converts_nodes_and_types():
         AnnotationTypeState(
             "word",
             [
-                AnnotationLabelState(0, 1, "hello"),
-                AnnotationLabelState(1, 2, "world"),
+                AnnotationLabelState(1, 0, 1, "hello"),
+                AnnotationLabelState(2, 1, 2, "world"),
             ],
         )
     ]

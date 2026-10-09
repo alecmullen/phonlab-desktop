@@ -13,6 +13,7 @@ from ui.waveform.state.audio_wave_action import (
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
 from ui.waveform.state.audio_wave_state import AudioWaveState
 from ui.waveform.state.channel_active_state import ChannelActiveState
+from ui.waveform.state.delete_channel_state import DeleteChannelState
 
 
 class AudioWaveViewModel(ViewModel):
@@ -22,10 +23,6 @@ class AudioWaveViewModel(ViewModel):
         self.audio_wave_scale_state = AudioWaveScaleState()
         self.audio_wave_state = AudioWaveState()
         self.channel_active_state = ChannelActiveState()
-
-    def set_active(self, is_active: bool):
-        self.channel_active_state = ChannelActiveState(is_active)
-        self.state_changed.emit(self.channel_active_state)
 
     def update_wave_y_range(self, delta: float):
         if delta < 0:
@@ -73,3 +70,10 @@ class AudioWaveViewModel(ViewModel):
     @pyqtSlot()
     def reverse_audio(self):
         self.state_changed.emit(AudioReverseAction())
+
+    def delete_channel(self):
+        self.state_changed.emit(DeleteChannelState(self.channel_idx))
+
+    def toggle_active(self, is_active: bool):
+        self.channel_active_state = ChannelActiveState(self.channel_idx, is_active)
+        self.state_changed.emit(self.channel_active_state)

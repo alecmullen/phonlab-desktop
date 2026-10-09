@@ -85,3 +85,29 @@ class AnnotationViewModel(ViewModel):
             self.state_changed.emit(
                 StatusMessageState(self.tr("Error parsing TextGrid"))
             )
+
+    def change_label_text(self, label_id: int, text: str):
+        self.annotation_state = self._change_label_text_in_state(
+            label_id, text, self.annotation_state
+        )
+        self.annotation_view_state = self._change_label_text_in_state(
+            label_id, text, self.annotation_view_state
+        )
+
+    def _change_label_text_in_state(
+        self, label_id: int, text: str, annotation: AnnotationState
+    ) -> AnnotationState:
+        for type_idx, type in enumerate(annotation.types):
+            for label_idx, label in enumerate(type.labels):
+                if label.id == label_id:
+                    new_label = replace(label, label=text)
+                    labels = type.labels.copy()
+                    labels[label_idx] = new_label
+
+                    new_type = replace(type, labels=labels)
+                    types = annotation.types.copy()
+                    types[type_idx] = new_type
+
+                    return replace(annotation, types=types)
+
+        return annotation

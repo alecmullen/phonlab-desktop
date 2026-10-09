@@ -3,6 +3,8 @@ from pytestqt.qtbot import QtBot
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
 from ui.waveform.state.audio_wave_state import AudioWaveState
+from ui.waveform.state.channel_active_state import ChannelActiveState
+from ui.waveform.state.delete_channel_state import DeleteChannelState
 
 
 def test_default_state_has_unit_scale(qtbot: QtBot):
@@ -75,3 +77,28 @@ def test_set_wave_state_replaces_state_and_emits(qtbot: QtBot):
     assert view_model.audio_wave_state is new_state
     assert len(received) == 1
     assert received[0] is new_state
+
+
+def test_channel_is_active_by_default(qtbot: QtBot):
+    assert AudioWaveViewModel().channel_active_state == ChannelActiveState(
+        is_active=True
+    )
+
+
+def test_toggle_active_stores_and_emits_state(qtbot: QtBot):
+    view_model = AudioWaveViewModel()
+
+    with qtbot.waitSignal(view_model.state_changed) as blocker:
+        view_model.toggle_active(False)
+
+    assert view_model.channel_active_state == ChannelActiveState(is_active=False)
+    assert blocker.args == [ChannelActiveState(is_active=False)]
+
+
+def test_delete_channel_emits_delete_state(qtbot: QtBot):
+    view_model = AudioWaveViewModel()
+
+    with qtbot.waitSignal(view_model.state_changed) as blocker:
+        view_model.delete_channel()
+
+    assert isinstance(blocker.args[0], DeleteChannelState)

@@ -1,7 +1,7 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtGui import QFont, QFontMetrics, QMouseEvent, QShowEvent
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtGui import QFont, QFontMetrics, QShowEvent
+from PyQt6.QtWidgets import QGraphicsSceneMouseEvent, QWidget
 
 from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
 from ui.annotation.annotation_view_model import AnnotationViewModel
@@ -36,9 +36,6 @@ class AnnotationPlot(DocumentPlot):
         self.visible_nodes: list[AnnotationNodeState] = []
         self.visible_labels: list[AnnotationLabelState] = []
 
-        self.node_view: NodeView | None = None
-        self.label_view: LabelView | None = None
-
         self.dragging_node: AnnotationNodeState | None = None
 
     @pyqtSlot(object)
@@ -56,14 +53,9 @@ class AnnotationPlot(DocumentPlot):
         self.populate(self.view_model.annotation_view_state)
 
     def clear_annotations(self):
-        node_view = self.node_view
-        label_view = self.label_view
-        self.node_view = None
-        self.label_view = None
-        if node_view is not None:
-            self.removeItem(node_view)
-        if label_view is not None:
-            self.removeItem(label_view)
+        for item in self.allChildItems():
+            if isinstance(item, (LabelView, NodeView)):
+                self.removeItem(item)
 
     def populate(self, annotation_state: AnnotationState):
         self.clear_annotations()
@@ -94,38 +86,43 @@ class AnnotationPlot(DocumentPlot):
         for type in types:
             self.visible_labels += [label for label in type.labels if label.is_visible]
 
-        self.label_view = LabelView(self.visible_labels, self)
-        self.label_view.setPos(0, 0)
-        self.addItem(self.label_view)
+        label_view = LabelView(self.visible_labels, self.on_label_edit, self)
+        label_view.setPos(0, 0)
+        self.addItem(label_view)
 
         self.visible_nodes = [node for node in nodes.values() if node.is_visible]
 
-        self.node_view = NodeView(self.visible_nodes, self)
-        self.node_view.setPos(0, 0)
-        self.addItem(self.node_view)
+        node_view = NodeView(self.visible_nodes, self)
+        node_view.setPos(0, 0)
+        self.addItem(node_view)
 
-    def handle_mouse_press(self, event: QMouseEvent) -> bool:
+    def mousePressEvent(self, a0: QGraphicsSceneMouseEvent | None):
+        if a0 is None:
+            return
         pixel_size = self.getViewBox().viewPixelSize()
         h_margin = NODE_H_MARGIN * pixel_size[0]
         v_margin = NODE_V_MARGIN * pixel_size[1]
 
-        pos = self.getViewBox().mapSceneToView(event.position())
+        pos = self.getViewBox().mapSceneToView(a0.scenePos())
 
         for node_view_state in self.visible_nodes:
             node_x = node_view_state.x
             node_y = node_view_state.extents[0].tier
             if abs(pos.x() - node_x) < h_margin and abs(pos.y() - node_y) < v_margin:
                 self.dragging_node = node_view_state
-                return True
-        return False
+                a0.accept()
+                return
 
-    def handle_mouse_release(self, event: QMouseEvent) -> bool:
+        a0.ignore()
+
+    def mouseReleaseEvent(self, a0: QGraphicsSceneMouseEvent | None):
+        if a0 is None:
+            return
         if self.dragging_node is not None:
             self.dragging_node = None
-            event.accept()
-            return True
-
-        return False
+            a0.accept()
+        else:
+            a0.ignore()
 
     def handle_single_click(self, scene_pos: QPointF) -> bool:
         pos = self.getViewBox().mapSceneToView(scene_pos)
@@ -138,6 +135,10 @@ class AnnotationPlot(DocumentPlot):
                 self.view_model.select_label(label_view_state)
                 return True
         return False
+
+    @pyqtSlot(int, str)
+    def on_label_edit(self, label_id: int, text: str):
+        self.view_model.change_label_text(label_id, text)
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos: QPointF):

@@ -7,6 +7,7 @@ from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
+from ui.waveform.component.delete_channel_dialog import DeleteChannelDialog
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
 from ui.waveform.state.audio_wave_state import AudioWaveState
 from ui.waveform.state.channel_active_state import ChannelActiveState
@@ -36,6 +37,7 @@ class AudioWavePlot(DocumentPlot):
             # Rendering only - clicks handled in DocumentView
             self.active_checkbox = QCheckBox(self.tr("Active"))
             self.active_checkbox.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self.active_checkbox.toggled.connect(self.toggle_active)
             self.active_checkbox_proxy = QGraphicsProxyWidget(self)
             self.active_checkbox_proxy.setWidget(self.active_checkbox)
             self.active_checkbox_proxy.setZValue(100)
@@ -55,6 +57,7 @@ class AudioWavePlot(DocumentPlot):
                 "QPushButton { border: none; color: #888; font-weight: bold; }"
                 "QPushButton:hover { color: #c00; }"
             )
+            self.delete_button.clicked.connect(self.delete_channel)
             self.delete_button_proxy = QGraphicsProxyWidget(self)
             self.delete_button_proxy.setWidget(self.delete_button)
             self.delete_button_proxy.setZValue(100)
@@ -181,6 +184,15 @@ class AudioWavePlot(DocumentPlot):
 
     def update_y_range(self, scaled_y_max: float):
         self.setYRange(-scaled_y_max, scaled_y_max, padding=0)
+
+    @pyqtSlot()
+    def delete_channel(self):
+        if DeleteChannelDialog.confirm(self.getViewWidget()):
+            self.view_model.delete_channel()
+
+    @pyqtSlot(bool)
+    def toggle_active(self, is_active: bool):
+        self.view_model.toggle_active(is_active)
 
     def clear(self):
         self.wave_curve = None

@@ -4,10 +4,12 @@ import pytest
 from pytestqt.qtbot import QtBot
 
 from ui.base.state import State
-from ui.waveform.audio_wave_plot import AudioWavePlot
+from ui.waveform.audio_wave_plot import ACTIVE_PEN, INACTIVE_PEN, AudioWavePlot
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
+from ui.waveform.component.delete_channel_dialog import DeleteChannelDialog
 from ui.waveform.state.audio_wave_range_state import AudioWaveScaleState
 from ui.waveform.state.audio_wave_state import AudioWaveState
+from ui.waveform.state.channel_active_state import ChannelActiveState
 
 
 def make_wave_state(**overrides: object) -> AudioWaveState:
@@ -258,3 +260,140 @@ def test_clear_resets_wave_curve(qtbot: QtBot):
     plot.clear()
 
     assert plot.wave_curve is None
+
+
+def test_controls_are_hidden_by_default(qtbot: QtBot):
+    plot = AudioWavePlot(AudioWaveViewModel())
+
+    assert plot.active_checkbox is None
+    assert plot.delete_button is None
+
+
+def test_controls_are_created_when_requested(qtbot: QtBot):
+    plot = AudioWavePlot(
+        AudioWaveViewModel(), show_active_checkbox=True, show_delete_button=True
+    )
+
+    assert plot.active_checkbox is not None
+    assert plot.delete_button is not None
+
+
+def test_active_checkbox_starts_checked_and_curve_uses_active_pen(qtbot: QtBot):
+    view_model = AudioWaveViewModel()
+    view_model.audio_wave_state = make_wave_state()
+
+    plot = AudioWavePlot(view_model, show_active_checkbox=True)
+
+    assert plot.active_checkbox.isChecked() is True
+    assert plot.wave_curve.opts["pen"] == ACTIVE_PEN
+
+
+def test_active_checkbox_reflects_inactive_initial_state(qtbot: QtBot):
+    view_model = AudioWaveViewModel()
+    view_model.audio_wave_state = make_wave_state()
+    view_model.channel_active_state = ChannelActiveState(is_active=False)
+
+    plot = AudioWavePlot(view_model, show_active_checkbox=True)
+
+    assert plot.active_checkbox.isChecked() is False
+    assert plot.wave_curve.opts["pen"] == INACTIVE_PEN
+
+
+def test_toggling_checkbox_forwards_to_view_model(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = AudioWaveViewModel()
+    plot = AudioWavePlot(view_model, show_active_checkbox=True)
+    calls = []
+    monkeypatch.setattr(view_model, "toggle_active", lambda a: calls.append(a))
+
+    plot.active_checkbox.setChecked(False)
+    plot.active_checkbox.setChecked(True)
+
+    assert calls == [False, True]
+
+
+def test_channel_active_state_updates_checkbox_and_pen(qtbot: QtBot):
+    view_model = AudioWaveViewModel()
+    view_model.audio_wave_state = make_wave_state()
+    plot = AudioWavePlot(view_model, show_active_checkbox=True)
+
+    plot.on_state_change(ChannelActiveState(is_active=False))
+
+    assert plot.active_checkbox.isChecked() is False
+    assert plot.wave_curve.opts["pen"] == INACTIVE_PEN
+
+    plot.on_state_change(ChannelActiveState(is_active=True))
+
+    assert plot.active_checkbox.isChecked() is True
+    assert plot.wave_curve.opts["pen"] == ACTIVE_PEN
+
+
+def test_channel_active_state_without_checkbox_still_updates_pen(qtbot: QtBot):
+    view_model = AudioWaveViewModel()
+    view_model.audio_wave_state = make_wave_state()
+    plot = AudioWavePlot(view_model)
+
+    plot.on_state_change(ChannelActiveState(is_active=False))
+
+    assert plot.wave_curve.opts["pen"] == INACTIVE_PEN
+
+
+def test_channel_active_state_before_wave_exists_does_not_fail(qtbot: QtBot):
+    plot = AudioWavePlot(AudioWaveViewModel(), show_active_checkbox=True)
+
+    plot.on_state_change(ChannelActiveState(is_active=False))
+
+    assert plot.active_checkbox.isChecked() is False
+
+
+def test_view_model_toggle_active_updates_plot(qtbot: QtBot):
+    view_model = AudioWaveViewModel()
+    plot = AudioWavePlot(view_model, show_active_checkbox=True)
+
+    view_model.toggle_active(False)
+
+    assert plot.active_checkbox.isChecked() is False
+
+
+def test_delete_channel_confirmed_forwards_to_view_model(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = AudioWaveViewModel()
+    plot = AudioWavePlot(view_model, show_delete_button=True)
+    calls = []
+    monkeypatch.setattr(view_model, "delete_channel", lambda: calls.append(True))
+    monkeypatch.setattr(DeleteChannelDialog, "confirm", lambda parent: True)
+
+    plot.delete_channel()
+
+    assert calls == [True]
+
+
+def test_delete_channel_cancelled_does_nothing(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = AudioWaveViewModel()
+    plot = AudioWavePlot(view_model, show_delete_button=True)
+    calls = []
+    monkeypatch.setattr(view_model, "delete_channel", lambda: calls.append(True))
+    monkeypatch.setattr(DeleteChannelDialog, "confirm", lambda parent: False)
+
+    plot.delete_channel()
+
+    assert calls == []
+
+
+def test_delete_button_click_asks_for_confirmation(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = AudioWaveViewModel()
+    plot = AudioWavePlot(view_model, show_delete_button=True)
+    asked = []
+    monkeypatch.setattr(
+        DeleteChannelDialog, "confirm", lambda parent: asked.append(True) or False
+    )
+
+    plot.delete_button.click()
+
+    assert asked == [True]
