@@ -11,6 +11,13 @@ from PyQt6.QtWidgets import QApplication
 from ui.main.main_window import MainWindow
 from ui.main.splash import ClickableSplash, icon_path
 
+log_path = os.path.expanduser("~/Library/Logs/phonlab.log")
+logging.basicConfig(
+    filename=log_path,
+    level=logging.ERROR,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 
 if getattr(sys, "frozen", False):
