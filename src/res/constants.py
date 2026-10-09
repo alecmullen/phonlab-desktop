@@ -18,6 +18,14 @@ ZERO_CROSSING_SEARCH_MS = 5
 
 # -- Audio Player --
 LATENCY_WARNING_THRESHOLD_S = 0.1
+# Silence added around played audio. Freshly opened output streams (especially
+# Bluetooth) can drop the first samples while the device wakes up, and the tail
+# can be cut off when the stream is closed, so make sure only silence is lost.
+PLAYBACK_PRE_ROLL_S = 0.0
+PLAYBACK_POST_ROLL_S = 0.5
+# Safety net for waiting on the stream to finish; allows for the variable delay
+# before the first audio callback.
+PLAYBACK_FINISH_TIMEOUT_MARGIN_S = 2.0
 
 # -- Spectrogram --
 MAX_SGRAM_LENGTH = 10
