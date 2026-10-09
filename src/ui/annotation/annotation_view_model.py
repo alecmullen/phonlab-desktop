@@ -1,3 +1,4 @@
+import logging
 from dataclasses import replace
 
 from core.parse_textgrid.annotation import Annotation
@@ -12,6 +13,8 @@ from ui.annotation.state.annotation_state import (
 )
 from ui.base.view_model import ViewModel
 from ui.document.state.status_message_state import StatusMessageState
+
+logger = logging.getLogger(__name__)
 
 
 class AnnotationViewModel(ViewModel):
@@ -85,6 +88,7 @@ class AnnotationViewModel(ViewModel):
             self.state_changed.emit(
                 StatusMessageState(self.tr("Error parsing TextGrid"))
             )
+            logger.exception("Error parsing TextGrid")
 
     def change_label_text(self, label_id: int, text: str):
         self.annotation_state = self._change_label_text_in_state(
