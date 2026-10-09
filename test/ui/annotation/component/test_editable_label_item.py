@@ -28,7 +28,7 @@ def plot(qtbot: QtBot) -> Iterator[pg.PlotItem]:
 @pytest.fixture
 def item(plot: pg.PlotItem) -> EditableLabelItem:
     label = AnnotationLabelState(pos=(0.5, 0.25), size=(1.0, 0.5), label="hello")
-    return EditableLabelItem(label, (0.5, 0.5), (0, 0, 0), plot)
+    return EditableLabelItem(label, (0.5, 0.5), (0, 0, 0), lambda: None, plot)
 
 
 def mouse_event(
@@ -63,7 +63,7 @@ def right_click(item: EditableLabelItem):
 def test_init_stores_label_id_and_text(plot: pg.PlotItem):
     label = AnnotationLabelState(pos=(1.0, 0.5), size=(1.0, 0.5), label="abc")
 
-    item = EditableLabelItem(label, (0.5, 0.5), (0, 0, 0), plot)
+    item = EditableLabelItem(label, (0.5, 0.5), (0, 0, 0), lambda: None, plot)
 
     assert item.label_id == label.id
     assert item.toPlainText() == "abc"
@@ -147,20 +147,27 @@ def test_exit_editing_without_change_does_not_emit(
 ):
     item.setEditable(True)
 
-    with qtbot.assertNotEmitted(item.editing_finished):
-        item.setEditable(False)
+    called = []
+    item.on_edit = lambda idx, txt: called.append((idx, txt))
+
+    item.setEditable(False)
+
+    assert called == []
 
 
 def test_exit_editing_with_change_emits_id_and_text(
     qtbot: QtBot, item: EditableLabelItem
 ):
     item.setEditable(True)
+
+    called = []
+    item.on_edit = lambda idx, txt: called.append((idx, txt))
+
     item.setPlainText("changed")
 
-    with qtbot.waitSignal(item.editing_finished) as blocker:
-        item.setEditable(False)
+    item.setEditable(False)
 
-    assert blocker.args == [item.label_id, "changed"]
+    assert called == [(item.label_id, "changed")]
 
 
 @pytest.mark.parametrize(
@@ -193,20 +200,29 @@ def test_other_keys_are_passed_through(item: EditableLabelItem):
 
 def test_focus_out_commits_edit(qtbot: QtBot, item: EditableLabelItem):
     item.setEditable(True)
+
+    called = []
+    item.on_edit = lambda idx, txt: called.append((idx, txt))
+
     item.setPlainText("changed")
 
-    with qtbot.waitSignal(item.editing_finished) as blocker:
-        handled = item.eventFilter(item.textItem, focus_out_event())
+    handled = item.eventFilter(item.textItem, focus_out_event())
 
     assert handled is True
-    assert blocker.args == [item.label_id, "changed"]
+    assert called == [(item.label_id, "changed")]
 
 
-def test_focus_out_without_change_does_not_emit(qtbot: QtBot, item: EditableLabelItem):
+def test_focus_out_without_change_does_not_call_on_edit(
+    qtbot: QtBot, item: EditableLabelItem
+):
     item.setEditable(True)
 
-    with qtbot.assertNotEmitted(item.editing_finished):
-        item.eventFilter(item.textItem, focus_out_event())
+    called = []
+    item.on_edit = lambda idx, txt: called.append((idx, txt))
+
+    item.eventFilter(item.textItem, focus_out_event())
+
+    assert called == []
 
 
 def test_event_filter_ignores_none_event(item: EditableLabelItem):

@@ -291,7 +291,7 @@ def test_active_checkbox_starts_checked_and_curve_uses_active_pen(qtbot: QtBot):
 def test_active_checkbox_reflects_inactive_initial_state(qtbot: QtBot):
     view_model = AudioWaveViewModel()
     view_model.audio_wave_state = make_wave_state()
-    view_model.channel_active_state = ChannelActiveState(False)
+    view_model.channel_active_state = ChannelActiveState(is_active=False)
 
     plot = AudioWavePlot(view_model, show_active_checkbox=True)
 
@@ -318,12 +318,12 @@ def test_channel_active_state_updates_checkbox_and_pen(qtbot: QtBot):
     view_model.audio_wave_state = make_wave_state()
     plot = AudioWavePlot(view_model, show_active_checkbox=True)
 
-    plot.on_state_change(ChannelActiveState(False))
+    plot.on_state_change(ChannelActiveState(is_active=False))
 
     assert plot.active_checkbox.isChecked() is False
     assert plot.wave_curve.opts["pen"] == INACTIVE_PEN
 
-    plot.on_state_change(ChannelActiveState(True))
+    plot.on_state_change(ChannelActiveState(is_active=True))
 
     assert plot.active_checkbox.isChecked() is True
     assert plot.wave_curve.opts["pen"] == ACTIVE_PEN
@@ -334,7 +334,7 @@ def test_channel_active_state_without_checkbox_still_updates_pen(qtbot: QtBot):
     view_model.audio_wave_state = make_wave_state()
     plot = AudioWavePlot(view_model)
 
-    plot.on_state_change(ChannelActiveState(False))
+    plot.on_state_change(ChannelActiveState(is_active=False))
 
     assert plot.wave_curve.opts["pen"] == INACTIVE_PEN
 
@@ -342,16 +342,16 @@ def test_channel_active_state_without_checkbox_still_updates_pen(qtbot: QtBot):
 def test_channel_active_state_before_wave_exists_does_not_fail(qtbot: QtBot):
     plot = AudioWavePlot(AudioWaveViewModel(), show_active_checkbox=True)
 
-    plot.on_state_change(ChannelActiveState(False))
+    plot.on_state_change(ChannelActiveState(is_active=False))
 
     assert plot.active_checkbox.isChecked() is False
 
 
-def test_view_model_set_active_updates_plot(qtbot: QtBot):
+def test_view_model_toggle_active_updates_plot(qtbot: QtBot):
     view_model = AudioWaveViewModel()
     plot = AudioWavePlot(view_model, show_active_checkbox=True)
 
-    view_model.set_active(False)
+    view_model.toggle_active(False)
 
     assert plot.active_checkbox.isChecked() is False
 

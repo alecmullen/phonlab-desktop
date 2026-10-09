@@ -23,9 +23,10 @@ class LabelView(pg.GraphicsObject):
         self.setPos(self.view_rect.left(), self.view_rect.bottom())
 
         for label in labels:
-            label_item = EditableLabelItem(label, (0.5, 0.5), (0, 0, 0), parent_plot)
+            label_item = EditableLabelItem(
+                label, (0.5, 0.5), (0, 0, 0), on_edit_label, parent_plot
+            )
             label_item.setParentItem(self)
-            label_item.editing_finished.connect(on_edit_label)
 
         self.pic = QPicture()
         self._generate_picture()

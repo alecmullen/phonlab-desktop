@@ -1,7 +1,8 @@
+from collections.abc import Callable
 from typing import cast
 
 import pyqtgraph as pg
-from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, Qt
 from PyQt6.QtGui import (
     QFont,
     QFontMetrics,
@@ -20,13 +21,12 @@ class EditableLabelItem(pg.TextItem):
     A custom pyqtgraph TextItem that becomes editable on a double-click.
     """
 
-    editing_finished = pyqtSignal(int, str)
-
     def __init__(
         self,
         label: AnnotationLabelState,
         anchor: tuple[float, float],
         color: tuple[int, int, int],
+        on_edit: Callable[[int, str], None],
         parent_plot: pg.PlotItem,
     ):
         pixel_size = parent_plot.getViewBox().viewPixelSize()
@@ -59,6 +59,8 @@ class EditableLabelItem(pg.TextItem):
         self.setPos(*label.pos)
 
         self.textItem.installEventFilter(self)
+
+        self.on_edit = on_edit
 
         self.right_mouse_pressed: bool = False
         self.text_at_edit_start: str | None = None
@@ -109,7 +111,7 @@ class EditableLabelItem(pg.TextItem):
 
             new_text = self.textItem.toPlainText()
             if new_text != start_text:
-                self.editing_finished.emit(self.label_id, new_text)
+                self.on_edit(self.label_id, new_text)
 
     def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
         event = a1
