@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12.10, <3.13"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -475,7 +475,7 @@ wheels = [
 
 [[package]]
 name = "phonlab"
-version = "0.0.64"
+version = "0.0.65"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorednoise" },
@@ -489,9 +489,9 @@ dependencies = [
     { name = "scipy" },
     { name = "srt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1d/a6/47c8b3be7a104620128e515056caaae0b3f9fbe3c6e9c2025b19ed566758/phonlab-0.0.64.tar.gz", hash = "sha256:acd43f0bd811d529fcd3b9ea420aba49311616c191cf3c1fec20076a4bf30d22", size = 9577140, upload-time = "2026-10-05T14:43:39.954Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b4/5a/0ff9187a641d22ec8eda1259848c0667850fe6d8d1af334f3aa32456ab50/phonlab-0.0.65.tar.gz", hash = "sha256:a6b4fb53d84cb1b3367c2e92970a7a43a963d8adee696368d7d9ab6b0d8260a7", size = 9579207, upload-time = "2026-10-07T23:12:40.008Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/10/d9963ab070fb06e15c403ad48d8af1e1fd13df3822e418bc71d755faf4f9/phonlab-0.0.64-py3-none-any.whl", hash = "sha256:8bc761ae274347624cf857e55a3fee4c5c5dff67f8c6916204bbb10b6c27df2f", size = 9567874, upload-time = "2026-10-05T14:43:34.061Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/7f/dea217c08148df2838c4e61e4a976ddefa3caca30f6f48333cb3f4e764e4/phonlab-0.0.65-py3-none-any.whl", hash = "sha256:7f24df1767b9a99803140e728ac7004eded7e32411a55323f6daf2fc78943405", size = 9569228, upload-time = "2026-10-07T23:12:37.381Z" },
 ]
 
 [[package]]
@@ -528,7 +528,7 @@ requires-dist = [
     { name = "librosa", specifier = "==0.11" },
     { name = "numba", specifier = ">=0.67.0" },
     { name = "numpy", specifier = "==2.4" },
-    { name = "phonlab", specifier = "==0.0.64" },
+    { name = "phonlab", specifier = "==0.0.65" },
     { name = "pyqt6", specifier = "==6.11" },
     { name = "pyqt6-sip", specifier = "==13.12" },
     { name = "pyqtgraph", specifier = "==0.14" },
