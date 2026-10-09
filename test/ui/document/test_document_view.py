@@ -1001,6 +1001,7 @@ def test_plot_rows_have_spacing_between_them(all_plots_view: DocumentView):
 def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
     loaded_view.view_model.start_selection(2.0)
     loaded_view.view_model.continue_selection(3.0)
+    loaded_view.view_model.set_mark(4.0)
     menu = loaded_view.wave_plots[0].getViewBox().menu
     menu.aboutToShow.emit()
     actions = menu.actions()
@@ -1008,9 +1009,9 @@ def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
     ordered = [
         loaded_view.zoom_to_selection_action,
         loaded_view.deselect_action,
+        loaded_view.recenter_action,
         loaded_view.set_mark_action,
         loaded_view.remove_mark_action,
-        loaded_view.wave_plots[0].recenter_action,
         loaded_view.wave_plots[0].audio_info_action,
         loaded_view.wave_plots[0].resample_action,
         loaded_view.wave_plots[0].scale_action,
@@ -1038,6 +1039,7 @@ def test_non_waveform_plots_only_get_mark_actions(loaded_view: DocumentView):
     spec = next(
         p for p in loaded_view.document_plots if p not in loaded_view.wave_plots
     )
+    spec.getViewBox().menu.aboutToShow.emit()
     actions = spec.getViewBox().menu.actions()
 
     assert loaded_view.set_mark_action in actions

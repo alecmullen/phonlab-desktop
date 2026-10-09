@@ -4,7 +4,6 @@ from ui.base.view_model import ViewModel
 from ui.waveform.state.audio_wave_action import (
     AudioFilterAction,
     AudioInfoAction,
-    AudioRecenterAction,
     AudioResampleAction,
     AudioReverseAction,
     AudioRevertToOriginalAction,
@@ -58,10 +57,6 @@ class AudioWaveViewModel(ViewModel):
     @pyqtSlot()
     def open_audio_info(self):
         self.state_changed.emit(AudioInfoAction())
-
-    @pyqtSlot()
-    def recenter_on_selection(self):
-        self.state_changed.emit(AudioRecenterAction())
 
     @pyqtSlot()
     def revert_to_original(self):

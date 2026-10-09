@@ -23,7 +23,3 @@ class AudioReverseAction(State):
 
 class AudioRevertToOriginalAction(State):
     pass
-
-
-class AudioRecenterAction(State):
-    pass
