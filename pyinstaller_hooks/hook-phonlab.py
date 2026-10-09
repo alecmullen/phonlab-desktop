@@ -8,4 +8,5 @@ hiddenimports = [
     "phonlab.acoustic.tidypraat",
     "phonlab.utils.prep_audio_",
     "phonlab.utils.signal",
+    "phonlab.utils.textgrid",
 ]
