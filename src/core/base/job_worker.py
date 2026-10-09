@@ -10,8 +10,16 @@ class JobWorker(QRunnable):
         self.signals = JobWorkerSignals()
         self.job = job
         self.should_stop = False
+        self._connect_callbacks(job)
+
+    def _connect_callbacks(self, job: Job | None):
+        # Must run on the thread that owns the callbacks (the main thread):
+        if job is not None:
+            self.signals.result.connect(job.on_success)
+            self.signals.error.connect(job.on_error)
 
     def set_job(self, job: Job):
+        self._connect_callbacks(job)
         self.job = job
 
     def run(self):
@@ -20,8 +28,6 @@ class JobWorker(QRunnable):
                 job = self.job
                 self.job = None
 
-                self.signals.result.connect(job.on_success)
-                self.signals.error.connect(job.on_error)
                 try:
                     for result in job.use_case.invoke():
                         self.signals.result.emit(result)

@@ -23,5 +23,5 @@ class SpectrogramState(State):
     is_loading: bool = True
 
     gray_cutoff: float = DEFAULT_GRAY_CUTOFF
-    min_sxx: float = float("inf")
-    max_sxx: float = float("-inf")
+    low_sxx: float = float("inf")
+    high_sxx: float = float("-inf")

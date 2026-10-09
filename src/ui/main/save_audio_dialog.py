@@ -9,17 +9,20 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
+from ui.common.sample_rate_dropdown import SampleRateDropdown
 from ui.document.document_view import DocumentView
 
 _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]')
+
+SAMPLE_RATE_OPTIONS = [10000, 12000, 16000, 22050, 32000, 44100, 48000]
 
 
 def _default_filename(tab_name: str) -> str:
@@ -32,6 +35,7 @@ class SaveOptions:
     path: str
     target_fs: int
     scale: bool
+    channels: list[int]
 
 
 class SaveAudioDialog(QDialog):
@@ -48,30 +52,51 @@ class SaveAudioDialog(QDialog):
         if primary_channel is None:
             return
         raw_fs = primary_channel.fs
+        self._primary_index = doc.view_model.primary_channel_index()
+        self._stereo = doc.view_model.stereo_channels() is not None
+
         default_dir = Path(doc.origin_path).parent if doc.origin_path else Path.home()
-        self._default_path = str(default_dir / _default_filename(tab_name))
+        default_filename = _default_filename(tab_name)
 
-        self.path_edit = QLineEdit(self._default_path)
+        self.directory_edit = QLineEdit(str(default_dir))
         browse_button = QPushButton(self.tr("Browse…"))
-        browse_button.clicked.connect(self._browse)
-        path_row = QWidget()
-        path_layout = QHBoxLayout(path_row)
-        path_layout.setContentsMargins(0, 0, 0, 0)
-        path_layout.addWidget(self.path_edit)
-        path_layout.addWidget(browse_button)
+        browse_button.clicked.connect(self._browse_directory)
+        dir_row = QWidget()
+        dir_layout = QHBoxLayout(dir_row)
+        dir_layout.setContentsMargins(0, 0, 0, 0)
+        dir_layout.addWidget(self.directory_edit)
+        dir_layout.addWidget(browse_button)
 
-        self.rate_spin = QSpinBox()
-        self.rate_spin.setRange(1000, 384000)
-        self.rate_spin.setValue(raw_fs)
-        self.rate_spin.setSuffix(self.tr(" Hz"))
+        self.filename_edit = QLineEdit(default_filename)
+
+        self.rate_dropdown = SampleRateDropdown(SAMPLE_RATE_OPTIONS, raw_fs)
 
         self.scale_check = QCheckBox(self.tr("Scale to use the full amplitude range"))
         self.scale_check.setChecked(False)
 
+        if self._stereo:
+            active = doc.view_model.active_channel_indices()
+            self.channel_checks: list[QCheckBox] = []
+            for idx in range(2):
+                self.channel_checks.append(
+                    QCheckBox(self.tr("Channel {} (Left)").format(idx + 1))
+                )
+                self.channel_checks[idx].setChecked(idx in active)
+                self.channel_checks[idx].toggled.connect(self._update_channel_status)
+
+            self.channel_status_label = QLabel()
+            self._update_channel_status()
+
         form = QFormLayout()
-        form.addRow(self.tr("Save to:"), path_row)
-        form.addRow(self.tr("Sample rate:"), self.rate_spin)
+        form.addRow(self.tr("Directory:"), dir_row)
+        form.addRow(self.tr("Filename:"), self.filename_edit)
+        form.addRow(self.tr("Sample rate:"), self.rate_dropdown)
         form.addRow("", self.scale_check)
+        if self._stereo:
+            for idx in range(2):
+                form.addRow("", self.channel_checks[idx])
+                form.addRow("", self.channel_checks[idx])
+            form.addRow("", self.channel_status_label)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
@@ -84,29 +109,62 @@ class SaveAudioDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(buttons)
 
-    def _browse(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            self.tr("Save Audio"),
-            self.path_edit.text(),
-            self.tr("Sound files (*.wav)"),
+    def _browse_directory(self):
+        directory = QFileDialog.getExistingDirectory(
+            self, self.tr("Select Directory"), self.directory_edit.text()
         )
-        if path:
-            self.path_edit.setText(path)
+        if directory:
+            self.directory_edit.setText(directory)
+
+    def _update_channel_status(self):
+        is_checked = [check.isChecked() for check in self.channel_checks]
+        if all(is_checked):
+            self.channel_status_label.setText(self.tr("Will be saved as a stereo file"))
+        elif sum(is_checked) == 1:
+            idx = is_checked.index(True)
+            self.channel_status_label.setText(
+                self.tr("Will be saved as mono (Channel {})").format(idx + 1)
+            )
+        else:
+            self.channel_status_label.setText(
+                self.tr("Choose at least one channel to save")
+            )
 
     def _on_accept(self):
-        if not self.path_edit.text().strip():
+        if (
+            not self.directory_edit.text().strip()
+            or not self.filename_edit.text().strip()
+        ):
             QMessageBox.warning(
-                self, self.tr("Save Audio"), self.tr("Choose a file to save to.")
+                self,
+                self.tr("Save Audio"),
+                self.tr("Choose a directory and filename to save to."),
+            )
+            return
+        if self._stereo and all(not check.isChecked() for check in self.channel_checks):
+            QMessageBox.warning(
+                self,
+                self.tr("Save Audio"),
+                self.tr("Choose at least one channel to save."),
             )
             return
         self.accept()
 
     def options(self) -> SaveOptions:
+        path = str(
+            Path(self.directory_edit.text().strip()) / self.filename_edit.text().strip()
+        )
+        if self._stereo:
+            channels = [
+                idx for idx, box in enumerate(self.channel_checks) if box.isChecked()
+            ]
+        else:
+            channels = [self._primary_index]
         return SaveOptions(
-            path=self.path_edit.text().strip(),
-            target_fs=self.rate_spin.value(),
+            path=path,
+            target_fs=self.rate_dropdown.currentData(),
             scale=self.scale_check.isChecked(),
+            channels=channels,
         )
 
     @staticmethod

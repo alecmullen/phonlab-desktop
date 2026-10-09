@@ -5,17 +5,23 @@ import numpy as np
 from PyQt6.QtCore import pyqtSlot
 
 from core.load_audio.entity.audio_signal import AudioSignal
-from core.load_audio.prep_audio import PrepAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
-from res.constants import MAX_SGRAM_LENGTH, SPECTROGRAM_PRE_EMPHASIS
+from core.transform_audio.prep_audio import PrepAudio
+from res.constants import (
+    MAX_SGRAM_LENGTH,
+    SPECTROGRAM_HIGH_PERCENTILE,
+    SPECTROGRAM_LOW_PERCENTILE,
+    SPECTROGRAM_PERCENTILE_SAMPLE_SIZE,
+    SPECTROGRAM_PRE_EMPHASIS,
+)
 from ui.base.state import State
 from ui.base.view_model import ViewModel
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
-    to_audio_state,
+    to_audio_channel_state,
 )
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.spectrogram.state.audio_prepped import AudioPrepped
@@ -34,6 +40,8 @@ class SpectrogramViewModel(ViewModel):
         self.window_state = SpectrogramWindowState()
 
         self._buffer_generation = 0
+        # Fixed seed: the displayed range is reproducible across app runs and tests
+        self._percentile_rng = np.random.default_rng(0)
 
         self.state_changed.connect(self.on_state_changed)
 
@@ -42,12 +50,15 @@ class SpectrogramViewModel(ViewModel):
         if isinstance(model, AudioPrepped) and self.sgram_state.is_showing:
             self.load_spectrogram()
 
+    def set_target_fs(self, target_fs: int):
+        """Set the prepped sample rate used for the next prep_audio."""
+        self.spectrogram_settings = replace(self.spectrogram_settings, fs=target_fs)
+
     @pyqtSlot(object, object)
-    def prep_audio(self, x: np.ndarray, fs: int, target_fs: int | None = None):
-        if target_fs is None:
-            target_fs = self.spectrogram_settings.fs
-        else:
-            self.spectrogram_settings = replace(self.spectrogram_settings, fs=target_fs)
+    def prep_audio(self, x: np.ndarray, fs: int):
+        """Prepare the raw audio at the spectrogram settings' sample rate,
+        which is independent of (and may exceed) the raw rate."""
+        target_fs = self.spectrogram_settings.fs
 
         self.raw_audio_state = AudioChannelState(x, fs)
         use_case = PrepAudio(
@@ -57,12 +68,26 @@ class SpectrogramViewModel(ViewModel):
 
         @pyqtSlot(object)
         def on_success(prepped: dict[int, AudioSignal]):
-            self.prepped_audio_state = to_audio_state(prepped)[0]
+            new_state = to_audio_channel_state(prepped[0])
+            self._rescale_window(self.prepped_audio_state, new_state)
+            self.prepped_audio_state = new_state
             self.invalidate_spectrogram()
             self.state_changed.emit(LoadProgressState(False))
             self.state_changed.emit(AudioPrepped())
 
         self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
+
+    def _rescale_window(self, old: AudioChannelState | None, new: AudioChannelState):
+        """Window indices are prepped-audio samples, so a change of the
+        prepped sample rate must carry them to the new units."""
+        if old is None or old.fs == new.fs:
+            return
+        ratio = new.fs / old.fs
+        last = max(len(new.x) - 1, 0)
+        self.window_state = SpectrogramWindowState(
+            min(int(self.window_state.start * ratio), last),
+            min(int(self.window_state.end * ratio), last),
+        )
 
     @pyqtSlot()
     def load_spectrogram(self):
@@ -156,7 +181,7 @@ class SpectrogramViewModel(ViewModel):
             f=f,
             is_showing=True,
         )
-        self.update_sxx_extrema(sxx)
+        self.update_sxx_percentiles(sxx)
         self.state_changed.emit(self.sgram_state)
 
     def compute_spectrogram_mmap(self, x: np.ndarray, fs: int):
@@ -174,7 +199,8 @@ class SpectrogramViewModel(ViewModel):
                 frames_computed=sgram.frames_computed,
                 samples_computed=sgram.samples_computed,
             )
-            self.update_sxx_extrema(sgram.sxx_mmap)
+            # Only use computed frames, not zero-pad values
+            self.update_sxx_percentiles(sgram.sxx_mmap[:, : sgram.frames_computed])
 
         settings = self.spectrogram_settings
         use_case = ComputeSpectrogramMmap(
@@ -190,11 +216,27 @@ class SpectrogramViewModel(ViewModel):
         self.sgram_state = replace(self.sgram_state, gray_cutoff=gray_cutoff)
         self.state_changed.emit(self.sgram_state)
 
-    def update_sxx_extrema(self, sxx: np.ndarray | np.memmap):
+    def _sample_sxx(self, sxx: np.ndarray | np.memmap) -> np.ndarray:
+        """A random sample of sxx's elements, capped at
+        SPECTROGRAM_PERCENTILE_SAMPLE_SIZE"""
+        if sxx.size <= SPECTROGRAM_PERCENTILE_SAMPLE_SIZE:
+            return np.asarray(sxx)
+        flat_indices = self._percentile_rng.integers(
+            0, sxx.size, size=SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
+        )
+        return sxx[np.unravel_index(flat_indices, sxx.shape)]
+
+    def update_sxx_percentiles(self, sxx: np.ndarray | np.memmap):
+        """Update near-extrema estimates for gray-scaling purposes."""
+        if sxx.size == 0:
+            return
+        sample = self._sample_sxx(sxx)
+
+        low, high = np.percentile(
+            sample, [SPECTROGRAM_LOW_PERCENTILE, SPECTROGRAM_HIGH_PERCENTILE]
+        )
         self.sgram_state = replace(
-            self.sgram_state,
-            min_sxx=min(self.sgram_state.min_sxx, np.min(sxx)),
-            max_sxx=max(self.sgram_state.max_sxx, np.max(sxx)),
+            self.sgram_state, low_sxx=float(low), high_sxx=float(high)
         )
 
     def invalidate_spectrogram(self):

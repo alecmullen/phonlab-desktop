@@ -11,7 +11,14 @@ cd phonlab-desktop
 
 ## Environment Setup
 
-We recommend using conda or uv to set up the environment.
+We recommend using uv or conda to set up the environment.
+
+### uv
+```
+uv sync
+source .venv/bin/activate
+```
+  - *If on Windows*: replace `source .venv/bin/activate` with `.venv\Scripts\activate`
 
 ### conda
 
@@ -19,20 +26,13 @@ We recommend using conda or uv to set up the environment.
 conda env create -f environment.yml
 conda activate phonlab_desktop
 ```
-### uv
-```
-uv venv --python 3.12 .venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
-```
-  - *If on Windows*: replace `source .venv/bin/activate` with `.venv\Scripts\activate`
 
 ### Without conda or uv
-Make sure python 3.12 is installed on your machine first (Use the [3.12.10 installer](https://www.python.org/downloads/release/python-31210/)).
+Make sure python 3.12 (>=3.12.10) is installed on your machine first (Use the [3.12.10 installer](https://www.python.org/downloads/release/python-31210/)).
 ```
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install .
 ```
   - *If on Windows*: replace `source .venv/bin/activate` with `.venv\Scripts\activate`
 

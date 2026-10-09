@@ -1,12 +1,14 @@
-import bisect
 from dataclasses import replace
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QSpinBox
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QSpinBox
 
+from ui.common.sample_rate_dropdown import SampleRateDropdown
 from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
 
-SAMPLE_RATE_OPTIONS = [4000, 8000, 16000, 32000, 44100, 48000, 96000]
+# The top frequency is the Nyquist frequency, so the spectrogram's sampling
+# rate is twice the chosen value.
+TOP_FREQUENCY_OPTIONS = [4000, 5000, 8000, 12000, 16000]
 
 
 class SpectrogramSettingsDialog(QDialog):
@@ -18,13 +20,12 @@ class SpectrogramSettingsDialog(QDialog):
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        sample_rates = sorted(SAMPLE_RATE_OPTIONS)
+        top_frequencies = sorted(TOP_FREQUENCY_OPTIONS)
 
-        self.fs_dropdown = QComboBox()
-        for fs in sample_rates:
-            self.fs_dropdown.addItem(f"{fs} Hz", fs)
-        self.fs_dropdown.setCurrentIndex(bisect.bisect_left(sample_rates, settings.fs))
-        layout.addRow(self.tr("Sample rate:"), self.fs_dropdown)
+        self.top_frequency_dropdown = SampleRateDropdown(
+            top_frequencies, settings.fs // 2
+        )
+        layout.addRow(self.tr("Top frequency:"), self.top_frequency_dropdown)
 
         self.window_spin = QSpinBox()
         self.window_spin.setRange(5, 60)
@@ -56,7 +57,7 @@ class SpectrogramSettingsDialog(QDialog):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             return replace(
                 settings,
-                fs=int(dialog.fs_dropdown.currentData()),
+                fs=2 * int(dialog.top_frequency_dropdown.currentData()),
                 window_size=dialog.window_spin.value() / 1000,
                 step_size=dialog.step_spin.value() / 1000,
             )

@@ -1,13 +1,21 @@
+from collections.abc import Callable
+
 import pyqtgraph as pg
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QFont, QPainter, QPicture
+from PyQt6.QtGui import QPainter, QPicture
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
-from ui.annotation.state.label_view_state import LabelViewState
+from ui.annotation.component.editable_label_item import EditableLabelItem
+from ui.annotation.state.annotation_label_state import AnnotationLabelState
 
 
 class LabelView(pg.GraphicsObject):
-    def __init__(self, labels: list[LabelViewState], parent_plot: pg.PlotItem):
+    def __init__(
+        self,
+        labels: list[AnnotationLabelState],
+        on_edit_label: Callable[[int, str], None],
+        parent_plot: pg.PlotItem,
+    ):
         super().__init__()
         self.labels = labels
 
@@ -15,9 +23,9 @@ class LabelView(pg.GraphicsObject):
         self.setPos(self.view_rect.left(), self.view_rect.bottom())
 
         for label in labels:
-            label_item = pg.TextItem(label.label, anchor=(0.5, 0.5), color=(0, 0, 0))
-            label_item.setFont(QFont("Arial", 16))
-            label_item.setPos(*label.pos)
+            label_item = EditableLabelItem(
+                label, (0.5, 0.5), (0, 0, 0), on_edit_label, parent_plot
+            )
             label_item.setParentItem(self)
 
         self.pic = QPicture()

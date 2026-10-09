@@ -1,0 +1,1317 @@
+from dataclasses import replace
+
+import numpy as np
+import pytest
+from PyQt6.QtCore import QObject, pyqtSignal
+from pytestqt.qtbot import QtBot
+
+import ui.base.view_model as view_model_module
+import ui.document.document_view_model as dvm_module
+from core.load_audio.entity.audio_signal import AudioSignal
+from core.settings.app_settings import settings
+from core.transform_audio.entity.filter_spec import FilterType
+from core.transform_audio.filter_audio import FilterSpec
+from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
+from ui.base.state import State
+from ui.document.document_view_model import DocumentViewModel
+from ui.document.state.audio_channel_state import (
+    AudioChannelState,
+    AudioState,
+    to_audio_state,
+)
+from ui.document.state.audio_loaded import AudioLoaded
+from ui.document.state.document_window_state import DocumentWindowState
+from ui.document.state.edit_command_state import EditCommandState
+from ui.document.state.load_progress_state import LoadProgressState
+from ui.document.state.mark_state import MarkState
+from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
+from ui.document.state.select_state import SelectState
+from ui.document.state.status_message_state import StatusMessageState
+from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
+from ui.spectrogram.state.audio_prepped import AudioPrepped
+
+
+class FakeAudioPlayer:
+    def __init__(self):
+        self.stopped = False
+        self.played: list[tuple[np.ndarray, int, float]] = []
+
+    def stop(self):
+        self.stopped = True
+
+    def play(self, x: np.ndarray, fs: int, start: float):
+        self.played.append((x, fs, start))
+
+    class playback_poll:
+        @staticmethod
+        def connect(slot: object):
+            pass
+
+
+class FakeJobManagerSignals(QObject):
+    finished = pyqtSignal()
+
+
+class FakeJobManager:
+    def __init__(self):
+        self.signals = FakeJobManagerSignals()
+        self.jobs = []
+
+    def __call__(self, job: object):
+        self.jobs.append(job)
+
+    def queue_job(self, job: object):
+        self.jobs.append(job)
+
+    def quit(self):
+        pass
+
+
+@pytest.fixture
+def view_model(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> DocumentViewModel:
+    monkeypatch.setattr(dvm_module, "AudioPlayer", FakeAudioPlayer)
+    vm = DocumentViewModel()
+    # Do not trigger spectrogram
+    vm.prep_audio_spectrogram = lambda: None
+    return vm
+
+
+def load_signal(
+    view_model: DocumentViewModel, x: np.ndarray, fs: int
+) -> AudioChannelState:
+    return view_model.set_audio(
+        AudioState({0: AudioChannelState(np.asarray(x, dtype=np.float64), fs)}),
+        primary_channel_idx=0,
+        reset_window=True,
+    )
+
+
+def load_stereo(
+    view_model: DocumentViewModel, x0: np.ndarray, x1: np.ndarray, fs: int
+) -> None:
+    view_model.load_from_samples(
+        AudioState(
+            {
+                0: AudioChannelState(np.asarray(x0, dtype=np.float64), fs),
+                1: AudioChannelState(np.asarray(x1, dtype=np.float64), fs),
+            }
+        )
+    )
+
+
+# --------------------------- navigation ---------------------------
+
+
+def test_set_audio_resets_window_to_default_length(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    assert view_model.document_window_state == DocumentWindowState(
+        start=0, end=10000, max_start=39999
+    )
+
+
+def test_go_back_clamps_at_start(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.go_back()
+
+    assert view_model.document_window_state.start == 0
+    assert view_model.document_window_state.end == 10000
+
+
+def test_advance_moves_window_forward_by_window_size(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.advance()
+
+    assert view_model.document_window_state.start == 10000
+    assert view_model.document_window_state.end == 20000
+
+
+def test_move_start_clamps_to_signal_end(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(15000), fs=1000)
+
+    view_model.move_start(100000)
+
+    assert view_model.document_window_state.end == 14999
+    assert view_model.document_window_state.start == 4999
+
+
+def test_move_start_by_fraction_scrolls_proportionally(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.move_start_by_fraction(0.5)
+
+    assert view_model.document_window_state.start == 5000
+    assert view_model.document_window_state.end == 15000
+
+
+def test_zoom_out_doubles_window_and_recenters(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.advance()
+
+    view_model.zoom_out()
+
+    window = view_model.document_window_state
+    assert window.end - window.start == 20000
+
+
+def test_zoom_in_halves_window_and_recenters(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.zoom_in()
+
+    window = view_model.document_window_state
+    assert window.end - window.start == 5000
+
+
+def test_zoom_in_does_not_shrink_window_below_minimum_size(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.document_window_state = DocumentWindowState(
+        start=0, end=100, max_start=49900
+    )
+
+    view_model.zoom_in(factor=10)
+
+    window = view_model.document_window_state
+    assert window.end - window.start == 50
+
+
+def test_show_all_sets_window_to_full_signal(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.show_all()
+
+    assert view_model.document_window_state == DocumentWindowState(start=0, end=49999)
+
+
+def test_adjust_window_if_needed_shrinks_window_to_new_signal_end(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(10000), fs=1000)
+
+    view_model.adjust_window_if_needed(5000)
+
+    assert view_model.document_window_state.start == 0
+    assert view_model.document_window_state.end == 5000
+
+
+def test_center_on_selection_centers_window_on_selection_midpoint(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.start_selection(20.0)
+    view_model.continue_selection(30.0)
+
+    view_model.center_on_selection()
+
+    window = view_model.document_window_state
+    center = (window.start + window.end) / 2
+    assert center == pytest.approx(25000, abs=1)
+
+
+def test_center_on_selection_shows_status_message_when_nothing_selected(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.center_on_selection()
+
+    assert any(isinstance(s, StatusMessageState) for s in received)
+
+
+def test_center_on_mark_when_nothing_selected(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.set_mark(40.0)
+
+    view_model.center_on_selection()
+
+    window = view_model.document_window_state
+    assert (window.start + window.end) / 2 == pytest.approx(40000, abs=1)
+
+
+def test_center_prefers_selection_over_mark(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.start_selection(20.0)
+    view_model.continue_selection(30.0)
+    view_model.set_mark(40.0)
+
+    view_model.center_on_selection()
+
+    window = view_model.document_window_state
+    assert (window.start + window.end) / 2 == pytest.approx(25000, abs=1)
+
+
+def test_zoom_if_in_selection_zooms_to_selection_when_click_inside(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.start_selection(1.0)
+    view_model.continue_selection(5.0)
+
+    view_model.zoom_if_in_selection(2.0)
+
+    assert view_model.document_window_state.start == 1000
+    assert view_model.document_window_state.end == 5000
+    assert view_model.select_state.is_selected is False
+
+
+def test_zoom_if_in_selection_does_nothing_when_click_outside(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.start_selection(1.0)
+    view_model.continue_selection(5.0)
+    window_before = view_model.document_window_state
+
+    view_model.zoom_if_in_selection(10.0)
+
+    assert view_model.document_window_state == window_before
+    assert view_model.select_state.is_selected is True
+
+
+# --------------------------- selection ---------------------------
+
+
+def test_start_selection_sets_anchor_and_marks_selected(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(5000), fs=1000)
+
+    view_model.start_selection(1.5)
+
+    assert view_model.select_state == SelectState(
+        sel_start=1.5, sel_end=1.5, sel_anchor=1.5, is_selected=True
+    )
+
+
+def test_continue_selection_forward_from_anchor(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(5000), fs=1000)
+    view_model.start_selection(1.0)
+
+    view_model.continue_selection(3.0)
+
+    assert view_model.select_state.sel_start == 1.0
+    assert view_model.select_state.sel_end == 3.0
+
+
+def test_continue_selection_backward_from_anchor(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(5000), fs=1000)
+    view_model.start_selection(3.0)
+
+    view_model.continue_selection(1.0)
+
+    assert view_model.select_state.sel_start == 1.0
+    assert view_model.select_state.sel_end == 3.0
+
+
+def test_continue_selection_clamps_to_channel_duration(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(5000), fs=1000)
+    channel_end = view_model.primary_channel().t[-1]
+    view_model.start_selection(2.0)
+
+    view_model.continue_selection(100.0)
+
+    assert view_model.select_state.sel_end == channel_end
+
+
+def test_continue_selection_clamps_to_zero(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(5000), fs=1000)
+    view_model.start_selection(2.0)
+
+    view_model.continue_selection(-50.0)
+
+    assert view_model.select_state.sel_start == 0.0
+
+
+def test_remove_selection_resets_to_default(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(5000), fs=1000)
+    view_model.start_selection(2.0)
+
+    view_model.remove_selection()
+
+    assert view_model.select_state == SelectState()
+
+
+# --------------------------- mark ---------------------------
+
+
+def test_set_mark_records_position(view_model: DocumentViewModel):
+    view_model.set_mark(3.5)
+
+    assert view_model.mark_state == MarkState(position=3.5, is_set=True)
+
+
+def test_remove_mark_resets_to_default(view_model: DocumentViewModel):
+    view_model.set_mark(3.5)
+
+    view_model.remove_mark()
+
+    assert view_model.mark_state == MarkState()
+
+
+# --------------------------- plot layout ---------------------------
+
+
+def test_toggle_wave_removes_waveform_when_another_plot_present(
+    view_model: DocumentViewModel,
+):
+    view_model.update_spectrogram = lambda: None
+    view_model.toggle_spectrogram()
+
+    view_model.toggle_wave()
+
+    assert PlotType.WAVEFORM not in view_model.plot_layout_state.plots
+    assert PlotType.SPECTROGRAM in view_model.plot_layout_state.plots
+
+
+def test_toggle_wave_keeps_last_remaining_plot(view_model: DocumentViewModel):
+    view_model.toggle_wave()
+
+    assert view_model.plot_layout_state.plots == {PlotType.WAVEFORM}
+
+
+def test_toggle_spectrogram_adds_and_removes_spectrogram(
+    view_model: DocumentViewModel,
+):
+    view_model.update_spectrogram = lambda: None
+
+    view_model.toggle_spectrogram()
+    assert PlotType.SPECTROGRAM in view_model.plot_layout_state.plots
+
+    view_model.toggle_spectrogram()
+    assert PlotType.SPECTROGRAM not in view_model.plot_layout_state.plots
+
+
+def test_toggle_annotations_adds_and_removes_annotations(
+    view_model: DocumentViewModel,
+):
+    view_model.update_annotation_state = lambda: None
+
+    view_model.toggle_annotations()
+    assert PlotType.ANNOTATION in view_model.plot_layout_state.plots
+
+    view_model.toggle_annotations()
+    assert PlotType.ANNOTATION not in view_model.plot_layout_state.plots
+
+
+# --------------------------- primary_channel ---------------------------
+
+
+def test_primary_channel_is_none_without_loaded_audio(view_model: DocumentViewModel):
+    assert view_model.primary_channel() is None
+
+
+def test_primary_channel_returns_channel_for_current_primary_index(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000), fs=500)
+
+    channel = view_model.primary_channel()
+
+    assert channel is not None
+    assert channel.fs == 500
+    assert len(channel.x) == 1000
+
+
+# --------------------------- editing: copy/cut/paste/undo/redo ---------------------------
+
+
+@pytest.fixture(autouse=True)
+def disable_zero_crossing_snapping(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "cut_and_paste_at_zero_crossings", False)
+
+
+def test_copy_selection_returns_selected_slice(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    view_model.start_selection(2.0)
+    view_model.continue_selection(3.0)
+
+    clip = view_model.copy_selection()
+
+    assert clip is not None
+    np.testing.assert_array_equal(clip.channels[0].x, np.arange(2000, 3000))
+    assert len(view_model.primary_channel().x) == 10000
+
+
+def test_copy_selection_returns_none_when_audio_not_loaded(
+    view_model: DocumentViewModel,
+):
+    assert view_model.copy_selection() is None
+
+
+def test_copy_selection_returns_none_when_nothing_selected(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(10000), fs=1000)
+
+    assert view_model.copy_selection() is None
+
+
+def test_cut_selection_removes_slice_and_pushes_undo(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    view_model.start_selection(2.0)
+    view_model.continue_selection(3.0)
+
+    clip = view_model.cut_selection()
+
+    assert clip is not None
+    np.testing.assert_array_equal(clip.channels[0].x, np.arange(2000, 3000))
+    assert len(view_model.primary_channel().x) == 9000
+    assert len(view_model.undo_stack) == 1
+    assert view_model.undo_stack[0].type == "cut"
+
+
+def test_undo_restores_cut_audio(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    view_model.start_selection(2.0)
+    view_model.continue_selection(3.0)
+    view_model.cut_selection()
+
+    view_model.undo()
+
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(10000))
+    assert view_model.undo_stack == []
+    assert len(view_model.redo_stack) == 1
+
+
+def test_redo_reapplies_undone_cut(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    view_model.start_selection(2.0)
+    view_model.continue_selection(3.0)
+    view_model.cut_selection()
+    view_model.undo()
+
+    view_model.redo()
+
+    assert len(view_model.primary_channel().x) == 9000
+    assert len(view_model.undo_stack) == 1
+    assert view_model.redo_stack == []
+
+
+def test_undo_with_empty_stack_is_a_noop(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+
+    view_model.undo()
+
+    assert len(view_model.primary_channel().x) == 10000
+
+
+def test_redo_with_empty_stack_is_a_noop(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+
+    view_model.redo()
+
+    assert len(view_model.primary_channel().x) == 10000
+
+
+def test_paste_at_mark_inserts_clip_at_mark_position(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    clip = to_audio_state({0: AudioSignal(np.full(500, -1.0), fs=1000)})
+    view_model.set_mark(1.0)
+
+    view_model.paste_at_mark(clip)
+
+    channel = view_model.primary_channel()
+    assert len(channel.x) == 10500
+    np.testing.assert_array_equal(channel.x[1000:1500], np.full(500, -1.0))
+    assert len(view_model.undo_stack) == 1
+    assert view_model.undo_stack[0].type == "paste"
+
+
+def test_paste_at_mark_shows_message_when_mark_not_set(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    received = []
+    view_model.subscribe(received.append)
+    clip = to_audio_state({0: AudioSignal(np.full(500, -1.0), fs=1000)})
+
+    view_model.paste_at_mark(clip)
+
+    assert len(view_model.primary_channel().x) == 10000
+    assert any(isinstance(s, StatusMessageState) for s in received)
+
+
+def test_push_undo_caps_history_and_clears_redo(view_model: DocumentViewModel):
+    view_model.redo_stack.append(EditCommandState("cut", 0, AudioState()))
+
+    for i in range(15):
+        view_model._push_undo(EditCommandState("cut", i, AudioState()))
+
+    assert len(view_model.undo_stack) == 10
+    assert view_model.undo_stack[0].start_idx == 5
+    assert view_model.redo_stack == []
+
+
+# --------------------------- load_audio / resample (async use cases) ---------------------------
+
+
+def test_load_audio_launches_use_case_and_updates_state_on_success(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
+    received = []
+    view_model.subscribe(received.append)
+    options = AudioOpenOptionsState(primary_channel=0, channel_mode="mono")
+
+    view_model.load_audio("/fake/path.wav", options)
+
+    manager = view_model.job_managers["load_audio"]
+    job = manager.jobs[0]
+
+    signals = {0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)}
+    job.on_success(signals)
+
+    assert view_model.audio_loaded_state == AudioLoaded(is_loaded=True, fs=1000)
+    assert view_model.raw_audio_state.channels.keys() == {0}
+    assert any(isinstance(s, AudioLoaded) for s in received)
+
+
+def test_resample_rescales_window_and_updates_primary_fs(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
+    load_signal(view_model, np.arange(20000), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+
+    view_model.resample(2000)
+
+    manager = view_model.job_managers["prep_audio"]
+    job = manager.jobs[0]
+    prepped = {0: AudioSignal(np.arange(40000, dtype=np.float64), 2000)}
+
+    job.on_success(prepped)
+
+    assert view_model.primary_channel().fs == 2000
+    assert view_model.document_window_state.start == 0
+    assert view_model.document_window_state.end == 20000
+
+
+# --------------------------- state dispatch ---------------------------
+
+
+def test_on_state_changed_preps_spectrogram_on_audio_loaded(
+    view_model: DocumentViewModel,
+):
+    calls = []
+    view_model.prep_audio_spectrogram = lambda: calls.append(True)
+
+    view_model.on_state_changed(AudioLoaded(True, 1000))
+
+    assert calls == [True]
+
+
+def test_on_state_changed_ignores_other_states(view_model: DocumentViewModel):
+    calls = []
+    view_model.prep_audio_spectrogram = lambda: calls.append(True)
+
+    view_model.on_state_changed(StatusMessageState("hi"))
+
+    assert calls == []
+
+
+def test_on_sgram_state_change_forwards_load_progress_and_prepped(
+    view_model: DocumentViewModel,
+):
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.on_sgram_state_change(LoadProgressState(True))
+    view_model.on_sgram_state_change(AudioPrepped())
+    view_model.on_sgram_state_change(StatusMessageState("ignored"))
+
+    assert [type(s).__name__ for s in received] == ["LoadProgressState", "AudioPrepped"]
+
+
+# --------------------------- stereo channel deletion ---------------------------
+
+
+def test_delete_channel_converts_to_mono(view_model: DocumentViewModel):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+
+    view_model.delete_channel(1)
+
+    assert view_model.stereo_channels() is None
+    assert view_model.channel_state.channel_mode == ChannelMode.MONO
+    assert view_model.audio_options.retained_channels == [0]
+    assert view_model.channel_state.primary_channel == 0
+    assert view_model.channel_state.active_channels == frozenset({0})
+
+
+def test_delete_channel_keeps_surviving_channel_data(view_model: DocumentViewModel):
+    x0, x1 = np.arange(1000), np.arange(1000) * -1
+    load_stereo(view_model, x0, x1, fs=1000)
+
+    view_model.delete_channel(0)
+
+    np.testing.assert_array_equal(view_model.primary_channel().x, x1)
+
+
+def test_delete_channel_clears_undo_redo_stacks(view_model: DocumentViewModel):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    view_model.start_selection(0.1)
+    view_model.continue_selection(0.2)
+    view_model.cut_selection()
+    assert view_model.undo_stack != []
+
+    view_model.delete_channel(1)
+
+    assert view_model.undo_stack == []
+    assert view_model.redo_stack == []
+    view_model.undo()  # must not raise
+
+
+def test_delete_channel_reemits_plot_layout(view_model: DocumentViewModel):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.delete_channel(1)
+
+    assert any(isinstance(s, PlotLayoutState) for s in received)
+
+
+def test_delete_channel_noop_when_not_stereo(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(1000), fs=1000)
+
+    view_model.delete_channel(0)
+
+    assert view_model.primary_channel() is not None
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(1000))
+
+
+# --------------------------- paste special / stereo promotion ---------------------------
+
+
+def test_promote_to_stereo_keeps_existing_audio_and_fills_other_with_noise(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+
+    view_model._promote_to_stereo(1)
+
+    assert view_model.stereo_channels() is not None
+    np.testing.assert_array_equal(view_model.audio_state.channels[1].x, x)
+    assert len(view_model.audio_state.channels[0].x) == len(x)
+    assert not np.array_equal(view_model.audio_state.channels[0].x, x)
+    assert view_model.channel_state.primary_channel == 1
+
+
+def test_reconcile_clip_for_paste_promotion_still_works(view_model: DocumentViewModel):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    stereo_clip = AudioState(
+        {0: AudioSignal(np.ones(500), 1000), 1: AudioSignal(np.ones(500) * -1, 1000)}
+    )
+
+    result = view_model.reconcile_clip_for_paste(stereo_clip, channel_choice=0)
+
+    assert result is stereo_clip
+    assert view_model.stereo_channels() is not None
+    np.testing.assert_array_equal(view_model.audio_state.channels[0].x, x)
+    assert view_model.channel_state.primary_channel == 0
+
+
+def test_paste_special_new_channel_with_silence_puts_clip_in_chosen_channel(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = AudioState({0: AudioChannelState(np.full(50, 5.0), 1000)})
+
+    result = view_model.paste_special_new_channel_with_silence(1, 0.1, clip)
+
+    assert result is not None
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    assert len(ch0.x) == len(ch1.x) == len(x) + 50
+    np.testing.assert_array_equal(ch1.x[100:150], np.full(50, 5.0))
+    np.testing.assert_array_equal(ch0.x[:100], x[:100])
+    np.testing.assert_array_equal(ch0.x[150:], x[100:])
+
+
+def test_paste_special_new_channel_with_silence_moves_existing_to_other_slot(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = AudioState({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_with_silence(0, 0.1, clip)
+
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    np.testing.assert_array_equal(ch0.x[100:150], np.full(50, 5.0))
+    np.testing.assert_array_equal(ch1.x[:100], x[:100])
+    np.testing.assert_array_equal(ch1.x[150:], x[100:])
+
+
+def test_paste_special_new_channel_with_silence_pushes_undo_entry(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = AudioState({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_with_silence(1, 0.1, clip)
+
+    assert len(view_model.undo_stack) == 1
+    view_model.undo()  # must not raise
+
+
+def test_paste_special_new_channel_with_silence_raises_if_already_stereo(
+    view_model: DocumentViewModel,
+):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel_with_silence(1, 0.1, clip)
+
+
+def test_paste_special_new_channel_with_silence_raises_if_clip_is_stereo(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state(
+        {
+            0: AudioSignal(np.full(50, 5.0), 1000),
+            1: AudioSignal(np.full(50, -5.0), 1000),
+        }
+    )
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel_with_silence(1, 0.1, clip)
+
+
+def test_paste_special_new_channel_without_silence_leaves_existing_channel_unchanged(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    result = view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+    assert result is not None
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    assert len(ch0.x) == len(ch1.x) == len(x)
+    np.testing.assert_array_equal(ch0.x, x)
+    np.testing.assert_array_equal(ch1.x[100:150], np.full(50, 5.0))
+
+
+def test_paste_special_new_channel_without_silence_moves_existing_to_other_slot(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(0, 0.1, clip)
+
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    np.testing.assert_array_equal(ch1.x, x)
+    np.testing.assert_array_equal(ch0.x[100:150], np.full(50, 5.0))
+
+
+def test_paste_special_new_channel_without_silence_pads_existing_when_clip_runs_past_end(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    # mark at 0.98s (sample 980), clip of 50 samples ends at 1030 > 1000
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(1, 0.98, clip)
+
+    channels = view_model.stereo_channels().channels
+    ch0, ch1 = [channels[idx] for idx in sorted(channels)]
+    assert len(ch0.x) == len(ch1.x) == 1030
+    np.testing.assert_array_equal(ch0.x[:1000], x)
+    np.testing.assert_array_equal(ch1.x[980:1030], np.full(50, 5.0))
+    assert len(ch1.x) - 1030 == 0  # clip ends exactly at the new total length
+
+
+def test_paste_special_new_channel_without_silence_handles_paste_at_zero(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(1, 0.0, clip)
+
+    channels = view_model.stereo_channels().channels
+    _, ch1 = [channels[idx] for idx in sorted(channels)]
+    np.testing.assert_array_equal(ch1.x[:50], np.full(50, 5.0))
+
+
+def test_paste_special_new_channel_without_silence_resamples_clip(
+    view_model: DocumentViewModel,
+):
+    x = np.arange(1000, dtype=np.float64)
+    load_signal(view_model, x, fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(100, 5.0), 2000)})  # half the fs
+
+    view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+    channels = view_model.stereo_channels().channels
+    _, ch1 = [channels[idx] for idx in sorted(channels)]
+    # 100 samples at 2000 Hz resample to 50 samples at 1000 Hz, fitting
+    # entirely within the existing channel's length - no extension needed.
+    # resample_poly is a proper FIR filter, not naive decimation, so only
+    # check the resampled segment's length and its steady-state value
+    # (away from the filter's transient edges).
+    assert len(ch1.x) == len(x)
+    np.testing.assert_allclose(ch1.x[115:135], 5.0, atol=1e-6)
+
+
+def test_paste_special_new_channel_without_silence_not_undoable(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+    assert view_model.undo_stack == []
+
+
+def test_paste_special_new_channel_without_silence_raises_if_already_stereo(
+    view_model: DocumentViewModel,
+):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    clip = to_audio_state({0: AudioSignal(np.full(50, 5.0), 1000)})
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+
+def test_paste_special_new_channel_without_silence_raises_if_clip_is_stereo(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000, dtype=np.float64), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    clip = to_audio_state(
+        {
+            0: AudioSignal(np.full(50, 5.0), 1000),
+            1: AudioSignal(np.full(50, -5.0), 1000),
+        }
+    )
+
+    with pytest.raises(RuntimeError):
+        view_model.paste_special_new_channel_without_silence(1, 0.1, clip)
+
+
+# --------------------------- misc ---------------------------
+
+
+def test_play_selected_audio_plays_selection(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    view_model.start_selection(2.0)
+    view_model.continue_selection(4.0)
+
+    view_model.play_selected_audio()
+
+    assert len(view_model.audio_player.played) == 1
+    x, fs, start = view_model.audio_player.played[0]
+    assert len(x) == 2000
+    assert fs == 1000
+    assert start == 2.0
+
+
+def test_play_selected_audio_does_nothing_for_zero_length_selection(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(10000), fs=1000)
+
+    view_model.play_selected_audio()
+
+    assert view_model.audio_player.played == []
+
+
+def test_play_selected_audio_shows_message_when_audio_not_loaded(
+    view_model: DocumentViewModel,
+):
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.play_selected_audio()
+
+    assert view_model.audio_player.played == []
+    assert any(isinstance(s, StatusMessageState) for s in received)
+
+
+def test_play_visible_audio_plays_current_window(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.play_visible_audio()
+
+    assert len(view_model.audio_player.played) == 1
+    x, _fs, start = view_model.audio_player.played[0]
+    assert len(x) == 10000
+    assert start == 0.0
+
+
+def test_close_threads_stops_audio_player(view_model: DocumentViewModel):
+    view_model.close_threads()
+
+    assert view_model.audio_player.stopped is True
+
+
+def test_audio_loaded_seeds_spectrogram_fs_from_open_options(
+    view_model: DocumentViewModel,
+):
+    view_model.audio_options = replace(view_model.audio_options, target_fs=22050)
+
+    view_model.on_state_changed(AudioLoaded(True, 1000))
+
+    assert view_model.spectrogram_view_model.spectrogram_settings.fs == 22050
+
+
+def test_on_annot_state_changed_forwards_status_message(
+    view_model: DocumentViewModel, qtbot: QtBot
+):
+    message = StatusMessageState("bad textgrid")
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.on_annot_state_changed(message)
+
+    assert blocker.args[0] is message
+
+
+def test_on_annot_state_changed_selected_state_selects_and_plays(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(
+        view_model, "select_and_play", lambda s, e: calls.append((s, e))
+    )
+
+    view_model.on_annot_state_changed(AnnotationSelectedState(1.0, 2.5))
+
+    assert calls == [(1.0, 2.5)]
+
+
+def test_on_annot_state_changed_ignores_other_states(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(view_model, "select_and_play", lambda s, e: calls.append(1))
+    view_model.state_changed.connect(lambda s: calls.append(s))
+
+    view_model.on_annot_state_changed(State())
+
+    assert calls == []
+
+
+def test_select_and_play_selects_range_and_plays_it(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(4000), 1000)
+
+    view_model.select_and_play(1.0, 2.0)
+
+    assert view_model.select_state.sel_start == pytest.approx(1.0)
+    assert view_model.select_state.sel_end == pytest.approx(2.0)
+    player = view_model.audio_player
+    assert len(player.played) == 1
+
+
+def test_parse_textgrid_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(
+        view_model.annotation_view_model, "parse_textgrid", lambda p: calls.append(p)
+    )
+
+    view_model.parse_textgrid("a.TextGrid")
+
+    assert calls == ["a.TextGrid"]
+
+
+def test_window_change_updates_annotation_window_in_seconds(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(4000), 1000)
+
+    view_model.annotation_view_model.set_window_state(9.0, 9.0)
+    view_model.update_annotation_state()
+
+    start, end = view_model.annotation_view_model.window_state
+    assert end == pytest.approx(4.0, abs=0.01)
+    assert start == pytest.approx(0.0, abs=0.01)
+
+
+# --------------------------- scale / reverse / zoom to selection ---------------------------
+
+
+def test_reverse_whole_signal_and_undo_redo(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10), fs=10)
+
+    assert view_model.reverse_audio()
+
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(10)[::-1])
+    assert view_model.undo_stack[0].type == "replace"
+
+    view_model.undo()
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(10))
+
+    view_model.redo()
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(10)[::-1])
+
+
+def test_reverse_selection_only_and_keeps_selection(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    view_model.start_selection(2.0)
+    view_model.continue_selection(3.0)
+
+    view_model.reverse_audio()
+
+    expected = np.arange(10000, dtype=np.float64)
+    expected[2000:3000] = expected[2000:3000][::-1]
+    np.testing.assert_array_equal(view_model.primary_channel().x, expected)
+    assert view_model.select_state.is_selected
+
+    view_model.undo()
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(10000))
+    assert view_model.select_state.is_selected
+
+
+def test_scale_selection_only_and_undo(view_model: DocumentViewModel):
+    x = np.concatenate([np.full(1000, 0.1), np.full(1000, 0.5), np.full(1000, 0.1)])
+    load_signal(view_model, x, fs=1000)
+    view_model.start_selection(1.0)
+    view_model.continue_selection(2.0)
+
+    assert view_model.scale_audio(0)
+
+    y = view_model.primary_channel().x
+    np.testing.assert_allclose(y[1000:2000], 1.0)
+    np.testing.assert_array_equal(y[:1000], x[:1000])
+    np.testing.assert_array_equal(y[2000:], x[2000:])
+
+    view_model.undo()
+    np.testing.assert_array_equal(view_model.primary_channel().x, x)
+
+
+def test_reverse_stereo_applies_only_to_active_channels(view_model: DocumentViewModel):
+    x0, x1 = np.arange(1000), np.arange(1000) * -1
+    load_stereo(view_model, x0, x1, fs=1000)
+    view_model.toggle_channel_active(1, False)  # leaves only channel 0 active
+
+    view_model.reverse_audio()
+
+    np.testing.assert_array_equal(view_model.audio_state.channels[0].x, x0[::-1])
+    np.testing.assert_array_equal(view_model.audio_state.channels[1].x, x1)
+
+    view_model.undo()
+    np.testing.assert_array_equal(view_model.audio_state.channels[0].x, x0)
+
+
+def test_scale_stereo_both_active_channels(view_model: DocumentViewModel):
+    load_stereo(view_model, np.full(1000, 0.2), np.full(1000, -0.4), fs=1000)
+
+    view_model.scale_audio(-6)
+
+    for idx, sign in ((0, 1), (1, -1)):
+        np.testing.assert_allclose(
+            view_model.audio_state.channels[idx].x, sign * 10 ** (-6 / 20)
+        )
+
+
+def test_transform_without_audio_returns_false(view_model: DocumentViewModel):
+    assert view_model.reverse_audio() is False
+    assert view_model.scale_audio(-1) is False
+    assert view_model.undo_stack == []
+
+
+def test_zoom_to_selection_sets_window_and_clears_selection(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    view_model.start_selection(2.0)
+    view_model.continue_selection(3.0)
+
+    view_model.zoom_to_selection()
+
+    assert view_model.document_window_state.start == 2000
+    assert view_model.document_window_state.end == 3000
+    assert not view_model.select_state.is_selected
+
+
+def test_zoom_to_selection_noop_without_selection(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(10000), fs=1000)
+    before = view_model.document_window_state
+
+    view_model.zoom_to_selection()
+
+    assert view_model.document_window_state == before
+
+
+# --------------------------- resample undo / filter / revert ---------------------------
+
+
+def resample_to(
+    view_model: DocumentViewModel, fs: int, n: int, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
+    view_model.resample(fs)
+    job = view_model.job_managers["prep_audio"].jobs[-1]
+    job.on_success({0: AudioSignal(np.arange(n, dtype=np.float64), fs)})
+
+
+def test_resample_is_not_undoable_and_clears_history(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    load_signal(view_model, np.arange(20000), fs=1000)
+    view_model.reverse_audio()
+    assert view_model.undo_stack
+
+    resample_to(view_model, 2000, 40000, monkeypatch)
+
+    assert view_model.primary_channel().fs == 2000
+    assert view_model.undo_stack == []
+    assert view_model.redo_stack == []
+
+
+def test_resample_keeps_earlier_edits_as_source(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
+    load_signal(view_model, np.arange(10000), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    view_model.reverse_audio()
+
+    view_model.resample(2000)
+
+    job = view_model.job_managers["prep_audio"].jobs[-1]
+    assert job.use_case.raw_signals[0].x[0] == 9999
+    assert job.use_case.scale is False
+
+
+def test_filter_audio_filters_without_undo_and_clears_history(
+    view_model: DocumentViewModel,
+):
+    fs = 8000
+    t = np.arange(fs) / fs
+    x = np.sin(2 * np.pi * 100 * t) + np.sin(2 * np.pi * 3000 * t)
+    load_signal(view_model, x, fs=fs)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    view_model.reverse_audio()
+    assert view_model.undo_stack
+
+    assert view_model.filter_audio(FilterSpec(FilterType.LOWPASS, high=500.0))
+
+    y = view_model.primary_channel().x
+    spectrum = np.abs(np.fft.rfft(y))
+    assert spectrum[3000] < 0.01 * spectrum[100]
+    assert view_model.undo_stack == []
+    assert view_model.redo_stack == []
+
+
+def test_filter_audio_reports_invalid_spec(view_model: DocumentViewModel):
+    load_signal(view_model, np.arange(1000), fs=1000)
+    received = []
+    view_model.subscribe(received.append)
+
+    ok = view_model.filter_audio(FilterSpec(FilterType.LOWPASS, high=900.0))
+
+    assert ok is False
+    assert any(isinstance(s, StatusMessageState) for s in received)
+
+
+def test_revert_to_original_restores_loaded_audio_and_clears_history(
+    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+):
+    load_signal(view_model, np.arange(20000), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    view_model.reverse_audio()
+    resample_to(view_model, 2000, 40000, monkeypatch)
+    view_model.filter_audio(FilterSpec(FilterType.HIGHPASS, low=50.0 * 2))
+
+    assert view_model.revert_to_original()
+
+    assert view_model.primary_channel().fs == 1000
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(20000))
+    assert view_model.undo_stack == []
+
+
+def test_revert_to_original_without_original_is_noop(view_model: DocumentViewModel):
+    assert view_model.revert_to_original() is False
+
+
+def test_filter_stereo_only_affects_active_channels(view_model: DocumentViewModel):
+    fs = 8000
+    t = np.arange(fs) / fs
+    x = np.sin(2 * np.pi * 3000 * t)
+    load_stereo(view_model, x, x, fs=fs)
+    view_model.toggle_channel_active(1, False)  # only channel 0 stays active
+
+    view_model.filter_audio(FilterSpec(FilterType.LOWPASS, high=500.0))
+
+    assert np.max(np.abs(view_model.audio_state.channels[0].x[1000:-1000])) < 0.01
+    np.testing.assert_array_equal(view_model.audio_state.channels[1].x, x)
+
+
+def test_revert_removes_channel_added_by_paste_special(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(1000), fs=1000)
+    view_model.raw_audio_state = replace(view_model.audio_state)
+    view_model.set_mark(0.5)
+    clip = AudioState({0: AudioChannelState(np.ones(100), 1000)})
+
+    view_model.paste_special_new_channel_without_silence(1, 0.5, clip)
+    assert view_model.stereo_channels() is not None
+    assert view_model.raw_audio_state.channels.keys() == {0}
+
+    assert view_model.revert_to_original()
+
+    assert view_model.stereo_channels() is None
+    assert view_model.audio_state.channels.keys() == {0}
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.arange(1000))
+    assert view_model.channel_state.active_channels == frozenset({0})
+
+
+def test_scale_silence_is_left_alone(view_model: DocumentViewModel):
+    load_signal(view_model, np.zeros(1000), fs=1000)
+
+    view_model.scale_audio(-1)
+
+    np.testing.assert_array_equal(view_model.primary_channel().x, np.zeros(1000))
+
+
+def test_peak_dbfs_whole_signal_and_selection(view_model: DocumentViewModel):
+    x = np.concatenate([np.full(1000, 0.1), np.full(1000, 0.5), np.full(1000, 0.1)])
+    load_signal(view_model, x, fs=1000)
+
+    np.testing.assert_allclose(view_model.peak_dbfs(), [20 * np.log10(0.5)])
+
+    view_model.start_selection(0.0)
+    view_model.continue_selection(0.5)
+    np.testing.assert_allclose(view_model.peak_dbfs(), [20 * np.log10(0.1)])
+
+
+def test_peak_dbfs_silence_is_negative_infinity(view_model: DocumentViewModel):
+    load_signal(view_model, np.zeros(1000), fs=1000)
+
+    assert view_model.peak_dbfs() == [float("-inf")]

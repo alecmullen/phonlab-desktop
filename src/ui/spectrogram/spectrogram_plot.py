@@ -1,12 +1,12 @@
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, Qt, pyqtSlot
+from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
 from res.constants import MAX_SGRAM_LENGTH
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
-from ui.common.cursor_controller import CursorController
+from ui.common.document_plot import DocumentPlot
 from ui.spectrogram.component.spectrogram_settings_dialog import (
     SpectrogramSettingsDialog,
 )
@@ -14,7 +14,7 @@ from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 
 
-class SpectrogramPlot(pg.PlotItem, CursorController):
+class SpectrogramPlot(DocumentPlot):
     def __init__(
         self,
         view_model: SpectrogramViewModel,
@@ -22,52 +22,20 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         is_bottom_plot: bool = False,
         parent: QWidget | None = None,
     ):
-        super().__init__(parent)
+        super().__init__(parent, linked_plot, is_bottom_plot)
 
         self.view_model = view_model
         self.view_model.subscribe(self.on_state_change)
 
         self.setLabel("left", self.tr("Frequency"), units="Hz")
         self.getAxis("left").enableAutoSIPrefix(False)
-        self.getAxis("left").setWidth(60)
-
-        if is_bottom_plot:
-            self.setLabel("bottom", self.tr("Time"), units="s")
-            self.getAxis("bottom").enableAutoSIPrefix(False)
-        else:
-            self.getAxis("bottom").setStyle(showValues=False)
 
         self.showGrid(x=True, y=True, alpha=0.3)
-        self.getViewBox().setMouseEnabled(x=False, y=False)
-        self.getViewBox().rbScaleBox.hide()
 
         self.spec_img = pg.ImageItem()
         self.addItem(self.spec_img)
         lut = pg.colormap.get("CET-L1").getLookupTable(nPts=256)[::-1]
         self.spec_img.setLookupTable(lut)
-
-        self.cursor_line = pg.InfiniteLine(angle=90, movable=False, pen="r")
-        self.addItem(self.cursor_line, ignoreBounds=True)
-
-        self.mark_line = pg.InfiniteLine(
-            angle=90,
-            movable=False,
-            pen=pg.mkPen(color="g", width=2, style=Qt.PenStyle.DashLine),
-        )
-        self.addItem(self.mark_line, ignoreBounds=True)
-        self.mark_line.setVisible(False)
-
-        self.selection_region = pg.LinearRegionItem(
-            values=[0, 0],
-            brush=pg.mkBrush(0, 100, 200, 50),
-            movable=False,
-        )
-        self.selection_region.setZValue(10)
-        self.addItem(self.selection_region)
-        self.selection_region.setVisible(False)
-
-        if linked_plot is not None:
-            self.getViewBox().setXLink(linked_plot)
 
         self.center_label = pg.LabelItem(
             self.tr(
@@ -113,7 +81,7 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.getViewBox().setLimits(yMin=0, yMax=sgram.f[-1])
         self.getViewBox().setYRange(sgram.f[0], sgram.f[-1])
 
-        vmin = sgram.min_sxx + (sgram.max_sxx - sgram.min_sxx) * sgram.gray_cutoff
+        vmin = sgram.low_sxx + (sgram.high_sxx - sgram.low_sxx) * sgram.gray_cutoff
 
         self.spec_img.setImage(
             sgram.sxx_window.T,
@@ -132,27 +100,6 @@ class SpectrogramPlot(pg.PlotItem, CursorController):
         self.spec_img.setRect(rect)
 
         return True
-
-    @pyqtSlot(object)
-    def on_mouse_moved(self, pos: QPointF):
-        if self.has_cursor_control:
-            x = self.getViewBox().mapSceneToView(pos).x()
-            self.cursor_line.setPos(x)
-
-    def set_cursor_position(self, x: float):
-        self.remove_cursor_control()
-        self.cursor_line.setPos(x)
-
-    def set_mark_position(self, x: float, visible: bool):
-        self.mark_line.setPos(x)
-        self.mark_line.setVisible(visible)
-
-    def update_selection_region(self, box_left: float, xrange: float):
-        if xrange > 0:
-            self.selection_region.setRegion([box_left, box_left + xrange])
-            self.selection_region.setVisible(True)
-        else:
-            self.selection_region.setVisible(False)
 
     def display_window_too_big(self):
         if self.spec_img:

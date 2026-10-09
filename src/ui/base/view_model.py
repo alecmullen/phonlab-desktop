@@ -32,14 +32,16 @@ class ViewModel(QObject):
         else:
             manager = JobManager()
             self.job_managers[key] = manager
-            manager(Job(use_case, on_success, on_error))
 
             @pyqtSlot()
             def on_finished():
                 if self.job_managers.get(key) is manager:
                     del self.job_managers[key]
 
+            # Connect before starting: a fast job can finish before
+            # manager() returns, and its `finished` would go unheard.
             manager.signals.finished.connect(on_finished)
+            manager(Job(use_case, on_success, on_error))
 
     def close_threads(self):
         for key in self.job_managers:

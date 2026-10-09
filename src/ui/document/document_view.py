@@ -1,30 +1,37 @@
-from typing import cast
-
 import pyqtgraph as pg
-from PyQt6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
+    QAction,
     QDragEnterEvent,
     QDropEvent,
     QMouseEvent,
+    QResizeEvent,
     QWheelEvent,
 )
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QProgressBar,
     QScrollBar,
     QVBoxLayout,
     QWidget,
 )
 
-from core.load_audio.entity.audio_open_options import AudioOpenOptions
-from core.load_audio.entity.audio_signal import AudioSignal
+from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
+from ui.common.document_plot import DocumentPlot
+from ui.document.component.audio_info_dialog import AudioInfoDialog
+from ui.document.component.filter_dialog import FilterAudioDialog
+from ui.document.component.paste_channel_dialog import PasteChannelDialog
+from ui.document.component.paste_special_dialog import PasteSpecialDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
+from ui.document.component.scale_dialog import ScaleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
+from ui.document.state.audio_channel_state import AudioState
 from ui.document.state.audio_loaded import AudioLoaded
 from ui.document.state.document_window_state import DocumentWindowState
 from ui.document.state.load_progress_state import LoadProgressState
@@ -33,8 +40,15 @@ from ui.document.state.playback_state import PlaybackState
 from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
+from ui.main.state.audio_open_options import AudioOpenOptionsState
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.waveform.audio_wave_plot import AudioWavePlot
+from ui.waveform.state.audio_wave_action import (
+    AudioFilterAction,
+    AudioInfoAction,
+    AudioResampleAction,
+    AudioScaleAction,
+)
 
 
 class DocumentView(QWidget):
@@ -57,12 +71,12 @@ class DocumentView(QWidget):
 
         # Create graphics layout widget
         self.graphics_widget = pg.GraphicsLayoutWidget()
-        self.graphics_widget.viewport().installEventFilter(self)
 
         # Initialize plot items (will be created in plot methods)
-        self.wave_plot: AudioWavePlot | None = None
-        self.spec_plot: SpectrogramPlot | None = None
-        self.annot_plot: AnnotationPlot | None = None
+        self.document_plots: list[DocumentPlot] = []
+        self.row_weights: list[float] = []
+        # Waveplots (should all be in document_plots as well)
+        self.wave_plots = []
         # Track one plot to have main x-axis others link to
         self.first_plot: pg.PlotItem | None = None
 
@@ -116,17 +130,25 @@ class DocumentView(QWidget):
     def set_up_menu(self):
         self.graphics_widget.scene().contextMenu = []
 
-        self.resample_action = ContextMenuHintAction(
-            self.tr("Resample..."), parent=self
+        self.zoom_to_selection_action = ContextMenuHintAction(
+            self.tr("Zoom to Selection"), self.tr("Double-click"), parent=self
         )
-        self.resample_action.triggered.connect(self.open_resample_dialog)
+        self.zoom_to_selection_action.triggered.connect(
+            self.view_model.zoom_to_selection
+        )
+
+        self.deselect_action = ContextMenuHintAction(self.tr("Deselect"), parent=self)
+        self.deselect_action.triggered.connect(self.view_model.remove_selection)
+
+        self.recenter_action = ContextMenuHintAction(self.tr("Recenter"), parent=self)
+        self.recenter_action.triggered.connect(self.view_model.center_on_selection)
 
         self.set_mark_action = ContextMenuHintAction(
-            self.tr("Set Mark"), self.tr("Shift+Click"), parent=self
+            self.tr("Set Mark"), self.tr("Click"), parent=self
         )
         self.set_mark_action.triggered.connect(
             lambda: (
-                self.set_mark(self.context_pos)
+                self.set_mark_if_in_plot(self.context_pos)
                 if self.context_pos is not None
                 else None
             )
@@ -138,16 +160,46 @@ class DocumentView(QWidget):
         self.remove_mark_action.triggered.connect(self.view_model.remove_mark)
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
-        """Add the Resample/Set Mark/Remove Mark actions to a plot's ViewBox menu.
+        """Add the navigation actions (Zoom to Selection, Deselect, Set Mark,
+        Remove Mark) to a plot's ViewBox menu.
 
         Added directly to each plot's own menu (rather than via the
         scene-wide contextMenu list) so they're present before the menu
         is ever shown.
         """
         menu = view_box.menu
-        menu.addAction(self.resample_action)
-        menu.addAction(self.set_mark_action)
-        menu.addAction(self.remove_mark_action)
+        first_action = menu.actions()[0] if len(menu.actions()) > 0 else None
+        menu.aboutToShow.connect(
+            lambda first=first_action: self.sync_actions_with_ui_state(menu, first)
+        )
+
+    def sync_actions_with_ui_state(self, menu: QMenu, first_action: QAction | None):
+        """Put Zoom to Selection at the top of `menu` only while a selection
+        exists. Adding/removing it as the menu opens (rather than toggling the
+        action's visibility) makes Qt lay the rows out afresh, so it can't be
+        drawn over its neighbour."""
+        is_selected = self.view_model.select_state.is_selected
+        is_marked = self.view_model.mark_state.is_set
+
+        actions = [
+            self.zoom_to_selection_action,
+            self.deselect_action,
+            self.recenter_action,
+            self.set_mark_action,
+            self.remove_mark_action,
+        ]
+        wanted = [is_selected, is_selected, is_selected or is_marked, True, is_marked]
+
+        next_action = first_action
+        for idx in reversed(range(len(actions))):
+            if actions[idx] in menu.actions():
+                menu.removeAction(actions[idx])
+            if wanted[idx]:
+                menu.insertAction(next_action, actions[idx])
+                next_action = actions[idx]
+
+        if first_action is not None:
+            menu.insertSeparator(first_action)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -168,8 +220,16 @@ class DocumentView(QWidget):
             self.update_plot_layout(model)
         elif isinstance(model, MarkState):
             self.update_mark(model)
+        elif isinstance(model, AudioScaleAction):
+            self.open_scale_dialog()
+        elif isinstance(model, AudioResampleAction):
+            self.open_resample_dialog()
+        elif isinstance(model, AudioFilterAction):
+            self.open_filter_dialog()
+        elif isinstance(model, AudioInfoAction):
+            self.open_audio_info()
 
-    def load_audio(self, filename: str, options: AudioOpenOptions):
+    def load_audio(self, filename: str, options: AudioOpenOptionsState):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
@@ -182,27 +242,44 @@ class DocumentView(QWidget):
 
         self.first_plot = None
 
-        if self.wave_plot:
-            self.wave_plot.clear()
-            del self.wave_plot
-            self.wave_plot = None
+        for plot in self.document_plots:
+            del plot
 
-        del self.spec_plot
-        self.spec_plot = None
+        self.document_plots = []
+        self.wave_plots = []
 
-        self.selection_region_wave = None
-        self.selection_region_spec = None
+    def apply_row_heights(self):
+        """Size plot rows in proportion to their weights. The bottom axis is extra
+        height on the last row, outside the weighted share."""
+        if not self.row_weights or len(self.row_weights) != len(self.document_plots):
+            return
+
+        layout = self.graphics_widget.ci.layout
+        layout.setVerticalSpacing(PLOT_ROW_SPACING)
+
+        _, top, _, bottom = layout.getContentsMargins()
+        spacing = PLOT_ROW_SPACING * (len(self.row_weights) - 1)
+        axis_height = self.document_plots[-1].getAxis("bottom").height()
+
+        total_blankspace = top + bottom + spacing + axis_height
+        available = self.graphics_widget.viewport().height() - total_blankspace
+        if available <= 0:
+            return
+
+        total_weight = sum(self.row_weights)
+        for row_index, weight in enumerate(self.row_weights):
+            height = available * weight / total_weight
+            if row_index == len(self.row_weights) - 1:
+                height += axis_height
+            layout.setRowFixedHeight(row_index, height)
 
     def connect_plot_signals(self):
         """Connect mouse signals to all plots"""
         scene = self.graphics_widget.scene()
         scene.sigMouseMoved.connect(self.on_mouse_moved)
-        if self.wave_plot is not None:
-            scene.sigMouseMoved.connect(self.wave_plot.on_mouse_moved)
-        if self.spec_plot is not None:
-            scene.sigMouseMoved.connect(self.spec_plot.on_mouse_moved)
-        if self.annot_plot is not None:
-            scene.sigMouseMoved.connect(self.annot_plot.on_mouse_moved)
+
+        for plot in self.document_plots:
+            scene.sigMouseMoved.connect(plot.on_mouse_moved)
 
     def toggle_wave(self):
         self.view_model.toggle_wave()
@@ -217,19 +294,22 @@ class DocumentView(QWidget):
         self.clear_plots()
 
         ordered_plots = sorted(layout_state.plots, key=lambda type: type.value)
-        for i, plot_type in enumerate(ordered_plots):
-            is_bottom = i == len(ordered_plots) - 1
-            plot = self.add_plot(i, plot_type, is_bottom)
-            if self.first_plot is None:
-                self.first_plot = plot
+        row = 0
+        row_weights: list[float] = []
+        for plot_type in ordered_plots:
+            is_bottom = plot_type == ordered_plots[-1]
 
-        if len(layout_state.plots) == 2:
-            self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
-            self.graphics_widget.ci.layout.setRowStretchFactor(1, 2)
-        elif len(layout_state.plots) == 3:
-            self.graphics_widget.ci.layout.setRowStretchFactor(0, 1)
-            self.graphics_widget.ci.layout.setRowStretchFactor(1, 1)
-            self.graphics_widget.ci.layout.setRowStretchFactor(2, 1)
+            plots = self.add_plot(row, plot_type, is_bottom)
+            self.document_plots.extend(plots)
+            if self.first_plot is None:
+                self.first_plot = plots[0]
+
+            rows_added = len(plots)
+            row_weights.extend([PLOT_ROW_WEIGHT[plot_type]] * rows_added)
+            row += rows_added
+
+        self.row_weights = row_weights
+        self.apply_row_heights()
 
         self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
@@ -238,37 +318,61 @@ class DocumentView(QWidget):
 
     def add_plot(
         self, row: int, plot_type: PlotType, is_bottom: bool = False
-    ) -> pg.PlotItem:
+    ) -> list[pg.PlotItem]:
         if plot_type == PlotType.WAVEFORM:
-            self.wave_plot = AudioWavePlot(
-                view_model=self.view_model.audio_wave_view_model,
-                linked_plot=self.first_plot,
-                is_bottom_plot=is_bottom,
-            )
-            self.add_shared_context_menu_actions(self.wave_plot.getViewBox())
-            self.graphics_widget.addItem(self.wave_plot, row=row, col=0)
-            self.wave_plot.show()
-            return self.wave_plot
+            return self._add_waveform_plots(row, is_bottom)
         elif plot_type == PlotType.SPECTROGRAM:
-            self.spec_plot = SpectrogramPlot(
+            spec_plot = SpectrogramPlot(
                 view_model=self.view_model.spectrogram_view_model,
                 linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom,
             )
-            self.add_shared_context_menu_actions(self.spec_plot.getViewBox())
-            self.graphics_widget.addItem(self.spec_plot, row=row, col=0)
-            self.spec_plot.show()
-            return self.spec_plot
+            self.add_shared_context_menu_actions(spec_plot.getViewBox())
+            self.graphics_widget.addItem(spec_plot, row=row, col=0)
+            spec_plot.show()
+            return [spec_plot]
         elif plot_type == PlotType.ANNOTATION:
-            self.annot_plot = AnnotationPlot(
+            annot_plot = AnnotationPlot(
                 view_model=self.view_model.annotation_view_model,
                 linked_plot=self.first_plot,
                 is_bottom_plot=is_bottom,
             )
-            self.add_shared_context_menu_actions(self.annot_plot.getViewBox())
-            self.graphics_widget.addItem(self.annot_plot, row=row, col=0)
-            self.annot_plot.show()
-            return self.annot_plot
+            self.add_shared_context_menu_actions(annot_plot.getViewBox())
+            self.graphics_widget.addItem(annot_plot, row=row, col=0)
+            annot_plot.show()
+            return [annot_plot]
+
+    def _add_waveform_plots(self, row: int, is_bottom: bool) -> list[pg.PlotItem]:
+        """Add one waveform row for channel 0, plus a second row for
+        channel 1 when the document is stereo. Returns the plots."""
+        num_channels = 2 if self.view_model.stereo_channels() is not None else 1
+        self.wave_plots = []
+
+        for idx in range(num_channels):
+            wave_plot = AudioWavePlot(
+                view_model=self.view_model.audio_wave_view_models[idx],
+                linked_plot=self.first_plot,
+                is_bottom_plot=is_bottom and idx == num_channels - 1,
+                show_active_checkbox=num_channels > 1,
+                show_delete_button=num_channels > 1,
+            )
+            wave_label = (
+                self.tr("Ch {} Amplitude").format(idx + 1)
+                if num_channels > 1
+                else self.tr("Amplitude")
+            )
+            wave_plot.setLabel("left", wave_label)
+            self.add_shared_context_menu_actions(wave_plot.getViewBox())
+            self.graphics_widget.addItem(wave_plot, row=row + idx, col=0)
+            wave_plot.show()
+
+            self.wave_plots.append(wave_plot)
+            # Must be set before creating the second wave plot, which
+            # needs a valid linked_plot to x-link against.
+            if idx == 0 and self.first_plot is None:
+                self.first_plot = wave_plot
+
+        return self.wave_plots
 
     @pyqtSlot(int)
     def on_slider_move(self, value: int):
@@ -314,12 +418,16 @@ class DocumentView(QWidget):
         """Center the view window on the selected region without changing zoom level"""
         self.view_model.center_on_selection()
 
+    def _get_document_plot_at(self, scene_pos: QPointF) -> DocumentPlot | None:
+        plot_at = None
+        for plot in self.document_plots:
+            if plot.sceneBoundingRect().contains(scene_pos):
+                plot_at = plot
+
+        return plot_at
+
     def play_window_or_selection(self, scene_pos: QPointF):
-        clicked_plot = None
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.wave_plot
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.spec_plot
+        clicked_plot = self._get_document_plot_at(scene_pos)
 
         if not clicked_plot:
             return
@@ -343,10 +451,8 @@ class DocumentView(QWidget):
         else:
             box_left = t_range = 0
 
-        if self.spec_plot is not None:
-            self.spec_plot.update_selection_region(box_left, t_range)
-        if self.wave_plot is not None:
-            self.wave_plot.update_selection_region(box_left, t_range)
+        for plot in self.document_plots:
+            plot.update_selection_region(box_left, t_range)
 
     def update_document_window(self, doc_window: DocumentWindowState):
         self.update_slider_page_step(doc_window)
@@ -361,21 +467,13 @@ class DocumentView(QWidget):
             )
 
     def update_mark(self, mark: MarkState):
-        if self.spec_plot is not None:
-            self.spec_plot.set_mark_position(mark.position, mark.is_set)
-        if self.wave_plot is not None:
-            self.wave_plot.set_mark_position(mark.position, mark.is_set)
-        if self.annot_plot is not None:
-            self.annot_plot.set_mark_position(mark.position, mark.is_set)
+        for plot in self.document_plots:
+            plot.set_mark_position(mark.position, mark.is_set)
 
     def update_playback_cursor(self, playback: PlaybackState):
         if playback.is_playing:
-            if self.wave_plot:
-                self.wave_plot.set_cursor_position(playback.position)
-            if self.spec_plot:
-                self.spec_plot.set_cursor_position(playback.position)
-            if self.annot_plot:
-                self.annot_plot.set_cursor_position(playback.position)
+            for plot in self.document_plots:
+                plot.set_cursor_position(playback.position)
 
     def update_load_progress(self, progress: LoadProgressState):
         self.progress_bar.setVisible(progress.is_loading)
@@ -386,90 +484,66 @@ class DocumentView(QWidget):
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setFormat(self.tr("Computing %p%"))
 
+    def map_scene_to_graphics_widget(self, pos: QPointF) -> QPointF:
+        return pos - self.graphics_widget.pos().toPointF()
+
     def on_mouse_moved(self, pos: QPointF):
         # Determine which plot the mouse is over
 
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(pos):
-            mouse_point = self.wave_plot.vb.mapSceneToView(pos)
-            x = mouse_point.x()
-            status_msg = self.tr("Cursor time: {:.3f}s").format(x)
+        mouse_over_plot = False
+        for plot in self.document_plots:
+            if plot.sceneBoundingRect().contains(pos):
+                mouse_over_plot = True
 
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(pos):
-            mouse_point = self.spec_plot.getViewBox().mapSceneToView(pos)
-            x = mouse_point.x()
-            y = mouse_point.y()
-            status_msg = self.tr("Cursor time: {:.3f}s, frequency: {:.0f} Hz").format(
-                x, y
-            )
+                mouse_point = plot.getViewBox().mapSceneToView(pos)
+                x = mouse_point.x()
+                y = mouse_point.y()
 
-        else:
-            return  # Mouse not over any plot
+                if isinstance(plot, SpectrogramPlot):
+                    status_msg = self.tr(
+                        "Cursor time: {:.3f}s, frequency: {:.0f} Hz"
+                    ).format(x, y)
+                else:
+                    status_msg = self.tr("Cursor time: {:.3f}s").format(x)
 
-        # Handle mouse interactions (same for both plots)
+        if not mouse_over_plot:
+            return
+
         if self.mouse_pressed:
             if not self.is_dragging:
                 self.view_model.start_selection(x)
             else:
-                # continue_selection() sets its own "Select: ... to ..."
-                # status message; don't clobber it with the cursor position.
                 self.view_model.continue_selection(x)
             self.is_dragging = True
         else:
             self.message_label.setText(status_msg)
 
-    def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
-        """Filter mouse events from the graphics widget"""
-        obj, event = a0, a1
-        if obj == self.graphics_widget.viewport() and event is not None:
-            if event.type() == QEvent.Type.MouseButtonDblClick:
-                event = cast(QMouseEvent, event)
-                if event.button() == Qt.MouseButton.LeftButton:
-                    self.handle_double_click(event)
-                    return True
-
-            elif event.type() == QEvent.Type.MouseButtonPress:
-                event = cast(QMouseEvent, event)
-                if event.button() == Qt.MouseButton.LeftButton:
-                    self.handle_mouse_press(event)
-                    return True
-                else:
-                    self.context_pos = self.graphics_widget.mapToScene(event.pos())
-
-            elif event.type() == QEvent.Type.MouseButtonRelease:
-                event = cast(QMouseEvent, event)
-                if event.button() == Qt.MouseButton.LeftButton:
-                    self.handle_mouse_release(event)
-                    return True
-
-            elif event.type() == QEvent.Type.Wheel:
-                return self.handle_scroll(cast(QWheelEvent, event))
-
-        return super().eventFilter(obj, event)
-
-    def handle_mouse_press(self, event: QMouseEvent):
+    def mousePressEvent(self, a0: QMouseEvent | None):
         """Handle left mouse button press"""
-        scene_pos = self.graphics_widget.mapToScene(event.pos())
+        if a0 is None:
+            return
+        if a0.button() == Qt.MouseButton.RightButton:
+            self.context_pos = self.map_scene_to_graphics_widget(a0.position())
+            return
 
-        clicked_plot = None
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.wave_plot
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.spec_plot
-        elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
-            scene_pos
-        ):
-            handled = self.annot_plot.handle_mouse_press(event)
-            if not handled:
-                clicked_plot = self.annot_plot
+        scene_pos = self.map_scene_to_graphics_widget(a0.position())
+
+        clicked_plot = self._get_document_plot_at(scene_pos)
 
         if clicked_plot is None:
             return
 
         self.mouse_pressed = True
+        a0.accept()
 
-    def handle_double_click(self, event: QMouseEvent):
+    def mouseDoubleClickEvent(self, a0: QMouseEvent | None):
         """Handle double-click"""
-        scene_pos = self.graphics_widget.mapToScene(event.pos())
+        if a0 is None:
+            return
+        if a0.button() != Qt.MouseButton.LeftButton:
+            return
+
+        scene_pos = self.map_scene_to_graphics_widget(a0.position())
 
         if self.click_timer is not None:
             self.click_timer.stop()
@@ -478,11 +552,7 @@ class DocumentView(QWidget):
 
         self.mouse_pressed = False
 
-        clicked_plot = None
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.wave_plot
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.spec_plot
+        clicked_plot = self._get_document_plot_at(scene_pos)
 
         if not clicked_plot:
             return
@@ -490,12 +560,17 @@ class DocumentView(QWidget):
         mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
 
-        if clicked_plot == self.wave_plot or clicked_plot == self.spec_plot:
-            self.view_model.zoom_if_in_selection(x)
+        self.view_model.zoom_if_in_selection(x)
+        a0.accept()
 
-    def handle_mouse_release(self, event: QMouseEvent):
+    def mouseReleaseEvent(self, a0: QMouseEvent | None):
         """Handle left mouse button release"""
-        scene_pos = self.graphics_widget.mapToScene(event.pos())
+        if a0 is None:
+            return
+        if a0.button() != Qt.MouseButton.LeftButton:
+            return
+
+        scene_pos = self.map_scene_to_graphics_widget(a0.position())
 
         if self.mouse_pressed:
             self.mouse_pressed = False
@@ -504,8 +579,8 @@ class DocumentView(QWidget):
                 self.is_dragging = False
                 self.view_model.play_selected_audio()
             else:
-                if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                    self.set_mark(scene_pos)
+                if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+                    self.play_window_or_selection(scene_pos)
                 else:
                     self.pending_single_click = scene_pos
                     if self.click_timer is not None:
@@ -514,23 +589,40 @@ class DocumentView(QWidget):
                     self.click_timer.setSingleShot(True)
                     self.click_timer.timeout.connect(self.handle_single_click)
                     self.click_timer.start(250)
-        else:
-            if self.annot_plot is not None:
-                self.annot_plot.handle_mouse_release(event)
+
+        a0.accept()
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
             scene_pos = self.pending_single_click
-            self.play_window_or_selection(scene_pos)
+
+            clicked_plot = self._get_document_plot_at(scene_pos)
+
+            if clicked_plot and isinstance(clicked_plot, AnnotationPlot):
+                handled = clicked_plot.handle_single_click(scene_pos)
+                if handled:
+                    clicked_plot = None
+
+            if clicked_plot is not None:
+                self.set_mark(scene_pos, clicked_plot)
 
         self.pending_single_click = None
         self.click_timer = None
 
-    def handle_scroll(self, event: QWheelEvent) -> bool:
-        angle_x = event.angleDelta().x()
-        angle_y = event.angleDelta().y()
-        pixel_x = event.pixelDelta().x()
-        pixel_y = event.pixelDelta().y()
+    def resizeEvent(self, a0: QResizeEvent | None):
+        if a0 is None:
+            return
+        self.apply_row_heights()
+        a0.accept()
+
+    def wheelEvent(self, a0: QWheelEvent | None):
+        if a0 is None:
+            return
+
+        angle_x = a0.angleDelta().x()
+        angle_y = a0.angleDelta().y()
+        pixel_x = a0.pixelDelta().x()
+        pixel_y = a0.pixelDelta().y()
 
         modifiers = QApplication.keyboardModifiers()
 
@@ -544,66 +636,59 @@ class DocumentView(QWidget):
             is_trackpad = False
 
         if modifiers == Qt.KeyboardModifier.ControlModifier:
-            return self.handle_control_scroll(event, scroll_y, is_trackpad)
+            self.handle_control_scroll(a0, scroll_y, is_trackpad)
+            a0.accept()
+            return
 
         scroll = max(scroll_x, scroll_y, key=abs)
 
         if abs(scroll) > 0:
             # shift vertical scroll motion
             if modifiers == Qt.KeyboardModifier.ShiftModifier:
-                return self.handle_shift_scroll(scroll)
+                self.handle_shift_scroll(scroll)
             else:
-                return self.handle_plain_scroll(scroll, is_trackpad)
+                self.handle_plain_scroll(scroll, is_trackpad)
 
-        return False
+            a0.accept()
 
-    def handle_shift_scroll(self, scroll: float) -> bool:
+    def handle_shift_scroll(self, scroll: float):
         if scroll > 0:
             self.zoom_in(1.05)
         else:
             self.zoom_out(1.05)
-        return True
 
-    def handle_plain_scroll(self, scroll: float, is_trackpad: bool) -> bool:
+    def handle_plain_scroll(self, scroll: float, is_trackpad: bool):
         if is_trackpad:
             scroll_fraction = -scroll * 0.002
         else:
             scroll_fraction = -scroll * 0.1
 
         self.view_model.move_start_by_fraction(scroll_fraction)
-        return True
 
     def handle_control_scroll(
         self, event: QWheelEvent, scroll_y: float, is_trackpad: bool
-    ) -> bool:
+    ):
         mouse_pos = event.position() if hasattr(event, "position") else event.pos()
-        scene_pos = self.graphics_widget.mapToScene(mouse_pos.toPoint())
+        scene_pos = self.map_scene_to_graphics_widget(mouse_pos)
 
         delta = scroll_y
 
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            self.wave_plot.adjust_y_scale(delta)
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            self.spec_plot.adjust_gray_scale(is_trackpad, delta)
+        plot = self._get_document_plot_at(scene_pos)
+        if isinstance(plot, AudioWavePlot):
+            plot.adjust_y_scale(delta)
+        elif isinstance(plot, SpectrogramPlot):
+            plot.adjust_gray_scale(is_trackpad, delta)
 
-        return True
+    def set_mark_if_in_plot(self, scene_pos: QPointF):
+        """Set mark if position is in a document plot."""
+        clicked_plot = self._get_document_plot_at(scene_pos)
 
-    def set_mark(self, scene_pos: QPointF):
-        """Shift+Click: place a persistent mark at this time, used as the
+        if clicked_plot:
+            self.set_mark(scene_pos, clicked_plot)
+
+    def set_mark(self, scene_pos: QPointF, clicked_plot: DocumentPlot):
+        """Place a persistent mark at this time, used as the
         paste insertion point (and available for future uses)."""
-        clicked_plot = None
-        if self.wave_plot and self.wave_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.wave_plot
-        elif self.spec_plot and self.spec_plot.sceneBoundingRect().contains(scene_pos):
-            clicked_plot = self.spec_plot
-        elif self.annot_plot and self.annot_plot.sceneBoundingRect().contains(
-            scene_pos
-        ):
-            clicked_plot = self.annot_plot
-
-        if not clicked_plot:
-            return
-
         mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
         self.view_model.set_mark(x)
@@ -616,14 +701,58 @@ class DocumentView(QWidget):
         """Play the audio currently visible in the viewport"""
         self.view_model.play_visible_audio()
 
-    def copy_selection(self) -> AudioSignal | None:
+    def copy_selection(self) -> AudioState | None:
         return self.view_model.copy_selection()
 
-    def cut_selection(self) -> AudioSignal | None:
+    def cut_selection(self) -> AudioState | None:
         return self.view_model.cut_selection()
 
-    def paste_at_cursor(self, clip: AudioSignal):
-        self.view_model.paste_at_mark(clip)
+    def paste_at_cursor(self, clip: AudioState):
+        mark_position = self.view_model.mark_position_or_warn()
+        if mark_position is None:
+            return
+
+        self._paste_matching_channels(mark_position, clip)
+
+    def _paste_matching_channels(self, mark_position: float, clip: AudioState):
+        """Paste `clip` at the mark, asking how to reconcile a mono/stereo
+        mismatch between the document and the clip."""
+        doc_is_stereo = self.view_model.stereo_channels() is not None
+        if doc_is_stereo != clip.is_stereo:
+            choice = PasteChannelDialog.get_channel(self, clip.is_stereo)
+            if choice is None:
+                return
+            clip = self.view_model.reconcile_clip_for_paste(clip, choice)
+
+        self.view_model.paste_at(mark_position, clip)
+
+    def paste_special(self, clip: AudioState):
+        mark_position = self.view_model.mark_position_or_warn()
+        if mark_position is None:
+            return
+
+        new_channel_available = (
+            self.view_model.stereo_channels() is None and not clip.is_stereo
+        )
+        choice = PasteSpecialDialog.get_choice(
+            self, new_channel_available=new_channel_available
+        )
+        if choice is None:
+            return
+
+        if choice.reverse:
+            clip = self.view_model.reversed_clip(clip)
+
+        if not (choice.new_channel and new_channel_available):
+            self._paste_matching_channels(mark_position, clip)
+        elif choice.insert_silence:
+            self.view_model.paste_special_new_channel_with_silence(
+                choice.new_channel_idx, mark_position, clip
+            )
+        else:
+            self.view_model.paste_special_new_channel_without_silence(
+                choice.new_channel_idx, mark_position, clip
+            )
 
     def undo(self):
         self.view_model.undo()
@@ -658,6 +787,38 @@ class DocumentView(QWidget):
         target_fs = ResampleAudioDialog.get_target_fs(primary_channel.fs)
         if target_fs is not None:
             self.view_model.resample(target_fs)
+
+    @pyqtSlot()
+    def open_scale_dialog(self):
+        if self.view_model.primary_channel() is None:
+            return
+
+        scale = ScaleAudioDialog.get_scale_value(
+            applies_to_selection=self.view_model.select_state.is_selected,
+            peaks_dbfs=self.view_model.peak_dbfs(),
+        )
+        if scale is not None:
+            self.view_model.scale_audio(scale)
+
+    @pyqtSlot()
+    def open_filter_dialog(self):
+        primary_channel = self.view_model.primary_channel()
+        if primary_channel is None:
+            return
+
+        spec = FilterAudioDialog.get_filter_spec(primary_channel.fs)
+        if spec is not None:
+            self.view_model.filter_audio(spec)
+
+    @pyqtSlot()
+    def open_audio_info(self):
+        origin_name = self.origin_name if self.origin_name is not None else ""
+        AudioInfoDialog.show_info(
+            self.view_model.primary_channel(),
+            self.view_model.stereo_channels(),
+            origin_name,
+            self,
+        )
 
     def cleanup(self):
         """Clean up resources when closing document"""

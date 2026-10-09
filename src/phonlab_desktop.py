@@ -5,10 +5,11 @@ import sys
 from typing import cast
 
 import phonlab  # noqa: F401
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
 from ui.main.main_window import MainWindow
-from ui.main.splash import ClickableSplash, create_splash_pixmap
+from ui.main.splash import ClickableSplash, icon_path
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +41,12 @@ if __name__ == "__main__":
 
     def run_app():
         app = QApplication(sys.argv)
+        app.setWindowIcon(QIcon(str(icon_path())))
 
         mainWin = MainWindow()
 
         # Create and show splash screen
-        splash_pix = create_splash_pixmap()
-        splash = ClickableSplash(splash_pix, mainWin)
+        splash = ClickableSplash(mainWin)
         mainWin.splash = splash
 
         mainWin.show()
