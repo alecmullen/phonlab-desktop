@@ -6,21 +6,17 @@ import sounddevice as sd
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.play_audio.entity.latency_info import LatencyInfo
+from res.constants import (
+    PLAYBACK_FINISH_TIMEOUT_MARGIN_S,
+    PLAYBACK_POST_ROLL_S,
+    PLAYBACK_PRE_ROLL_S,
+)
 
 BLOCK_SIZE = 2048
 
 
 class AudioTask(QObject):
     latency = pyqtSignal(object)
-
-    FINISH_TIMEOUT_MARGIN_S = 2.0
-
-    # Silence added around the audio. Freshly opened output streams (especially
-    # Bluetooth) can drop the first samples while the device wakes up, and the
-    # tail can be cut off when the stream is closed, so make sure that only
-    # silence is lost.
-    PRE_ROLL_S = 0.0
-    POST_ROLL_S = 0.5
 
     def __init__(self, audio_data: np.ndarray, fs: int):
         super().__init__()
@@ -52,15 +48,19 @@ class AudioTask(QObject):
             # the stream early would cut off the queued tail of the audio.
             self._finished_event.wait(
                 timeout=(len(self._audio_data) / self._fs)
-                + self.FINISH_TIMEOUT_MARGIN_S
+                + PLAYBACK_FINISH_TIMEOUT_MARGIN_S
             )
             time.sleep(self._latency)
 
     def _pad_with_silence(self, audio_data: np.ndarray) -> np.ndarray:
         channels = audio_data.shape[1]
-        pre = np.zeros((round(self.PRE_ROLL_S * self._fs), channels), dtype="float32")
-        post = np.zeros((round(self.POST_ROLL_S * self._fs), channels), dtype="float32")
-        self._pre_roll_s = self.PRE_ROLL_S
+        pre = np.zeros(
+            (round(PLAYBACK_PRE_ROLL_S * self._fs), channels), dtype="float32"
+        )
+        post = np.zeros(
+            (round(PLAYBACK_POST_ROLL_S * self._fs), channels), dtype="float32"
+        )
+        self._pre_roll_s = PLAYBACK_PRE_ROLL_S
         return np.ascontiguousarray(
             np.concatenate([pre, audio_data.astype("float32", copy=False), post])
         )
