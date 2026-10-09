@@ -97,3 +97,36 @@ def test_paste_special_get_choice_returns_none_when_rejected(
     )
 
     assert PasteSpecialDialog.get_choice(None) is None
+
+
+def test_paste_special_dialog_reverse_option(qtbot: QtBot):
+    dlg = PasteSpecialDialog()
+    qtbot.addWidget(dlg)
+    assert dlg.choice().reverse is False
+
+    dlg.reverse_check_box.setChecked(True)
+
+    assert dlg.choice() == PasteSpecialChoice(1, True, reverse=True)
+
+
+def test_paste_special_dialog_new_channel_unavailable(qtbot: QtBot):
+    dlg = PasteSpecialDialog(new_channel_available=False)
+    qtbot.addWidget(dlg)
+
+    assert not dlg.channel_group_box.isEnabled()
+    assert not dlg.silence_group_box.isEnabled()
+    assert dlg.choice().new_channel is False
+    dlg.reverse_check_box.setChecked(True)
+    assert dlg.choice().reverse is True
+
+
+def test_paste_special_dialog_unticking_new_channel_disables_silence(qtbot: QtBot):
+    dlg = PasteSpecialDialog()
+    qtbot.addWidget(dlg)
+    assert dlg.choice().new_channel is True
+    assert dlg.silence_group_box.isEnabled()
+
+    dlg.channel_group_box.setChecked(False)
+
+    assert dlg.choice().new_channel is False
+    assert not dlg.silence_group_box.isEnabled()

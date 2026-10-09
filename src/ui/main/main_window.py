@@ -127,7 +127,9 @@ class MainWindow(QMainWindow):
 
         self.paste_special_action = QAction(self.tr("Paste &Special..."), self)
         self.paste_special_action.setStatusTip(
-            self.tr("Paste the clipboard clip into a new stereo channel")
+            self.tr(
+                "Paste the clipboard clip, optionally reversed or into a new stereo channel"
+            )
         )
         self.paste_special_action.setShortcut("Ctrl+Shift+V")
         self.paste_special_action.triggered.connect(self.paste_special)
