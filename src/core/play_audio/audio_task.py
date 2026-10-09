@@ -13,6 +13,15 @@ BLOCK_SIZE = 2048
 class AudioTask(QObject):
     latency = pyqtSignal(object)
 
+    FINISH_TIMEOUT_MARGIN_S = 2.0
+
+    # Silence added around the audio. Freshly opened output streams (especially
+    # Bluetooth) can drop the first samples while the device wakes up, and the
+    # tail can be cut off when the stream is closed, so make sure that only
+    # silence is lost.
+    PRE_ROLL_S = 0.0
+    POST_ROLL_S = 0.5
+
     def __init__(self, audio_data: np.ndarray, fs: int):
         super().__init__()
         self._audio_data = audio_data[..., None] if audio_data.ndim == 1 else audio_data
@@ -21,6 +30,7 @@ class AudioTask(QObject):
         self._current_offset = 0
         self._is_first_chunk = True
         self._latency = 0.0
+        self._pre_roll_s = 0.0
 
         self._should_stop = False
 
@@ -32,12 +42,28 @@ class AudioTask(QObject):
             sd._terminate()
             sd._initialize()
 
-        self._audio_data = np.ascontiguousarray(self._audio_data, dtype="float32")
+        self._audio_data = self._pad_with_silence(self._audio_data)
 
         # Fresh OutputStream with currently selected system default
         with self._open_stream(self._fs, self._audio_data.shape[1]):
-            self._finished_event.wait(timeout=(len(self._audio_data) / self._fs) + 0.02)
+            # The stream sets this event itself once the audio has played out
+            # (or been aborted), so the timeout is only a safety net. It must
+            # allow for the variable delay before the first callback; closing
+            # the stream early would cut off the queued tail of the audio.
+            self._finished_event.wait(
+                timeout=(len(self._audio_data) / self._fs)
+                + self.FINISH_TIMEOUT_MARGIN_S
+            )
             time.sleep(self._latency)
+
+    def _pad_with_silence(self, audio_data: np.ndarray) -> np.ndarray:
+        channels = audio_data.shape[1]
+        pre = np.zeros((round(self.PRE_ROLL_S * self._fs), channels), dtype="float32")
+        post = np.zeros((round(self.POST_ROLL_S * self._fs), channels), dtype="float32")
+        self._pre_roll_s = self.PRE_ROLL_S
+        return np.ascontiguousarray(
+            np.concatenate([pre, audio_data.astype("float32", copy=False), post])
+        )
 
     def _audio_callback(
         self,
@@ -48,7 +74,7 @@ class AudioTask(QObject):
     ):
         if self._is_first_chunk:
             self._latency = time_info.outputBufferDacTime - time_info.currentTime  # ty: ignore[unresolved-attribute]
-            audible_start_time = time.monotonic() + self._latency
+            audible_start_time = time.monotonic() + self._latency + self._pre_roll_s
             self.latency.emit(LatencyInfo(self._latency, audible_start_time))
             self._is_first_chunk = False
 
@@ -63,7 +89,11 @@ class AudioTask(QObject):
                 outdata[:remainder, :] = self._audio_data[self._current_offset :]
                 outdata[remainder:, :].fill(0)
 
-            raise sd.CallbackAbort()
+            # CallbackStop drains already-queued audio (needed for devices with
+            # deep output buffers, e.g. Bluetooth); abort only on user stop.
+            if self._should_stop:
+                raise sd.CallbackAbort()
+            raise sd.CallbackStop()
 
     def _open_stream(self, fs: int, channels: int) -> sd.OutputStream:
         """Open an OutputStream, falling back to a more conservative latency

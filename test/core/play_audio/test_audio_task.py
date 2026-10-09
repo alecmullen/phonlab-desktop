@@ -69,13 +69,13 @@ def test_audio_callback_copies_full_frame_and_advances_offset(qtbot: QtBot):
     assert task._current_offset == 4
 
 
-def test_audio_callback_zero_pads_and_aborts_on_final_partial_frame(qtbot: QtBot):
+def test_audio_callback_zero_pads_and_stops_on_final_partial_frame(qtbot: QtBot):
     task = AudioTask(np.arange(6, dtype="float32"), fs=1000)
     task._is_first_chunk = False
     task._current_offset = 4
     outdata = np.full((4, 1), -1.0, dtype="float32")
 
-    with pytest.raises(sd.CallbackAbort):
+    with pytest.raises(sd.CallbackStop):
         task._audio_callback(outdata, 4, make_time_info(), sd.CallbackFlags())
 
     np.testing.assert_array_equal(outdata[:2, 0], [4, 5])

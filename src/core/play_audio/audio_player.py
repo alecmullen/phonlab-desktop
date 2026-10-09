@@ -89,6 +89,12 @@ class AudioPlayer(QObject):
         self.poll_timer.stop()
 
     def stop(self):
+        if self.poll_timer.isActive():
+            # Report the exact position at the moment of stopping so the cursor
+            # doesn't stay at the last (up to one poll interval old) position
+            self.playback_poll.emit(
+                PlaybackPoll(self._get_current_time(), self._latency, True)
+            )
         if self._audio_worker is not None:
             self._audio_worker.stop()
         self.poll_timer.stop()
