@@ -49,7 +49,6 @@ from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 from ui.waveform.state.audio_wave_action import (
     AudioFilterAction,
     AudioInfoAction,
-    AudioRecenterAction,
     AudioResampleAction,
     AudioReverseAction,
     AudioRevertToOriginalAction,
@@ -120,8 +119,6 @@ class DocumentViewModel(ViewModel):
             self.reverse_audio()
         elif isinstance(model, AudioRevertToOriginalAction):
             self.revert_to_original()
-        elif isinstance(model, AudioRecenterAction):
-            self.center_on_selection()
         if isinstance(model, DeleteChannelState):
             self.delete_channel(model.idx)
         if isinstance(model, ChannelActiveState):

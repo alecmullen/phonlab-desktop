@@ -113,9 +113,6 @@ class AudioWavePlot(DocumentPlot):
         self.reverse_action = ContextMenuHintAction(self.tr("Reverse"), parent=self)
         self.reverse_action.triggered.connect(self.view_model.reverse_audio)
 
-        self.recenter_action = ContextMenuHintAction(self.tr("Recenter"), parent=self)
-        self.recenter_action.triggered.connect(self.view_model.recenter_on_selection)
-
         self.filter_action = ContextMenuHintAction(self.tr("Filter..."), parent=self)
         self.filter_action.triggered.connect(self.view_model.filter_audio)
 
@@ -125,7 +122,6 @@ class AudioWavePlot(DocumentPlot):
         self.revert_action.triggered.connect(self.view_model.revert_to_original)
 
         for action in (
-            self.recenter_action,
             self.audio_info_action,
             self.resample_action,
             self.scale_action,

@@ -1,6 +1,7 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
+    QAction,
     QDragEnterEvent,
     QDropEvent,
     QMouseEvent,
@@ -139,6 +140,9 @@ class DocumentView(QWidget):
         self.deselect_action = ContextMenuHintAction(self.tr("Deselect"), parent=self)
         self.deselect_action.triggered.connect(self.view_model.remove_selection)
 
+        self.recenter_action = ContextMenuHintAction(self.tr("Recenter"), parent=self)
+        self.recenter_action.triggered.connect(self.view_model.center_on_selection)
+
         self.set_mark_action = ContextMenuHintAction(
             self.tr("Set Mark"), self.tr("Click"), parent=self
         )
@@ -165,23 +169,37 @@ class DocumentView(QWidget):
         """
         menu = view_box.menu
         first_action = menu.actions()[0] if len(menu.actions()) > 0 else None
-        menu.insertAction(first_action, self.deselect_action)
-        menu.insertAction(first_action, self.set_mark_action)
-        menu.insertAction(first_action, self.remove_mark_action)
-        menu.aboutToShow.connect(lambda: self.sync_zoom_to_selection_action(menu))
-        menu.insertSeparator(first_action)
+        menu.aboutToShow.connect(
+            lambda first=first_action: self.sync_actions_with_ui_state(menu, first)
+        )
 
-    def sync_zoom_to_selection_action(self, menu: QMenu):
+    def sync_actions_with_ui_state(self, menu: QMenu, first_action: QAction | None):
         """Put Zoom to Selection at the top of `menu` only while a selection
         exists. Adding/removing it as the menu opens (rather than toggling the
         action's visibility) makes Qt lay the rows out afresh, so it can't be
         drawn over its neighbour."""
-        present = self.zoom_to_selection_action in menu.actions()
-        wanted = self.view_model.select_state.is_selected
-        if wanted and not present:
-            menu.insertAction(self.deselect_action, self.zoom_to_selection_action)
-        elif present and not wanted:
-            menu.removeAction(self.zoom_to_selection_action)
+        is_selected = self.view_model.select_state.is_selected
+        is_marked = self.view_model.mark_state.is_set
+
+        actions = [
+            self.zoom_to_selection_action,
+            self.deselect_action,
+            self.recenter_action,
+            self.set_mark_action,
+            self.remove_mark_action,
+        ]
+        wanted = [is_selected, is_selected, is_selected or is_marked, True, is_marked]
+
+        next_action = first_action
+        for idx in reversed(range(len(actions))):
+            if actions[idx] in menu.actions():
+                menu.removeAction(actions[idx])
+            if wanted[idx]:
+                menu.insertAction(next_action, actions[idx])
+                next_action = actions[idx]
+
+        if first_action is not None:
+            menu.insertSeparator(first_action)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
