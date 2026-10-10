@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtGui import QFont, QFontMetrics, QShowEvent
+from PyQt6.QtGui import QFont, QFontMetrics, QKeyEvent, QShowEvent
 from PyQt6.QtWidgets import QGraphicsSceneMouseEvent, QWidget
 
 from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
@@ -37,6 +37,9 @@ class AnnotationPlot(DocumentPlot):
         self.visible_labels: list[AnnotationLabelState] = []
 
         self.dragging_node: AnnotationNodeState | None = None
+        self.selected_node: int | None = None
+
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -86,13 +89,13 @@ class AnnotationPlot(DocumentPlot):
         for type in types:
             self.visible_labels += [label for label in type.labels if label.is_visible]
 
-        label_view = LabelView(self.visible_labels, self.on_label_edit, self)
+        label_view = LabelView(self, self.visible_labels, self.on_label_edit)
         label_view.setPos(0, 0)
         self.addItem(label_view)
 
         self.visible_nodes = [node for node in nodes.values() if node.is_visible]
 
-        node_view = NodeView(self.visible_nodes, self)
+        node_view = NodeView(self, self.visible_nodes, self.selected_node)
         node_view.setPos(0, 0)
         self.addItem(node_view)
 
@@ -119,7 +122,9 @@ class AnnotationPlot(DocumentPlot):
         if a0 is None:
             return
         if self.dragging_node is not None:
+            self.selected_node = self.dragging_node.node
             self.dragging_node = None
+            self.populate(self.view_model.annotation_view_state)
             a0.accept()
         else:
             a0.ignore()
@@ -135,6 +140,15 @@ class AnnotationPlot(DocumentPlot):
                 self.view_model.select_label(label_view_state)
                 return True
         return False
+
+    def keyPressEvent(self, a0: QKeyEvent | None):
+        if a0 is None:
+            return
+        if a0.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            print("DELETED NODE")
+            a0.accept()
+        else:
+            a0.ignore()
 
     @pyqtSlot(int, str)
     def on_label_edit(self, label_id: int, text: str):

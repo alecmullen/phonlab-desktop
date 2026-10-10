@@ -12,9 +12,9 @@ from ui.annotation.state.annotation_label_state import AnnotationLabelState
 class LabelView(pg.GraphicsObject):
     def __init__(
         self,
+        parent_plot: pg.PlotItem,
         labels: list[AnnotationLabelState],
         on_edit_label: Callable[[int, str], None],
-        parent_plot: pg.PlotItem,
     ):
         super().__init__()
         self.labels = labels
