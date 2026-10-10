@@ -3,12 +3,13 @@ from dataclasses import replace
 import pyqtgraph as pg
 import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
-from PyQt6.QtGui import QMouseEvent, QShowEvent
+from PyQt6.QtGui import QKeyEvent, QMouseEvent, QShowEvent
 from pytestqt.qtbot import QtBot
 
 from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.component.node_view import NodeView
 from ui.annotation.state.annotation_node_state import (
     AnnotationNodeExtentState,
     AnnotationNodeState,
@@ -398,3 +399,137 @@ def test_show_event_populates_from_view_model_state(
     plot.showEvent(QShowEvent())
 
     assert calls == [view_model.annotation_view_state]
+
+
+def _node_views(plot: AnnotationPlot) -> list[NodeView]:
+    return [item for item in plot.items if isinstance(item, NodeView)]
+
+
+def _key_event(key: Qt.Key) -> QKeyEvent:
+    return QKeyEvent(QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier)
+
+
+def test_plot_has_no_selected_node_initially(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+
+    assert plot.selected_node is None
+
+
+def test_plot_accepts_focus_on_click(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+
+    assert plot.focusPolicy() == Qt.FocusPolicy.ClickFocus
+
+
+def test_populate_passes_no_selection_to_node_view(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+
+    plot.populate(MOCK_ANNOTATION_STATE)
+
+    node_views = _node_views(plot)
+    assert len(node_views) == 1
+    assert node_views[0].selected_node is None
+
+
+def test_populate_passes_selected_node_to_node_view(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.selected_node = 2
+
+    plot.populate(MOCK_ANNOTATION_STATE)
+
+    assert _node_views(plot)[0].selected_node == 2
+
+
+def test_mouse_release_after_drag_selects_node_and_clears_drag(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    view_model.annotation_view_state = MOCK_ANNOTATION_STATE
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.dragging_node = MOCK_ANNOTATION_STATE.nodes[2]
+
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonRelease,
+        QPointF(0, 0),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    plot.mouseReleaseEvent(event)  # type: ignore[arg-type]
+
+    assert plot.dragging_node is None
+    assert plot.selected_node == 2
+
+
+def test_mouse_release_after_drag_rerenders_node_as_selected(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    view_model.annotation_view_state = MOCK_ANNOTATION_STATE
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.populate(MOCK_ANNOTATION_STATE)
+    plot.dragging_node = MOCK_ANNOTATION_STATE.nodes[3]
+
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonRelease,
+        QPointF(0, 0),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    plot.mouseReleaseEvent(event)  # type: ignore[arg-type]
+
+    node_views = _node_views(plot)
+    assert len(node_views) == 1
+    assert node_views[0].selected_node == 3
+
+
+def test_mouse_release_without_drag_keeps_selection(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+    plot.selected_node = 1
+
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonRelease,
+        QPointF(0, 0),
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    plot.mouseReleaseEvent(event)  # type: ignore[arg-type]
+
+    assert plot.selected_node == 1
+
+
+@pytest.mark.parametrize("key", [Qt.Key.Key_Delete, Qt.Key.Key_Backspace])
+def test_delete_keys_are_accepted(qtbot: QtBot, key: Qt.Key):
+    plot = AnnotationPlot(AnnotationViewModel())
+    event = _key_event(key)
+    event.ignore()
+
+    plot.keyPressEvent(event)
+
+    assert event.isAccepted()
+
+
+def test_other_keys_are_ignored(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+    event = _key_event(Qt.Key.Key_A)
+    event.accept()
+
+    plot.keyPressEvent(event)
+
+    assert not event.isAccepted()
+
+
+def test_key_press_with_none_event_does_nothing(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+
+    plot.keyPressEvent(None)
