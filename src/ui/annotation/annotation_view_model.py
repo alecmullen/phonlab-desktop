@@ -115,3 +115,38 @@ class AnnotationViewModel(ViewModel):
                     return replace(annotation, types=types)
 
         return annotation
+
+    def delete_node(self, node: int):
+        self._delete_node_in_state(node, self.annotation_state)
+        self._delete_node_in_state(node, self.annotation_view_state)
+
+    def _delete_node_in_state(self, node: int, annotation: AnnotationState):
+        if node not in annotation.nodes:
+            raise ValueError("Can't find node to delete")
+        node_state = annotation.nodes[node]
+        before_labels: dict[int, list[AnnotationLabelState]] = {}
+        after_labels: dict[int, list[AnnotationLabelState]] = {}
+        new_labels: dict[int, list[AnnotationLabelState]] = {}
+        for extent in node_state.extents:
+            tier = extent.tier
+            before_labels[tier] = [
+                label for label in annotation.types[tier].labels if label.e_node == node
+            ]
+            after_labels[tier] = [
+                label for label in annotation.types[tier].labels if label.s_node == node
+            ]
+
+            if len(before_labels[tier]) == len(after_labels[tier]) == 1:
+                # Mash labels
+                before, after = before_labels[tier][0], after_labels[tier][0]
+                new_labels[tier] = [
+                    AnnotationLabelState(
+                        before.id,
+                        s_node=before.s_node,
+                        e_node=after.e_node,
+                        label=before.label + after.label,
+                    )
+                ]
+            else:
+                # Let overlap (they already are)
+                pass
