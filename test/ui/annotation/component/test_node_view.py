@@ -19,7 +19,7 @@ def test_node_view_stores_input_nodes(qtbot: QtBot):
         AnnotationNodeState(1, 2.0, [AnnotationNodeExtentState(1)]),
     ]
 
-    node_view = NodeView(nodes, plot)
+    node_view = NodeView(plot, nodes)
 
     assert node_view.nodes == nodes
 
@@ -39,7 +39,7 @@ def test_node_view_renders_symbol_for_each_node(qtbot: QtBot):
         ),
     ]
 
-    node_view = NodeView(nodes, plot)
+    node_view = NodeView(plot, nodes)
 
     plot_data_items = [
         child for child in node_view.childItems() if isinstance(child, pg.PlotDataItem)
@@ -56,7 +56,7 @@ def test_node_view_bounding_rect_expands_view_rect_by_margins(qtbot: QtBot):
     view_rect = plot.getViewBox().viewRect()
 
     node_view = NodeView(
-        [AnnotationNodeState(0, 0.0, [AnnotationNodeExtentState(0)])], plot
+        plot, [AnnotationNodeState(0, 0.0, [AnnotationNodeExtentState(0)])]
     )
 
     expected = view_rect.adjusted(
@@ -78,7 +78,7 @@ def test_node_view_position_follows_parent_plot_view(qtbot: QtBot):
     qtbot.waitExposed(layout)
 
     node_view = NodeView(
-        [AnnotationNodeState(0, 0.0, [AnnotationNodeExtentState(0)])], plot
+        plot, [AnnotationNodeState(0, 0.0, [AnnotationNodeExtentState(0)])]
     )
 
     assert node_view.pos().x() == view_rect.left()
@@ -88,7 +88,7 @@ def test_node_view_position_follows_parent_plot_view(qtbot: QtBot):
 def test_node_view_paint_draws_picture(qtbot: QtBot):
     plot = pg.PlotItem()
     node_view = NodeView(
-        [AnnotationNodeState(0, 1.0, [AnnotationNodeExtentState(0)])], plot
+        plot, [AnnotationNodeState(0, 1.0, [AnnotationNodeExtentState(0)])]
     )
 
     pixmap = QPixmap(50, 50)

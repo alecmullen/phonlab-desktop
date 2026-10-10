@@ -27,7 +27,7 @@ def test_label_view_stores_input_labels(qtbot: QtBot):
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
 
-    label_view = LabelView(labels, lambda: None, plot)
+    label_view = LabelView(plot, labels, lambda: None)
 
     assert label_view.labels == labels
 
@@ -46,7 +46,7 @@ def test_label_view_creates_text_item_per_label_with_correct_text_and_position(
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
 
-    label_view = LabelView(labels, lambda: None, plot)
+    label_view = LabelView(plot, labels, lambda: None)
 
     text_items = [
         child for child in label_view.childItems() if isinstance(child, pg.TextItem)
@@ -69,7 +69,7 @@ def test_label_view_bounding_rect_matches_parent_plot_view_rect(qtbot: QtBot):
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
 
-    label_view = LabelView([], lambda: None, plot)
+    label_view = LabelView(plot, [], lambda: None)
 
     assert label_view.boundingRect() == view_rect
 
@@ -83,7 +83,7 @@ def test_label_view_position_follows_parent_plot_view(qtbot: QtBot):
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
 
-    label_view = LabelView([], lambda: None, plot)
+    label_view = LabelView(plot, [], lambda: None)
 
     assert label_view.pos().x() == view_rect.left()
     assert label_view.pos().y() == view_rect.bottom()
@@ -107,7 +107,7 @@ def test_label_view_ellides_long_text(qtbot: QtBot):
     label_width = int(max(size[0], 1.0) / pixel_size[0])
 
     labels = [AnnotationLabelState(size=size, pos=(0.5, 0.25), label=long_text)]
-    label_view = LabelView(labels, lambda: None, plot)
+    label_view = LabelView(plot, labels, lambda: None)
 
     label_text_item = next(
         child for child in label_view.childItems() if isinstance(child, pg.TextItem)
@@ -130,7 +130,7 @@ def test_label_view_removes_line_breaks(qtbot: QtBot):
         long_text += "h\n"
 
     labels = [AnnotationLabelState(size=(1.0, 0.5), pos=(0.5, 0.25), label=long_text)]
-    label_view = LabelView(labels, lambda: None, plot)
+    label_view = LabelView(plot, labels, lambda: None)
 
     label_text_item = next(
         child for child in label_view.childItems() if isinstance(child, pg.TextItem)
@@ -146,9 +146,9 @@ def test_label_view_point_label_uses_default_width(qtbot: QtBot):
     qtbot.waitExposed(layout)
 
     label_view = LabelView(
+        plot,
         [AnnotationLabelState(pos=(1.0, 0.5), size=(0.0, 0.25), label="pt")],
         lambda: None,
-        plot,
     )
 
     assert label_view.labels[0].size[0] == 0.0
@@ -161,9 +161,9 @@ def test_label_view_paint_draws_picture(qtbot: QtBot):
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
     label_view = LabelView(
+        plot,
         [AnnotationLabelState(pos=(1.0, 0.5), size=(1.0, 0.25), label="a")],
         lambda: None,
-        plot,
     )
 
     pixmap = QPixmap(50, 50)
