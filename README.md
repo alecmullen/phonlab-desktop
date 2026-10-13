@@ -69,10 +69,28 @@ Audio can be edited by copy and paste. Select a chunk of audio to copy or cut it
  - **Up/Down Arrow Keys**: zoom
  - **Right/Left Arrow Keys**: pan
 
+ - #### Annotations
+    - **Click**: 
+        - Select label interval
+        - Select node
+    - **Right-click**:
+        - Edit label text
+    - **Delete/Backspace**:
+        - Delete selected node
+
  ### Context Menu
   - Over any Plot:
-    - **Resample**: open menu for resampling primary audio channel
     - **Set Mark**
     - **Remove Mark**
+    - **Zoom to Selection**
+    - **Deselect**
+    - **Recenter**
+  - Audio Wave
+    - **Audio Info**
+    - **Scale**: Scale audio
+    - **Reverse**: Reverse Audio
+    - **Filter**: Apply filter to audio
+    - **Revert to Original**: Undo all changes (edits, resamples, filters)
+    - **Resample**: open menu for resampling audio
   - Spectrogram
     - **Spectrogram settings**: set sample rate, window size and step size for the spectrogram 

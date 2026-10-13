@@ -1,4 +1,3 @@
-import bisect
 import logging
 from dataclasses import replace
 
@@ -118,89 +117,69 @@ class AnnotationViewModel(ViewModel):
         return annotation
 
     def delete_node(self, node: int):
-        annotation = replace(self.annotation_state)
-        if node not in annotation.nodes:
+        if node not in self.annotation_state.nodes:
             raise ValueError("Can't find node to delete")
-        node_state = self.annotation_view_state.nodes[node]
 
-        before_labels: list[set[AnnotationLabelState]] = [
-            set() for _ in range(len(annotation.types))
-        ]
-        after_labels: list[set[AnnotationLabelState]] = [
-            set() for _ in range(len(annotation.types))
-        ]
-        point_labels: list[set[AnnotationLabelState]] = [
-            set() for _ in range(len(annotation.types))
-        ]
+        types = []
+        for type in self.annotation_state.types:
+            try:
+                labels = self._labels_without_node(node, type.labels)
+            except ValueError as e:
+                self.state_changed.emit(StatusMessageState(str(e)))
+                return
+            types.append(replace(type, labels=labels))
 
-        new_labels: list[list[AnnotationLabelState]] = [
-            [] for _ in range(len(annotation.types))
-        ]
-        for extent in node_state.extents:
-            tier = extent.tier
-            before_labels[tier] = set()
-            after_labels[tier] = set()
-            point_labels[tier] = set()
-            for label in annotation.types[tier].labels:
-                if label.e_node == node and label.s_node == node:
-                    point_labels[tier].add(label)
-                elif label.e_node == node:
-                    before_labels[tier].add(label)
-                elif label.s_node == node:
-                    after_labels[tier].add(label)
-
-            if len(before_labels[tier]) == len(after_labels[tier]) == 1:
-                # Mash labels
-                before, after = (
-                    next(iter(before_labels[tier])),
-                    next(iter(after_labels[tier])),
-                )
-                new_labels[tier] = [
-                    AnnotationLabelState(
-                        before.id,
-                        s_node=before.s_node,
-                        e_node=after.e_node,
-                        label=before.label + after.label,
-                    )
-                ]
-            else:
-                ordered_nodes = sorted(
-                    annotation.nodes, key=lambda node: annotation.nodes[node].x
-                )
-                node_idx = bisect.bisect_left(ordered_nodes, node)
-
-                before_node, after_node = None, None
-                if node_idx > 0:
-                    before_node = ordered_nodes[node_idx - 1]
-                if node_idx < len(ordered_nodes) - 1:
-                    after_node = ordered_nodes[node_idx + 1]
-
-                if (
-                    len(before_labels[tier]) > 0
-                    and after_node is None
-                    or len(after_labels[tier]) > 0
-                    and before_node is None
-                ):
-                    self.state_changed.emit(
-                        StatusMessageState(
-                            self.tr("Cannot delete end node with attached label")
-                        )
-                    )
-                    return
-
-                new_labels[tier] = []
-                for before_label in before_labels[tier]:
-                    new_labels[tier].append(replace(before_label, e_node=after_node))
-                for after_label in after_labels[tier]:
-                    new_labels[tier].append(replace(after_label, s_node=before_node))
-
-        for tier in range(len(annotation.types)):
-            for label in iter(
-                before_labels[tier] | after_labels[tier] | point_labels[tier]
-            ):
-                annotation.types[tier].labels.remove(label)
-            for label in new_labels[tier]:
-                annotation.types[tier].labels.append(label)
-
-        self.annotation_state = annotation
+        nodes = {
+            key: value
+            for key, value in self.annotation_state.nodes.items()
+            if key != node
+        }
+        self.annotation_state = AnnotationState(nodes=nodes, types=types)
         self.update_annotation_change()
+
+    def _labels_without_node(
+        self, node: int, labels: list[AnnotationLabelState]
+    ) -> list[AnnotationLabelState]:
+        """Returns the tier's labels with `node` removed, or None if the node is
+        an end node of the tier with an interval label attached."""
+        before = [
+            label for label in labels if label.e_node == node and label.s_node != node
+        ]
+        after = [
+            label for label in labels if label.s_node == node and label.e_node != node
+        ]
+
+        if len(before) == len(after) == 1:
+            replacements = {
+                before[0].id: replace(
+                    before[0],
+                    e_node=after[0].e_node,
+                    label=before[0].label + after[0].label,
+                )
+            }
+        else:
+            tier_nodes = sorted(
+                {n for label in labels for n in (label.s_node, label.e_node)},
+                key=lambda n: (self.annotation_state.nodes[n].x, n),
+            )
+            if node not in tier_nodes:
+                return list(labels)
+
+            node_idx = tier_nodes.index(node)
+            before_node = tier_nodes[node_idx - 1] if node_idx > 0 else None
+            after_node = (
+                tier_nodes[node_idx + 1] if node_idx < len(tier_nodes) - 1 else None
+            )
+
+            if (before and after_node is None) or (after and before_node is None):
+                raise ValueError(self.tr("Cannot delete end node with attached label"))
+
+            replacements = {
+                label.id: replace(label, e_node=after_node) for label in before
+            } | {label.id: replace(label, s_node=before_node) for label in after}
+
+        return [
+            replacements.get(label.id, label)
+            for label in labels
+            if label.id in replacements or node not in (label.s_node, label.e_node)
+        ]
