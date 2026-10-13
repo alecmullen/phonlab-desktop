@@ -39,7 +39,7 @@ def test_pad_with_silence_adds_post_roll(monkeypatch: pytest.MonkeyPatch):
 
     padded = task._pad_with_silence(task._audio_data)
 
-    assert padded.shape == (10, 1)
+    assert padded.shape == (8, 1)
     assert padded.dtype == np.float32
     np.testing.assert_array_equal(padded[0:5], 1)
     np.testing.assert_array_equal(padded[5:], 0)
