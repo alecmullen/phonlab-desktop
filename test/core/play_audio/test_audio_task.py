@@ -33,8 +33,7 @@ def test_init_keeps_multichannel_audio_shape_unchanged():
 # --------------------------- _pad_with_silence ---------------------------
 
 
-def test_pad_with_silence_adds_pre_and_post_roll(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(audio_task_module, "PLAYBACK_PRE_ROLL_S", 0.002)
+def test_pad_with_silence_adds_post_roll(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(audio_task_module, "PLAYBACK_POST_ROLL_S", 0.003)
     task = AudioTask(np.ones(5, dtype="float32"), fs=1000)
 
@@ -42,9 +41,8 @@ def test_pad_with_silence_adds_pre_and_post_roll(monkeypatch: pytest.MonkeyPatch
 
     assert padded.shape == (10, 1)
     assert padded.dtype == np.float32
-    np.testing.assert_array_equal(padded[:2], 0)
-    np.testing.assert_array_equal(padded[2:7], 1)
-    np.testing.assert_array_equal(padded[7:], 0)
+    np.testing.assert_array_equal(padded[0:5], 1)
+    np.testing.assert_array_equal(padded[5:], 0)
 
 
 def test_pad_with_silence_preserves_channel_count():
@@ -105,25 +103,6 @@ def test_audio_callback_zero_pads_and_stops_on_final_partial_frame(qtbot: QtBot)
 
     np.testing.assert_array_equal(outdata[:2, 0], [4, 5])
     np.testing.assert_array_equal(outdata[2:, 0], [0, 0])
-
-
-def test_audio_callback_audible_start_includes_pre_roll(
-    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(audio_task_module.time, "monotonic", lambda: 100.0)
-    task = AudioTask(np.zeros(10), fs=1000)
-    task._pre_roll_s = 0.3
-    received = []
-    task.latency.connect(received.append)
-
-    task._audio_callback(
-        np.zeros((4, 1), dtype="float32"),
-        4,
-        make_time_info(1.5, 1.0),
-        sd.CallbackFlags(),
-    )
-
-    assert received[0].audible_start_time == pytest.approx(100.0 + 0.5 + 0.3)
 
 
 def test_audio_callback_aborts_at_end_of_audio_when_should_stop_set(qtbot: QtBot):

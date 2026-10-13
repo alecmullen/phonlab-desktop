@@ -6,11 +6,7 @@ import sounddevice as sd
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.play_audio.entity.latency_info import LatencyInfo
-from res.constants import (
-    PLAYBACK_FINISH_TIMEOUT_MARGIN_S,
-    PLAYBACK_POST_ROLL_S,
-    PLAYBACK_PRE_ROLL_S,
-)
+from res.constants import PLAYBACK_FINISH_TIMEOUT_MARGIN_S, PLAYBACK_POST_ROLL_S
 
 BLOCK_SIZE = 2048
 
@@ -26,7 +22,6 @@ class AudioTask(QObject):
         self._current_offset = 0
         self._is_first_chunk = True
         self._latency = 0.0
-        self._pre_roll_s = 0.0
 
         self._should_stop = False
 
@@ -42,10 +37,6 @@ class AudioTask(QObject):
 
         # Fresh OutputStream with currently selected system default
         with self._open_stream(self._fs, self._audio_data.shape[1]):
-            # The stream sets this event itself once the audio has played out
-            # (or been aborted), so the timeout is only a safety net. It must
-            # allow for the variable delay before the first callback; closing
-            # the stream early would cut off the queued tail of the audio.
             self._finished_event.wait(
                 timeout=(len(self._audio_data) / self._fs)
                 + PLAYBACK_FINISH_TIMEOUT_MARGIN_S
@@ -54,15 +45,11 @@ class AudioTask(QObject):
 
     def _pad_with_silence(self, audio_data: np.ndarray) -> np.ndarray:
         channels = audio_data.shape[1]
-        pre = np.zeros(
-            (round(PLAYBACK_PRE_ROLL_S * self._fs), channels), dtype="float32"
-        )
         post = np.zeros(
             (round(PLAYBACK_POST_ROLL_S * self._fs), channels), dtype="float32"
         )
-        self._pre_roll_s = PLAYBACK_PRE_ROLL_S
         return np.ascontiguousarray(
-            np.concatenate([pre, audio_data.astype("float32", copy=False), post])
+            np.concatenate([audio_data.astype("float32", copy=False), post])
         )
 
     def _audio_callback(
@@ -74,7 +61,7 @@ class AudioTask(QObject):
     ):
         if self._is_first_chunk:
             self._latency = time_info.outputBufferDacTime - time_info.currentTime  # ty: ignore[unresolved-attribute]
-            audible_start_time = time.monotonic() + self._latency + self._pre_roll_s
+            audible_start_time = time.monotonic() + self._latency
             self.latency.emit(LatencyInfo(self._latency, audible_start_time))
             self._is_first_chunk = False
 
