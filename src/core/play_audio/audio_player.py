@@ -89,6 +89,8 @@ class AudioPlayer(QObject):
         self.poll_timer.stop()
 
     def stop(self):
+        if self.poll_timer.isActive():
+            self._poll_playback()
         if self._audio_worker is not None:
             self._audio_worker.stop()
         self.poll_timer.stop()

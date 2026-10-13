@@ -178,3 +178,25 @@ def test_stop_stops_worker_and_timer(player: AudioPlayer):
 
     assert player._audio_worker.stop_calls == 1
     assert player.poll_timer.isActive() is False
+
+
+def test_stop_emits_final_poll_with_current_time_while_playing(player: AudioPlayer):
+    received = []
+    player.playback_poll.connect(received.append)
+    player._start_time = 2.0
+    player.poll_timer.start()
+
+    player.stop()
+
+    assert len(received) == 1
+    assert received[0].is_playing is True
+    assert received[0].current_time == 2.0
+
+
+def test_stop_does_not_emit_poll_when_not_playing(player: AudioPlayer):
+    received = []
+    player.playback_poll.connect(received.append)
+
+    player.stop()
+
+    assert received == []

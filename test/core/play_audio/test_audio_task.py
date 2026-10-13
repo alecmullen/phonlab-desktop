@@ -30,6 +30,29 @@ def test_init_keeps_multichannel_audio_shape_unchanged():
     assert task._audio_data.shape == (5, 2)
 
 
+# --------------------------- _pad_with_silence ---------------------------
+
+
+def test_pad_with_silence_adds_post_roll(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(audio_task_module, "PLAYBACK_POST_ROLL_S", 0.003)
+    task = AudioTask(np.ones(5, dtype="float32"), fs=1000)
+
+    padded = task._pad_with_silence(task._audio_data)
+
+    assert padded.shape == (8, 1)
+    assert padded.dtype == np.float32
+    np.testing.assert_array_equal(padded[0:5], 1)
+    np.testing.assert_array_equal(padded[5:], 0)
+
+
+def test_pad_with_silence_preserves_channel_count():
+    task = AudioTask(np.ones((5, 2), dtype="float32"), fs=1000)
+
+    padded = task._pad_with_silence(task._audio_data)
+
+    assert padded.shape[1] == 2
+
+
 # --------------------------- _audio_callback ---------------------------
 
 
@@ -69,17 +92,29 @@ def test_audio_callback_copies_full_frame_and_advances_offset(qtbot: QtBot):
     assert task._current_offset == 4
 
 
-def test_audio_callback_zero_pads_and_aborts_on_final_partial_frame(qtbot: QtBot):
+def test_audio_callback_zero_pads_and_stops_on_final_partial_frame(qtbot: QtBot):
     task = AudioTask(np.arange(6, dtype="float32"), fs=1000)
     task._is_first_chunk = False
     task._current_offset = 4
     outdata = np.full((4, 1), -1.0, dtype="float32")
 
-    with pytest.raises(sd.CallbackAbort):
+    with pytest.raises(sd.CallbackStop):
         task._audio_callback(outdata, 4, make_time_info(), sd.CallbackFlags())
 
     np.testing.assert_array_equal(outdata[:2, 0], [4, 5])
     np.testing.assert_array_equal(outdata[2:, 0], [0, 0])
+
+
+def test_audio_callback_aborts_at_end_of_audio_when_should_stop_set(qtbot: QtBot):
+    task = AudioTask(np.arange(6, dtype="float32"), fs=1000)
+    task._is_first_chunk = False
+    task._current_offset = 4
+    task._should_stop = True
+
+    with pytest.raises(sd.CallbackAbort):
+        task._audio_callback(
+            np.zeros((4, 1), dtype="float32"), 4, make_time_info(), sd.CallbackFlags()
+        )
 
 
 def test_audio_callback_aborts_immediately_when_should_stop_set(qtbot: QtBot):
