@@ -84,7 +84,7 @@ Audio can be edited by copy and paste. Select a chunk of audio to copy or cut it
     - **Remove Mark**
     - **Zoom to Selection**
     - **Deselect**
-    - **Recenter**
+    - **Recenter**: Recenter on selection or mark
   - Audio Wave
     - **Audio Info**
     - **Scale**: Scale audio
