@@ -6,6 +6,7 @@ import sounddevice as sd
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.play_audio.entity.latency_info import LatencyInfo
+from res.constants import PLAYBACK_FINISH_TIMEOUT_MARGIN_S, PLAYBACK_POST_ROLL_S
 
 BLOCK_SIZE = 2048
 
@@ -32,12 +33,24 @@ class AudioTask(QObject):
             sd._terminate()
             sd._initialize()
 
-        self._audio_data = np.ascontiguousarray(self._audio_data, dtype="float32")
+        self._audio_data = self._pad_with_silence(self._audio_data)
 
         # Fresh OutputStream with currently selected system default
         with self._open_stream(self._fs, self._audio_data.shape[1]):
-            self._finished_event.wait(timeout=(len(self._audio_data) / self._fs) + 0.02)
+            self._finished_event.wait(
+                timeout=(len(self._audio_data) / self._fs)
+                + PLAYBACK_FINISH_TIMEOUT_MARGIN_S
+            )
             time.sleep(self._latency)
+
+    def _pad_with_silence(self, audio_data: np.ndarray) -> np.ndarray:
+        channels = audio_data.shape[1]
+        post = np.zeros(
+            (round(PLAYBACK_POST_ROLL_S * self._fs), channels), dtype="float32"
+        )
+        return np.ascontiguousarray(
+            np.concatenate([audio_data.astype("float32", copy=False), post])
+        )
 
     def _audio_callback(
         self,
@@ -63,7 +76,11 @@ class AudioTask(QObject):
                 outdata[:remainder, :] = self._audio_data[self._current_offset :]
                 outdata[remainder:, :].fill(0)
 
-            raise sd.CallbackAbort()
+            # CallbackStop drains already-queued audio (needed for devices with
+            # deep output buffers, e.g. Bluetooth); abort only on user stop.
+            if self._should_stop:
+                raise sd.CallbackAbort()
+            raise sd.CallbackStop()
 
     def _open_stream(self, fs: int, channels: int) -> sd.OutputStream:
         """Open an OutputStream, falling back to a more conservative latency
