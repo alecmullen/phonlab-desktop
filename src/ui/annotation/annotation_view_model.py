@@ -1,3 +1,4 @@
+import bisect
 import logging
 from dataclasses import replace
 
@@ -117,28 +118,43 @@ class AnnotationViewModel(ViewModel):
         return annotation
 
     def delete_node(self, node: int):
-        self._delete_node_in_state(node, self.annotation_state)
-        self._delete_node_in_state(node, self.annotation_view_state)
-
-    def _delete_node_in_state(self, node: int, annotation: AnnotationState):
+        annotation = replace(self.annotation_state)
         if node not in annotation.nodes:
             raise ValueError("Can't find node to delete")
-        node_state = annotation.nodes[node]
-        before_labels: dict[int, list[AnnotationLabelState]] = {}
-        after_labels: dict[int, list[AnnotationLabelState]] = {}
-        new_labels: dict[int, list[AnnotationLabelState]] = {}
+        node_state = self.annotation_view_state.nodes[node]
+
+        before_labels: list[set[AnnotationLabelState]] = [
+            set() for _ in range(len(annotation.types))
+        ]
+        after_labels: list[set[AnnotationLabelState]] = [
+            set() for _ in range(len(annotation.types))
+        ]
+        point_labels: list[set[AnnotationLabelState]] = [
+            set() for _ in range(len(annotation.types))
+        ]
+
+        new_labels: list[list[AnnotationLabelState]] = [
+            [] for _ in range(len(annotation.types))
+        ]
         for extent in node_state.extents:
             tier = extent.tier
-            before_labels[tier] = [
-                label for label in annotation.types[tier].labels if label.e_node == node
-            ]
-            after_labels[tier] = [
-                label for label in annotation.types[tier].labels if label.s_node == node
-            ]
+            before_labels[tier] = set()
+            after_labels[tier] = set()
+            point_labels[tier] = set()
+            for label in annotation.types[tier].labels:
+                if label.e_node == node and label.s_node == node:
+                    point_labels[tier].add(label)
+                elif label.e_node == node:
+                    before_labels[tier].add(label)
+                elif label.s_node == node:
+                    after_labels[tier].add(label)
 
             if len(before_labels[tier]) == len(after_labels[tier]) == 1:
                 # Mash labels
-                before, after = before_labels[tier][0], after_labels[tier][0]
+                before, after = (
+                    next(iter(before_labels[tier])),
+                    next(iter(after_labels[tier])),
+                )
                 new_labels[tier] = [
                     AnnotationLabelState(
                         before.id,
@@ -148,5 +164,43 @@ class AnnotationViewModel(ViewModel):
                     )
                 ]
             else:
-                # Let overlap (they already are)
-                pass
+                ordered_nodes = sorted(
+                    annotation.nodes, key=lambda node: annotation.nodes[node].x
+                )
+                node_idx = bisect.bisect_left(ordered_nodes, node)
+
+                before_node, after_node = None, None
+                if node_idx > 0:
+                    before_node = ordered_nodes[node_idx - 1]
+                if node_idx < len(ordered_nodes) - 1:
+                    after_node = ordered_nodes[node_idx + 1]
+
+                if (
+                    len(before_labels[tier]) > 0
+                    and after_node is None
+                    or len(after_labels[tier]) > 0
+                    and before_node is None
+                ):
+                    self.state_changed.emit(
+                        StatusMessageState(
+                            self.tr("Cannot delete end node with attached label")
+                        )
+                    )
+                    return
+
+                new_labels[tier] = []
+                for before_label in before_labels[tier]:
+                    new_labels[tier].append(replace(before_label, e_node=after_node))
+                for after_label in after_labels[tier]:
+                    new_labels[tier].append(replace(after_label, s_node=before_node))
+
+        for tier in range(len(annotation.types)):
+            for label in iter(
+                before_labels[tier] | after_labels[tier] | point_labels[tier]
+            ):
+                annotation.types[tier].labels.remove(label)
+            for label in new_labels[tier]:
+                annotation.types[tier].labels.append(label)
+
+        self.annotation_state = annotation
+        self.update_annotation_change()

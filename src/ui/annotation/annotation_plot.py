@@ -144,8 +144,11 @@ class AnnotationPlot(DocumentPlot):
     def keyPressEvent(self, a0: QKeyEvent | None):
         if a0 is None:
             return
-        if a0.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
-            print("DELETED NODE")
+        if (
+            a0.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
+            and self.selected_node is not None
+        ):
+            self.view_model.delete_node(self.selected_node)
             a0.accept()
         else:
             a0.ignore()

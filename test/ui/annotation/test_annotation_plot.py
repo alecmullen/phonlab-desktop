@@ -509,11 +509,15 @@ def test_mouse_release_without_drag_keeps_selection(qtbot: QtBot):
 
 
 @pytest.mark.parametrize("key", [Qt.Key.Key_Delete, Qt.Key.Key_Backspace])
-def test_delete_keys_are_accepted(qtbot: QtBot, key: Qt.Key):
-    plot = AnnotationPlot(AnnotationViewModel())
+def test_delete_keys_are_accepted_when_node_selected(qtbot: QtBot, key: Qt.Key):
+    view_model = AnnotationViewModel()
+    view_model.delete_node = lambda x: None
+
+    plot = AnnotationPlot(view_model)
     event = _key_event(key)
     event.ignore()
 
+    plot.selected_node = 0
     plot.keyPressEvent(event)
 
     assert event.isAccepted()
