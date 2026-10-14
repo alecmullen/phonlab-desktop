@@ -12,7 +12,7 @@ dependencies = [
     "pyqt6==6.11",
     "pyqt6-sip==13.12",
     "pyqtgraph==0.14",
-    "scipy==1.15",
+    "scipy~=1.16.3",
     "sounddevice==0.5.5",
     "soundfile==0.13.1",
 ]
