@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSlot
 from PyQt6.QtWidgets import QCheckBox, QGraphicsProxyWidget, QPushButton, QWidget
 from pyqtgraph import PlotDataItem
 
@@ -57,7 +57,7 @@ class AudioWavePlot(DocumentPlot):
                 "QPushButton { border: none; color: #888; font-weight: bold; }"
                 "QPushButton:hover { color: #c00; }"
             )
-            self.delete_button.clicked.connect(self.delete_channel)
+            self.delete_button.clicked.connect(self._on_delete_clicked)
             self.delete_button_proxy = QGraphicsProxyWidget(self)
             self.delete_button_proxy.setWidget(self.delete_button)
             self.delete_button_proxy.setZValue(100)
@@ -182,6 +182,11 @@ class AudioWavePlot(DocumentPlot):
         self.setYRange(-scaled_y_max, scaled_y_max, padding=0)
 
     @pyqtSlot()
+    def _on_delete_clicked(self):
+        # Deleting a channel rebuilds the plots, destroying this button's
+        # QGraphicsProxyWidget. Defer until it has finished handling the click.
+        QTimer.singleShot(0, self.delete_channel)
+
     def delete_channel(self):
         if DeleteChannelDialog.confirm(self.getViewWidget()):
             self.view_model.delete_channel()
