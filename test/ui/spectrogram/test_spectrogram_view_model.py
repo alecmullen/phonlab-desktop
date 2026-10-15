@@ -11,12 +11,15 @@ import ui.spectrogram.spectrogram_view_model as svm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from core.track_formants.entity.formant_track import FormantTrack
 from res.constants import SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
 from ui.base.state import State
 from ui.document.state.audio_channel_state import AudioChannelState
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
+from ui.spectrogram.state.formant_settings import FormantSettingsState
+from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 
@@ -775,3 +778,113 @@ def test_prep_audio_on_success_rescales_window_when_prepped_fs_changes(
     job.on_success({0: AudioSignal(np.zeros(16000), 8000)})
 
     assert view_model.window_state == SpectrogramWindowState(4000, 15999)
+
+
+# --------------------------- formants ---------------------------
+
+
+class FakeTrackFormants:
+    instances: ClassVar[list["FakeTrackFormants"]] = []
+
+    def __init__(self, *args: object):
+        self.args = args
+        FakeTrackFormants.instances.append(self)
+
+
+@pytest.fixture
+def fake_track_formants(monkeypatch: pytest.MonkeyPatch) -> type[FakeTrackFormants]:
+    FakeTrackFormants.instances = []
+    monkeypatch.setattr(svm_module, "TrackFormants", FakeTrackFormants)
+    return FakeTrackFormants
+
+
+def make_formant_view_model() -> SpectrogramViewModel:
+    view_model = SpectrogramViewModel()
+    view_model.raw_audio_state = AudioChannelState(np.zeros(4000), 1000)
+    view_model.prepped_audio_state = AudioChannelState(np.zeros(8000), 2000)
+    view_model.window_state = SpectrogramWindowState(2000, 6000)  # 1 s to 3 s
+    return view_model
+
+
+def test_track_formants_uses_raw_audio_under_window(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+    fake_track_formants: type[FakeTrackFormants],
+):
+    view_model = make_formant_view_model()
+    settings = FormantSettingsState(0.9, 80, 300, 2)
+
+    view_model.track_formants(settings)
+
+    assert view_model.formant_settings == settings
+    x, fs, *params = fake_track_formants.instances[0].args
+    assert len(x) == 2000
+    assert fs == 1000
+    assert params == [0.9, 80, 300, 2]
+
+
+def test_track_formants_emits_track_at_absolute_times(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+    fake_track_formants: type[FakeTrackFormants],
+):
+    view_model = make_formant_view_model()
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.track_formants(FormantSettingsState())
+    assert any(isinstance(s, LoadProgressState) and s.is_loading for s in received)
+
+    job = view_model.job_managers["formants"].jobs[0]
+    job.on_success(FormantTrack(np.array([0.01, 0.02]), np.ones((2, 4))))
+
+    track = received[-1]
+    assert isinstance(track, FormantTrackState)
+    np.testing.assert_allclose(track.sec, [1.01, 1.02])
+    assert received[-2] == LoadProgressState(False)
+
+
+def test_track_formants_does_nothing_without_audio(
+    qtbot: QtBot, fake_track_formants: type[FakeTrackFormants]
+):
+    view_model = SpectrogramViewModel()
+
+    view_model.track_formants(FormantSettingsState())
+
+    assert fake_track_formants.instances == []
+
+
+def test_clear_formants_discards_pending_track(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+    fake_track_formants: type[FakeTrackFormants],
+):
+    view_model = make_formant_view_model()
+    view_model.track_formants(FormantSettingsState())
+    job = view_model.job_managers["formants"].jobs[0]
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.clear_formants()
+    job.on_success(FormantTrack(np.array([0.01]), np.ones((1, 4))))
+
+    assert received[0] == LoadProgressState(False)
+    assert isinstance(received[1], FormantTrackState)
+    assert len(received[1].sec) == 0
+    assert len(received) == 2
+
+
+def test_track_formants_error_stops_progress(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+    fake_track_formants: type[FakeTrackFormants],
+):
+    view_model = make_formant_view_model()
+    view_model.track_formants(FormantSettingsState())
+    job = view_model.job_managers["formants"].jobs[0]
+    received = []
+    view_model.subscribe(received.append)
+
+    job.on_error(RuntimeError("boom"))
+
+    assert received == [LoadProgressState(False)]
