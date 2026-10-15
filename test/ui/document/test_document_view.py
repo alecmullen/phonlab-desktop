@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
@@ -1189,3 +1190,24 @@ def test_paste_special_reverses_clip_when_requested(
 
     np.testing.assert_array_equal(pasted[0].channels[0].x, original[::-1])
     np.testing.assert_array_equal(clip.channels[0].x, original)  # not mutated
+
+
+def test_delete_button_mouse_click_converts_to_mono(
+    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    """A real click reaches the button through its QGraphicsProxyWidget, which
+    must not be destroyed while it is still handling the mouse release."""
+    monkeypatch.setattr(
+        DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
+    )
+    proxy = stereo_loaded_view.document_plots[1].delete_button_proxy
+    graphics_widget = stereo_loaded_view.graphics_widget
+    viewport_pos = graphics_widget.mapFromScene(proxy.sceneBoundingRect().center())
+
+    QTest.mouseClick(
+        graphics_widget.viewport(), Qt.MouseButton.LeftButton, pos=viewport_pos
+    )
+    QApplication.processEvents()
+
+    assert stereo_loaded_view.view_model.stereo_channels() is None
+    assert len(stereo_loaded_view.document_plots) == 1
