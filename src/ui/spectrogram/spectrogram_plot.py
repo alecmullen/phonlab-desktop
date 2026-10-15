@@ -7,10 +7,12 @@ from res.constants import MAX_SGRAM_LENGTH
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
+from ui.spectrogram.component.formant_settings_dialog import FormantSettingsDialog
 from ui.spectrogram.component.spectrogram_settings_dialog import (
     SpectrogramSettingsDialog,
 )
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
+from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 
 
@@ -37,6 +39,11 @@ class SpectrogramPlot(DocumentPlot):
         lut = pg.colormap.get("CET-L1").getLookupTable(nPts=256)[::-1]
         self.spec_img.setLookupTable(lut)
 
+        self.formant_dots = pg.ScatterPlotItem(
+            pen=None, brush=pg.mkBrush("r"), size=4, pxMode=True
+        )
+        self.addItem(self.formant_dots, ignoreBounds=True)
+
         self.center_label = pg.LabelItem(
             self.tr(
                 "Zoom to a chunk of {} seconds or shorter to see spectrogram"
@@ -62,12 +69,35 @@ class SpectrogramPlot(DocumentPlot):
 
         self.getViewBox().menu.addAction(open_settings_action)
 
+        self.track_formants_action = ContextMenuHintAction(
+            self.tr("Track formants..."), parent=self
+        )
+        self.track_formants_action.triggered.connect(self.open_formant_dialog)
+        self.track_formants_action.setEnabled(False)
+        self.getViewBox().menu.addAction(self.track_formants_action)
+
+        clear_formants_action = ContextMenuHintAction(
+            self.tr("Clear formants"), parent=self
+        )
+        clear_formants_action.triggered.connect(self.view_model.clear_formants)
+        self.getViewBox().menu.addAction(clear_formants_action)
+
     @pyqtSlot(object)
     def on_state_change(self, model: State):
         if isinstance(model, SpectrogramState):
             self.plot_spectrogram(model)
+        elif isinstance(model, FormantTrackState):
+            self.plot_formants(model)
+
+    def plot_formants(self, track: FormantTrackState):
+        """Draw F1-F4 as red dots; frames without a measurement are skipped."""
+        t = np.repeat(track.sec, track.formants.shape[1])
+        f = track.formants.reshape(-1)
+        valid = np.isfinite(f)
+        self.formant_dots.setData(x=t[valid], y=f[valid])
 
     def plot_spectrogram(self, sgram: SpectrogramState):
+        self.track_formants_action.setEnabled(sgram.is_showing)
         if not sgram.is_showing and not sgram.is_loading:
             self.display_window_too_big()
         elif sgram.is_showing:
@@ -114,6 +144,14 @@ class SpectrogramPlot(DocumentPlot):
             adjustment = delta * 0.01
 
         self.view_model.adjust_gray_scale(adjustment)
+
+    @pyqtSlot()
+    def open_formant_dialog(self):
+        settings = FormantSettingsDialog.open_formant_settings(
+            self.view_model.formant_settings
+        )
+        if settings is not None:
+            self.view_model.track_formants(settings)
 
     @pyqtSlot()
     def open_settings_dialog(self):
