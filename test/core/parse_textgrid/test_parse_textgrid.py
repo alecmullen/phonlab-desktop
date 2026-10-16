@@ -4,11 +4,11 @@ import pytest
 
 from core.parse_textgrid.annotation import AnnotationLabel
 from core.parse_textgrid.parse_textgrid import (
-    SAME_NODE_THRESHOLD,
     ParseTextGrid,
     ParseTextGridError,
     add_node_time,
 )
+from res.constants import SAME_NODE_THRESHOLD
 
 SIMPLE_TEXTGRID = """File type = "ooTextFile"
 Object class = "TextGrid"

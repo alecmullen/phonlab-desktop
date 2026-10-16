@@ -1,6 +1,6 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtGui import QFont, QFontMetrics, QKeyEvent, QShowEvent
+from PyQt6.QtGui import QFocusEvent, QFont, QFontMetrics, QKeyEvent, QShowEvent
 from PyQt6.QtWidgets import QGraphicsSceneMouseEvent, QWidget
 
 from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
@@ -11,6 +11,7 @@ from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_state import AnnotationState
 from ui.base.state import State
+from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 
 
@@ -31,6 +32,7 @@ class AnnotationPlot(DocumentPlot):
         self.getAxis("top").setTicks([])
 
         self.getViewBox().menu.clear()
+        self.set_up_menu()
         self.ctrlMenu.menuAction().setVisible(False)
 
         self.visible_nodes: list[AnnotationNodeState] = []
@@ -40,6 +42,14 @@ class AnnotationPlot(DocumentPlot):
         self.selected_node: int | None = None
 
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+
+    def set_up_menu(self):
+        create_label_action = ContextMenuHintAction(self.tr(""), parent=self)
+        create_label_action.triggered.connect(
+            self.view_model.create_label_from_selection
+        )
+
+        self.getViewBox().menu.addAction(create_label_action)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -99,6 +109,10 @@ class AnnotationPlot(DocumentPlot):
         node_view.setPos(0, 0)
         self.addItem(node_view)
 
+    def unselect_node(self):
+        self.selected_node = None
+        self.populate(self.view_model.annotation_view_state)
+
     def mousePressEvent(self, a0: QGraphicsSceneMouseEvent | None):
         if a0 is None:
             return
@@ -127,6 +141,11 @@ class AnnotationPlot(DocumentPlot):
             self.populate(self.view_model.annotation_view_state)
             a0.accept()
         else:
+            a0.ignore()
+
+    def focusOutEvent(self, a0: QFocusEvent | None):
+        if a0 is not None:
+            self.unselect_node()
             a0.ignore()
 
     def handle_single_click(self, scene_pos: QPointF) -> bool:

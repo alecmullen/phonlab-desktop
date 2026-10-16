@@ -1,7 +1,7 @@
 import logging
 from dataclasses import replace
 
-from core.parse_textgrid.annotation import Annotation
+from core.parse_textgrid.annotation import Annotation, get_matching_node
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
@@ -183,3 +183,9 @@ class AnnotationViewModel(ViewModel):
             for label in labels
             if label.id in replacements or node not in (label.s_node, label.e_node)
         ]
+
+    def create_label_from_selection(self):
+        start, end = self.window_state
+
+        s_node = get_matching_node(self.annotation_state.nodes, start)
+        e_node = get_matching_node(self.annotation_state.nodes, end)
