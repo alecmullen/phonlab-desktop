@@ -1,13 +1,16 @@
 import logging
 from dataclasses import replace
 
-from core.parse_textgrid.annotation import Annotation, get_matching_node
+from core.annotation.create_label import CreateLabel
+from core.annotation.delete_node import DeleteEndNodeError, DeleteNode
+from core.annotation.entity.annotation import Annotation
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import (
     AnnotationState,
+    to_annotation,
     to_annotation_state,
     update_annotation_state_from_window,
 )
@@ -117,75 +120,23 @@ class AnnotationViewModel(ViewModel):
         return annotation
 
     def delete_node(self, node: int):
-        if node not in self.annotation_state.nodes:
-            raise ValueError("Can't find node to delete")
-
-        types = []
-        for type in self.annotation_state.types:
-            try:
-                labels = self._labels_without_node(node, type.labels)
-            except ValueError as e:
-                self.state_changed.emit(StatusMessageState(str(e)))
-                return
-            types.append(replace(type, labels=labels))
-
-        nodes = {
-            key: value
-            for key, value in self.annotation_state.nodes.items()
-            if key != node
-        }
-        self.annotation_state = AnnotationState(nodes=nodes, types=types)
-        self.update_annotation_change()
-
-    def _labels_without_node(
-        self, node: int, labels: list[AnnotationLabelState]
-    ) -> list[AnnotationLabelState]:
-        """Returns the tier's labels with `node` removed, or None if the node is
-        an end node of the tier with an interval label attached."""
-        before = [
-            label for label in labels if label.e_node == node and label.s_node != node
-        ]
-        after = [
-            label for label in labels if label.s_node == node and label.e_node != node
-        ]
-
-        if len(before) == len(after) == 1:
-            replacements = {
-                before[0].id: replace(
-                    before[0],
-                    e_node=after[0].e_node,
-                    label=before[0].label + after[0].label,
+        use_case = DeleteNode(to_annotation(self.annotation_state), node)
+        try:
+            annotation = use_case.invoke()
+        except DeleteEndNodeError:
+            self.state_changed.emit(
+                StatusMessageState(
+                    self.tr("Cannot delete end node with attached label")
                 )
-            }
-        else:
-            tier_nodes = sorted(
-                {n for label in labels for n in (label.s_node, label.e_node)},
-                key=lambda n: (self.annotation_state.nodes[n].x, n),
             )
-            if node not in tier_nodes:
-                return list(labels)
-
-            node_idx = tier_nodes.index(node)
-            before_node = tier_nodes[node_idx - 1] if node_idx > 0 else None
-            after_node = (
-                tier_nodes[node_idx + 1] if node_idx < len(tier_nodes) - 1 else None
-            )
-
-            if (before and after_node is None) or (after and before_node is None):
-                raise ValueError(self.tr("Cannot delete end node with attached label"))
-
-            replacements = {
-                label.id: replace(label, e_node=after_node) for label in before
-            } | {label.id: replace(label, s_node=before_node) for label in after}
-
-        return [
-            replacements.get(label.id, label)
-            for label in labels
-            if label.id in replacements or node not in (label.s_node, label.e_node)
-        ]
+            return
+        self.annotation_state = to_annotation_state(annotation)
+        self.update_annotation_change()
 
     def create_label_from_selection(self):
         start, end = self.window_state
+        use_case = CreateLabel(to_annotation(self.annotation_state), start, end)
+        annotation = use_case.invoke()
 
-        s_node = get_matching_node(self.annotation_state.nodes, start)
-        e_node = get_matching_node(self.annotation_state.nodes, end)
+        self.annotation_state = to_annotation_state(annotation)
+        self.update_annotation_change()

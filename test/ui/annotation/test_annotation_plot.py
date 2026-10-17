@@ -6,7 +6,11 @@ from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent, QMouseEvent, QShowEvent
 from pytestqt.qtbot import QtBot
 
-from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+)
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.component.node_view import NodeView
@@ -193,7 +197,7 @@ def test_view_model_state_change_triggers_populate(qtbot: QtBot):
 
     state = Annotation(
         nodes={0: 0.0, 1: 1.0},
-        types=[AnnotationType("word", [AnnotationLabel(0, 1, "hi")])],
+        types=[AnnotationType("word", [AnnotationLabel(0, 0, 1, "hi")])],
     )
 
     view_model.set_annotation_state(state)

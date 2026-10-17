@@ -18,15 +18,22 @@ class NodeView(pg.GraphicsObject):
         self.nodes = nodes
         self.selected_node = selected_node
 
+        self.parent_plot = parent_plot
         self.view_rect: QRectF = parent_plot.getViewBox().viewRect()
         self.setPos(self.view_rect.left(), self.view_rect.bottom())
 
+        self._plot_all_circles()
+
+        self.pic = QPicture()
+        self._generate_picture()
+
+    def _plot_all_circles(self):
         blue_xs = []
         blue_ys = []
         red_xs = []
         red_ys = []
 
-        for node in nodes:
+        for node in self.nodes:
             if node.node != self.selected_node:
                 blue_xs.append(node.x)
                 blue_ys.append(node.extents[0].tier)
@@ -37,9 +44,6 @@ class NodeView(pg.GraphicsObject):
         self._plot_circles(blue_xs, blue_ys, "b")
         if len(red_xs) > 0:
             self._plot_circles(red_xs, red_ys, "r")
-
-        self.pic = QPicture()
-        self._generate_picture()
 
     def _plot_circles(self, xs: list[float], ys: list[int], color: str):
         circles = pg.PlotDataItem(
@@ -105,6 +109,15 @@ class NodeView(pg.GraphicsObject):
             painter.drawPath(dotted_path)
 
         painter.end()
+
+    def set_selected_node(self, node: int | None):
+        self.selected_node = node
+        self._generate_picture()
+        for item in self.allChildItems():
+            if isinstance(item, pg.PlotDataItem):
+                self.parent_plot.removeItem(item)
+        self._plot_all_circles()
+        self.update()
 
     def paint(
         self,
