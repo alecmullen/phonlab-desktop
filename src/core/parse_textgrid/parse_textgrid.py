@@ -1,12 +1,14 @@
+import bisect
+
 import phonlab as phon
 
-from core.base.use_case_sync import UseCaseSync
-from core.parse_textgrid.annotation import (
+from core.annotation.entity.annotation import (
     Annotation,
+    AnnotationLabel,
     AnnotationType,
     add_node_time,
-    to_label,
 )
+from core.base.use_case_sync import UseCaseSync
 
 INTERVAL_TIER_NAME = "IntervalTier"
 POINT_TIER_NAME = "TextTier"
@@ -35,10 +37,22 @@ class ParseTextGrid(UseCaseSync):
                 types=[
                     AnnotationType(
                         tier["name"],
-                        [to_label(node_times, label) for label in tier["labels"]],
+                        [
+                            to_label(node_times, idx, label)
+                            for idx, label in enumerate(tier["labels"])
+                        ],
                     )
                     for tier in tiers
                 ],
             )
         except Exception as err:
             raise ParseTextGridError from err
+
+
+def to_label(node_times: list[float], id: int, label: tuple) -> AnnotationLabel:
+    s_node = bisect.bisect_left(node_times, label[0])
+    if label[1] is None:
+        e_node = s_node
+    else:
+        e_node = bisect.bisect_left(node_times, label[1])
+    return AnnotationLabel(id, s_node, e_node, label[2])

@@ -7,6 +7,7 @@ from ui.base.state import State
 
 @dataclass(frozen=True)
 class AnnotationLabel(State):
+    id: int
     s_node: int
     e_node: int
     label: str
@@ -25,8 +26,10 @@ class Annotation(State):
 
 
 def get_matching_node(nodes: dict[int, float], new_time: float) -> int | None:
+    node_ids: tuple[int]
+    node_times: tuple[float]
     node_ids, node_times = zip(*sorted(nodes.items(), key=lambda item: item[1]))
-    return _get_matching_node(node_ids, node_times, new_time)
+    return _get_matching_node(list(node_ids), list(node_times), new_time)
 
 
 def _get_matching_node(
@@ -48,18 +51,9 @@ def add_node_time(node_times: list[float], new_time: float | None) -> list[float
     if new_time is None:
         return node_times
 
-    node = _get_matching_node(range(len(node_times)), node_times, new_time)
+    node = _get_matching_node(list(range(len(node_times))), node_times, new_time)
 
     if node is None:
         bisect.insort(node_times, new_time)
 
     return node_times
-
-
-def to_label(node_times: list[float], label: tuple) -> AnnotationLabel:
-    s_node = bisect.bisect_left(node_times, label[0])
-    if label[1] is None:
-        e_node = s_node
-    else:
-        e_node = bisect.bisect_left(node_times, label[1])
-    return AnnotationLabel(s_node, e_node, label[2])

@@ -1,4 +1,8 @@
-from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+)
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_state import (
     AnnotationLabelState,
@@ -14,8 +18,8 @@ def test_to_annotation_state_converts_nodes_and_types():
             AnnotationType(
                 type="word",
                 labels=[
-                    AnnotationLabel(0, 1, "hello"),
-                    AnnotationLabel(1, 2, "world"),
+                    AnnotationLabel(1, 0, 1, "hello"),
+                    AnnotationLabel(2, 1, 2, "world"),
                 ],
             )
         ],
@@ -43,7 +47,7 @@ def test_to_annotation_state_converts_multiple_types():
     annotation = Annotation(
         nodes={0: 0.0, 1: 1.0},
         types=[
-            AnnotationType("word", [AnnotationLabel(0, 1, "hi")]),
+            AnnotationType("word", [AnnotationLabel(1, 0, 1, "hi")]),
             AnnotationType("phone", []),
         ],
     )

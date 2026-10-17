@@ -111,7 +111,10 @@ class AnnotationPlot(DocumentPlot):
 
     def unselect_node(self):
         self.selected_node = None
-        self.populate(self.view_model.annotation_view_state)
+        node_view = next(
+            item for item in self.allChildItems() if isinstance(item, NodeView)
+        )
+        node_view.set_selected_node(None)
 
     def mousePressEvent(self, a0: QGraphicsSceneMouseEvent | None):
         if a0 is None:
@@ -145,7 +148,8 @@ class AnnotationPlot(DocumentPlot):
 
     def focusOutEvent(self, a0: QFocusEvent | None):
         if a0 is not None:
-            self.unselect_node()
+            if self.selected_node is not None:
+                self.unselect_node()
             a0.ignore()
 
     def handle_single_click(self, scene_pos: QPointF) -> bool:

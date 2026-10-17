@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from core.parse_textgrid.annotation import AnnotationLabel
+from core.annotation.entity.annotation import AnnotationLabel
 from core.parse_textgrid.parse_textgrid import (
     ParseTextGrid,
     ParseTextGridError,
@@ -122,8 +122,8 @@ def test_invoke_parses_single_tier_textgrid(tmp_path: Path):
     assert len(result.types) == 1
     assert result.types[0].type == "word"
     assert result.types[0].labels == [
-        AnnotationLabel(0, 1, "hello"),
-        AnnotationLabel(1, 2, "world"),
+        AnnotationLabel(0, 0, 1, "hello"),
+        AnnotationLabel(1, 1, 2, "world"),
     ]
 
 
@@ -134,10 +134,10 @@ def test_invoke_parses_multiple_tiers_sharing_nodes(tmp_path: Path):
 
     assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
     assert [t.type for t in result.types] == ["word", "phone"]
-    assert result.types[0].labels == [AnnotationLabel(0, 2, "hi")]
+    assert result.types[0].labels == [AnnotationLabel(0, 0, 2, "hi")]
     assert result.types[1].labels == [
-        AnnotationLabel(0, 1, "h"),
-        AnnotationLabel(1, 2, "ay"),
+        AnnotationLabel(0, 0, 1, "h"),
+        AnnotationLabel(1, 1, 2, "ay"),
     ]
 
 
@@ -165,8 +165,8 @@ def test_invoke_parses_point_tier(tmp_path: Path):
     assert result.types[0].type == "mark"
     # a point's start and end node are the same, since it has zero duration
     assert result.types[0].labels == [
-        AnnotationLabel(0, 0, "a"),
-        AnnotationLabel(1, 1, "b"),
+        AnnotationLabel(0, 0, 0, "a"),
+        AnnotationLabel(1, 1, 1, "b"),
     ]
 
 
@@ -191,10 +191,10 @@ def test_invoke_reads_utf_16_file(tmp_path: Path):
 
     assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
     assert [t.type for t in result.types] == ["word", "phone"]
-    assert result.types[0].labels == [AnnotationLabel(0, 2, "hi")]
+    assert result.types[0].labels == [AnnotationLabel(0, 0, 2, "hi")]
     assert result.types[1].labels == [
-        AnnotationLabel(0, 1, "h"),
-        AnnotationLabel(1, 2, "ay"),
+        AnnotationLabel(0, 0, 1, "h"),
+        AnnotationLabel(1, 1, 2, "ay"),
     ]
 
 

@@ -5,7 +5,11 @@ from types import MappingProxyType
 import pytest
 from pytestqt.qtbot import QtBot
 
-from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+)
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import (
@@ -290,7 +294,7 @@ def make_annotation_view_model(
             types=[
                 AnnotationType(
                     f"tier{idx}",
-                    [AnnotationLabel(s, e, label) for s, e, label in labels],
+                    [AnnotationLabel(id, *label) for id, label in enumerate(labels)],
                 )
                 for idx, labels in enumerate(tiers)
             ],

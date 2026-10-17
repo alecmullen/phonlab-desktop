@@ -1,7 +1,10 @@
-import itertools
 from dataclasses import dataclass, field
 
-from core.parse_textgrid.annotation import Annotation
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+)
 from ui.annotation.state.annotation_label_state import (
     AnnotationLabelState,
     update_label_state,
@@ -26,8 +29,26 @@ class AnnotationState(State):
     types: list[AnnotationTypeState] = field(default_factory=list)
 
 
+def to_annotation(annotation_state: AnnotationState) -> Annotation:
+    return Annotation(
+        nodes={
+            node_state.node: node_state.x
+            for node_state in annotation_state.nodes.values()
+        },
+        types=[
+            AnnotationType(
+                type.type,
+                [
+                    AnnotationLabel(label.id, label.s_node, label.e_node, label.label)
+                    for label in type.labels
+                ],
+            )
+            for type in annotation_state.types
+        ],
+    )
+
+
 def to_annotation_state(annotation: Annotation) -> AnnotationState:
-    id_generator = itertools.count(start=1)
     return AnnotationState(
         nodes={
             node: AnnotationNodeState(node, x) for node, x in annotation.nodes.items()
@@ -37,7 +58,7 @@ def to_annotation_state(annotation: Annotation) -> AnnotationState:
                 type.type,
                 [
                     AnnotationLabelState(
-                        next(id_generator), label.s_node, label.e_node, label.label
+                        label.id, label.s_node, label.e_node, label.label
                     )
                     for label in type.labels
                 ],
