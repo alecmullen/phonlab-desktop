@@ -395,5 +395,4 @@ def test_delete_button_click_asks_for_confirmation(
     )
 
     plot.delete_button.click()
-
-    assert asked == [True]
+    qtbot.waitUntil(lambda: asked == [True])
