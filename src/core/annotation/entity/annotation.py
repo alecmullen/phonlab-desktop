@@ -29,20 +29,20 @@ def get_matching_node(nodes: dict[int, float], new_time: float) -> int | None:
     node_ids: tuple[int]
     node_times: tuple[float]
     node_ids, node_times = zip(*sorted(nodes.items(), key=lambda item: item[1]))
-    return _get_matching_node(list(node_ids), list(node_times), new_time)
+    return _get_matching_node(list(node_times), new_time, list(node_ids))
 
 
 def _get_matching_node(
-    node_ids: list[int], node_times: list[float], new_time: float
+    node_times: list[float], new_time: float, node_ids: list[int] | None = None
 ) -> int | None:
     """Searches for node with timestamp within threshold of new_time. node_times and node_ids
-    must be sorted by node time"""
+    must be sorted by node time. If node_ids is None, uses index of sorted node_times"""
     idx = bisect.bisect_left(node_times, new_time)
 
     if idx < len(node_times) and abs(node_times[idx] - new_time) < SAME_NODE_THRESHOLD:
-        return node_ids[idx]
+        return node_ids[idx] if node_ids is not None else idx
     if idx - 1 >= 0 and abs(node_times[idx - 1] - new_time) < SAME_NODE_THRESHOLD:
-        return node_ids[idx - 1]
+        return node_ids[idx - 1] if node_ids is not None else idx - 1
 
     return None
 
@@ -51,7 +51,7 @@ def add_node_time(node_times: list[float], new_time: float | None) -> list[float
     if new_time is None:
         return node_times
 
-    node = _get_matching_node(list(range(len(node_times))), node_times, new_time)
+    node = _get_matching_node(node_times, new_time)
 
     if node is None:
         bisect.insort(node_times, new_time)
