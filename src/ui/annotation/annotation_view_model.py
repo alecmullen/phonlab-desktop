@@ -133,9 +133,8 @@ class AnnotationViewModel(ViewModel):
         self.annotation_state = to_annotation_state(annotation)
         self.update_annotation_change()
 
-    def create_label_from_selection(self):
-        start, end = self.window_state
-        use_case = CreateLabel(to_annotation(self.annotation_state), start, end)
+    def create_label_from_selection(self, type: int, start: float, end: float):
+        use_case = CreateLabel(to_annotation(self.annotation_state), type, start, end)
         annotation = use_case.invoke()
 
         self.annotation_state = to_annotation_state(annotation)

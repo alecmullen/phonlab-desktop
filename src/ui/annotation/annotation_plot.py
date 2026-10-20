@@ -1,6 +1,13 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtGui import QFocusEvent, QFont, QFontMetrics, QKeyEvent, QShowEvent
+from PyQt6.QtGui import (
+    QFocusEvent,
+    QFont,
+    QFontMetrics,
+    QKeyEvent,
+    QKeySequence,
+    QShowEvent,
+)
 from PyQt6.QtWidgets import QGraphicsSceneMouseEvent, QWidget
 
 from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
@@ -35,6 +42,8 @@ class AnnotationPlot(DocumentPlot):
         self.set_up_menu()
         self.ctrlMenu.menuAction().setVisible(False)
 
+        self.context_pos: QPointF | None = None
+
         self.visible_nodes: list[AnnotationNodeState] = []
         self.visible_labels: list[AnnotationLabelState] = []
 
@@ -44,11 +53,13 @@ class AnnotationPlot(DocumentPlot):
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
 
     def set_up_menu(self):
-        create_label_action = ContextMenuHintAction(self.tr(""), parent=self)
-        create_label_action.triggered.connect(
-            self.view_model.create_label_from_selection
+        create_label_action = ContextMenuHintAction(
+            self.tr("Create Label"), parent=self
         )
+        create_label_action.setShortcut(QKeySequence("Ctrl+L"))
+        create_label_action.triggered.connect(self.create_label_from_selection)
 
+        self.addAction(create_label_action)
         self.getViewBox().menu.addAction(create_label_action)
 
     @pyqtSlot(object)
@@ -119,11 +130,17 @@ class AnnotationPlot(DocumentPlot):
     def mousePressEvent(self, a0: QGraphicsSceneMouseEvent | None):
         if a0 is None:
             return
+
+        pos = self.getViewBox().mapSceneToView(a0.scenePos())
+
+        if a0.button() == Qt.MouseButton.RightButton:
+            self.context_pos = pos
+            a0.ignore()
+            return
+
         pixel_size = self.getViewBox().viewPixelSize()
         h_margin = NODE_H_MARGIN * pixel_size[0]
         v_margin = NODE_V_MARGIN * pixel_size[1]
-
-        pos = self.getViewBox().mapSceneToView(a0.scenePos())
 
         for node_view_state in self.visible_nodes:
             node_x = node_view_state.x
@@ -188,3 +205,10 @@ class AnnotationPlot(DocumentPlot):
             self.view_model.change_node_state(self.dragging_node, x)
 
         super().on_mouse_moved(pos)
+
+    def create_label_from_selection(self):
+        if self.context_pos is None or not self.selection_region.isVisible():
+            return
+        type = int(self.context_pos.y())
+        start, end = self.selection_region.getRegion()
+        self.view_model.create_label_from_selection(type, start, end)

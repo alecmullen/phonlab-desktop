@@ -10,7 +10,7 @@ class AnnotationLabel(State):
     id: int
     s_node: int
     e_node: int
-    label: str
+    label: str = ""
 
 
 @dataclass(frozen=True)
