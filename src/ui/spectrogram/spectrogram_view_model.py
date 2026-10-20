@@ -9,6 +9,8 @@ from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from core.track_formants.entity.formant_track import FormantTrack
+from core.track_formants.track_formants import TrackFormants
 from core.transform_audio.prep_audio import PrepAudio
 from res.constants import (
     MAX_SGRAM_LENGTH,
@@ -25,6 +27,11 @@ from ui.document.state.audio_channel_state import (
 )
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.spectrogram.state.audio_prepped import AudioPrepped
+from ui.spectrogram.state.formant_settings import FormantSettingsState
+from ui.spectrogram.state.formant_track_state import (
+    FormantTrackState,
+    to_formant_track_state,
+)
 from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
@@ -38,8 +45,10 @@ class SpectrogramViewModel(ViewModel):
         self.prepped_audio_state: AudioChannelState | None = None
         self.sgram_state = SpectrogramState()
         self.window_state = SpectrogramWindowState()
+        self.formant_settings = FormantSettingsState()
 
         self._buffer_generation = 0
+        self._formant_generation = 0
         # Fixed seed: the displayed range is reproducible across app runs and tests
         self._percentile_rng = np.random.default_rng(0)
 
@@ -71,6 +80,7 @@ class SpectrogramViewModel(ViewModel):
             new_state = to_audio_channel_state(prepped[0])
             self._rescale_window(self.prepped_audio_state, new_state)
             self.prepped_audio_state = new_state
+            self.clear_formants()
             self.invalidate_spectrogram()
             self.state_changed.emit(LoadProgressState(False))
             self.state_changed.emit(AudioPrepped())
@@ -209,6 +219,55 @@ class SpectrogramViewModel(ViewModel):
         self.launch_use_case(
             "sgram_mmap", use_case, on_success, self.on_error, only_once=True
         )
+
+    def track_formants(self, settings: FormantSettingsState):
+        """Track formants in the audio under the current window, and emit them
+        as a FormantTrackState. They are dropped when the audio is re-prepped."""
+        self.formant_settings = settings
+
+        if self.raw_audio_state is None or self.prepped_audio_state is None:
+            return
+
+        raw = self.raw_audio_state
+        offset = self.window_state.start / self.prepped_audio_state.fs
+        start = int(offset * raw.fs)
+        end = int(self.window_state.end / self.prepped_audio_state.fs * raw.fs)
+
+        # track_formants does its own resampling and preemphasis, so it takes
+        # the raw audio rather than the spectrogram's prepped audio.
+        use_case = TrackFormants(
+            raw.x[start:end],
+            raw.fs,
+            settings.preemphasis,
+            settings.f0_min,
+            settings.f0_max,
+            settings.speaker,
+        )
+
+        generation = self._formant_generation
+        self.state_changed.emit(LoadProgressState(True))
+
+        @pyqtSlot(object)
+        def on_success(track: FormantTrack):
+            if generation != self._formant_generation:
+                return
+            self.state_changed.emit(LoadProgressState(False))
+            self.state_changed.emit(to_formant_track_state(track, offset))
+
+        @pyqtSlot(object)
+        def on_error(err: Exception):
+            if generation == self._formant_generation:
+                self.state_changed.emit(LoadProgressState(False))
+            self.on_error(err)
+
+        self.launch_use_case("formants", use_case, on_success, on_error)
+
+    def clear_formants(self):
+        """Drop any formant dots and ignore a track still being computed."""
+        self._formant_generation += 1
+        if "formants" in self.job_managers:
+            self.state_changed.emit(LoadProgressState(False))
+        self.state_changed.emit(FormantTrackState())
 
     def adjust_gray_scale(self, adjustment: float):
         gray_cutoff = self.sgram_state.gray_cutoff + adjustment

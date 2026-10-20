@@ -7,6 +7,8 @@ from pytestqt.qtbot import QtBot
 from ui.base.state import State
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
+from ui.spectrogram.state.formant_settings import FormantSettingsState
+from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 
 
@@ -316,5 +318,83 @@ def test_open_settings_dialog_does_nothing_when_cancelled(
     )
 
     plot.open_settings_dialog()
+
+    assert calls == []
+
+
+def test_plot_formants_draws_finite_points_only(qtbot: QtBot):
+    plot = SpectrogramPlot(SpectrogramViewModel())
+
+    plot.plot_formants(
+        FormantTrackState(
+            sec=np.array([1.0, 2.0]),
+            formants=np.array([[1.0, 2.0, 3.0, 4.0], [5.0, np.nan, 7.0, 8.0]]),
+        )
+    )
+
+    x, y = plot.formant_dots.getData()
+    np.testing.assert_array_equal(x, [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0])
+    np.testing.assert_array_equal(y, [1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 8.0])
+
+
+def test_on_state_change_plots_formants_for_formant_track_state(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    plot = SpectrogramPlot(SpectrogramViewModel())
+    calls = []
+    monkeypatch.setattr(plot, "plot_formants", lambda state: calls.append(state))
+
+    state = FormantTrackState()
+    plot.on_state_change(state)
+
+    assert calls == [state]
+
+
+def test_track_formants_action_is_enabled_only_when_spectrogram_shows(qtbot: QtBot):
+    plot = SpectrogramPlot(SpectrogramViewModel())
+    assert plot.track_formants_action.isEnabled() is False
+
+    plot.plot_spectrogram(make_sgram_state())
+    assert plot.track_formants_action.isEnabled() is True
+
+    plot.plot_spectrogram(make_sgram_state(is_showing=False, is_loading=False))
+    assert plot.track_formants_action.isEnabled() is False
+
+
+def test_open_formant_dialog_tracks_formants_when_accepted(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = SpectrogramViewModel()
+    plot = SpectrogramPlot(view_model)
+    new_settings = FormantSettingsState(0.5, 60, 500, 2)
+    monkeypatch.setattr(
+        "ui.spectrogram.spectrogram_plot.FormantSettingsDialog.open_formant_settings",
+        staticmethod(lambda settings: new_settings),
+    )
+    calls = []
+    monkeypatch.setattr(
+        view_model, "track_formants", lambda settings: calls.append(settings)
+    )
+
+    plot.open_formant_dialog()
+
+    assert calls == [new_settings]
+
+
+def test_open_formant_dialog_does_nothing_when_cancelled(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = SpectrogramViewModel()
+    plot = SpectrogramPlot(view_model)
+    monkeypatch.setattr(
+        "ui.spectrogram.spectrogram_plot.FormantSettingsDialog.open_formant_settings",
+        staticmethod(lambda settings: None),
+    )
+    calls = []
+    monkeypatch.setattr(
+        view_model, "track_formants", lambda settings: calls.append(settings)
+    )
+
+    plot.open_formant_dialog()
 
     assert calls == []
