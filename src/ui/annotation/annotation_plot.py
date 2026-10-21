@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, Qt, pyqtSlot
+from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
     QFocusEvent,
     QFont,
@@ -50,17 +50,42 @@ class AnnotationPlot(DocumentPlot):
         self.dragging_node: AnnotationNodeState | None = None
         self.selected_node: int | None = None
 
+        self.selected_type: int | None = None
+
+        self.left_tier_selection = pg.PlotDataItem(
+            [-1, -1], [-1, -1], pen=pg.mkPen("g", width=8)
+        )
+
+        self.right_tier_selection = pg.PlotDataItem(
+            [-1, -1], [-1, -1], pen=pg.mkPen("g", width=8)
+        )
+
+        self.addItem(self.left_tier_selection)
+        self.addItem(self.right_tier_selection)
+
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
 
     def set_up_menu(self):
+        shortcut = QKeySequence("Ctrl+L")
         create_label_action = ContextMenuHintAction(
-            self.tr("Create Label"), parent=self
+            self.tr("Create Label"),
+            shortcut.toString(QKeySequence.SequenceFormat.NativeText),
+            parent=self,
         )
-        create_label_action.setShortcut(QKeySequence("Ctrl+L"))
+        create_label_action.setShortcut(shortcut)
         create_label_action.triggered.connect(self.create_label_from_selection)
 
         self.addAction(create_label_action)
         self.getViewBox().menu.addAction(create_label_action)
+        self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
+
+    @pyqtSlot()
+    def on_context_menu_about_to_close(self):
+        QTimer.singleShot(0, self.on_context_menu_close)
+
+    @pyqtSlot()
+    def on_context_menu_close(self):
+        self.context_pos = None
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -199,16 +224,46 @@ class AnnotationPlot(DocumentPlot):
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos: QPointF):
-        x = self.getViewBox().mapSceneToView(pos).x()
+        scene_pos = self.getViewBox().mapSceneToView(pos)
+        x, y = scene_pos.x(), scene_pos.y()
 
         if self.dragging_node is not None:
             self.view_model.change_node_state(self.dragging_node, x)
 
+        if not self.viewRect().contains(scene_pos):
+            self.selected_type = None
+        else:
+            self.selected_type = int(y)
+
+        self.update_selected_type()
+
         super().on_mouse_moved(pos)
 
+    def update_selected_type(self):
+        if self.selected_type is None:
+            self.left_tier_selection.setVisible(False)
+            self.right_tier_selection.setVisible(False)
+        elif self.selection_region.isVisible():
+            start, end = self.selection_region.getRegion()
+            self.left_tier_selection.setVisible(True)
+            self.right_tier_selection.setVisible(True)
+            self.left_tier_selection.setData(
+                [start, start], [self.selected_type, self.selected_type + 1]
+            )
+            self.right_tier_selection.setData(
+                [end, end], [self.selected_type, self.selected_type + 1]
+            )
+
     def create_label_from_selection(self):
-        if self.context_pos is None or not self.selection_region.isVisible():
+        if not self.selection_region.isVisible():
             return
-        type = int(self.context_pos.y())
+
+        if self.context_pos is not None:
+            type = int(self.context_pos.y())
+        elif self.selected_type is not None:
+            type = self.selected_type
+        else:
+            return
+
         start, end = self.selection_region.getRegion()
         self.view_model.create_label_from_selection(type, start, end)
