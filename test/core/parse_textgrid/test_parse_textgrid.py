@@ -3,11 +3,7 @@ from pathlib import Path
 import pytest
 
 from core.annotation.entity.annotation import AnnotationLabel
-from core.parse_textgrid.parse_textgrid import (
-    ParseTextGrid,
-    ParseTextGridError,
-    add_node_time,
-)
+from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from res.constants import SAME_NODE_THRESHOLD
 
 SIMPLE_TEXTGRID = """File type = "ooTextFile"
@@ -196,38 +192,3 @@ def test_invoke_reads_utf_16_file(tmp_path: Path):
         AnnotationLabel(0, 0, 1, "h"),
         AnnotationLabel(1, 1, 2, "ay"),
     ]
-
-
-# --------------------------- get_or_add_node ---------------------------
-
-
-def test_get_or_add_node_inserts_new_time_in_sorted_position():
-    result = add_node_time([0.0, 1.0], 0.5)
-
-    assert result == [0.0, 0.5, 1.0]
-
-
-def test_get_or_add_node_merges_when_within_threshold_of_next_node():
-    result = add_node_time([0.0, 0.5, 1.0], 0.5 + SAME_NODE_THRESHOLD / 2)
-
-    assert result == [0.0, 0.5, 1.0]
-
-
-def test_get_or_add_node_merges_when_within_threshold_of_previous_node():
-    result = add_node_time([0.0, 0.5, 1.0], 0.5 - SAME_NODE_THRESHOLD / 2)
-
-    assert result == [0.0, 0.5, 1.0]
-
-
-def test_get_or_add_node_keeps_separate_nodes_when_beyond_threshold():
-    new_time = 0.5 + SAME_NODE_THRESHOLD * 2
-
-    result = add_node_time([0.0, 0.5, 1.0], new_time)
-
-    assert result == [0.0, 0.5, new_time, 1.0]
-
-
-def test_get_or_add_node_handles_empty_list():
-    result = add_node_time([], 0.25)
-
-    assert result == [0.25]

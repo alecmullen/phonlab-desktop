@@ -74,6 +74,37 @@ def test_delete_node_leaves_tiers_without_node_untouched():
     assert label_spans(result, 1) == [(0, 2, "c")]
 
 
+def test_delete_node_merges_labels_on_every_tier_at_node():
+    annotation = make_annotation(
+        {0: 0.0, 1: 1.0, 2: 2.0},
+        [[(0, 1, "a"), (1, 2, "b")], [(0, 1, "c"), (1, 2, "d")]],
+    )
+
+    result = DeleteNode(annotation, 1).invoke()
+
+    assert label_spans(result, 0) == [(0, 2, "ab")]
+    assert label_spans(result, 1) == [(0, 2, "cd")]
+
+
+def test_delete_node_with_ids_out_of_time_order():
+    annotation = make_annotation(
+        {5: 0.0, 3: 1.0, 0: 2.0, 1: 3.0}, [[(5, 3, "a"), (0, 1, "b")]]
+    )
+
+    result = DeleteNode(annotation, 3).invoke()
+
+    assert label_spans(result, 0) == [(0, 1, "b"), (5, 0, "a")]
+
+
+def test_delete_last_node_of_tier_with_attached_label_raises():
+    annotation = make_annotation(
+        {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a")], [(0, 2, "b")]]
+    )
+
+    with pytest.raises(DeleteEndNodeError):
+        DeleteNode(annotation, 1).invoke()
+
+
 @pytest.mark.parametrize("node", [0, 2])
 def test_delete_end_node_with_attached_label_raises(node: int):
     annotation = make_annotation({0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]])

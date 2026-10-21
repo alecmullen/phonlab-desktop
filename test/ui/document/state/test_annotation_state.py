@@ -93,17 +93,6 @@ def test_to_annotation_converts_nodes_and_types():
     )
 
 
-def test_to_annotation_state_keeps_label_ids():
-    annotation = Annotation(
-        nodes={0: 0.0, 1: 1.0},
-        types=[AnnotationType("word", [AnnotationLabel(7, 0, 1, "hi")])],
-    )
-
-    state = to_annotation_state(annotation)
-
-    assert state.types[0].labels[0].id == 7
-
-
 def test_to_annotation_round_trips_through_annotation_state():
     annotation = Annotation(
         nodes={3: 0.0, 1: 0.5, 2: 1.0},

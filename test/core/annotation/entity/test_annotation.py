@@ -62,5 +62,27 @@ def test_add_node_time_inserts_in_sorted_position():
     assert add_node_time([0.0, 1.0], 0.5) == [0.0, 0.5, 1.0]
 
 
-def test_add_node_time_skips_time_within_threshold():
-    assert add_node_time([0.0, 1.0], 1.0 - SAME_NODE_THRESHOLD / 2) == [0.0, 1.0]
+def test_add_node_time_skips_time_within_threshold_of_next_node():
+    assert add_node_time([0.0, 0.5, 1.0], 0.5 - SAME_NODE_THRESHOLD / 2) == [
+        0.0,
+        0.5,
+        1.0,
+    ]
+
+
+def test_add_node_time_skips_time_within_threshold_of_previous_node():
+    assert add_node_time([0.0, 0.5, 1.0], 0.5 + SAME_NODE_THRESHOLD / 2) == [
+        0.0,
+        0.5,
+        1.0,
+    ]
+
+
+def test_add_node_time_keeps_separate_nodes_beyond_threshold():
+    new_time = 0.5 + SAME_NODE_THRESHOLD * 2
+
+    assert add_node_time([0.0, 0.5, 1.0], new_time) == [0.0, 0.5, new_time, 1.0]
+
+
+def test_add_node_time_handles_empty_list():
+    assert add_node_time([], 0.25) == [0.25]

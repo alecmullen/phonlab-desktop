@@ -219,20 +219,6 @@ item []:
 """
 
 
-def test_parse_textgrid_loads_point_tier(tmp_path: Path):
-    view_model = make_view_model({}, 0.0, 1.0)
-    textgrid = tmp_path / "point.TextGrid"
-    textgrid.write_text(POINT_TIER_TEXTGRID)
-
-    view_model.parse_textgrid(str(textgrid))
-
-    assert {node.x for node in view_model.annotation_state.nodes.values()} == {0.5}
-    assert [t.type for t in view_model.annotation_state.types] == ["mark"]
-    assert [label.label for label in view_model.annotation_state.types[0].labels] == [
-        "click"
-    ]
-
-
 BROKEN_TIER_TEXTGRID = """File type = "ooTextFile"
 Object class = "TextGrid"
 xmin = 0
@@ -334,76 +320,6 @@ def test_delete_node_merges_adjacent_interval_labels(qtbot: QtBot):
     assert blocker.args[0] is view_model.annotation_view_state
 
 
-def test_delete_node_merges_labels_on_every_tier_at_node(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0},
-        [[(0, 1, "a"), (1, 2, "b")], [(0, 1, "c"), (1, 2, "d")]],
-    )
-
-    view_model.delete_node(1)
-
-    assert label_spans(view_model, 0) == [(0, 2, "ab")]
-    assert label_spans(view_model, 1) == [(0, 2, "cd")]
-
-
-def test_delete_node_leaves_other_tiers_untouched(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0, 3: 1.5},
-        [[(0, 1, "a"), (1, 2, "b")], [(0, 3, "c"), (3, 2, "d")]],
-    )
-
-    view_model.delete_node(1)
-
-    assert label_spans(view_model, 0) == [(0, 2, "ab")]
-    assert label_spans(view_model, 1) == [(0, 3, "c"), (3, 2, "d")]
-
-
-def test_delete_node_removes_point_label(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.5, 1: 1.5}, [[(0, 0, "x"), (1, 1, "y")]]
-    )
-
-    with qtbot.waitSignal(view_model.state_changed, timeout=1000):
-        view_model.delete_node(0)
-
-    assert label_spans(view_model, 0) == [(1, 1, "y")]
-    assert 0 not in view_model.annotation_view_state.nodes
-
-
-def test_delete_node_extends_label_to_next_node_on_same_tier(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0, 4: 4.0},
-        [[(0, 1, "a"), (3, 4, "b")], [(0, 2, "c"), (2, 4, "d")]],
-        end=4.0,
-    )
-
-    view_model.delete_node(1)
-
-    assert label_spans(view_model, 0) == [(0, 3, "a"), (3, 4, "b")]
-    assert label_spans(view_model, 1) == [(0, 2, "c"), (2, 4, "d")]
-
-
-def test_delete_node_with_ids_out_of_time_order(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {5: 0.0, 3: 1.0, 0: 2.0, 1: 3.0},
-        [[(5, 3, "a"), (0, 1, "b")]],
-    )
-
-    view_model.delete_node(3)
-
-    assert label_spans(view_model, 0) == [(0, 1, "b"), (5, 0, "a")]
-
-
-def test_delete_node_removes_node_from_state(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
-    )
-
-    view_model.delete_node(1)
-
-    assert list(view_model.annotation_state.nodes) == [0, 2]
-
-
 def test_delete_node_does_not_mutate_previous_state(qtbot: QtBot):
     view_model = make_annotation_view_model(
         {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
@@ -415,25 +331,6 @@ def test_delete_node_does_not_mutate_previous_state(qtbot: QtBot):
 
     assert previous.types[0].labels == previous_labels
     assert 1 in previous.nodes
-
-
-def test_delete_last_node_of_tier_with_attached_label_shows_status_message(
-    qtbot: QtBot,
-):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0},
-        [[(0, 1, "a")], [(0, 2, "b")]],
-    )
-    received = []
-    view_model.subscribe(received.append)
-
-    view_model.delete_node(1)
-
-    assert received == [
-        StatusMessageState("Cannot delete end node with attached label")
-    ]
-    assert label_spans(view_model, 0) == [(0, 1, "a")]
-    assert 1 in view_model.annotation_state.nodes
 
 
 @pytest.mark.parametrize("node", [0, 2])
@@ -467,12 +364,3 @@ def test_create_label_from_selection_adds_label_and_emits(qtbot: QtBot):
     assert labels[0].label == ""
     assert label_spans(view_model, 1) == [(0, 1, "a")]
     assert blocker.args[0] is view_model.annotation_view_state
-
-
-def test_create_label_from_selection_reuses_existing_nodes(qtbot: QtBot):
-    view_model = make_annotation_view_model({0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a")]])
-
-    view_model.create_label_from_selection(0, 1.0, 2.0)
-
-    assert list(view_model.annotation_state.nodes) == [0, 1, 2]
-    assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "")]

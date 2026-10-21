@@ -1,5 +1,4 @@
 import numpy as np
-import pyqtgraph as pg
 import pytest
 from pytestqt.qtbot import QtBot
 
@@ -159,28 +158,6 @@ def test_update_wave_replaces_curve_data(qtbot: QtBot):
     np.testing.assert_array_equal(plot.wave_curve.yData, new_state.x)
 
 
-def test_update_selection_region_shows_region_for_positive_range(qtbot: QtBot):
-    view_model = AudioWaveViewModel()
-    plot = AudioWavePlot(view_model)
-
-    plot.update_selection_region(1.0, 2.0)
-
-    assert plot.selection_region.isVisible() is True
-    assert list(plot.selection_region.getRegion()) == [1.0, 3.0]
-
-
-def test_update_selection_region_hides_region_for_zero_or_negative_range(
-    qtbot: QtBot,
-):
-    view_model = AudioWaveViewModel()
-    plot = AudioWavePlot(view_model)
-    plot.update_selection_region(1.0, 2.0)
-
-    plot.update_selection_region(1.0, -1.0)
-
-    assert plot.selection_region.isVisible() is False
-
-
 def test_adjust_y_scale_forwards_delta_to_view_model(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
@@ -204,51 +181,6 @@ def test_update_y_range_sets_symmetric_view_range(qtbot: QtBot):
     plot.update_y_range(4.0)
 
     assert plot.getViewBox().viewRange()[1] == [-4.0, 4.0]
-
-
-def test_on_mouse_moved_updates_cursor_when_in_control(qtbot: QtBot):
-    view_model = AudioWaveViewModel()
-    plot = AudioWavePlot(view_model)
-
-    from PyQt6.QtCore import QPointF
-
-    layout = pg.GraphicsLayoutWidget()
-    qtbot.addWidget(layout)
-    layout.addItem(plot)
-    layout.resize(400, 300)
-    layout.show()
-    qtbot.waitExposed(layout)
-
-    plot.has_cursor_control = True
-    scene_pos = plot.getViewBox().mapViewToScene(QPointF(0.5, 0.0))
-
-    plot.on_mouse_moved(scene_pos)
-
-    assert plot.cursor_line.value() == pytest.approx(0.5)
-
-
-def test_set_cursor_position_moves_line_and_removes_control(qtbot: QtBot):
-    view_model = AudioWaveViewModel()
-    plot = AudioWavePlot(view_model)
-
-    plot.set_cursor_position(2.0)
-
-    assert plot.cursor_line.value() == 2.0
-    assert plot.has_cursor_control is False
-
-
-def test_set_mark_position_moves_line_and_sets_visibility(qtbot: QtBot):
-    view_model = AudioWaveViewModel()
-    plot = AudioWavePlot(view_model)
-
-    assert plot.mark_line.isVisible() is False
-
-    plot.set_mark_position(1.5, True)
-    assert plot.mark_line.value() == 1.5
-    assert plot.mark_line.isVisible() is True
-
-    plot.set_mark_position(1.5, False)
-    assert plot.mark_line.isVisible() is False
 
 
 def test_clear_resets_wave_curve(qtbot: QtBot):

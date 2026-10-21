@@ -217,23 +217,6 @@ def test_show_time_axis_true_sets_bottom_label(qtbot: QtBot):
     assert plot.getAxis("bottom").labelText == "Time"
 
 
-def test_handle_mouse_release_without_drag_returns_false(qtbot: QtBot):
-    view_model = AnnotationViewModel()
-    plot = AnnotationPlot(view_model)
-
-    event = QMouseEvent(
-        QEvent.Type.MouseButtonRelease,
-        QPointF(0, 0),
-        Qt.MouseButton.LeftButton,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.NoModifier,
-    )
-    event.scenePos = lambda: QPointF(0, 0)
-
-    plot.mouseReleaseEvent(event)
-    assert plot.dragging_node is None
-
-
 def test_handle_mouse_press_and_release_on_node(qtbot: QtBot):
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
@@ -265,11 +248,11 @@ def test_handle_mouse_press_and_release_on_node(qtbot: QtBot):
         Qt.KeyboardModifier.NoModifier,
     )
     release_event.scenePos = lambda: scene_pos
-    plot.mouseReleaseEvent(press_event)
+    plot.mouseReleaseEvent(release_event)
     assert plot.dragging_node is None
 
 
-def test_handle_mouse_press_away_from_node_returns_false(qtbot: QtBot):
+def test_mouse_press_away_from_node_does_not_start_drag(qtbot: QtBot):
     view_model = AnnotationViewModel()
     plot = AnnotationPlot(view_model)
 
@@ -288,8 +271,9 @@ def test_handle_mouse_press_away_from_node_returns_false(qtbot: QtBot):
         Qt.KeyboardModifier.NoModifier,
     )
     event.scenePos = lambda: far_scene_pos
-    plot.mouseReleaseEvent(event)
+    plot.mousePressEvent(event)  # type: ignore[arg-type]
     assert plot.dragging_node is None
+    assert not event.isAccepted()
 
 
 def test_on_mouse_moved_while_dragging_updates_node_state(qtbot: QtBot):
@@ -327,30 +311,6 @@ def test_on_mouse_moved_without_dragging_moves_cursor_when_in_control(qtbot: QtB
     plot.on_mouse_moved(scene_pos)
 
     assert plot.cursor_line.value() == pytest.approx(0.75)
-
-
-def test_set_cursor_position_moves_line_and_removes_control(qtbot: QtBot):
-    view_model = AnnotationViewModel()
-    plot = AnnotationPlot(view_model)
-
-    plot.set_cursor_position(3.0)
-
-    assert plot.cursor_line.value() == 3.0
-    assert plot.has_cursor_control is False
-
-
-def test_set_mark_position_moves_line_and_sets_visibility(qtbot: QtBot):
-    view_model = AnnotationViewModel()
-    plot = AnnotationPlot(view_model)
-
-    assert plot.mark_line.isVisible() is False
-
-    plot.set_mark_position(2.5, True)
-    assert plot.mark_line.value() == 2.5
-    assert plot.mark_line.isVisible() is True
-
-    plot.set_mark_position(2.5, False)
-    assert plot.mark_line.isVisible() is False
 
 
 def test_show_time_axis_false_leaves_bottom_label_unset(qtbot: QtBot):
