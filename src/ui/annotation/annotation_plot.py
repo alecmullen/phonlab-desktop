@@ -14,6 +14,7 @@ from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
+from ui.annotation.component.tier_selection_indicator import TierSelectionIndicator
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_state import AnnotationState
@@ -52,16 +53,7 @@ class AnnotationPlot(DocumentPlot):
 
         self.selected_type: int | None = None
 
-        self.left_tier_selection = pg.PlotDataItem(
-            [-1, -1], [-1, -1], pen=pg.mkPen("g", width=8)
-        )
-
-        self.right_tier_selection = pg.PlotDataItem(
-            [-1, -1], [-1, -1], pen=pg.mkPen("g", width=8)
-        )
-
-        self.addItem(self.left_tier_selection)
-        self.addItem(self.right_tier_selection)
+        self.tier_selection = TierSelectionIndicator(self)
 
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
 
@@ -241,18 +233,10 @@ class AnnotationPlot(DocumentPlot):
 
     def update_selected_type(self):
         if self.selected_type is None:
-            self.left_tier_selection.setVisible(False)
-            self.right_tier_selection.setVisible(False)
+            self.tier_selection.set_visible(False)
         elif self.selection_region.isVisible():
             start, end = self.selection_region.getRegion()
-            self.left_tier_selection.setVisible(True)
-            self.right_tier_selection.setVisible(True)
-            self.left_tier_selection.setData(
-                [start, start], [self.selected_type, self.selected_type + 1]
-            )
-            self.right_tier_selection.setData(
-                [end, end], [self.selected_type, self.selected_type + 1]
-            )
+            self.tier_selection.set_boundaries(self.selected_type, start, end)
 
     def create_label_from_selection(self):
         if not self.selection_region.isVisible():
