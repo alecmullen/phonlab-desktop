@@ -3,7 +3,7 @@ from dataclasses import replace
 import pyqtgraph as pg
 import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
-from PyQt6.QtGui import QKeyEvent, QMouseEvent, QShowEvent
+from PyQt6.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QMouseEvent, QShowEvent
 from pytestqt.qtbot import QtBot
 
 from core.annotation.entity.annotation import (
@@ -24,6 +24,7 @@ from ui.annotation.state.annotation_state import (
     AnnotationTypeState,
 )
 from ui.base.state import State
+from ui.common.context_menu_hint import ContextMenuHintAction
 
 MOCK_ANNOTATION_STATE = AnnotationState(
     nodes={
@@ -541,3 +542,166 @@ def test_key_press_with_none_event_does_nothing(qtbot: QtBot):
     plot = AnnotationPlot(AnnotationViewModel())
 
     plot.keyPressEvent(None)
+
+
+def _create_label_action(plot: AnnotationPlot) -> ContextMenuHintAction:
+    return next(a for a in plot.actions() if isinstance(a, ContextMenuHintAction))
+
+
+def _shown_plot(
+    qtbot: QtBot, view_model: AnnotationViewModel
+) -> tuple[AnnotationPlot, pg.GraphicsLayoutWidget]:
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.getViewBox().setRange(xRange=(0.0, 4.0), yRange=(0.0, 2.0), padding=0)
+    return plot, layout
+
+
+def _record_create_label(view_model: AnnotationViewModel) -> list[tuple]:
+    calls = []
+    view_model.create_label_from_selection = (  # type: ignore[method-assign]
+        lambda *args: calls.append(args)
+    )
+    return calls
+
+
+def test_create_label_action_is_in_context_menu_with_shortcut(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+
+    action = _create_label_action(plot)
+
+    assert action in plot.getViewBox().menu.actions()
+    assert action.shortcut() == QKeySequence("Ctrl+L")
+
+
+def test_create_label_action_triggers_create_label_from_selection(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    calls = _record_create_label(view_model)
+    plot = AnnotationPlot(view_model)
+    plot.update_selection_region(1.0, 2.0)
+    plot.selected_type = 1
+
+    _create_label_action(plot).trigger()
+
+    assert calls == [(1, 1.0, 3.0)]
+
+
+def test_right_click_stores_context_pos_and_ignores_event(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, AnnotationViewModel())
+    scene_pos = plot.getViewBox().mapViewToScene(QPointF(1.0, 1.5))
+
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonPress,
+        scene_pos,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    event.scenePos = lambda: scene_pos
+    plot.mousePressEvent(event)  # type: ignore[arg-type]
+
+    assert plot.context_pos is not None
+    assert plot.context_pos.x() == pytest.approx(1.0)
+    assert plot.context_pos.y() == pytest.approx(1.5)
+    assert not event.isAccepted()
+    assert plot.dragging_node is None
+
+
+def test_context_menu_close_clears_context_pos_after_event_loop(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+    plot.context_pos = QPointF(1.0, 1.0)
+
+    plot.getViewBox().menu.aboutToHide.emit()
+
+    assert plot.context_pos is not None
+    qtbot.waitUntil(lambda: plot.context_pos is None, timeout=1000)
+
+
+def test_focus_out_unselects_node(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, AnnotationViewModel())
+    plot.selected_node = 2
+    plot.populate(MOCK_ANNOTATION_STATE)
+
+    plot.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
+
+    assert plot.selected_node is None
+    assert _node_views(plot)[0].selected_node is None
+
+
+def test_focus_out_without_selection_keeps_none(qtbot: QtBot):
+    plot = AnnotationPlot(AnnotationViewModel())
+
+    plot.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
+
+    assert plot.selected_node is None
+
+
+def test_mouse_moved_inside_view_selects_tier_under_cursor(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, AnnotationViewModel())
+
+    plot.on_mouse_moved(plot.getViewBox().mapViewToScene(QPointF(1.0, 1.5)))
+
+    assert plot.selected_type == 1
+
+
+def test_mouse_moved_outside_view_clears_tier_and_hides_indicator(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, AnnotationViewModel())
+    plot.update_selection_region(1.0, 1.0)
+    plot.on_mouse_moved(plot.getViewBox().mapViewToScene(QPointF(1.0, 0.5)))
+
+    plot.on_mouse_moved(plot.getViewBox().mapViewToScene(QPointF(1.0, 50.0)))
+
+    assert plot.selected_type is None
+    assert not plot.tier_selection.left_bar.isVisible()
+    assert not plot.tier_selection.right_bar.isVisible()
+
+
+def test_mouse_moved_with_selection_shows_indicator_on_tier(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, AnnotationViewModel())
+    plot.update_selection_region(1.0, 2.0)
+
+    plot.on_mouse_moved(plot.getViewBox().mapViewToScene(QPointF(2.0, 1.5)))
+
+    left_x, left_y = plot.tier_selection.left_bar.getData()
+    right_x, _ = plot.tier_selection.right_bar.getData()
+    assert plot.tier_selection.left_bar.isVisible()
+    assert list(left_x) == [1.0, 1.0]
+    assert list(right_x) == [3.0, 3.0]
+    assert list(left_y) == [1, 2]
+
+
+def test_create_label_from_selection_without_selection_does_nothing(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    calls = _record_create_label(view_model)
+    plot = AnnotationPlot(view_model)
+    plot.selected_type = 0
+
+    plot.create_label_from_selection()
+
+    assert calls == []
+
+
+def test_create_label_from_selection_without_tier_does_nothing(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    calls = _record_create_label(view_model)
+    plot = AnnotationPlot(view_model)
+    plot.update_selection_region(1.0, 2.0)
+
+    plot.create_label_from_selection()
+
+    assert calls == []
+
+
+def test_create_label_from_selection_prefers_context_menu_tier(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    calls = _record_create_label(view_model)
+    plot = AnnotationPlot(view_model)
+    plot.update_selection_region(1.0, 2.0)
+    plot.selected_type = 0
+    plot.context_pos = QPointF(0.5, 2.5)
+
+    plot.create_label_from_selection()
+
+    assert calls == [(2, 1.0, 3.0)]

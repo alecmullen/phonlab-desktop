@@ -115,7 +115,10 @@ class NodeView(pg.GraphicsObject):
         self._generate_picture()
         for item in self.allChildItems():
             if isinstance(item, pg.PlotDataItem):
-                self.parent_plot.removeItem(item)
+                if (scene := item.scene()) is not None:
+                    scene.removeItem(item)
+                else:
+                    item.setParentItem(None)
         self._plot_all_circles()
         self.update()
 

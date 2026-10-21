@@ -1,0 +1,66 @@
+from core.annotation.entity.annotation import (
+    AnnotationLabel,
+    add_node_time,
+    get_matching_node,
+)
+from res.constants import SAME_NODE_THRESHOLD
+
+
+def test_annotation_label_defaults_to_empty_text():
+    assert AnnotationLabel(0, 1, 2).label == ""
+
+
+# --------------------------- get_matching_node ---------------------------
+
+
+def test_get_matching_node_returns_id_of_exact_match():
+    assert get_matching_node({0: 0.0, 1: 0.5, 2: 1.0}, 0.5) == 1
+
+
+def test_get_matching_node_returns_id_within_threshold_of_next_node():
+    nodes = {0: 0.0, 1: 0.5, 2: 1.0}
+
+    assert get_matching_node(nodes, 0.5 - SAME_NODE_THRESHOLD / 2) == 1
+
+
+def test_get_matching_node_returns_id_within_threshold_of_previous_node():
+    nodes = {0: 0.0, 1: 0.5, 2: 1.0}
+
+    assert get_matching_node(nodes, 0.5 + SAME_NODE_THRESHOLD / 2) == 1
+
+
+def test_get_matching_node_returns_none_beyond_threshold():
+    nodes = {0: 0.0, 1: 0.5, 2: 1.0}
+
+    assert get_matching_node(nodes, 0.5 + SAME_NODE_THRESHOLD * 2) is None
+
+
+def test_get_matching_node_uses_node_ids_when_out_of_time_order():
+    nodes = {7: 1.0, 3: 0.0, 5: 0.5}
+
+    assert get_matching_node(nodes, 0.0) == 3
+    assert get_matching_node(nodes, 0.5) == 5
+    assert get_matching_node(nodes, 1.0) == 7
+
+
+def test_get_matching_node_matches_past_last_node():
+    assert get_matching_node({0: 0.0, 1: 1.0}, 1.0 + SAME_NODE_THRESHOLD / 2) == 1
+
+
+def test_get_matching_node_matches_before_first_node():
+    assert get_matching_node({0: 0.0, 1: 1.0}, -SAME_NODE_THRESHOLD / 2) == 0
+
+
+# --------------------------- add_node_time ---------------------------
+
+
+def test_add_node_time_ignores_none():
+    assert add_node_time([0.0, 1.0], None) == [0.0, 1.0]
+
+
+def test_add_node_time_inserts_in_sorted_position():
+    assert add_node_time([0.0, 1.0], 0.5) == [0.0, 0.5, 1.0]
+
+
+def test_add_node_time_skips_time_within_threshold():
+    assert add_node_time([0.0, 1.0], 1.0 - SAME_NODE_THRESHOLD / 2) == [0.0, 1.0]

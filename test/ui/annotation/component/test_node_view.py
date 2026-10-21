@@ -197,3 +197,47 @@ def test_node_view_paints_all_lines_blue_without_selection(qtbot: QtBot):
     color = _pixel_color(NodeView(pg.PlotItem(), nodes), 40, 10)
 
     assert color.blue() > 200 and color.red() < 50
+
+
+def test_set_selected_node_updates_selected_node(qtbot: QtBot):
+    nodes = [AnnotationNodeState(0, 1.0, [AnnotationNodeExtentState(0)])]
+    node_view = NodeView(pg.PlotItem(), nodes)
+
+    node_view.set_selected_node(0)
+
+    assert node_view.selected_node == 0
+
+
+def test_set_selected_node_repaints_line_red(qtbot: QtBot):
+    nodes = [AnnotationNodeState(0, 2.0, [AnnotationNodeExtentState(0)])]
+    node_view = NodeView(pg.PlotItem(), nodes)
+
+    node_view.set_selected_node(0)
+
+    color = _pixel_color(node_view, 40, 10)
+    assert color.red() > 200 and color.blue() < 50
+
+
+def test_set_selected_node_none_repaints_line_blue(qtbot: QtBot):
+    nodes = [AnnotationNodeState(0, 2.0, [AnnotationNodeExtentState(0)])]
+    node_view = NodeView(pg.PlotItem(), nodes, selected_node=0)
+
+    node_view.set_selected_node(None)
+
+    color = _pixel_color(node_view, 40, 10)
+    assert color.blue() > 200 and color.red() < 50
+
+
+def test_set_selected_node_replaces_symbols(qtbot: QtBot):
+    nodes = [
+        AnnotationNodeState(0, 1.0, [AnnotationNodeExtentState(0)]),
+        AnnotationNodeState(1, 2.0, [AnnotationNodeExtentState(0)]),
+    ]
+    node_view = NodeView(pg.PlotItem(), nodes)
+
+    node_view.set_selected_node(1)
+
+    by_color = {_symbol_color(item).name(): item for item in _symbol_items(node_view)}
+    assert len(_symbol_items(node_view)) == 2
+    assert list(by_color[pg.mkColor("b").name()].getData()[0]) == [1.0]
+    assert list(by_color[pg.mkColor("r").name()].getData()[0]) == [2.0]

@@ -26,6 +26,9 @@ class Annotation(State):
 
 
 def get_matching_node(nodes: dict[int, float], new_time: float) -> int | None:
+    if len(nodes) == 0:
+        return None
+
     node_ids: tuple[int]
     node_times: tuple[float]
     node_ids, node_times = zip(*sorted(nodes.items(), key=lambda item: item[1]))

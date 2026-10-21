@@ -452,3 +452,27 @@ def test_delete_end_node_with_attached_label_shows_status_message(
         StatusMessageState("Cannot delete end node with attached label")
     ]
     assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "b")]
+
+
+def test_create_label_from_selection_adds_label_and_emits(qtbot: QtBot):
+    view_model = make_annotation_view_model({0: 0.0, 1: 3.0}, [[], [(0, 1, "a")]])
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.create_label_from_selection(0, 1.0, 2.0)
+
+    nodes = view_model.annotation_state.nodes
+    labels = view_model.annotation_state.types[0].labels
+    assert len(labels) == 1
+    assert (nodes[labels[0].s_node].x, nodes[labels[0].e_node].x) == (1.0, 2.0)
+    assert labels[0].label == ""
+    assert label_spans(view_model, 1) == [(0, 1, "a")]
+    assert blocker.args[0] is view_model.annotation_view_state
+
+
+def test_create_label_from_selection_reuses_existing_nodes(qtbot: QtBot):
+    view_model = make_annotation_view_model({0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a")]])
+
+    view_model.create_label_from_selection(0, 1.0, 2.0)
+
+    assert list(view_model.annotation_state.nodes) == [0, 1, 2]
+    assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "")]
