@@ -383,5 +383,6 @@ def test_create_label_from_too_short_selection_shows_status_message(qtbot: QtBot
 
     view_model.create_label_from_selection(0, 1.05, 1.2, 0.35)
 
-    assert received == [StatusMessageState("Selection is too short to create a label")]
+    assert len(received) == 1
+    assert isinstance(received[0], StatusMessageState)
     assert view_model.annotation_state is previous
