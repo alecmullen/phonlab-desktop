@@ -2,13 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from core.parse_textgrid.annotation import AnnotationLabel
-from core.parse_textgrid.parse_textgrid import (
-    SAME_NODE_THRESHOLD,
-    ParseTextGrid,
-    ParseTextGridError,
-    add_node_time,
-)
+from core.annotation.entity.annotation import AnnotationLabel
+from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
+from res.constants import SAME_NODE_THRESHOLD
 
 SIMPLE_TEXTGRID = """File type = "ooTextFile"
 Object class = "TextGrid"
@@ -122,8 +118,8 @@ def test_invoke_parses_single_tier_textgrid(tmp_path: Path):
     assert len(result.types) == 1
     assert result.types[0].type == "word"
     assert result.types[0].labels == [
-        AnnotationLabel(0, 1, "hello"),
-        AnnotationLabel(1, 2, "world"),
+        AnnotationLabel(0, 0, 1, "hello"),
+        AnnotationLabel(1, 1, 2, "world"),
     ]
 
 
@@ -134,10 +130,10 @@ def test_invoke_parses_multiple_tiers_sharing_nodes(tmp_path: Path):
 
     assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
     assert [t.type for t in result.types] == ["word", "phone"]
-    assert result.types[0].labels == [AnnotationLabel(0, 2, "hi")]
+    assert result.types[0].labels == [AnnotationLabel(0, 0, 2, "hi")]
     assert result.types[1].labels == [
-        AnnotationLabel(0, 1, "h"),
-        AnnotationLabel(1, 2, "ay"),
+        AnnotationLabel(0, 0, 1, "h"),
+        AnnotationLabel(1, 1, 2, "ay"),
     ]
 
 
@@ -165,8 +161,8 @@ def test_invoke_parses_point_tier(tmp_path: Path):
     assert result.types[0].type == "mark"
     # a point's start and end node are the same, since it has zero duration
     assert result.types[0].labels == [
-        AnnotationLabel(0, 0, "a"),
-        AnnotationLabel(1, 1, "b"),
+        AnnotationLabel(0, 0, 0, "a"),
+        AnnotationLabel(1, 1, 1, "b"),
     ]
 
 
@@ -191,43 +187,8 @@ def test_invoke_reads_utf_16_file(tmp_path: Path):
 
     assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
     assert [t.type for t in result.types] == ["word", "phone"]
-    assert result.types[0].labels == [AnnotationLabel(0, 2, "hi")]
+    assert result.types[0].labels == [AnnotationLabel(0, 0, 2, "hi")]
     assert result.types[1].labels == [
-        AnnotationLabel(0, 1, "h"),
-        AnnotationLabel(1, 2, "ay"),
+        AnnotationLabel(0, 0, 1, "h"),
+        AnnotationLabel(1, 1, 2, "ay"),
     ]
-
-
-# --------------------------- get_or_add_node ---------------------------
-
-
-def test_get_or_add_node_inserts_new_time_in_sorted_position():
-    result = add_node_time([0.0, 1.0], 0.5)
-
-    assert result == [0.0, 0.5, 1.0]
-
-
-def test_get_or_add_node_merges_when_within_threshold_of_next_node():
-    result = add_node_time([0.0, 0.5, 1.0], 0.5 + SAME_NODE_THRESHOLD / 2)
-
-    assert result == [0.0, 0.5, 1.0]
-
-
-def test_get_or_add_node_merges_when_within_threshold_of_previous_node():
-    result = add_node_time([0.0, 0.5, 1.0], 0.5 - SAME_NODE_THRESHOLD / 2)
-
-    assert result == [0.0, 0.5, 1.0]
-
-
-def test_get_or_add_node_keeps_separate_nodes_when_beyond_threshold():
-    new_time = 0.5 + SAME_NODE_THRESHOLD * 2
-
-    result = add_node_time([0.0, 0.5, 1.0], new_time)
-
-    assert result == [0.0, 0.5, new_time, 1.0]
-
-
-def test_get_or_add_node_handles_empty_list():
-    result = add_node_time([], 0.25)
-
-    assert result == [0.25]

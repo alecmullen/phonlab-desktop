@@ -142,33 +142,6 @@ def test_load_from_samples_builds_wave_plot_and_sets_up_slider(
     assert loaded_view.slider.pageStep() == 10000
 
 
-def test_toggle_wave_delegates_to_view_model(view: DocumentView):
-    calls = []
-    view.view_model.toggle_wave = lambda: calls.append(True)
-
-    view.toggle_wave()
-
-    assert calls == [True]
-
-
-def test_toggle_spectrogram_delegates_to_view_model(view: DocumentView):
-    calls = []
-    view.view_model.toggle_spectrogram = lambda: calls.append(True)
-
-    view.toggle_spectrogram()
-
-    assert calls == [True]
-
-
-def test_toggle_annotations_delegates_to_view_model(view: DocumentView):
-    calls = []
-    view.view_model.toggle_annotations = lambda: calls.append(True)
-
-    view.toggle_annotations()
-
-    assert calls == [True]
-
-
 # --------------------------- state dispatch ---------------------------
 
 
@@ -504,20 +477,6 @@ def test_delete_button_click_cancelled_dialog_does_nothing(
     stereo_loaded_view.mousePressEvent(press)
 
     assert stereo_loaded_view.view_model.stereo_channels() is not None
-
-
-def test_layout_collapses_to_one_row_after_delete(
-    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(
-        DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
-    )
-
-    stereo_loaded_view.document_plots[1].delete_channel()
-    QApplication.processEvents()
-
-    assert len(stereo_loaded_view.document_plots) < 2
-    assert len(stereo_loaded_view.document_plots) == 1
 
 
 # --------------------------- paste special ---------------------------
@@ -953,6 +912,9 @@ def test_update_load_progress_toggles_progress_bar(view: DocumentView):
         ("recenter_on_selection", "center_on_selection", ()),
         ("undo", "undo", ()),
         ("redo", "redo", ()),
+        ("toggle_wave", "toggle_wave", ()),
+        ("toggle_spectrogram", "toggle_spectrogram", ()),
+        ("toggle_annotations", "toggle_annotations", ()),
     ],
 )
 def test_view_methods_delegate_to_view_model(

@@ -1,16 +1,30 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, Qt, pyqtSlot
-from PyQt6.QtGui import QFont, QFontMetrics, QKeyEvent, QShowEvent
+from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
+from PyQt6.QtGui import (
+    QFocusEvent,
+    QFont,
+    QFontMetrics,
+    QKeyEvent,
+    QKeySequence,
+    QShowEvent,
+)
 from PyQt6.QtWidgets import QGraphicsSceneMouseEvent, QWidget
 
-from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
+from res.constants import (
+    LEFT_AXIS_WIDTH,
+    NODE_H_MARGIN,
+    NODE_V_MARGIN,
+    SAME_NODE_PIXEL_THRESH,
+)
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
+from ui.annotation.component.tier_selection_indicator import TierSelectionIndicator
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_state import AnnotationState
 from ui.base.state import State
+from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 
 
@@ -31,7 +45,10 @@ class AnnotationPlot(DocumentPlot):
         self.getAxis("top").setTicks([])
 
         self.getViewBox().menu.clear()
+        self.set_up_menu()
         self.ctrlMenu.menuAction().setVisible(False)
+
+        self.context_pos: QPointF | None = None
 
         self.visible_nodes: list[AnnotationNodeState] = []
         self.visible_labels: list[AnnotationLabelState] = []
@@ -39,7 +56,33 @@ class AnnotationPlot(DocumentPlot):
         self.dragging_node: AnnotationNodeState | None = None
         self.selected_node: int | None = None
 
+        self.selected_type: int | None = None
+
+        self.tier_selection = TierSelectionIndicator(self)
+
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+
+    def set_up_menu(self):
+        shortcut = QKeySequence("Ctrl+L")
+        create_label_action = ContextMenuHintAction(
+            self.tr("Create Label"),
+            shortcut.toString(QKeySequence.SequenceFormat.NativeText),
+            parent=self,
+        )
+        create_label_action.setShortcut(shortcut)
+        create_label_action.triggered.connect(self.create_label_from_selection)
+
+        self.addAction(create_label_action)
+        self.getViewBox().menu.addAction(create_label_action)
+        self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
+
+    @pyqtSlot()
+    def on_context_menu_about_to_close(self):
+        QTimer.singleShot(0, self.on_context_menu_close)
+
+    @pyqtSlot()
+    def on_context_menu_close(self):
+        self.context_pos = None
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -99,14 +142,27 @@ class AnnotationPlot(DocumentPlot):
         node_view.setPos(0, 0)
         self.addItem(node_view)
 
+    def unselect_node(self):
+        self.selected_node = None
+        node_view = next(
+            item for item in self.allChildItems() if isinstance(item, NodeView)
+        )
+        node_view.set_selected_node(None)
+
     def mousePressEvent(self, a0: QGraphicsSceneMouseEvent | None):
         if a0 is None:
             return
+
+        pos = self.getViewBox().mapSceneToView(a0.scenePos())
+
+        if a0.button() == Qt.MouseButton.RightButton:
+            self.context_pos = pos
+            a0.ignore()
+            return
+
         pixel_size = self.getViewBox().viewPixelSize()
         h_margin = NODE_H_MARGIN * pixel_size[0]
         v_margin = NODE_V_MARGIN * pixel_size[1]
-
-        pos = self.getViewBox().mapSceneToView(a0.scenePos())
 
         for node_view_state in self.visible_nodes:
             node_x = node_view_state.x
@@ -127,6 +183,12 @@ class AnnotationPlot(DocumentPlot):
             self.populate(self.view_model.annotation_view_state)
             a0.accept()
         else:
+            a0.ignore()
+
+    def focusOutEvent(self, a0: QFocusEvent | None):
+        if a0 is not None:
+            if self.selected_node is not None:
+                self.unselect_node()
             a0.ignore()
 
     def handle_single_click(self, scene_pos: QPointF) -> bool:
@@ -159,9 +221,42 @@ class AnnotationPlot(DocumentPlot):
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos: QPointF):
-        x = self.getViewBox().mapSceneToView(pos).x()
+        scene_pos = self.getViewBox().mapSceneToView(pos)
+        x, y = scene_pos.x(), scene_pos.y()
 
         if self.dragging_node is not None:
             self.view_model.change_node_state(self.dragging_node, x)
 
+        if not self.viewRect().contains(scene_pos):
+            self.selected_type = None
+        else:
+            self.selected_type = int(y)
+
+        self.update_selected_type()
+
         super().on_mouse_moved(pos)
+
+    def update_selected_type(self):
+        if self.selected_type is None:
+            self.tier_selection.set_visible(False)
+        elif self.selection_region.isVisible():
+            start, end = self.selection_region.getRegion()
+            self.tier_selection.set_boundaries(self.selected_type, start, end)
+
+    def create_label_from_selection(self):
+        if not self.selection_region.isVisible():
+            return
+
+        if self.context_pos is not None:
+            type = int(self.context_pos.y())
+        elif self.selected_type is not None:
+            type = self.selected_type
+        else:
+            return
+
+        pixel_width = self.getViewBox().viewPixelSize()[0]
+
+        start, end = self.selection_region.getRegion()
+        self.view_model.create_label_from_selection(
+            type, start, end, pixel_width * SAME_NODE_PIXEL_THRESH
+        )

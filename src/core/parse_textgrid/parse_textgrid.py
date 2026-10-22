@@ -2,10 +2,14 @@ import bisect
 
 import phonlab as phon
 
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+    add_node_time,
+)
 from core.base.use_case_sync import UseCaseSync
-from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
 
-SAME_NODE_THRESHOLD = 0.005
 INTERVAL_TIER_NAME = "IntervalTier"
 POINT_TIER_NAME = "TextTier"
 
@@ -33,7 +37,10 @@ class ParseTextGrid(UseCaseSync):
                 types=[
                     AnnotationType(
                         tier["name"],
-                        [to_label(node_times, label) for label in tier["labels"]],
+                        [
+                            to_label(node_times, idx, label)
+                            for idx, label in enumerate(tier["labels"])
+                        ],
                     )
                     for tier in tiers
                 ],
@@ -42,25 +49,10 @@ class ParseTextGrid(UseCaseSync):
             raise ParseTextGridError from err
 
 
-def add_node_time(node_times: list[float], new_time: float | None) -> list[float]:
-    if new_time is None:
-        return node_times
-
-    idx = bisect.bisect_left(node_times, new_time)
-
-    if (
-        idx < len(node_times) and abs(node_times[idx] - new_time) < SAME_NODE_THRESHOLD
-    ) or (idx - 1 >= 0 and abs(node_times[idx - 1] - new_time) < SAME_NODE_THRESHOLD):
-        return node_times
-
-    bisect.insort(node_times, new_time)
-    return node_times
-
-
-def to_label(node_times: list[float], label: tuple) -> AnnotationLabel:
+def to_label(node_times: list[float], id: int, label: tuple) -> AnnotationLabel:
     s_node = bisect.bisect_left(node_times, label[0])
     if label[1] is None:
         e_node = s_node
     else:
         e_node = bisect.bisect_left(node_times, label[1])
-    return AnnotationLabel(s_node, e_node, label[2])
+    return AnnotationLabel(id, s_node, e_node, label[2])
