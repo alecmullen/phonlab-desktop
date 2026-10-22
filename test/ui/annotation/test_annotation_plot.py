@@ -11,6 +11,7 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
+from res.constants import SAME_NODE_PIXEL_THRESH
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.component.node_view import NodeView
@@ -540,12 +541,16 @@ def test_create_label_action_triggers_create_label_from_selection(qtbot: QtBot):
     view_model = AnnotationViewModel()
     calls = _record_create_label(view_model)
     plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
     plot.update_selection_region(1.0, 2.0)
     plot.selected_type = 1
 
     _create_label_action(plot).trigger()
 
-    assert calls == [(1, 1.0, 3.0)]
+    assert len(calls) == 1
+    assert calls[0][:-1] == (1, 1.0, 3.0)
 
 
 def test_right_click_stores_context_pos_and_ignores_event(qtbot: QtBot):
@@ -636,6 +641,9 @@ def test_create_label_from_selection_without_selection_does_nothing(qtbot: QtBot
     view_model = AnnotationViewModel()
     calls = _record_create_label(view_model)
     plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
     plot.selected_type = 0
 
     plot.create_label_from_selection()
@@ -647,6 +655,9 @@ def test_create_label_from_selection_without_tier_does_nothing(qtbot: QtBot):
     view_model = AnnotationViewModel()
     calls = _record_create_label(view_model)
     plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
     plot.update_selection_region(1.0, 2.0)
 
     plot.create_label_from_selection()
@@ -658,10 +669,67 @@ def test_create_label_from_selection_prefers_context_menu_tier(qtbot: QtBot):
     view_model = AnnotationViewModel()
     calls = _record_create_label(view_model)
     plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
     plot.update_selection_region(1.0, 2.0)
     plot.selected_type = 0
     plot.context_pos = QPointF(0.5, 2.5)
 
     plot.create_label_from_selection()
 
-    assert calls == [(2, 1.0, 3.0)]
+    assert len(calls) == 1
+    assert calls[0][:-1] == (2, 1.0, 3.0)
+
+
+def test_create_label_from_selection_scales_threshold_with_pixel_width(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    calls = _record_create_label(view_model)
+    plot, _layout = _shown_plot(qtbot, view_model)
+    plot.update_selection_region(1.0, 2.0)
+    plot.selected_type = 0
+
+    plot.create_label_from_selection()
+
+    pixel_width = plot.getViewBox().viewPixelSize()[0]
+    assert calls[0][-1] == pytest.approx(pixel_width * SAME_NODE_PIXEL_THRESH)
+
+
+def test_create_label_from_selection_threshold_grows_when_zoomed_out(qtbot: QtBot):
+    view_model = AnnotationViewModel()
+    calls = _record_create_label(view_model)
+    plot, _layout = _shown_plot(qtbot, view_model)
+    plot.update_selection_region(1.0, 2.0)
+    plot.selected_type = 0
+
+    plot.create_label_from_selection()
+    plot.getViewBox().setXRange(0.0, 8.0, padding=0)
+    plot.create_label_from_selection()
+
+    assert calls[1][-1] == pytest.approx(calls[0][-1] * 2)
+
+
+def test_create_label_from_selection_snaps_to_node_within_pixel_threshold(
+    qtbot: QtBot,
+):
+    view_model = AnnotationViewModel()
+    view_model.window_state = (0.0, 4.0)
+    view_model.set_annotation_state(
+        Annotation(
+            nodes={0: 0.0, 1: 1.0, 2: 3.0, 3: 4.0}, types=[AnnotationType("w", [])]
+        )
+    )
+    plot, _layout = _shown_plot(qtbot, view_model)
+    threshold = plot.getViewBox().viewPixelSize()[0] * SAME_NODE_PIXEL_THRESH
+    start = 1.0 + threshold / 2
+    end = 3.0 - threshold * 2
+    plot.update_selection_region(start, end - start)
+    plot.selected_type = 0
+
+    plot.create_label_from_selection()
+
+    nodes = view_model.annotation_state.nodes
+    [label] = view_model.annotation_state.types[0].labels
+    assert label.s_node == 1
+    assert label.e_node not in (2, 3)
+    assert nodes[label.e_node].x == pytest.approx(end)

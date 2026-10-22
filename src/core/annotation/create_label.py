@@ -9,17 +9,34 @@ from core.annotation.entity.annotation import (
 from core.base.use_case_sync import UseCaseSync
 
 
+class ZeroLengthLabelError(ValueError):
+    pass
+
+
 class CreateLabel(UseCaseSync[Annotation]):
-    def __init__(self, annotation: Annotation, type: int, start: float, end: float):
+    def __init__(
+        self,
+        annotation: Annotation,
+        type: int,
+        start: float,
+        end: float,
+        same_node_threshold: float | None = None,
+    ):
         super().__init__()
         self.annotation = annotation
         self.type = type
         self.start = start
         self.end = end
+        self.same_node_threshold = same_node_threshold
 
     def invoke(self) -> Annotation:
-        annotation, s_node = create_node(self.annotation, self.start)
-        annotation, e_node = create_node(annotation, self.end)
+        annotation, s_node = create_node(
+            self.annotation, self.start, self.same_node_threshold
+        )
+        annotation, e_node = create_node(annotation, self.end, self.same_node_threshold)
+
+        if s_node == e_node:
+            raise ZeroLengthLabelError()
 
         annotation = delete_annotation_interval(annotation, [self.type], s_node, e_node)
 

@@ -364,3 +364,24 @@ def test_create_label_from_selection_adds_label_and_emits(qtbot: QtBot):
     assert labels[0].label == ""
     assert label_spans(view_model, 1) == [(0, 1, "a")]
     assert blocker.args[0] is view_model.annotation_view_state
+
+
+def test_create_label_from_selection_uses_same_node_threshold(qtbot: QtBot):
+    view_model = make_annotation_view_model({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[]])
+
+    view_model.create_label_from_selection(0, 1.1, 1.9, 0.2)
+
+    assert list(view_model.annotation_state.nodes) == [0, 1, 2, 3]
+    assert label_spans(view_model, 0) == [(1, 2, "")]
+
+
+def test_create_label_from_too_short_selection_shows_status_message(qtbot: QtBot):
+    view_model = make_annotation_view_model({0: 0.0, 1: 1.0, 2: 3.0}, [[(0, 1, "a")]])
+    previous = view_model.annotation_state
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.create_label_from_selection(0, 1.05, 1.2, 0.35)
+
+    assert received == [StatusMessageState("Selection is too short to create a label")]
+    assert view_model.annotation_state is previous

@@ -1,4 +1,6 @@
-from core.annotation.create_label import CreateLabel
+import pytest
+
+from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
 from core.annotation.delete_node import DeleteNode
 from core.annotation.entity.annotation import (
     Annotation,
@@ -130,3 +132,50 @@ def test_delete_node_after_splitting_label_merges_with_new_label():
     result = DeleteNode(annotation, 2).invoke()
 
     assert label_times(result, 0) == [(0.0, 2.0, "a"), (2.0, 3.0, "")]
+
+
+def test_create_label_custom_threshold_snaps_both_ends_to_existing_nodes():
+    annotation = make_annotation({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[]])
+
+    result = CreateLabel(annotation, 0, 1.1, 1.9, same_node_threshold=0.2).invoke()
+
+    assert result.nodes == {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}
+    assert result.types[0].labels == [AnnotationLabel(0, 1, 2, "")]
+
+
+def test_create_label_custom_threshold_smaller_than_default_adds_nodes():
+    annotation = make_annotation({0: 0.0, 1: 1.0, 2: 2.0}, [[]])
+    offset = SAME_NODE_THRESHOLD / 2
+
+    result = CreateLabel(
+        annotation, 0, 1.0 + offset, 2.0 - offset, SAME_NODE_THRESHOLD / 4
+    ).invoke()
+
+    assert len(result.nodes) == 5
+    assert label_times(result, 0) == [(1.0 + offset, 2.0 - offset, "")]
+
+
+def test_create_label_snaps_each_end_to_closest_node():
+    annotation = make_annotation({0: 0.0, 1: 1.0, 2: 1.3, 3: 2.0, 4: 3.0}, [[]])
+
+    result = CreateLabel(annotation, 0, 1.05, 2.0, same_node_threshold=0.35).invoke()
+
+    assert result.types[0].labels == [AnnotationLabel(0, 1, 3, "")]
+
+
+def test_create_label_raises_when_both_ends_snap_to_same_node():
+    annotation = make_annotation({0: 0.0, 1: 1.0, 2: 3.0}, [[]])
+
+    with pytest.raises(ZeroLengthLabelError):
+        CreateLabel(annotation, 0, 1.05, 1.2, same_node_threshold=0.35).invoke()
+
+
+def test_create_label_raises_when_selection_shorter_than_threshold():
+    annotation = make_annotation({0: 0.0, 1: 3.0}, [[]])
+
+    with pytest.raises(ZeroLengthLabelError):
+        CreateLabel(annotation, 0, 1.5, 1.6, same_node_threshold=0.2).invoke()
+
+
+def test_zero_length_label_error_is_value_error():
+    assert issubclass(ZeroLengthLabelError, ValueError)

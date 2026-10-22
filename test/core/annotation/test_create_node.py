@@ -56,3 +56,22 @@ def test_create_node_does_not_mutate_input():
     create_node(annotation, 0.5)
 
     assert annotation.nodes == {0: 0.0, 1: 1.0}
+
+
+def test_create_node_custom_threshold_reuses_node_beyond_default():
+    annotation = Annotation(nodes={0: 0.0, 1: 1.0})
+
+    result, node = create_node(annotation, 1.1, 0.2)
+
+    assert node == 1
+    assert result.nodes == {0: 0.0, 1: 1.0}
+
+
+def test_create_node_custom_threshold_adds_node_within_default():
+    annotation = Annotation(nodes={0: 0.0, 1: 1.0})
+    x = 1.0 + SAME_NODE_THRESHOLD / 2
+
+    result, node = create_node(annotation, x, SAME_NODE_THRESHOLD / 4)
+
+    assert node == 2
+    assert result.nodes == {0: 0.0, 1: 1.0, 2: x}

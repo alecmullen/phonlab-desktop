@@ -10,7 +10,12 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QGraphicsSceneMouseEvent, QWidget
 
-from res.constants import LEFT_AXIS_WIDTH, NODE_H_MARGIN, NODE_V_MARGIN
+from res.constants import (
+    LEFT_AXIS_WIDTH,
+    NODE_H_MARGIN,
+    NODE_V_MARGIN,
+    SAME_NODE_PIXEL_THRESH,
+)
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.component.label_view import LabelView
 from ui.annotation.component.node_view import NodeView
@@ -249,5 +254,9 @@ class AnnotationPlot(DocumentPlot):
         else:
             return
 
+        pixel_width = self.getViewBox().viewPixelSize()[0]
+
         start, end = self.selection_region.getRegion()
-        self.view_model.create_label_from_selection(type, start, end)
+        self.view_model.create_label_from_selection(
+            type, start, end, pixel_width * SAME_NODE_PIXEL_THRESH
+        )

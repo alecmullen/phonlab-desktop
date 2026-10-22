@@ -1,7 +1,7 @@
 import logging
 from dataclasses import replace
 
-from core.annotation.create_label import CreateLabel
+from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
 from core.annotation.delete_node import DeleteEndNodeError, DeleteNode
 from core.annotation.entity.annotation import Annotation
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
@@ -133,9 +133,23 @@ class AnnotationViewModel(ViewModel):
         self.annotation_state = to_annotation_state(annotation)
         self.update_annotation_change()
 
-    def create_label_from_selection(self, type: int, start: float, end: float):
-        use_case = CreateLabel(to_annotation(self.annotation_state), type, start, end)
-        annotation = use_case.invoke()
+    def create_label_from_selection(
+        self,
+        type: int,
+        start: float,
+        end: float,
+        same_node_threshold: float | None = None,
+    ):
+        use_case = CreateLabel(
+            to_annotation(self.annotation_state), type, start, end, same_node_threshold
+        )
+        try:
+            annotation = use_case.invoke()
+        except ZeroLengthLabelError:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Zoom in to create shorter labels"))
+            )
+            return
 
         self.annotation_state = to_annotation_state(annotation)
         self.update_annotation_change()
