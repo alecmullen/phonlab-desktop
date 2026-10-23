@@ -64,7 +64,7 @@ class ClickableSplash(QSplashScreen):
             width,
             30,
             Qt.AlignmentFlag.AlignCenter,
-            self.tr("Click on this card to open a sound file"),
+            self.tr("Click on this card to open a project directory"),
         )
 
         painter.end()

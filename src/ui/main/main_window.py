@@ -20,6 +20,7 @@ from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
 from ui.main.component.open_audio_dialog import OpenAudioDialog
 from ui.main.component.save_audio_dialog import SaveAudioDialog
+from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
@@ -47,6 +48,8 @@ class MainWindow(QMainWindow):
 
         # ------- toolbar -------------
         self.create_toolbar()
+
+        self.view_model = MainViewModel()
 
     def create_menus(self):
         """Create application menus"""
@@ -247,7 +250,29 @@ class MainWindow(QMainWindow):
     def open_files(self, filenames: list[str] | None = None):
         """Open a new audio file in a new tab"""
         if filenames is None:
-            filenames, _ = QFileDialog.getOpenFileNames(self, filter=self.filters)
+            dir_path = QFileDialog.getExistingDirectory(
+                self, self.tr("Open Phonlab Directory")
+            )
+            self.view_model.set_dir_path(dir_path)
+
+            dir = Path(dir_path)
+
+            config_file = next(dir.glob("phonlab.toml"), None)
+            if config_file is None:
+                answer = QMessageBox.question(
+                    self,
+                    self.tr("Initialize Project"),
+                    self.tr(
+                        "No phonlab.toml found. Initialize phonlab project at {}?"
+                    ).format(dir_path),
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    self.open_files()
+                    return
+                else:
+                    self.view_model.init_toml()
+
+            filenames = [str(path) for path in dir.glob("*")]
 
         if len(filenames) > 0:
             audio_filename = next(
