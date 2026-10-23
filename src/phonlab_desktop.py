@@ -8,8 +8,8 @@ import phonlab  # noqa: F401
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
+from ui.main.component.splash import ClickableSplash, icon_path
 from ui.main.main_window import MainWindow
-from ui.main.splash import ClickableSplash, icon_path
 
 log_path = os.path.expanduser("~/Library/Logs/phonlab.log")
 logging.basicConfig(

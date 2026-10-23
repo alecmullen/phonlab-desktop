@@ -13,7 +13,7 @@ def icon_path() -> Path:
     if getattr(sys, "frozen", False):
         base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
     else:
-        base = Path(__file__).resolve().parents[3]
+        base = Path(__file__).resolve().parents[4]
     return base / "icons" / "phonlab.png"
 
 
