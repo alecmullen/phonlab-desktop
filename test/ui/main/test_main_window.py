@@ -20,9 +20,9 @@ from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
+from ui.main.component.open_audio_dialog import OpenAudioDialog
+from ui.main.component.save_audio_dialog import SaveOptions
 from ui.main.main_window import MainWindow
-from ui.main.open_audio_dialog import OpenAudioDialog
-from ui.main.save_audio_dialog import SaveOptions
 from ui.main.state.audio_open_options import AudioOpenOptionsState
 
 

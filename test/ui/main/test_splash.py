@@ -2,7 +2,7 @@ from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
 from pytestqt.qtbot import QtBot
 
-from ui.main.splash import ClickableSplash
+from ui.main.component.splash import ClickableSplash
 
 
 class FakeMainWindow:

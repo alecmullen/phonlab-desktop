@@ -6,7 +6,7 @@ import soundfile as sf
 from PyQt6.QtWidgets import QDialog
 from pytestqt.qtbot import QtBot
 
-from ui.main.open_audio_dialog import (
+from ui.main.component.open_audio_dialog import (
     OpenAudioDialog,
     _channel_label,
     _mono_options,

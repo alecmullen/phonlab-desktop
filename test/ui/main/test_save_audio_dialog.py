@@ -9,7 +9,11 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import to_audio_state
-from ui.main.save_audio_dialog import SaveAudioDialog, SaveOptions, _default_filename
+from ui.main.component.save_audio_dialog import (
+    SaveAudioDialog,
+    SaveOptions,
+    _default_filename,
+)
 
 
 @pytest.fixture

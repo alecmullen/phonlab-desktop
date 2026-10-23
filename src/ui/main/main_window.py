@@ -19,8 +19,8 @@ from ui.base.view_model_factory import ViewModelFactory
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
-from ui.main.open_audio_dialog import OpenAudioDialog
-from ui.main.save_audio_dialog import SaveAudioDialog
+from ui.main.component.open_audio_dialog import OpenAudioDialog
+from ui.main.component.save_audio_dialog import SaveAudioDialog
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 

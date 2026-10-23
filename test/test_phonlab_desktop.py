@@ -112,8 +112,8 @@ def fake_run_app_dependencies(
         def show(self) -> None:
             self.shown = True
 
+    import ui.main.component.splash as splash_module
     import ui.main.main_window as main_window_module
-    import ui.main.splash as splash_module
 
     monkeypatch.setattr(main_window_module, "MainWindow", FakeMainWindow)
     monkeypatch.setattr(splash_module, "ClickableSplash", FakeSplash)
