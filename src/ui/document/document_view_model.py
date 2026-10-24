@@ -60,7 +60,10 @@ from ui.waveform.state.delete_channel_state import DeleteChannelState
 
 
 class DocumentViewModel(ViewModel):
-    def __init__(self):
+    def __init__(
+        self,
+        edit_audio: EditAudio,
+    ):
         super().__init__()
 
         self.raw_audio_state: AudioState = AudioState()
@@ -87,6 +90,7 @@ class DocumentViewModel(ViewModel):
         self.annotation_view_model.state_changed.connect(self.on_annot_state_changed)
 
         self.audio_player = AudioPlayer()
+        self.edit_audio = edit_audio
 
     @pyqtSlot(object)
     def on_state_changed(self, model: State):
@@ -850,15 +854,15 @@ class DocumentViewModel(ViewModel):
             if primary_channel is None:
                 raise RuntimeError("Missing primary audio channel")
 
-            result = EditAudio(
+            result = self.edit_audio.invoke(
                 to_audio_signals(
                     AudioState({self.channel_state.primary_channel: primary_channel})
                 ),
                 cmd,
-            ).invoke()
+            )
         else:
             channels = self._stereo_edit_channels()
-            result = EditAudio(to_audio_signals(channels), cmd).invoke()
+            result = self.edit_audio.invoke(to_audio_signals(channels), cmd)
 
         if result is None:
             self.state_changed.emit(StatusMessageState(self.tr("No selection to copy")))
@@ -884,15 +888,15 @@ class DocumentViewModel(ViewModel):
             if primary_channel is None:
                 raise RuntimeError("Missing primary audio channel")
 
-            result = EditAudio(
+            result = self.edit_audio.invoke(
                 to_audio_signals(
                     AudioState({self.channel_state.primary_channel: primary_channel})
                 ),
                 cmd,
-            ).invoke()
+            )
         else:
             channels = self._stereo_edit_channels()
-            result = EditAudio(to_audio_signals(channels), cmd).invoke()
+            result = self.edit_audio.invoke(to_audio_signals(channels), cmd)
 
         if result is None:
             self.state_changed.emit(StatusMessageState(self.tr("No selection to cut")))
@@ -926,26 +930,26 @@ class DocumentViewModel(ViewModel):
                 else next(iter(clip.channels.values()))
             )
 
-            result = EditAudio(
+            result = self.edit_audio.invoke(
                 {idx: to_audio_signal(channel)},
                 EditCommand(
                     EditCommandType.PASTE,
                     start_time,
                     clip={idx: to_audio_signal(mono_clip)},
                 ),
-            ).invoke()
+            )
         else:
             if not clip.is_stereo:
                 raise RuntimeError("Mono clip pasted without reconciliation")
 
             channels = self._stereo_edit_channels()
 
-            result = EditAudio(
+            result = self.edit_audio.invoke(
                 to_audio_signals(channels),
                 EditCommand(
                     EditCommandType.PASTE, start_time, clip=to_audio_signals(clip)
                 ),
-            ).invoke()
+            )
 
         if result is None:
             raise RuntimeError("Paste failed unexpectedly")
@@ -1013,7 +1017,7 @@ class DocumentViewModel(ViewModel):
     def _replace_samples(self, start: int, clip: AudioState) -> EditResult | None:
         """Overwrite each channel's samples from `start` with `clip`, keeping
         the selection. Returns None if the edit was rejected."""
-        result = EditAudio(
+        result = self.edit_audio.invoke(
             to_audio_signals(self.audio_state),
             EditCommand(
                 EditCommandType.REPLACE,
@@ -1022,7 +1026,7 @@ class DocumentViewModel(ViewModel):
                 start_idx=start,
             ),
             ref_channel=next(iter(self.audio_state.channels)),
-        ).invoke()
+        )
         if result is None:
             return None
 
@@ -1251,10 +1255,10 @@ class DocumentViewModel(ViewModel):
             raise RuntimeError("Missing primary audio channel")
 
         new_channel = self._tiny_noise(len(existing.x), existing.fs, existing.x.dtype)
-        new_result = EditAudio(
+        new_result = self.edit_audio.invoke(
             {0: new_channel},
             EditCommand(EditCommandType.PASTE, position, clip=to_audio_signals(clip)),
-        ).invoke()
+        )
         if new_result is None:
             raise RuntimeError("Paste failed unexpectedly")
         new_channel = new_result.new_audio[0]
