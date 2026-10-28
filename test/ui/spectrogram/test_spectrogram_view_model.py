@@ -1,17 +1,18 @@
 from dataclasses import replace
-from typing import ClassVar
 
 import numpy as np
 import pytest
-from PyQt6.QtCore import QObject, pyqtSignal
 from pytestqt.qtbot import QtBot
+from support.job_manager import FakeJobManager
+from support.mocks import mock_use_case, yields
+from support.view_models import make_spectrogram_view_model
 
-import ui.base.view_model as view_model_module
-import ui.spectrogram.spectrogram_view_model as svm_module
 from core.load_audio.entity.audio_signal import AudioSignal
+from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
 from core.track_formants.entity.formant_track import FormantTrack
+from core.track_formants.track_formants import TrackFormants
 from res.constants import SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
 from ui.base.state import State
 from ui.document.state.audio_channel_state import AudioChannelState
@@ -22,64 +23,9 @@ from ui.spectrogram.state.formant_settings import FormantSettingsState
 from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
-
-class FakeJobManagerSignals(QObject):
-    finished = pyqtSignal()
-
-
-class FakeJobManager:
-    def __init__(self):
-        self.signals = FakeJobManagerSignals()
-        self.jobs = []
-
-    def __call__(self, job: object):
-        self.jobs.append(job)
-
-    def queue_job(self, job: object):
-        self.jobs.append(job)
-
-    def quit(self):
-        pass
-
-
-class FakeComputeSpectrogram:
-    instances: ClassVar[list["FakeComputeSpectrogram"]] = []
-    result: ClassVar[Spectrogram] = Spectrogram(
-        t=np.array([0.0, 1.0]), f=np.array([0.0, 100.0]), sxx=np.array([[1.0, 2.0]])
-    )
-
-    def __init__(
-        self,
-        x: np.ndarray,
-        fs: int,
-        window_size: float,
-        step_size: float,
-        order: int,
-    ):
-        self.x = x
-        self.fs = fs
-        self.window_size = window_size
-        self.step_size = step_size
-        self.order = order
-        FakeComputeSpectrogram.instances.append(self)
-
-    def run_sync(self) -> Spectrogram:
-        return FakeComputeSpectrogram.result
-
-
-@pytest.fixture
-def fake_job_manager(monkeypatch: pytest.MonkeyPatch) -> type[FakeJobManager]:
-    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
-    return FakeJobManager
-
-
-@pytest.fixture
-def fake_compute_spectrogram(
-    monkeypatch: pytest.MonkeyPatch,
-) -> type[FakeComputeSpectrogram]:
-    FakeComputeSpectrogram.instances = []
-    monkeypatch.setattr(svm_module, "ComputeSpectrogram", FakeComputeSpectrogram)
-    return FakeComputeSpectrogram
+SPECTROGRAM = Spectrogram(
+    t=np.array([0.0, 1.0]), f=np.array([0.0, 100.0]), sxx=np.array([[1.0, 2.0]])
+)
 
 
 # --------------------------- on_state_changed ---------------------------
@@ -88,7 +34,7 @@ def fake_compute_spectrogram(
 def test_on_state_changed_loads_spectrogram_when_prepped_and_showing(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.sgram_state = replace(view_model.sgram_state, is_showing=True)
     calls = []
     view_model.load_spectrogram = lambda: calls.append(True)
@@ -99,7 +45,7 @@ def test_on_state_changed_loads_spectrogram_when_prepped_and_showing(
 
 
 def test_on_state_changed_does_not_load_when_not_showing(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     calls = []
     view_model.load_spectrogram = lambda: calls.append(True)
 
@@ -109,7 +55,7 @@ def test_on_state_changed_does_not_load_when_not_showing(qtbot: QtBot):
 
 
 def test_on_state_changed_ignores_other_states(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.sgram_state = replace(view_model.sgram_state, is_showing=True)
     calls = []
     view_model.load_spectrogram = lambda: calls.append(True)
@@ -125,7 +71,7 @@ def test_on_state_changed_ignores_other_states(qtbot: QtBot):
 def test_prep_audio_uses_settings_fs(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.spectrogram_settings = replace(view_model.spectrogram_settings, fs=8000)
 
     view_model.prep_audio(np.arange(1000, dtype=np.float64), 1000)
@@ -138,7 +84,7 @@ def test_prep_audio_uses_settings_fs(
 
 
 def test_set_target_fs_updates_settings_fs(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
 
     view_model.set_target_fs(22050)
 
@@ -148,7 +94,7 @@ def test_set_target_fs_updates_settings_fs(qtbot: QtBot):
 def test_prep_audio_emits_load_progress_true(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     received = []
     view_model.subscribe(received.append)
 
@@ -160,7 +106,7 @@ def test_prep_audio_emits_load_progress_true(
 def test_prep_audio_on_success_updates_prepped_state_and_emits_audio_prepped(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     received = []
     view_model.subscribe(received.append)
     view_model.load_spectrogram = lambda: None
@@ -184,7 +130,7 @@ def test_prep_audio_on_success_updates_prepped_state_and_emits_audio_prepped(
 def test_prep_audio_on_success_invalidates_spectrogram(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.sgram_state = replace(
         view_model.sgram_state, sxx_mmap=np.zeros((1, 1)), t_mmap=np.zeros(1)
     )
@@ -204,7 +150,7 @@ def test_prep_audio_on_success_invalidates_spectrogram(
 
 
 def test_load_spectrogram_returns_early_when_no_prepped_audio(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
 
     view_model.load_spectrogram()
 
@@ -213,7 +159,7 @@ def test_load_spectrogram_returns_early_when_no_prepped_audio(qtbot: QtBot):
 
 
 def test_load_spectrogram_hides_when_window_too_long(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     fs = 1000
     view_model.prepped_audio_state = AudioChannelState(
         np.arange(fs * 20, dtype=np.float64), fs
@@ -230,7 +176,7 @@ def test_load_spectrogram_hides_when_window_too_long(qtbot: QtBot):
 
 
 def test_load_spectrogram_hides_when_window_too_short(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     fs = 1000
     view_model.prepped_audio_state = AudioChannelState(
         np.arange(fs * 5, dtype=np.float64), fs
@@ -247,7 +193,7 @@ def test_load_spectrogram_hides_when_window_too_short(qtbot: QtBot):
 def test_load_spectrogram_loads_window_and_computes_mmap_when_missing(
     qtbot: QtBot,
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     fs = 1000
     view_model.prepped_audio_state = AudioChannelState(
         np.arange(fs * 5, dtype=np.float64), fs
@@ -270,7 +216,7 @@ def test_load_spectrogram_loads_window_and_computes_mmap_when_missing(
 def test_load_spectrogram_skips_mmap_computation_when_already_present(
     qtbot: QtBot,
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     fs = 1000
     view_model.prepped_audio_state = AudioChannelState(
         np.arange(fs * 5, dtype=np.float64), fs
@@ -293,7 +239,7 @@ def test_load_spectrogram_skips_mmap_computation_when_already_present(
 
 
 def test_load_spectrogram_window_uses_cached_mmap_when_available(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     fs = 1000
     t = np.arange(10, dtype=np.float64) / fs
     t_mmap = np.array([0.0, 0.001, 0.003, 0.005, 0.007, 0.009])
@@ -317,7 +263,7 @@ def test_load_spectrogram_window_uses_cached_mmap_when_available(qtbot: QtBot):
 
 
 def test_load_spectrogram_window_computes_fresh_when_no_cache(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     fs = 1000
     t = np.arange(10, dtype=np.float64) / fs
 
@@ -339,7 +285,7 @@ def test_load_spectrogram_window_computes_fresh_when_no_cache(qtbot: QtBot):
 def test_load_spectrogram_window_computes_fresh_when_window_extends_past_computed(
     qtbot: QtBot,
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     fs = 1000
     t = np.arange(10, dtype=np.float64) / fs
     view_model.sgram_state = replace(
@@ -364,28 +310,27 @@ def test_load_spectrogram_window_computes_fresh_when_window_extends_past_compute
 # --------------------------- compute_low_res_sgram ---------------------------
 
 
-def test_compute_low_res_sgram_updates_window_state(
-    qtbot: QtBot, fake_compute_spectrogram: type[FakeComputeSpectrogram]
-):
-    view_model = SpectrogramViewModel()
+def test_compute_low_res_sgram_updates_window_state(qtbot: QtBot):
+    compute_spectrogram = mock_use_case(ComputeSpectrogram)
+    yields(compute_spectrogram, SPECTROGRAM)
+    view_model = make_spectrogram_view_model(compute_spectrogram=compute_spectrogram)
     x = np.arange(1000, dtype=np.float64)
 
     view_model.compute_low_res_sgram(x, 1000, 100, 500)
 
-    instance = fake_compute_spectrogram.instances[0]
-    assert instance.step_size == 0.003
     # SpectrogramSettingsState.__post_init__ raises order 7 to the minimum (8)
     # required for the default window_size/fs.
-    assert instance.order == 8
-    np.testing.assert_array_equal(instance.x, x[100:500])
+    compute_spectrogram.assert_called_once()
+    window, fs, _window_size, step_size, order = compute_spectrogram.call_args.args
+    np.testing.assert_array_equal(window, x[100:500])
+    assert fs == 1000
+    assert step_size == 0.003
+    assert order == 8
 
     np.testing.assert_array_equal(
-        view_model.sgram_state.t_window,
-        FakeComputeSpectrogram.result.t + (100 / 1000),
+        view_model.sgram_state.t_window, SPECTROGRAM.t + (100 / 1000)
     )
-    np.testing.assert_array_equal(
-        view_model.sgram_state.sxx_window, FakeComputeSpectrogram.result.sxx
-    )
+    np.testing.assert_array_equal(view_model.sgram_state.sxx_window, SPECTROGRAM.sxx)
     assert view_model.sgram_state.is_showing is True
 
 
@@ -395,7 +340,7 @@ def test_compute_low_res_sgram_updates_window_state(
 def test_compute_sgram_window_updates_state_on_success(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     x = np.arange(1000, dtype=np.float64)
 
     view_model.compute_sgram_window(x, 1000, 100, 500)
@@ -418,7 +363,7 @@ def test_compute_sgram_window_updates_state_on_success(
 def test_compute_sgram_window_ignores_stale_generation(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     x = np.arange(1000, dtype=np.float64)
 
     view_model.compute_sgram_window(x, 1000, 100, 500)
@@ -438,7 +383,7 @@ def test_compute_sgram_window_ignores_stale_generation(
 def test_compute_spectrogram_mmap_updates_state_on_success(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     x = np.arange(1000, dtype=np.float64)
 
     view_model.compute_spectrogram_mmap(x, 1000)
@@ -467,7 +412,7 @@ def test_compute_spectrogram_mmap_updates_state_on_success(
 def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     x = np.arange(1000, dtype=np.float64)
 
     view_model.compute_spectrogram_mmap(x, 1000)
@@ -494,7 +439,7 @@ def test_compute_spectrogram_mmap_ignores_unwritten_buffer_tail(
 def test_compute_spectrogram_mmap_launches_only_once(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     x = np.arange(1000, dtype=np.float64)
 
     view_model.compute_spectrogram_mmap(x, 1000)
@@ -507,7 +452,7 @@ def test_compute_spectrogram_mmap_launches_only_once(
 def test_compute_spectrogram_mmap_ignores_stale_generation(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     x = np.arange(1000, dtype=np.float64)
 
     view_model.compute_spectrogram_mmap(x, 1000)
@@ -531,7 +476,7 @@ def test_compute_spectrogram_mmap_ignores_stale_generation(
 
 
 def test_adjust_gray_scale_applies_adjustment(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.sgram_state = replace(view_model.sgram_state, gray_cutoff=0.3)
     received = []
     view_model.subscribe(received.append)
@@ -543,7 +488,7 @@ def test_adjust_gray_scale_applies_adjustment(qtbot: QtBot):
 
 
 def test_adjust_gray_scale_clamps_to_upper_bound(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.sgram_state = replace(view_model.sgram_state, gray_cutoff=0.65)
 
     view_model.adjust_gray_scale(0.5)
@@ -552,7 +497,7 @@ def test_adjust_gray_scale_clamps_to_upper_bound(qtbot: QtBot):
 
 
 def test_adjust_gray_scale_clamps_to_lower_bound(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.sgram_state = replace(view_model.sgram_state, gray_cutoff=0.05)
 
     view_model.adjust_gray_scale(-0.5)
@@ -564,7 +509,7 @@ def test_adjust_gray_scale_clamps_to_lower_bound(qtbot: QtBot):
 
 
 def test_update_sxx_percentiles_computes_20th_and_80th(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
 
     view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64))
 
@@ -573,7 +518,7 @@ def test_update_sxx_percentiles_computes_20th_and_80th(qtbot: QtBot):
 
 
 def test_update_sxx_percentiles_replaces_low_and_high(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64) - 100)
 
     view_model.update_sxx_percentiles(np.arange(11, dtype=np.float64))
@@ -583,7 +528,7 @@ def test_update_sxx_percentiles_replaces_low_and_high(qtbot: QtBot):
 
 
 def test_update_sxx_percentiles_is_not_skewed_by_a_single_outlier(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     data = np.concatenate([np.arange(11, dtype=np.float64), [-3076.0]])
 
     view_model.update_sxx_percentiles(data)
@@ -593,7 +538,7 @@ def test_update_sxx_percentiles_is_not_skewed_by_a_single_outlier(qtbot: QtBot):
 
 
 def test_update_sxx_percentiles_does_nothing_for_empty_input(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     before = view_model.sgram_state
 
     view_model.update_sxx_percentiles(np.array([]))
@@ -604,7 +549,7 @@ def test_update_sxx_percentiles_does_nothing_for_empty_input(qtbot: QtBot):
 def test_update_sxx_percentiles_estimates_correctly_from_a_large_sample(
     qtbot: QtBot,
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     rng = np.random.default_rng(42)
     data = rng.uniform(-70, -5, size=(257, 500_000)).astype(np.float32)
 
@@ -619,7 +564,7 @@ def test_update_sxx_percentiles_estimates_correctly_from_a_large_sample(
 
 
 def test_sample_sxx_returns_full_array_at_or_under_threshold(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE, dtype=np.float64)
 
     sample = view_model._sample_sxx(data)
@@ -628,7 +573,7 @@ def test_sample_sxx_returns_full_array_at_or_under_threshold(qtbot: QtBot):
 
 
 def test_sample_sxx_caps_size_when_over_threshold(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE + 1, dtype=np.float64)
 
     sample = view_model._sample_sxx(data)
@@ -638,7 +583,7 @@ def test_sample_sxx_caps_size_when_over_threshold(qtbot: QtBot):
 
 
 def test_sample_sxx_samples_from_a_2d_array(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     data = np.arange(300 * 400, dtype=np.float64).reshape(300, 400)
 
     sample = view_model._sample_sxx(data)
@@ -650,8 +595,8 @@ def test_sample_sxx_samples_from_a_2d_array(qtbot: QtBot):
 def test_sample_sxx_is_deterministic_across_fresh_instances(qtbot: QtBot):
     data = np.arange(SPECTROGRAM_PERCENTILE_SAMPLE_SIZE * 3, dtype=np.float64)
 
-    sample_a = SpectrogramViewModel()._sample_sxx(data)
-    sample_b = SpectrogramViewModel()._sample_sxx(data)
+    sample_a = make_spectrogram_view_model()._sample_sxx(data)
+    sample_b = make_spectrogram_view_model()._sample_sxx(data)
 
     np.testing.assert_array_equal(sample_a, sample_b)
 
@@ -662,7 +607,7 @@ def test_sample_sxx_is_deterministic_across_fresh_instances(qtbot: QtBot):
 def test_invalidate_spectrogram_increments_generation_and_clears_mmap(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     generation_before = view_model._buffer_generation
     view_model.sgram_state = replace(
         view_model.sgram_state,
@@ -685,7 +630,7 @@ def test_invalidate_spectrogram_increments_generation_and_clears_mmap(
 
 
 def test_set_window_state_converts_sample_indices_and_loads(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.spectrogram_settings = replace(view_model.spectrogram_settings, fs=2000)
     load_calls = []
     view_model.load_spectrogram = lambda: load_calls.append(True)
@@ -697,7 +642,7 @@ def test_set_window_state_converts_sample_indices_and_loads(qtbot: QtBot):
 
 
 def test_set_window_state_updates_settings_fs_when_target_given(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.load_spectrogram = lambda: None
 
     view_model.set_window_state(start=0, end=1000, raw_fs=1000, target_fs=4000)
@@ -710,7 +655,7 @@ def test_set_window_state_updates_settings_fs_when_target_given(qtbot: QtBot):
 
 
 def test_update_settings_returns_early_without_raw_audio(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     new_settings = replace(view_model.spectrogram_settings, window_size=0.02)
 
     view_model.update_settings(new_settings)
@@ -721,7 +666,7 @@ def test_update_settings_returns_early_without_raw_audio(qtbot: QtBot):
 def test_update_settings_resamples_when_fs_changes(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.raw_audio_state = AudioChannelState(
         np.arange(1000, dtype=np.float64), 1000
     )
@@ -737,7 +682,7 @@ def test_update_settings_resamples_when_fs_changes(
 def test_update_settings_reloads_without_resample_when_fs_unchanged(
     qtbot: QtBot,
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.raw_audio_state = AudioChannelState(
         np.arange(1000, dtype=np.float64), 1000
     )
@@ -758,7 +703,7 @@ def test_update_settings_reloads_without_resample_when_fs_unchanged(
 
 
 def test_on_error_does_not_raise(qtbot: QtBot, capsys: pytest.CaptureFixture):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
 
     view_model.on_error(ValueError("boom"))
 
@@ -768,7 +713,7 @@ def test_on_error_does_not_raise(qtbot: QtBot, capsys: pytest.CaptureFixture):
 def test_prep_audio_on_success_rescales_window_when_prepped_fs_changes(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     view_model.load_spectrogram = lambda: None
     view_model.prepped_audio_state = AudioChannelState(np.zeros(32000), 16000)
     view_model.window_state = SpectrogramWindowState(8000, 31999)
@@ -783,23 +728,10 @@ def test_prep_audio_on_success_rescales_window_when_prepped_fs_changes(
 # --------------------------- formants ---------------------------
 
 
-class FakeTrackFormants:
-    instances: ClassVar[list["FakeTrackFormants"]] = []
-
-    def __init__(self, *args: object):
-        self.args = args
-        FakeTrackFormants.instances.append(self)
-
-
-@pytest.fixture
-def fake_track_formants(monkeypatch: pytest.MonkeyPatch) -> type[FakeTrackFormants]:
-    FakeTrackFormants.instances = []
-    monkeypatch.setattr(svm_module, "TrackFormants", FakeTrackFormants)
-    return FakeTrackFormants
-
-
-def make_formant_view_model() -> SpectrogramViewModel:
-    view_model = SpectrogramViewModel()
+def make_formant_view_model(
+    track_formants: TrackFormants | None = None,
+) -> SpectrogramViewModel:
+    view_model = make_spectrogram_view_model(track_formants=track_formants)
     view_model.raw_audio_state = AudioChannelState(np.zeros(4000), 1000)
     view_model.prepped_audio_state = AudioChannelState(np.zeros(8000), 2000)
     view_model.window_state = SpectrogramWindowState(2000, 6000)  # 1 s to 3 s
@@ -809,15 +741,15 @@ def make_formant_view_model() -> SpectrogramViewModel:
 def test_track_formants_uses_raw_audio_under_window(
     qtbot: QtBot,
     fake_job_manager: type[FakeJobManager],
-    fake_track_formants: type[FakeTrackFormants],
 ):
-    view_model = make_formant_view_model()
+    track_formants = mock_use_case(TrackFormants)
+    view_model = make_formant_view_model(track_formants)
     settings = FormantSettingsState(0.9, 80, 300, 2)
 
     view_model.track_formants(settings)
 
     assert view_model.formant_settings == settings
-    x, fs, *params = fake_track_formants.instances[0].args
+    x, fs, *params = track_formants.call_args.args
     assert len(x) == 2000
     assert fs == 1000
     assert params == [0.9, 80, 300, 2]
@@ -826,7 +758,6 @@ def test_track_formants_uses_raw_audio_under_window(
 def test_track_formants_emits_track_at_absolute_times(
     qtbot: QtBot,
     fake_job_manager: type[FakeJobManager],
-    fake_track_formants: type[FakeTrackFormants],
 ):
     view_model = make_formant_view_model()
     received = []
@@ -844,20 +775,18 @@ def test_track_formants_emits_track_at_absolute_times(
     assert received[-2] == LoadProgressState(False)
 
 
-def test_track_formants_does_nothing_without_audio(
-    qtbot: QtBot, fake_track_formants: type[FakeTrackFormants]
-):
-    view_model = SpectrogramViewModel()
+def test_track_formants_does_nothing_without_audio(qtbot: QtBot):
+    track_formants = mock_use_case(TrackFormants)
+    view_model = make_spectrogram_view_model(track_formants=track_formants)
 
     view_model.track_formants(FormantSettingsState())
 
-    assert fake_track_formants.instances == []
+    track_formants.assert_not_called()
 
 
 def test_clear_formants_discards_pending_track(
     qtbot: QtBot,
     fake_job_manager: type[FakeJobManager],
-    fake_track_formants: type[FakeTrackFormants],
 ):
     view_model = make_formant_view_model()
     view_model.track_formants(FormantSettingsState())
@@ -877,7 +806,6 @@ def test_clear_formants_discards_pending_track(
 def test_track_formants_error_stops_progress(
     qtbot: QtBot,
     fake_job_manager: type[FakeJobManager],
-    fake_track_formants: type[FakeTrackFormants],
 ):
     view_model = make_formant_view_model()
     view_model.track_formants(FormantSettingsState())

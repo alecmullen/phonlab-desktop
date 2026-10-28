@@ -4,6 +4,7 @@ from types import MappingProxyType
 
 import pytest
 from pytestqt.qtbot import QtBot
+from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
     Annotation,
@@ -41,7 +42,7 @@ MOCK_ANNOTATION_NODES = MappingProxyType(
 def make_view_model(
     nodes: dict[int, AnnotationNodeState], start: float, end: float
 ) -> AnnotationViewModel:
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     view_model.annotation_state = AnnotationState(nodes=nodes, types=[])
     view_model.window_state = (start, end)
     view_model.annotation_view_state = AnnotationState(nodes=nodes, types=[])
@@ -266,13 +267,13 @@ def test_select_label_with_missing_node_raises(qtbot: QtBot):
         view_model.select_label(AnnotationLabelState(s_node=0, e_node=99, label="x"))
 
 
-def make_annotation_view_model(
+def make_annotated_view_model(
     nodes: dict[int, float],
     tiers: list[list[tuple[int, int, str]]],
     start: float = 0.0,
     end: float = 3.0,
 ) -> AnnotationViewModel:
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     view_model.window_state = (start, end)
     view_model.set_annotation_state(
         Annotation(
@@ -297,14 +298,14 @@ def label_spans(view_model: AnnotationViewModel, tier: int) -> list[tuple]:
 
 
 def test_delete_node_missing_node_raises(qtbot: QtBot):
-    view_model = make_annotation_view_model({0: 0.0, 1: 1.0}, [[(0, 1, "a")]], end=1.0)
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[(0, 1, "a")]], end=1.0)
 
     with pytest.raises(ValueError):
         view_model.delete_node(99)
 
 
 def test_delete_node_merges_adjacent_interval_labels(qtbot: QtBot):
-    view_model = make_annotation_view_model(
+    view_model = make_annotated_view_model(
         {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
     )
     first_label_id = view_model.annotation_state.types[0].labels[0].id
@@ -321,7 +322,7 @@ def test_delete_node_merges_adjacent_interval_labels(qtbot: QtBot):
 
 
 def test_delete_node_does_not_mutate_previous_state(qtbot: QtBot):
-    view_model = make_annotation_view_model(
+    view_model = make_annotated_view_model(
         {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
     )
     previous = view_model.annotation_state
@@ -337,7 +338,7 @@ def test_delete_node_does_not_mutate_previous_state(qtbot: QtBot):
 def test_delete_end_node_with_attached_label_shows_status_message(
     qtbot: QtBot, node: int
 ):
-    view_model = make_annotation_view_model(
+    view_model = make_annotated_view_model(
         {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
     )
     received = []
@@ -352,7 +353,7 @@ def test_delete_end_node_with_attached_label_shows_status_message(
 
 
 def test_create_label_from_selection_adds_label_and_emits(qtbot: QtBot):
-    view_model = make_annotation_view_model({0: 0.0, 1: 3.0}, [[], [(0, 1, "a")]])
+    view_model = make_annotated_view_model({0: 0.0, 1: 3.0}, [[], [(0, 1, "a")]])
 
     with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
         view_model.create_label_from_selection(0, 1.0, 2.0)
@@ -367,7 +368,7 @@ def test_create_label_from_selection_adds_label_and_emits(qtbot: QtBot):
 
 
 def test_create_label_from_selection_uses_same_node_threshold(qtbot: QtBot):
-    view_model = make_annotation_view_model({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[]])
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[]])
 
     view_model.create_label_from_selection(0, 1.1, 1.9, 0.2)
 
@@ -376,7 +377,7 @@ def test_create_label_from_selection_uses_same_node_threshold(qtbot: QtBot):
 
 
 def test_create_label_from_too_short_selection_shows_status_message(qtbot: QtBot):
-    view_model = make_annotation_view_model({0: 0.0, 1: 1.0, 2: 3.0}, [[(0, 1, "a")]])
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0, 2: 3.0}, [[(0, 1, "a")]])
     previous = view_model.annotation_state
     received = []
     view_model.subscribe(received.append)

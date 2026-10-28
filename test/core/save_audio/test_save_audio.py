@@ -40,11 +40,9 @@ def test_invoke_preps_audio_and_writes_with_pcm16(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(save_audio_module.sf, "write", fake_write)
 
     raw_x = np.array([1.0, 2.0, 3.0])
-    use_case = SaveAudio(
-        "out.wav", [AudioSignal(raw_x, 44100)], target_fs=16000, scale=True
-    )
+    use_case = SaveAudio()
 
-    use_case.invoke()
+    use_case("out.wav", [AudioSignal(raw_x, 44100)], target_fs=16000, scale=True)
 
     assert len(prep_calls) == 1
     call = prep_calls[0]
@@ -81,11 +79,9 @@ def test_invoke_passes_scale_false_through(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(save_audio_module.phon, "prep_audio", fake_prep_audio)
     monkeypatch.setattr(save_audio_module.sf, "write", lambda *args, **kwargs: None)
 
-    use_case = SaveAudio(
-        "out.wav", [AudioSignal(np.zeros(1), 8000)], target_fs=8000, scale=False
-    )
+    use_case = SaveAudio()
 
-    use_case.invoke()
+    use_case("out.wav", [AudioSignal(np.zeros(1), 8000)], target_fs=8000, scale=False)
 
     assert scale_values == [False]
 
@@ -108,11 +104,9 @@ def test_invoke_writes_prepped_audio_to_a_real_file(
     monkeypatch.setattr(save_audio_module.phon, "prep_audio", fake_prep_audio)
 
     path = tmp_path / "out.wav"
-    use_case = SaveAudio(
-        str(path), [AudioSignal(np.zeros(5), 44100)], target_fs=16000, scale=True
-    )
+    use_case = SaveAudio()
 
-    use_case.invoke()
+    use_case(str(path), [AudioSignal(np.zeros(5), 44100)], target_fs=16000, scale=True)
 
     assert path.exists()
     written_x, written_fs = sf.read(str(path))
@@ -149,9 +143,9 @@ def test_invoke_writes_stereo_as_two_column_array(monkeypatch: pytest.MonkeyPatc
 
     channel0 = AudioSignal(np.array([1.0, 2.0, 3.0]), 44100)
     channel1 = AudioSignal(np.array([4.0, 5.0, 6.0]), 48000)
-    use_case = SaveAudio("out.wav", [channel0, channel1], target_fs=16000, scale=True)
+    use_case = SaveAudio()
 
-    use_case.invoke()
+    use_case("out.wav", [channel0, channel1], target_fs=16000, scale=True)
 
     assert len(write_calls) == 1
     written = write_calls[0]["x"]
@@ -182,9 +176,9 @@ def test_invoke_calls_prep_audio_once_per_channel_independently(
 
     channel0 = AudioSignal(np.array([1.0, 2.0]), 44100)
     channel1 = AudioSignal(np.array([3.0, 4.0]), 48000)
-    use_case = SaveAudio("out.wav", [channel0, channel1], target_fs=16000, scale=True)
+    use_case = SaveAudio()
 
-    use_case.invoke()
+    use_case("out.wav", [channel0, channel1], target_fs=16000, scale=True)
 
     assert len(calls) == 2
     np.testing.assert_array_equal(calls[0]["raw_x"], channel0.x)
@@ -213,8 +207,8 @@ def test_invoke_writes_real_two_channel_wav_file(
     channel1 = AudioSignal(np.linspace(1, -1, 100, dtype=np.float64), 16000)
     path = tmp_path / "stereo_out.wav"
 
-    use_case = SaveAudio(str(path), [channel0, channel1], target_fs=16000, scale=False)
-    use_case.invoke()
+    use_case = SaveAudio()
+    use_case(str(path), [channel0, channel1], target_fs=16000, scale=False)
 
     assert path.exists()
     written_x, written_fs = sf.read(str(path))

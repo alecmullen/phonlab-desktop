@@ -3,16 +3,19 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
+from support.audio_player import FakeAudioPlayer
+from support.job_manager import FakeJobManager
+from support.mocks import mock_use_case
+from support.view_models import StubViewModelFactory
 
-import ui.base.view_model as view_model_module
 import ui.document.document_view as doc_view_module
-import ui.document.document_view_model as dvm_module
 import ui.main.main_window as main_window_module
 from core.load_audio.entity.audio_signal import AudioSignal
+from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
@@ -23,55 +26,30 @@ from ui.main.save_audio_dialog import SaveOptions
 from ui.main.state.audio_open_options import AudioOpenOptionsState
 
 
-class FakeAudioPlayer:
-    def __init__(self):
-        self.stopped = False
-
-    def stop(self):
-        self.stopped = True
-
-    class playback_poll:
-        @staticmethod
-        def connect(slot: object):
-            pass
-
-
-class FakeJobManagerSignals(QObject):
-    finished = pyqtSignal()
-
-
-class FakeJobManager:
-    def __init__(self):
-        self.signals = FakeJobManagerSignals()
-        self.jobs = []
-
-    def __call__(self, job: object):
-        self.jobs.append(job)
-
-    def queue_job(self, job: object):
-        self.jobs.append(job)
-
-    def quit(self):
-        pass
-
-
 @pytest.fixture(autouse=True)
 def disable_zero_crossing_snapping(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "cut_and_paste_at_zero_crossings", False)
 
 
 @pytest.fixture
-def main_window(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> MainWindow:
-    monkeypatch.setattr(dvm_module, "AudioPlayer", FakeAudioPlayer)
-    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
-    win = MainWindow()
+def save_audio() -> SaveAudio:
+    return mock_use_case(SaveAudio)
+
+
+@pytest.fixture
+def main_window(
+    qtbot: QtBot,
+    fake_audio_player: type[FakeAudioPlayer],
+    fake_job_manager: type[FakeJobManager],
+    save_audio: SaveAudio,
+) -> MainWindow:
+    win = MainWindow(StubViewModelFactory(save_audio=save_audio))
     qtbot.addWidget(win)
     return win
 
 
 def add_document(main_window: MainWindow, name: str = "doc.wav") -> DocumentView:
-    vm = DocumentViewModel()
-    vm.prep_audio_spectrogram = lambda: None
+    vm = main_window.view_model_factory.create(DocumentViewModel)
     doc = DocumentView(vm)
     doc.origin_name = name
     doc.origin_path = f"/tmp/{name}"
@@ -452,7 +430,7 @@ def test_key_press_for_unhandled_key_does_not_touch_document(main_window: MainWi
 
 
 def test_save_audio_invokes_save_use_case_with_selected_options(
-    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+    main_window: MainWindow, save_audio: SaveAudio, monkeypatch: pytest.MonkeyPatch
 ):
     doc = add_document(main_window, "myfile.wav")
     load_signal(doc, np.arange(5000), fs=1000)
@@ -465,22 +443,17 @@ def test_save_audio_invokes_save_use_case_with_selected_options(
             )
         ),
     )
-    calls = []
-
-    class FakeSaveAudio:
-        def __init__(
-            self, path: str, channels: list[AudioSignal], target_fs: int, scale: bool
-        ):
-            calls.append((path, channels[0].fs, target_fs, scale))
-
-        def invoke(self):
-            pass
-
-    monkeypatch.setattr(dvm_module, "SaveAudio", FakeSaveAudio)
 
     main_window.save_audio()
 
-    assert calls == [("/tmp/out.wav", 1000, 8000, True)]
+    save_audio.assert_called_once()
+    path, channels, target_fs, scale = save_audio.call_args.args
+    assert (path, channels[0].fs, target_fs, scale) == (
+        "/tmp/out.wav",
+        1000,
+        8000,
+        True,
+    )
 
 
 def test_save_audio_does_nothing_without_a_current_document(
@@ -499,7 +472,7 @@ def test_save_audio_does_nothing_without_a_current_document(
 
 
 def test_save_audio_shows_error_dialog_on_failure(
-    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+    main_window: MainWindow, save_audio: SaveAudio, monkeypatch: pytest.MonkeyPatch
 ):
     doc = add_document(main_window, "myfile.wav")
     load_signal(doc, np.arange(5000), fs=1000)
@@ -513,14 +486,7 @@ def test_save_audio_shows_error_dialog_on_failure(
         ),
     )
 
-    class FailingSaveAudio:
-        def __init__(self, *args: object):
-            pass
-
-        def invoke(self):
-            raise RuntimeError("disk full")
-
-    monkeypatch.setattr(dvm_module, "SaveAudio", FailingSaveAudio)
+    save_audio.side_effect = RuntimeError("disk full")
     critical_calls = []
     monkeypatch.setattr(
         main_window_module.QMessageBox,

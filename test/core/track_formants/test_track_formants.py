@@ -31,7 +31,7 @@ def test_invoke_calls_phon_track_formants_with_ifc_and_params(
     )
     x = np.arange(10, dtype=np.float64)
 
-    result = TrackFormants(x, 8000, 0.9, 80, 300, 2).run_sync()
+    result = TrackFormants().run_sync(x, 8000, 0.9, 80, 300, 2)
 
     assert len(calls) == 1
     assert calls[0][0] is x

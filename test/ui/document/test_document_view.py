@@ -8,7 +8,6 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 from pytestqt.qtbot import QtBot
 
-import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
@@ -40,33 +39,9 @@ from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.waveform.component.delete_channel_dialog import DeleteChannelDialog
 
 
-class FakeAudioPlayer:
-    def __init__(self):
-        self.played: list[tuple[np.ndarray, int, float]] = []
-
-    def stop(self):
-        pass
-
-    def play(self, x: np.ndarray, fs: int, start: float):
-        self.played.append((x, fs, start))
-
-    class playback_poll:
-        @staticmethod
-        def connect(slot: object):
-            pass
-
-
 @pytest.fixture
-def view_model(monkeypatch: pytest.MonkeyPatch) -> DocumentViewModel:
-    monkeypatch.setattr(dvm_module, "AudioPlayer", FakeAudioPlayer)
-    vm = DocumentViewModel()
-    vm.prep_audio_spectrogram = lambda: None
-    return vm
-
-
-@pytest.fixture
-def view(qtbot: QtBot, view_model: DocumentViewModel) -> DocumentView:
-    document_view = DocumentView(view_model)
+def view(qtbot: QtBot, document_view_model: DocumentViewModel) -> DocumentView:
+    document_view = DocumentView(document_view_model)
     qtbot.addWidget(document_view)
     document_view.resize(800, 600)
     document_view.show()
@@ -75,8 +50,10 @@ def view(qtbot: QtBot, view_model: DocumentViewModel) -> DocumentView:
 
 
 @pytest.fixture
-def loaded_view(view: DocumentView, view_model: DocumentViewModel) -> DocumentView:
-    view_model.load_from_samples(
+def loaded_view(
+    view: DocumentView, document_view_model: DocumentViewModel
+) -> DocumentView:
+    document_view_model.load_from_samples(
         to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
     )
     QApplication.processEvents()
@@ -85,9 +62,9 @@ def loaded_view(view: DocumentView, view_model: DocumentViewModel) -> DocumentVi
 
 @pytest.fixture
 def stereo_loaded_view(
-    view: DocumentView, view_model: DocumentViewModel
+    view: DocumentView, document_view_model: DocumentViewModel
 ) -> DocumentView:
-    view_model.load_from_samples(
+    document_view_model.load_from_samples(
         AudioState(
             {
                 0: AudioChannelState(np.arange(20000, dtype=np.float64), 1000),
@@ -211,7 +188,7 @@ def test_update_slider_page_step_clamps_value_to_new_maximum(view: DocumentView)
 def test_mouse_drag_creates_selection_and_plays_it_on_release(
     loaded_view: DocumentView,
 ):
-    view_model = loaded_view.view_model
+    document_view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonPress)
     loaded_view.mousePressEvent(press)
 
@@ -222,8 +199,8 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
         loaded_view.document_plots[0].getViewBox().mapViewToScene(QPointF(4.0, 0))
     )
 
-    assert view_model.select_state.sel_start == pytest.approx(2.0, abs=1e-6)
-    assert view_model.select_state.sel_end == pytest.approx(4.0, abs=1e-6)
+    assert document_view_model.select_state.sel_start == pytest.approx(2.0, abs=1e-6)
+    assert document_view_model.select_state.sel_end == pytest.approx(4.0, abs=1e-6)
     assert loaded_view.is_dragging is True
 
     release = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonRelease)
@@ -231,11 +208,11 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
 
     assert loaded_view.mouse_pressed is False
     assert loaded_view.is_dragging is False
-    assert len(view_model.audio_player.played) == 1
+    assert len(document_view_model.audio_player.played) == 1
 
 
 def test_shift_click_plays_visible_audio(loaded_view: DocumentView):
-    view_model = loaded_view.view_model
+    document_view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
     loaded_view.mousePressEvent(press)
 
@@ -249,25 +226,25 @@ def test_shift_click_plays_visible_audio(loaded_view: DocumentView):
 
     assert loaded_view.pending_single_click is None
     assert loaded_view.click_timer is None
-    assert len(view_model.audio_player.played) == 1
+    assert len(document_view_model.audio_player.played) == 1
 
 
 def test_double_click_zooms_to_selection(loaded_view: DocumentView):
-    view_model = loaded_view.view_model
-    view_model.start_selection(1.0)
-    view_model.continue_selection(5.0)
+    document_view_model = loaded_view.view_model
+    document_view_model.start_selection(1.0)
+    document_view_model.continue_selection(5.0)
 
     dbl_click = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonDblClick)
     loaded_view.mouseDoubleClickEvent(dbl_click)
 
-    assert view_model.document_window_state.start == 1000
-    assert view_model.document_window_state.end == 5000
+    assert document_view_model.document_window_state.start == 1000
+    assert document_view_model.document_window_state.end == 5000
 
 
 def test_click_after_release_sets_mark_at_click_position(
     qtbot: QtBot, loaded_view: DocumentView
 ):
-    view_model = loaded_view.view_model
+    document_view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
     loaded_view.mousePressEvent(press)
     release = mouse_event(
@@ -280,8 +257,8 @@ def test_click_after_release_sets_mark_at_click_position(
     assert loaded_view.click_timer is not None
     qtbot.wait(400)
 
-    assert view_model.mark_state.is_set is True
-    assert view_model.mark_state.position == pytest.approx(4.0, abs=0.01)
+    assert document_view_model.mark_state.is_set is True
+    assert document_view_model.mark_state.position == pytest.approx(4.0, abs=0.01)
 
 
 # --------------------------- scroll handling ---------------------------
@@ -849,12 +826,16 @@ def test_set_mark_if_in_plot_ignores_position_outside_plots(
 def test_play_window_or_selection_plays_selection_when_click_inside_it(
     loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = loaded_view.view_model
-    view_model.start_selection(2.0)
-    view_model.continue_selection(6.0)
+    document_view_model = loaded_view.view_model
+    document_view_model.start_selection(2.0)
+    document_view_model.continue_selection(6.0)
     calls = []
-    monkeypatch.setattr(view_model, "play_selected_audio", lambda: calls.append("sel"))
-    monkeypatch.setattr(view_model, "play_visible_audio", lambda: calls.append("vis"))
+    monkeypatch.setattr(
+        document_view_model, "play_selected_audio", lambda: calls.append("sel")
+    )
+    monkeypatch.setattr(
+        document_view_model, "play_visible_audio", lambda: calls.append("vis")
+    )
     plot = loaded_view.document_plots[0]
     inside = plot.getViewBox().mapViewToScene(QPointF(4.0, 0.0))
 
@@ -1105,12 +1086,12 @@ def test_open_filter_dialog_cancelled_does_nothing(
 
 
 def test_wave_y_range_stays_centered_when_layout_rebuilds_after_y_zoom(
-    view: DocumentView, view_model: DocumentViewModel
+    view: DocumentView, document_view_model: DocumentViewModel
 ):
     """Paste Special (mono -> stereo) and Delete Channel (stereo -> mono)
     rebuild the wave plots; a persisted y zoom must not leave the new plot
     with pyqtgraph's default range pushed off-center by the limits."""
-    view_model.load_from_samples(
+    document_view_model.load_from_samples(
         to_audio_state({0: AudioSignal(np.sin(np.arange(20000) / 10) * 0.8, 1000)})
     )
     QApplication.processEvents()
@@ -1119,11 +1100,11 @@ def test_wave_y_range_stays_centered_when_layout_rebuilds_after_y_zoom(
     zoomed = view.wave_plots[0].getViewBox().viewRange()[1]
 
     clip = AudioState({0: AudioChannelState(np.sin(np.arange(2000) / 10) * 0.3, 1000)})
-    view_model.paste_special_new_channel_with_silence(1, 1.0, clip)
+    document_view_model.paste_special_new_channel_with_silence(1, 1.0, clip)
     QApplication.processEvents()
     assert view.wave_plots[0].getViewBox().viewRange()[1] == pytest.approx(zoomed)
 
-    view_model.delete_channel(1)
+    document_view_model.delete_channel(1)
     QApplication.processEvents()
     assert view.wave_plots[0].getViewBox().viewRange()[1] == pytest.approx(zoomed)
 

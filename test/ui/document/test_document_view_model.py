@@ -2,15 +2,18 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from PyQt6.QtCore import QObject, pyqtSignal
 from pytestqt.qtbot import QtBot
+from support.audio_player import FakeAudioPlayer
+from support.job_manager import FakeJobManager
+from support.mocks import mock_view_model, spy_on_use_case
+from support.view_models import StubViewModelFactory, make_document_view_model
 
-import ui.base.view_model as view_model_module
-import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.settings.app_settings import settings
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
+from core.transform_audio.prep_audio import PrepAudio
+from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
@@ -28,52 +31,41 @@ from ui.document.state.plot_layout_state import PlotLayoutState, PlotType
 from ui.document.state.select_state import SelectState
 from ui.document.state.status_message_state import StatusMessageState
 from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
+from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
-class FakeAudioPlayer:
-    def __init__(self):
-        self.stopped = False
-        self.played: list[tuple[np.ndarray, int, float]] = []
-
-    def stop(self):
-        self.stopped = True
-
-    def play(self, x: np.ndarray, fs: int, start: float):
-        self.played.append((x, fs, start))
-
-    class playback_poll:
-        @staticmethod
-        def connect(slot: object):
-            pass
-
-
-class FakeJobManagerSignals(QObject):
-    finished = pyqtSignal()
-
-
-class FakeJobManager:
-    def __init__(self):
-        self.signals = FakeJobManagerSignals()
-        self.jobs = []
-
-    def __call__(self, job: object):
-        self.jobs.append(job)
-
-    def queue_job(self, job: object):
-        self.jobs.append(job)
-
-    def quit(self):
-        pass
+@pytest.fixture
+def spectrogram_view_model() -> SpectrogramViewModel:
+    return mock_view_model(SpectrogramViewModel)
 
 
 @pytest.fixture
-def view_model(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> DocumentViewModel:
-    monkeypatch.setattr(dvm_module, "AudioPlayer", FakeAudioPlayer)
-    vm = DocumentViewModel()
-    # Do not trigger spectrogram
-    vm.prep_audio_spectrogram = lambda: None
-    return vm
+def annotation_view_model() -> AnnotationViewModel:
+    return mock_view_model(AnnotationViewModel)
+
+
+@pytest.fixture
+def prep_audio() -> PrepAudio:
+    return spy_on_use_case(PrepAudio())
+
+
+@pytest.fixture
+def view_model(
+    qtbot: QtBot,
+    fake_audio_player: type[FakeAudioPlayer],
+    fake_job_manager: type[FakeJobManager],
+    spectrogram_view_model: SpectrogramViewModel,
+    annotation_view_model: AnnotationViewModel,
+    prep_audio: PrepAudio,
+) -> DocumentViewModel:
+    view_model_factory = StubViewModelFactory(
+        {
+            SpectrogramViewModel: spectrogram_view_model,
+            AnnotationViewModel: annotation_view_model,
+        }
+    )
+    return make_document_view_model(view_model_factory, prep_audio=prep_audio)
 
 
 def load_signal(
@@ -554,7 +546,6 @@ def test_push_undo_caps_history_and_clears_redo(view_model: DocumentViewModel):
 def test_load_audio_launches_use_case_and_updates_state_on_success(
     view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
     received = []
     view_model.subscribe(received.append)
     options = AudioOpenOptionsState(primary_channel=0, channel_mode="mono")
@@ -575,7 +566,6 @@ def test_load_audio_launches_use_case_and_updates_state_on_success(
 def test_resample_rescales_window_and_updates_primary_fs(
     view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
     load_signal(view_model, np.arange(20000), fs=1000)
     view_model.raw_audio_state = replace(view_model.audio_state)
 
@@ -979,13 +969,13 @@ def test_close_threads_stops_audio_player(view_model: DocumentViewModel):
 
 
 def test_audio_loaded_seeds_spectrogram_fs_from_open_options(
-    view_model: DocumentViewModel,
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
 ):
     view_model.audio_options = replace(view_model.audio_options, target_fs=22050)
 
     view_model.on_state_changed(AudioLoaded(True, 1000))
 
-    assert view_model.spectrogram_view_model.spectrogram_settings.fs == 22050
+    spectrogram_view_model.set_target_fs.assert_called_once_with(22050)
 
 
 def test_on_annot_state_changed_forwards_status_message(
@@ -1036,29 +1026,23 @@ def test_select_and_play_selects_range_and_plays_it(view_model: DocumentViewMode
 
 
 def test_parse_textgrid_delegates_to_annotation_view_model(
-    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
 ):
-    calls = []
-    monkeypatch.setattr(
-        view_model.annotation_view_model, "parse_textgrid", lambda p: calls.append(p)
-    )
-
     view_model.parse_textgrid("a.TextGrid")
 
-    assert calls == ["a.TextGrid"]
+    annotation_view_model.parse_textgrid.assert_called_once_with("a.TextGrid")
 
 
 def test_window_change_updates_annotation_window_in_seconds(
-    view_model: DocumentViewModel,
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
 ):
     load_signal(view_model, np.arange(4000), 1000)
 
-    view_model.annotation_view_model.set_window_state(9.0, 9.0)
     view_model.update_annotation_state()
 
-    start, end = view_model.annotation_view_model.window_state
-    assert end == pytest.approx(4.0, abs=0.01)
+    start, end = annotation_view_model.set_window_state.call_args.args
     assert start == pytest.approx(0.0, abs=0.01)
+    assert end == pytest.approx(4.0, abs=0.01)
 
 
 # --------------------------- scale / reverse / zoom to selection ---------------------------
@@ -1173,7 +1157,6 @@ def test_zoom_to_selection_noop_without_selection(view_model: DocumentViewModel)
 def resample_to(
     view_model: DocumentViewModel, fs: int, n: int, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
     view_model.resample(fs)
     job = view_model.job_managers["prep_audio"].jobs[-1]
     job.on_success({0: AudioSignal(np.arange(n, dtype=np.float64), fs)})
@@ -1194,18 +1177,18 @@ def test_resample_is_not_undoable_and_clears_history(
 
 
 def test_resample_keeps_earlier_edits_as_source(
-    view_model: DocumentViewModel, monkeypatch: pytest.MonkeyPatch
+    view_model: DocumentViewModel, prep_audio: PrepAudio
 ):
-    monkeypatch.setattr(view_model_module, "JobManager", FakeJobManager)
     load_signal(view_model, np.arange(10000), fs=1000)
     view_model.raw_audio_state = replace(view_model.audio_state)
     view_model.reverse_audio()
 
     view_model.resample(2000)
 
-    job = view_model.job_managers["prep_audio"].jobs[-1]
-    assert job.use_case.raw_signals[0].x[0] == 9999
-    assert job.use_case.scale is False
+    raw_signals, target_fs, _retained = prep_audio.call_args.args
+    assert raw_signals[0].x[0] == 9999
+    assert target_fs == 2000
+    assert prep_audio.call_args.kwargs["scale"] is False
 
 
 def test_filter_audio_filters_without_undo_and_clears_history(

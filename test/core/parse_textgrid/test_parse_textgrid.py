@@ -98,21 +98,21 @@ item []:
 """
 
 
-def make_use_case(
+def write_textgrid(
     tmp_path: Path, content: str, name: str = "sample.TextGrid", encoding: str = "utf-8"
-) -> ParseTextGrid:
+) -> str:
     path = tmp_path / name
     path.write_text(content, encoding=encoding)
-    return ParseTextGrid(str(path))
+    return str(path)
 
 
 # --------------------------- invoke ---------------------------
 
 
 def test_invoke_parses_single_tier_textgrid(tmp_path: Path):
-    use_case = make_use_case(tmp_path, SIMPLE_TEXTGRID)
+    path = write_textgrid(tmp_path, SIMPLE_TEXTGRID)
 
-    result = use_case.invoke()
+    result = ParseTextGrid()(path)
 
     assert result.nodes == {0: 0.0, 1: 0.5, 2: 1.0}
     assert len(result.types) == 1
@@ -124,9 +124,9 @@ def test_invoke_parses_single_tier_textgrid(tmp_path: Path):
 
 
 def test_invoke_parses_multiple_tiers_sharing_nodes(tmp_path: Path):
-    use_case = make_use_case(tmp_path, TWO_TIER_TEXTGRID)
+    path = write_textgrid(tmp_path, TWO_TIER_TEXTGRID)
 
-    result = use_case.invoke()
+    result = ParseTextGrid()(path)
 
     assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
     assert [t.type for t in result.types] == ["word", "phone"]
@@ -143,18 +143,18 @@ def test_invoke_merges_boundaries_within_threshold_across_tiers(tmp_path: Path):
         'xmin = 0.4\n            xmax = 1.0\n            text = "ay"',
         f'xmin = {nudged}\n            xmax = 1.0\n            text = "ay"',
     )
-    use_case = make_use_case(tmp_path, content)
+    path = write_textgrid(tmp_path, content)
 
-    result = use_case.invoke()
+    result = ParseTextGrid()(path)
 
     # the "h"/"ay" boundary (0.4 vs 0.4 + threshold/2) should collapse to one node
     assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
 
 
 def test_invoke_parses_point_tier(tmp_path: Path):
-    use_case = make_use_case(tmp_path, POINT_TIER_TEXTGRID)
+    path = write_textgrid(tmp_path, POINT_TIER_TEXTGRID)
 
-    result = use_case.invoke()
+    result = ParseTextGrid()(path)
 
     assert result.nodes == {0: 0.25, 1: 0.75}
     assert len(result.types) == 1
@@ -167,23 +167,23 @@ def test_invoke_parses_point_tier(tmp_path: Path):
 
 
 def test_invoke_raises_parse_text_grid_error_for_unknown_tier_type(tmp_path: Path):
-    use_case = make_use_case(tmp_path, UNKNOWN_TIER_TEXTGRID)
+    path = write_textgrid(tmp_path, UNKNOWN_TIER_TEXTGRID)
 
     with pytest.raises(ParseTextGridError):
-        use_case.invoke()
+        ParseTextGrid()(path)
 
 
 def test_invoke_raises_parse_text_grid_error_for_truncated_file(tmp_path: Path):
-    use_case = make_use_case(tmp_path, "xmin = 0\nxmax = 1.0\n")
+    path = write_textgrid(tmp_path, "xmin = 0\nxmax = 1.0\n")
 
     with pytest.raises(ParseTextGridError):
-        use_case.invoke()
+        ParseTextGrid()(path)
 
 
 def test_invoke_reads_utf_16_file(tmp_path: Path):
-    use_case = make_use_case(tmp_path, TWO_TIER_TEXTGRID, encoding="utf-16")
+    path = write_textgrid(tmp_path, TWO_TIER_TEXTGRID, encoding="utf-16")
 
-    result = use_case.invoke()
+    result = ParseTextGrid()(path)
 
     assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
     assert [t.type for t in result.types] == ["word", "phone"]

@@ -17,9 +17,10 @@ class EditAudio(UseCaseSync[EditResult | None]):
         if len(ref_channel.x) == 0:
             return index
 
+        search_radius = int(ZERO_CROSSING_SEARCH_MS / 1000 * ref_channel.fs)
         clamped = min(max(index, 0), len(ref_channel.x) - 1)
-        lo = max(0, clamped - self._search_radius)
-        hi = min(len(ref_channel.x) - 1, clamped + self._search_radius)
+        lo = max(0, clamped - search_radius)
+        hi = min(len(ref_channel.x) - 1, clamped + search_radius)
         if hi <= lo:
             return index
 
@@ -151,10 +152,6 @@ class EditAudio(UseCaseSync[EditResult | None]):
     ) -> EditResult | None:
 
         self._validate_channels(channels, ref_channel)
-
-        self._search_radius = int(
-            ZERO_CROSSING_SEARCH_MS / 1000 * channels[ref_channel].fs
-        )
 
         if edit_command.type == EditCommandType.COPY:
             range = self._selected_range(channels[ref_channel], edit_command)
