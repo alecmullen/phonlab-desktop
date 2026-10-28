@@ -15,6 +15,7 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.base.view_model import ViewModel
 from ui.base.view_model_factory import ViewModelFactory
 from ui.document.document_view_model import DocumentViewModel
+from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 
@@ -48,6 +49,8 @@ class ViewModelFactoryImpl(ViewModelFactory):
             view_model = self.create_annotation_view_model(*args, **kwargs)
         elif view_model_type is AudioWaveViewModel:
             view_model = self.create_audio_wave_view_model(*args, **kwargs)
+        elif view_model_type is MainViewModel:
+            view_model = self.create_main_view_model(*args, **kwargs)
 
         if view_model is None:
             raise TypeError(f"No provider method for {view_model_type!s} found")
@@ -79,3 +82,6 @@ class ViewModelFactoryImpl(ViewModelFactory):
 
     def create_audio_wave_view_model(self, channel_idx: int) -> AudioWaveViewModel:
         return AudioWaveViewModel(channel_idx)
+
+    def create_main_view_model(self) -> MainViewModel:
+        return MainViewModel()

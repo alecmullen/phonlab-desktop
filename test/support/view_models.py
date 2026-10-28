@@ -29,34 +29,9 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.base.view_model import ViewModel
 from ui.base.view_model_factory import ViewModelFactory
 from ui.document.document_view_model import DocumentViewModel
+from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
-
-
-def make_annotation_view_model(
-    create_label: CreateLabel | None = None,
-    delete_node: DeleteNode | None = None,
-    parse_text_grid: ParseTextGrid | None = None,
-) -> AnnotationViewModel:
-    return AnnotationViewModel(
-        create_label or CreateLabel(),
-        delete_node or DeleteNode(),
-        parse_text_grid or ParseTextGrid(),
-    )
-
-
-def make_spectrogram_view_model(
-    track_formants: TrackFormants | None = None,
-    prep_audio: PrepAudio | None = None,
-    compute_spectrogram: ComputeSpectrogram | None = None,
-    compute_spectrogram_mmap: ComputeSpectrogramMmap | None = None,
-) -> SpectrogramViewModel:
-    return SpectrogramViewModel(
-        track_formants or mock_use_case(TrackFormants),
-        prep_audio or mock_use_case(PrepAudio),
-        compute_spectrogram or mock_use_case(ComputeSpectrogram),
-        compute_spectrogram_mmap or mock_use_case(ComputeSpectrogramMmap),
-    )
 
 
 class StubViewModelFactory(ViewModelFactory):
@@ -95,9 +70,37 @@ class StubViewModelFactory(ViewModelFactory):
             view_model = make_annotation_view_model()
         elif view_model_type is AudioWaveViewModel:
             view_model = AudioWaveViewModel(*args, **kwargs)
+        elif view_model_type is MainViewModel:
+            view_model = MainViewModel(*args, **kwargs)
         else:
             raise TypeError(f"No stub provided for {view_model_type!s}")
         return cast(T, view_model)
+
+
+def make_annotation_view_model(
+    create_label: CreateLabel | None = None,
+    delete_node: DeleteNode | None = None,
+    parse_text_grid: ParseTextGrid | None = None,
+) -> AnnotationViewModel:
+    return AnnotationViewModel(
+        create_label or CreateLabel(),
+        delete_node or DeleteNode(),
+        parse_text_grid or ParseTextGrid(),
+    )
+
+
+def make_spectrogram_view_model(
+    track_formants: TrackFormants | None = None,
+    prep_audio: PrepAudio | None = None,
+    compute_spectrogram: ComputeSpectrogram | None = None,
+    compute_spectrogram_mmap: ComputeSpectrogramMmap | None = None,
+) -> SpectrogramViewModel:
+    return SpectrogramViewModel(
+        track_formants or mock_use_case(TrackFormants),
+        prep_audio or mock_use_case(PrepAudio),
+        compute_spectrogram or mock_use_case(ComputeSpectrogram),
+        compute_spectrogram_mmap or mock_use_case(ComputeSpectrogramMmap),
+    )
 
 
 def make_document_view_model(

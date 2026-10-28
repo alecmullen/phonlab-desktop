@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
         self.create_toolbar()
 
         self.view_model_factory = view_model_factory
-        self.view_model = MainViewModel()
+        self.view_model = view_model_factory.create(MainViewModel)
 
     def create_menus(self):
         """Create application menus"""
