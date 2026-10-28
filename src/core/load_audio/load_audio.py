@@ -5,15 +5,9 @@ from core.load_audio.entity.audio_signal import AudioSignal
 
 
 class LoadAudio(UseCase[dict[int, AudioSignal]]):
-    def __init__(self, filename: str):
-        self.filename = filename
-
-    def invoke(self):
-        *original_channels, original_fs = phon.loadsig(self.filename)
+    def __call__(self, filename: str):
+        *original_channels, original_fs = phon.loadsig(filename)
         signals = {}
         for idx, x in enumerate(original_channels):
             signals[idx] = AudioSignal(x, original_fs)
         yield signals
-
-    def stop(self):
-        pass

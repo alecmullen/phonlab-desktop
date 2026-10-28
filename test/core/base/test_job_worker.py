@@ -3,9 +3,9 @@ from collections.abc import Generator
 import pytest
 from pytestqt.qtbot import QtBot
 
-from core.base.job import Job
-from core.base.job_worker import JobWorker
 from core.base.use_case import UseCase
+from ui.base.job import Job
+from ui.base.job_worker import JobWorker
 
 
 class FakeUseCase(UseCase[int]):

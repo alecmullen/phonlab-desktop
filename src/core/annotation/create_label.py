@@ -14,7 +14,7 @@ class ZeroLengthLabelError(ValueError):
 
 
 class CreateLabel(UseCaseSync[Annotation]):
-    def invoke(
+    def __call__(
         self,
         annotation: Annotation,
         type: int,

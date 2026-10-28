@@ -9,13 +9,13 @@ class DeleteEndNodeError(ValueError):
 
 
 class DeleteNode(UseCaseSync[Annotation]):
-    def invoke(self, annotation: Annotation, node: int) -> Annotation:
+    def __call__(self, annotation: Annotation, node: int) -> Annotation:
         if node not in annotation.nodes:
             raise ValueError("Can't find node to delete")
 
         types = []
         for type in annotation.types:
-            labels = self._labels_without_node(node, type.labels)
+            labels = self._labels_without_node(annotation, node, type.labels)
             types.append(replace(type, labels=labels))
 
         nodes = {key: value for key, value in annotation.nodes.items() if key != node}

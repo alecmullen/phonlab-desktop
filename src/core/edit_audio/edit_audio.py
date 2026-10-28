@@ -37,7 +37,9 @@ class EditAudio(UseCaseSync[EditResult | None]):
         i0, i1 = lo + best_offset, lo + best_offset + 1
         return i0 if abs(ref_channel.x[i0]) <= abs(ref_channel.x[i1]) else i1
 
-    def _nearest_zero_crossing_boundary(self, ref_channel: AudioSignal, boundary: int) -> int:
+    def _nearest_zero_crossing_boundary(
+        self, ref_channel: AudioSignal, boundary: int
+    ) -> int:
         """Like `nearest_zero_crossing`, but for an EXCLUSIVE/between-samples
         position"""
         return self._nearest_zero_crossing(ref_channel, boundary - 1) + 1
@@ -58,8 +60,8 @@ class EditAudio(UseCaseSync[EditResult | None]):
         end_idx = int(edit_command.end_time * fs)
 
         if settings.cut_and_paste_at_zero_crossings:
-            snapped_start = self._nearest_zero_crossing(start_idx)
-            snapped_end = self._nearest_zero_crossing_boundary(end_idx)
+            snapped_start = self._nearest_zero_crossing(ref_channel, start_idx)
+            snapped_end = self._nearest_zero_crossing_boundary(ref_channel, end_idx)
 
             start_idx, end_idx = snapped_start, snapped_end
 
@@ -77,7 +79,10 @@ class EditAudio(UseCaseSync[EditResult | None]):
         ).astype(ref_channel.x.dtype)
 
     def _select_clip(
-        self, channels: dict[int, AudioSignal], start: int, end: int, 
+        self,
+        channels: dict[int, AudioSignal],
+        start: int,
+        end: int,
     ) -> dict[int, AudioSignal]:
         return {
             idx: AudioSignal(channel.x[start:end], channel.fs)
@@ -138,7 +143,7 @@ class EditAudio(UseCaseSync[EditResult | None]):
             if channel.fs != channels[ref_channel].fs:
                 raise ValueError("Channel sample rates don't match")
 
-    def invoke(
+    def __call__(
         self,
         channels: dict[int, AudioSignal],
         edit_command: EditCommand,
@@ -181,16 +186,20 @@ class EditAudio(UseCaseSync[EditResult | None]):
 
             for idx, clip_channel in clip.items():
                 if channels[ref_channel].fs != clip_channel.fs:
-                    clip_x = self._resample_signal(channels[ref_channel], clip_channel.x, clip_channel.fs)
+                    clip_x = self._resample_signal(
+                        channels[ref_channel], clip_channel.x, clip_channel.fs
+                    )
                     clip[idx] = AudioSignal(clip_x, channels[ref_channel].fs)
 
             start_idx = edit_command.start_time * channels[ref_channel].fs
             start_idx = int(np.clip(start_idx, 0, len(channels[ref_channel].x)))
             if settings.cut_and_paste_at_zero_crossings:
-                start_idx = self._nearest_zero_crossing_boundary(channels[ref_channel], start_idx)
+                start_idx = self._nearest_zero_crossing_boundary(
+                    channels[ref_channel], start_idx
+                )
 
             return EditResult(
-                new_audio=self._paste_clip(clip, start_idx),
+                new_audio=self._paste_clip(clip, channels, start_idx),
                 new_clip=clip,
                 start_idx=start_idx,
             )
@@ -201,7 +210,7 @@ class EditAudio(UseCaseSync[EditResult | None]):
             if clip is None or start_idx is None:
                 raise RuntimeError("Replace needs a clip and a start index")
 
-            new_audio = self._replace_clip(clip, start_idx)
+            new_audio = self._replace_clip(channels, clip, start_idx)
             replaced_clip = {
                 idx: AudioSignal(
                     channels[idx].x[start_idx : start_idx + len(c.x)].copy(),

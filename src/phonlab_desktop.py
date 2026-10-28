@@ -8,6 +8,7 @@ import phonlab  # noqa: F401
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
+from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
 from ui.main.main_window import MainWindow
 from ui.main.splash import ClickableSplash, icon_path
 
@@ -50,7 +51,7 @@ if __name__ == "__main__":
         app = QApplication(sys.argv)
         app.setWindowIcon(QIcon(str(icon_path())))
 
-        mainWin = MainWindow()
+        mainWin = MainWindow(ViewModelFactoryImpl())
 
         # Create and show splash screen
         splash = ClickableSplash(mainWin)

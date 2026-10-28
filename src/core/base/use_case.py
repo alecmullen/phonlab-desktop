@@ -1,15 +1,12 @@
 from abc import ABC, abstractmethod
 from collections.abc import Generator
+from typing import Any
 
 
 class UseCase[T](ABC):
     @abstractmethod
-    def invoke(self) -> Generator[T, None, None]:
+    def __call__(self, *args: Any, **kwargs: Any) -> Generator[T, None, None]:  # noqa: ANN401
         pass
 
-    @abstractmethod
-    def stop(self) -> None:
-        pass
-
-    def run_sync(self) -> T:
-        return next(self.invoke())
+    def run_sync(self, *args: Any, **kwargs: Any) -> T:  # noqa: ANN401
+        return next(self(*args, **kwargs))

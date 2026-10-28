@@ -18,14 +18,10 @@ class ParseTextGridError(ValueError):
     pass
 
 
-class ParseTextGrid(UseCaseSync):
-    def __init__(self, filename: str):
-        super().__init__()
-        self.filename = filename
-
-    def invoke(self) -> Annotation:
+class ParseTextGrid(UseCaseSync[Annotation]):
+    def __call__(self, filename: str) -> Annotation:
         try:
-            tiers = phon.read_textgrid_with(self.filename)
+            tiers = phon.read_textgrid_with(filename)
 
             node_times: list[float] = []
             for tier in tiers:

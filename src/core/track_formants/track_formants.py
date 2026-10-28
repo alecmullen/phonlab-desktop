@@ -14,7 +14,7 @@ FORMANT_COLUMNS = ["F1", "F2", "F3", "F4"]
 
 
 class TrackFormants(UseCase[FormantTrack]):
-    def __init__(
+    def __call__(
         self,
         x: np.ndarray,
         fs: int,
@@ -23,26 +23,15 @@ class TrackFormants(UseCase[FormantTrack]):
         f0_max: float = FORMANT_F0_MAX,
         speaker: int = FORMANT_SPEAKER,
     ):
-        self.x = x
-        self.fs = fs
-        self.preemphasis = preemphasis
-        self.f0_min = f0_min
-        self.f0_max = f0_max
-        self.speaker = speaker
-
-    def invoke(self):
         df = phon.track_formants(
-            self.x,
-            self.fs,
+            x,
+            fs,
             method="ifc",
-            preemphasis=self.preemphasis,
-            f0_range=[self.f0_min, self.f0_max],
-            speaker=self.speaker,
+            preemphasis=preemphasis,
+            f0_range=[f0_min, f0_max],
+            speaker=speaker,
             quiet=True,
         )
         yield FormantTrack(
             df["sec"].to_numpy(dtype=float), df[FORMANT_COLUMNS].to_numpy(dtype=float)
         )
-
-    def stop(self):
-        pass
