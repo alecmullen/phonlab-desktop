@@ -5,7 +5,6 @@ import pytest
 from PyQt6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
-import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
@@ -13,22 +12,9 @@ from ui.document.state.audio_channel_state import to_audio_state
 from ui.main.save_audio_dialog import SaveAudioDialog, SaveOptions, _default_filename
 
 
-class FakeAudioPlayer:
-    def stop(self):
-        pass
-
-    class playback_poll:
-        @staticmethod
-        def connect(slot: object):
-            pass
-
-
 @pytest.fixture
-def document_view(monkeypatch: pytest.MonkeyPatch) -> DocumentView:
-    monkeypatch.setattr(dvm_module, "AudioPlayer", FakeAudioPlayer)
-    vm = DocumentViewModel()
-    vm.prep_audio_spectrogram = lambda: None
-    return DocumentView(vm)
+def document_view(document_view_model: DocumentViewModel) -> DocumentView:
+    return DocumentView(document_view_model)
 
 
 def load_mono(document_view: DocumentView):

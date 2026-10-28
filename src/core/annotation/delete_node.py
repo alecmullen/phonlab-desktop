@@ -9,29 +9,20 @@ class DeleteEndNodeError(ValueError):
 
 
 class DeleteNode(UseCaseSync[Annotation]):
-    def __init__(self, annotation: Annotation, node: int):
-        super().__init__()
-        self.annotation = annotation
-        self.node = node
-
-    def invoke(self) -> Annotation:
-        if self.node not in self.annotation.nodes:
+    def __call__(self, annotation: Annotation, node: int) -> Annotation:
+        if node not in annotation.nodes:
             raise ValueError("Can't find node to delete")
 
         types = []
-        for type in self.annotation.types:
-            labels = self._labels_without_node(self.node, type.labels)
+        for type in annotation.types:
+            labels = self._labels_without_node(annotation, node, type.labels)
             types.append(replace(type, labels=labels))
 
-        nodes = {
-            key: value
-            for key, value in self.annotation.nodes.items()
-            if key != self.node
-        }
+        nodes = {key: value for key, value in annotation.nodes.items() if key != node}
         return Annotation(nodes=nodes, types=types)
 
     def _labels_without_node(
-        self, node: int, labels: list[AnnotationLabel]
+        self, annotation: Annotation, node: int, labels: list[AnnotationLabel]
     ) -> list[AnnotationLabel]:
         """Returns the tier's labels with `node` removed, or None if the node is
         an end node of the tier with an interval label attached."""
@@ -53,7 +44,7 @@ class DeleteNode(UseCaseSync[Annotation]):
         else:
             tier_nodes = sorted(
                 {n for label in labels for n in (label.s_node, label.e_node)},
-                key=lambda n: (self.annotation.nodes[n], n),
+                key=lambda n: (annotation.nodes[n], n),
             )
             if node not in tier_nodes:
                 return list(labels)

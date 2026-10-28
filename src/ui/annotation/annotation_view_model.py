@@ -21,13 +21,22 @@ logger = logging.getLogger(__name__)
 
 
 class AnnotationViewModel(ViewModel):
-    def __init__(self):
+    def __init__(
+        self,
+        create_label: CreateLabel,
+        delete_node: DeleteNode,
+        parse_text_grid: ParseTextGrid,
+    ):
         super().__init__()
 
         self.annotation_state = AnnotationState()
         self.window_state: tuple[float, float] = (0.0, 0.0)
 
         self.annotation_view_state = AnnotationState()
+
+        self.create_label_use_case = create_label
+        self.delete_node_use_case = delete_node
+        self.parse_textgrid_use_case = parse_text_grid
 
     def change_node_state(self, drag_node: AnnotationNodeState, new_pos: float):
         new_pos = max(self.window_state[0], new_pos)
@@ -83,9 +92,8 @@ class AnnotationViewModel(ViewModel):
             raise ValueError("Missing node in annotation")
 
     def parse_textgrid(self, path: str):
-        use_case = ParseTextGrid(path)
         try:
-            annotation = use_case.invoke()
+            annotation = self.parse_textgrid_use_case(path)
             self.set_annotation_state(annotation)
         except ParseTextGridError:
             self.state_changed.emit(
@@ -120,9 +128,10 @@ class AnnotationViewModel(ViewModel):
         return annotation
 
     def delete_node(self, node: int):
-        use_case = DeleteNode(to_annotation(self.annotation_state), node)
         try:
-            annotation = use_case.invoke()
+            annotation = self.delete_node_use_case(
+                to_annotation(self.annotation_state), node
+            )
         except DeleteEndNodeError:
             self.state_changed.emit(
                 StatusMessageState(
@@ -140,11 +149,14 @@ class AnnotationViewModel(ViewModel):
         end: float,
         same_node_threshold: float | None = None,
     ):
-        use_case = CreateLabel(
-            to_annotation(self.annotation_state), type, start, end, same_node_threshold
-        )
         try:
-            annotation = use_case.invoke()
+            annotation = self.create_label_use_case(
+                to_annotation(self.annotation_state),
+                type,
+                start,
+                end,
+                same_node_threshold,
+            )
         except ZeroLengthLabelError:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Zoom in to create shorter labels"))

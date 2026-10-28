@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from core.settings.app_settings import settings
 from ui.base.state import State
+from ui.base.view_model_factory import ViewModelFactory
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
@@ -24,7 +25,9 @@ from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(
+        self, view_model_factory: ViewModelFactory, parent: QWidget | None = None
+    ):
         super().__init__(parent)
 
         self.setWindowTitle("Phonlab")
@@ -47,6 +50,8 @@ class MainWindow(QMainWindow):
 
         # ------- toolbar -------------
         self.create_toolbar()
+
+        self.view_model_factory = view_model_factory
 
     def create_menus(self):
         """Create application menus"""
@@ -264,7 +269,7 @@ class MainWindow(QMainWindow):
                     self.splash = None
 
                 # Create new document
-                doc_view_model = DocumentViewModel()
+                doc_view_model = self.view_model_factory.create(DocumentViewModel)
                 doc_view_model.subscribe(self.on_doc_state_change)
                 doc = DocumentView(doc_view_model)
                 doc.origin_name = Path(audio_filename).name
@@ -288,7 +293,7 @@ class MainWindow(QMainWindow):
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioState):
         """Open a new tab containing the just-copied/cut samples, without
         stealing focus from source_doc"""
-        doc_view_model = DocumentViewModel()
+        doc_view_model = self.view_model_factory.create(DocumentViewModel)
         doc_view_model.subscribe(self.on_doc_state_change)
         doc = DocumentView(doc_view_model)
 

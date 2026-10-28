@@ -1,10 +1,9 @@
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from core.base.job import Job
-from core.base.job_manager import JobManager
-from core.base.use_case import UseCase
+from ui.base.job import Job
+from ui.base.job_manager import JobManager
 
 
 class ViewModel(QObject):
@@ -17,10 +16,10 @@ class ViewModel(QObject):
     def subscribe(self, slot: Callable):
         self.state_changed.connect(slot)
 
-    def launch_use_case(
+    def launch_task[T](
         self,
         key: str,
-        use_case: UseCase,
+        task: Generator[T, None, None],
         on_success: Callable,
         on_error: Callable,
         only_once: bool = False,
@@ -28,7 +27,7 @@ class ViewModel(QObject):
         if key in self.job_managers:
             if only_once:
                 return
-            self.job_managers[key].queue_job(Job(use_case, on_success, on_error))
+            self.job_managers[key].queue_job(Job(task, on_success, on_error))
         else:
             manager = JobManager()
             self.job_managers[key] = manager
@@ -41,7 +40,7 @@ class ViewModel(QObject):
             # Connect before starting: a fast job can finish before
             # manager() returns, and its `finished` would go unheard.
             manager.signals.finished.connect(on_finished)
-            manager(Job(use_case, on_success, on_error))
+            manager(Job(task, on_success, on_error))
 
     def close_threads(self):
         for key in self.job_managers:

@@ -10,6 +10,9 @@ from typing import ClassVar
 
 import pytest
 
+from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
+from ui.base.view_model_factory import ViewModelFactory
+
 PHONLAB_DESKTOP_PATH = (
     Path(__file__).resolve().parent.parent / "src" / "phonlab_desktop.py"
 )
@@ -85,7 +88,8 @@ def fake_run_app_dependencies(
     class FakeMainWindow:
         instances: ClassVar[list["FakeMainWindow"]] = []
 
-        def __init__(self):
+        def __init__(self, view_model_factory: ViewModelFactory):
+            self.view_model_factory = view_model_factory
             self.shown = False
             self.splash = None
             self.opened_files = None
@@ -182,6 +186,7 @@ def test_run_app_shows_main_window_and_splash_and_starts_event_loop(
     main_window = fake_main_window_cls.instances[0]
     splash = fake_splash_cls.instances[0]
 
+    assert isinstance(main_window.view_model_factory, ViewModelFactoryImpl)
     assert main_window.shown is True
     assert splash.shown is True
     assert main_window.splash is splash
