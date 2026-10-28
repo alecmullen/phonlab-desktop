@@ -309,7 +309,12 @@ class MainWindow(QMainWindow):
                 doc.load_audio(audio_filename, options)
 
                 annotation_filename = next(
-                    (file for file in filenames if file.endswith(f"{Path(audio_filename).stem}.TextGrid")), None
+                    (
+                        file
+                        for file in filenames
+                        if file.endswith(f"{Path(audio_filename).stem}.TextGrid")
+                    ),
+                    None,
                 )
                 if annotation_filename is not None:
                     doc.load_textgrid(annotation_filename)
