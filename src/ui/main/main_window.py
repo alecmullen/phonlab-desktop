@@ -279,11 +279,11 @@ class MainWindow(QMainWindow):
             filenames = [str(path) for path in dir.glob("*")]
 
         if len(filenames) > 0:
-            audio_filename = next(
-                (file for file in filenames if file.endswith(".wav")), None
-            )
+            audio_filenames = (file for file in filenames if file.endswith(".wav"))
 
-            if audio_filename is not None:
+            for idx, audio_filename in enumerate(audio_filenames):
+                if idx > 4:
+                    return
                 options = OpenAudioDialog.get_options(audio_filename, self)
                 if options is None:
                     return
@@ -309,7 +309,7 @@ class MainWindow(QMainWindow):
                 doc.load_audio(audio_filename, options)
 
                 annotation_filename = next(
-                    (file for file in filenames if file.endswith(".TextGrid")), None
+                    (file for file in filenames if file.endswith(f"{Path(audio_filename).stem}.TextGrid")), None
                 )
                 if annotation_filename is not None:
                     doc.load_textgrid(annotation_filename)
