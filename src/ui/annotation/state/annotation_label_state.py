@@ -6,7 +6,7 @@ from ui.base.state import State
 
 @dataclass(frozen=True)
 class AnnotationLabelState(State):
-    id: int = 0
+    id: int | None = None
 
     s_node: int = 0
     e_node: int = 0

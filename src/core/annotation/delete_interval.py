@@ -15,7 +15,6 @@ def delete_annotation_interval(
             continue
 
         labels = []
-        next_id = max((label.id for label in type.labels), default=-1) + 1
         for label in type.labels:
             if (
                 nodes[label.e_node] <= nodes[s_node]
@@ -33,12 +32,11 @@ def delete_annotation_interval(
                     labels.append(
                         replace(
                             label,
-                            id=next_id if split else label.id,
+                            id=None if split else label.id,
                             s_node=e_node,
                             label=text,
                         )
                     )
-                    next_id += split
 
         types.append(replace(type, labels=labels))
 

@@ -2,27 +2,31 @@ import bisect
 from dataclasses import dataclass, field
 
 from res.constants import SAME_NODE_THRESHOLD
-from ui.base.state import State
 
 
 @dataclass(frozen=True)
-class AnnotationLabel(State):
-    id: int
+class AnnotationLabel:
     s_node: int
     e_node: int
     label: str = ""
 
+    id: int | None = None
+
 
 @dataclass(frozen=True)
-class AnnotationType(State):
+class AnnotationType:
     type: str
     labels: list[AnnotationLabel]
 
+    id: int | None = None
+
 
 @dataclass(frozen=True)
-class Annotation(State):
+class Annotation:
     nodes: dict[int, float] = field(default_factory=dict)
     types: list[AnnotationType] = field(default_factory=list)
+
+    id: int | None = None
 
 
 def get_matching_node(

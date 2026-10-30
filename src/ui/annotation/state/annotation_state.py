@@ -39,7 +39,7 @@ def to_annotation(annotation_state: AnnotationState) -> Annotation:
             AnnotationType(
                 type.type,
                 [
-                    AnnotationLabel(label.id, label.s_node, label.e_node, label.label)
+                    AnnotationLabel(label.s_node, label.e_node, label.label, label.id)
                     for label in type.labels
                 ],
             )

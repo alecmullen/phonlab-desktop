@@ -2,6 +2,7 @@ from typing import Any, cast
 
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.database.connect_local_database import ConnectLocalDatabase
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
@@ -11,6 +12,9 @@ from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
+from data.annotation.datasource.annotation_datasource import AnnotationDataSource
+from data.annotation.repository.annotation_repository import AnnotationRepositoryImpl
+from data.database import SQLiteDatabase
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.base.view_model import ViewModel
 from ui.base.view_model_factory import ViewModelFactory
@@ -22,6 +26,15 @@ from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 
 class ViewModelFactoryImpl(ViewModelFactory):
     def __init__(self):
+        self.database = SQLiteDatabase()
+
+        self.annotation_datasource = AnnotationDataSource(self.database)
+
+        self.annotation_repository = AnnotationRepositoryImpl(
+            self.annotation_datasource
+        )
+
+        self.connect_local_db = ConnectLocalDatabase(self.database)
         self.edit_audio = EditAudio()
         self.load_audio = LoadAudio()
         self.prep_audio = PrepAudio()
@@ -32,7 +45,7 @@ class ViewModelFactoryImpl(ViewModelFactory):
         self.compute_sgram_mmap = ComputeSpectrogramMmap()
         self.create_label = CreateLabel()
         self.delete_node = DeleteNode()
-        self.parse_textgrid = ParseTextGrid()
+        self.parse_textgrid = ParseTextGrid(self.annotation_repository)
 
     def create[T: ViewModel](
         self,
@@ -84,4 +97,4 @@ class ViewModelFactoryImpl(ViewModelFactory):
         return AudioWaveViewModel(channel_idx)
 
     def create_main_view_model(self) -> MainViewModel:
-        return MainViewModel()
+        return MainViewModel(self.connect_local_db)

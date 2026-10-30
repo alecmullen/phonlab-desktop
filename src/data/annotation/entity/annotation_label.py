@@ -9,7 +9,7 @@ class AnnotationLabelEntity(BaseEntity):
     __tablename__ = "annotation_label"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    annotation_id: Mapped[int] = mapped_column(ForeignKey("annotation.id"))
+    annotation_type_id: Mapped[int] = mapped_column(ForeignKey("annotation_type.id"))
     label_text: Mapped[str] = mapped_column(Text())
     start_node_id: Mapped[int] = mapped_column(ForeignKey("annotation_node.id"))
     end_node_id: Mapped[int] = mapped_column(ForeignKey("annotation_node.id"))
