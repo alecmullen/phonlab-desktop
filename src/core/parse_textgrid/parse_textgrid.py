@@ -42,22 +42,19 @@ class ParseTextGrid(UseCaseSync[Annotation]):
                 *sorted(nodes.items(), key=lambda item: item[1])
             )
 
-            annotation = Annotation(
-                id=id,
-                nodes=nodes,
-                types=[
-                    AnnotationType(
-                        tier["name"],
-                        [
-                            to_label(list(node_times_db), list(node_ids_db), label)
-                            for label in tier["labels"]
-                        ],
-                    )
-                    for tier in tiers
-                ],
-            )
+            types = [
+                AnnotationType(
+                    tier["name"],
+                    [
+                        to_label(list(node_times_db), list(node_ids_db), label)
+                        for label in tier["labels"]
+                    ],
+                )
+                for tier in tiers
+            ]
+            self.annotation_repository.create_types(id, types)
 
-            return self.annotation_repository.save_annotation(annotation, file_stem)
+            return self.annotation_repository.get_annotation_by_id(id)
         except Exception as err:
             raise ParseTextGridError from err
 

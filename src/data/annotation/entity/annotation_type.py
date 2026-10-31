@@ -12,4 +12,6 @@ class AnnotationTypeEntity(BaseEntity):
     annotation_id: Mapped[int] = mapped_column(ForeignKey("annotation.id"))
     name: Mapped[str] = mapped_column(String(255))
 
-    labels: Mapped[list[AnnotationLabelEntity]] = relationship()
+    labels: Mapped[list[AnnotationLabelEntity]] = relationship(
+        cascade="all, delete-orphan"
+    )
