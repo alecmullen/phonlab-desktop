@@ -18,7 +18,7 @@ def make_annotation(
         types=[
             AnnotationType(
                 f"tier{idx}",
-                [AnnotationLabel(id, *label) for id, label in enumerate(labels)],
+                [AnnotationLabel(*label, id=id) for id, label in enumerate(labels)],
             )
             for idx, labels in enumerate(tiers)
         ],
@@ -39,7 +39,7 @@ def test_create_label_on_empty_tier_creates_nodes_and_label():
     result = CreateLabel()(annotation, 0, 1.0, 2.0)
 
     assert result.nodes == {0: 0.0, 1: 3.0, 2: 1.0, 3: 2.0}
-    assert result.types[0].labels == [AnnotationLabel(0, 2, 3, "")]
+    assert result.types[0].labels == [AnnotationLabel(2, 3)]
 
 
 def test_create_label_reuses_nodes_within_threshold():
@@ -53,15 +53,15 @@ def test_create_label_reuses_nodes_within_threshold():
     assert label_times(result, 0) == [(0.0, 1.0, "a"), (1.0, 2.0, "")]
 
 
-def test_create_label_id_is_max_id_plus_one():
+def test_create_label_has_no_id_until_saved():
     annotation = Annotation(
         nodes={0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0},
-        types=[AnnotationType("word", [AnnotationLabel(5, 0, 1, "a")])],
+        types=[AnnotationType("word", [AnnotationLabel(0, 1, "a", id=5)])],
     )
 
     result = CreateLabel()(annotation, 0, 2.0, 3.0)
 
-    assert [label.id for label in result.types[0].labels] == [5, 6]
+    assert [label.id for label in result.types[0].labels] == [5, None]
 
 
 def test_create_label_replaces_labels_inside_selection():
@@ -116,13 +116,13 @@ def test_create_label_does_not_mutate_input():
     assert annotation.types[0].labels == original_labels
 
 
-def test_create_label_splitting_label_gives_unique_ids():
+def test_create_label_splitting_label_leaves_new_labels_without_ids():
     annotation = make_annotation({0: 0.0, 1: 3.0}, [[(0, 1, "a")]])
 
     result = CreateLabel()(annotation, 0, 1.0, 2.0)
 
     ids = [label.id for label in result.types[0].labels]
-    assert len(ids) == len(set(ids))
+    assert sorted(ids, key=lambda id: id is not None) == [None, None, 0]
 
 
 def test_delete_node_after_splitting_label_merges_with_new_label():
@@ -140,7 +140,7 @@ def test_create_label_custom_threshold_snaps_both_ends_to_existing_nodes():
     result = CreateLabel()(annotation, 0, 1.1, 1.9, same_node_threshold=0.2)
 
     assert result.nodes == {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}
-    assert result.types[0].labels == [AnnotationLabel(0, 1, 2, "")]
+    assert result.types[0].labels == [AnnotationLabel(1, 2)]
 
 
 def test_create_label_custom_threshold_smaller_than_default_adds_nodes():
@@ -160,7 +160,7 @@ def test_create_label_snaps_each_end_to_closest_node():
 
     result = CreateLabel()(annotation, 0, 1.05, 2.0, same_node_threshold=0.35)
 
-    assert result.types[0].labels == [AnnotationLabel(0, 1, 3, "")]
+    assert result.types[0].labels == [AnnotationLabel(1, 3)]
 
 
 def test_create_label_raises_when_both_ends_snap_to_same_node():

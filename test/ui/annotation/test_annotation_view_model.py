@@ -281,7 +281,7 @@ def make_annotated_view_model(
             types=[
                 AnnotationType(
                     f"tier{idx}",
-                    [AnnotationLabel(id, *label) for id, label in enumerate(labels)],
+                    [AnnotationLabel(*label, id=id) for id, label in enumerate(labels)],
                 )
                 for idx, labels in enumerate(tiers)
             ],

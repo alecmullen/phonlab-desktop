@@ -16,7 +16,7 @@ def make_annotation(
         types=[
             AnnotationType(
                 f"tier{idx}",
-                [AnnotationLabel(id, *label) for id, label in enumerate(labels)],
+                [AnnotationLabel(*label, id=id) for id, label in enumerate(labels)],
             )
             for idx, labels in enumerate(tiers)
         ],
@@ -42,7 +42,7 @@ def test_delete_node_merges_adjacent_labels_keeping_first_id():
 
     result = DeleteNode()(annotation, 1)
 
-    assert result.types[0].labels == [AnnotationLabel(0, 0, 2, "ab")]
+    assert result.types[0].labels == [AnnotationLabel(0, 2, "ab", id=0)]
     assert result.nodes == {0: 0.0, 2: 2.0}
 
 

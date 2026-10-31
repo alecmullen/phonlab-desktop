@@ -42,7 +42,7 @@ def test_create_node_on_empty_annotation_creates_first_node():
 
 
 def test_create_node_keeps_types():
-    types = [AnnotationType("word", [AnnotationLabel(0, 0, 1, "a")])]
+    types = [AnnotationType("word", [AnnotationLabel(0, 1, "a", id=0)])]
     annotation = Annotation(nodes={0: 0.0, 1: 1.0}, types=types)
 
     result, _ = create_node(annotation, 0.5)

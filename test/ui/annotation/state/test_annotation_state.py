@@ -20,8 +20,8 @@ def test_to_annotation_state_converts_nodes_and_types():
             AnnotationType(
                 type="word",
                 labels=[
-                    AnnotationLabel(1, 0, 1, "hello"),
-                    AnnotationLabel(2, 1, 2, "world"),
+                    AnnotationLabel(0, 1, "hello", id=1),
+                    AnnotationLabel(1, 2, "world", id=2),
                 ],
             )
         ],
@@ -49,7 +49,7 @@ def test_to_annotation_state_converts_multiple_types():
     annotation = Annotation(
         nodes={0: 0.0, 1: 1.0},
         types=[
-            AnnotationType("word", [AnnotationLabel(1, 0, 1, "hi")]),
+            AnnotationType("word", [AnnotationLabel(0, 1, "hi", id=1)]),
             AnnotationType("phone", []),
         ],
     )
@@ -87,7 +87,7 @@ def test_to_annotation_converts_nodes_and_types():
     assert annotation == Annotation(
         nodes={0: 0.0, 2: 1.0},
         types=[
-            AnnotationType("word", [AnnotationLabel(4, 0, 2, "hi")]),
+            AnnotationType("word", [AnnotationLabel(0, 2, "hi", id=4)]),
             AnnotationType("phone", []),
         ],
     )
@@ -99,9 +99,9 @@ def test_to_annotation_round_trips_through_annotation_state():
         types=[
             AnnotationType(
                 "word",
-                [AnnotationLabel(2, 3, 1, "a"), AnnotationLabel(5, 1, 2, "b")],
+                [AnnotationLabel(3, 1, "a", id=2), AnnotationLabel(1, 2, "b", id=5)],
             ),
-            AnnotationType("mark", [AnnotationLabel(0, 1, 1, "x")]),
+            AnnotationType("mark", [AnnotationLabel(1, 1, "x", id=0)]),
         ],
     )
 

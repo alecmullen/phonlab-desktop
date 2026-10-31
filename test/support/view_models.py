@@ -12,10 +12,12 @@ computations are mocks (see `support.mocks`).
 
 from typing import Any, cast
 
+from support.annotation_repository import FakeAnnotationRepository
 from support.mocks import mock_use_case
 
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.database.connect_local_database import ConnectLocalDatabase
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
@@ -71,7 +73,7 @@ class StubViewModelFactory(ViewModelFactory):
         elif view_model_type is AudioWaveViewModel:
             view_model = AudioWaveViewModel(*args, **kwargs)
         elif view_model_type is MainViewModel:
-            view_model = MainViewModel(*args, **kwargs)
+            view_model = make_main_view_model(*args, **kwargs)
         else:
             raise TypeError(f"No stub provided for {view_model_type!s}")
         return cast(T, view_model)
@@ -85,8 +87,14 @@ def make_annotation_view_model(
     return AnnotationViewModel(
         create_label or CreateLabel(),
         delete_node or DeleteNode(),
-        parse_text_grid or ParseTextGrid(),
+        parse_text_grid or ParseTextGrid(FakeAnnotationRepository()),
     )
+
+
+def make_main_view_model(
+    connect_local_database: ConnectLocalDatabase | None = None,
+) -> MainViewModel:
+    return MainViewModel(connect_local_database or mock_use_case(ConnectLocalDatabase))
 
 
 def make_spectrogram_view_model(

@@ -200,7 +200,7 @@ def test_view_model_state_change_triggers_populate(qtbot: QtBot):
 
     state = Annotation(
         nodes={0: 0.0, 1: 1.0},
-        types=[AnnotationType("word", [AnnotationLabel(0, 0, 1, "hi")])],
+        types=[AnnotationType("word", [AnnotationLabel(0, 1, "hi", id=0)])],
     )
 
     view_model.set_annotation_state(state)

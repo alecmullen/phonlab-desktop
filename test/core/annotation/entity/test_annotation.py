@@ -7,7 +7,7 @@ from res.constants import SAME_NODE_THRESHOLD
 
 
 def test_annotation_label_defaults_to_empty_text():
-    assert AnnotationLabel(0, 1, 2).label == ""
+    assert AnnotationLabel(0, 1).label == ""
 
 
 # --------------------------- get_matching_node ---------------------------
