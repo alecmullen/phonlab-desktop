@@ -76,3 +76,19 @@ def _get_matching_node(
         return None
 
     return node_ids[closest] if node_ids is not None else closest
+
+
+def add_node_time(
+    node_times: list[float],
+    new_time: float | None,
+    same_node_threshold: float | None = None,
+) -> list[float]:
+    if new_time is None:
+        return node_times
+
+    node = _get_matching_node(node_times, new_time, same_node_threshold)
+
+    if node is None:
+        bisect.insort(node_times, new_time)
+
+    return node_times

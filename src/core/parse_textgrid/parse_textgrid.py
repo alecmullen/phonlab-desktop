@@ -7,6 +7,7 @@ from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
+    add_node_time,
 )
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case_sync import UseCaseSync
@@ -34,8 +35,8 @@ class ParseTextGrid(UseCaseSync[Annotation]):
             node_times: list[float] = []
             for tier in tiers:
                 for label in tier["labels"]:
-                    node_times.append(label[0])
-                    node_times.append(label[1])
+                    node_times = add_node_time(node_times, label[0])
+                    node_times = add_node_time(node_times, label[1])
 
             nodes = self.annotation_repository.create_nodes(
                 id, node_times, SAME_NODE_THRESHOLD

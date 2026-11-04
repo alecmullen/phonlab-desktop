@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.entity.annotation import (
     Annotation,
@@ -37,8 +39,9 @@ class CreateLabel(UseCaseSync[Annotation]):
         if s_node == e_node:
             raise ZeroLengthLabelError()
 
-        annotation.nodes[s_node] = s_time
-        annotation.nodes[e_node] = e_time
+        annotation = replace(
+            annotation, nodes=annotation.nodes | {s_node: s_time} | {e_node: e_time}
+        )
 
         self.clear_interval(annotation, [type_id], s_node, e_node)
 

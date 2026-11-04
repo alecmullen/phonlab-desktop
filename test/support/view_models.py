@@ -15,8 +15,10 @@ from typing import Any, cast
 from support.annotation_repository import FakeAnnotationRepository
 from support.mocks import mock_use_case
 
+from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.load_annotation import LoadAnnotation
 from core.database.connect_local_database import ConnectLocalDatabase
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
@@ -79,15 +81,25 @@ class StubViewModelFactory(ViewModelFactory):
         return cast(T, view_model)
 
 
+def make_create_label(repository: FakeAnnotationRepository) -> CreateLabel:
+    return CreateLabel(ClearInterval(repository), repository)
+
+
 def make_annotation_view_model(
     create_label: CreateLabel | None = None,
     delete_node: DeleteNode | None = None,
     parse_text_grid: ParseTextGrid | None = None,
+    load_annotation: LoadAnnotation | None = None,
+    filestem: str | None = None,
+    repository: FakeAnnotationRepository | None = None,
 ) -> AnnotationViewModel:
+    repository = repository or FakeAnnotationRepository()
     return AnnotationViewModel(
-        create_label or CreateLabel(),
+        create_label or make_create_label(repository),
         delete_node or DeleteNode(),
-        parse_text_grid or ParseTextGrid(FakeAnnotationRepository()),
+        parse_text_grid or ParseTextGrid(repository),
+        load_annotation or LoadAnnotation(repository),
+        filestem,
     )
 
 

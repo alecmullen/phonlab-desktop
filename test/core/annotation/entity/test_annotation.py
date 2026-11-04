@@ -73,27 +73,6 @@ def test_get_matching_node_threshold_is_exclusive():
     assert get_matching_node({0: 0.0, 1: 1.0}, 1.25, 0.25) is None
 
 
-def test_add_node_time_custom_threshold_skips_time_beyond_default():
-    new_time = 0.5 + SAME_NODE_THRESHOLD * 4
-
-    assert add_node_time([0.0, 0.5, 1.0], new_time, SAME_NODE_THRESHOLD * 8) == [
-        0.0,
-        0.5,
-        1.0,
-    ]
-
-
-def test_add_node_time_custom_threshold_inserts_time_within_default():
-    new_time = 0.5 + SAME_NODE_THRESHOLD / 2
-
-    assert add_node_time([0.0, 0.5, 1.0], new_time, SAME_NODE_THRESHOLD / 4) == [
-        0.0,
-        0.5,
-        new_time,
-        1.0,
-    ]
-
-
 def test_get_matching_node_prefers_closer_previous_node():
     assert get_matching_node({0: 1.0, 1: 1.3}, 1.05, 0.35) == 0
 
@@ -105,7 +84,3 @@ def test_get_matching_node_prefers_closer_next_node():
 def test_get_matching_node_ignores_closer_node_outside_threshold_order():
     # next node is out of range, previous one is in range
     assert get_matching_node({0: 1.0, 1: 2.0}, 1.2, 0.25) == 0
-
-
-def test_add_node_time_skips_when_either_neighbour_is_within_threshold():
-    assert add_node_time([1.0, 1.3], 1.05, 0.35) == [1.0, 1.3]

@@ -4,6 +4,7 @@ from types import MappingProxyType
 
 import pytest
 from pytestqt.qtbot import QtBot
+from support.annotation_repository import FakeAnnotationRepository
 from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
@@ -11,6 +12,7 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
+from res.constants import SAME_NODE_THRESHOLD
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import (
@@ -273,18 +275,24 @@ def make_annotated_view_model(
     start: float = 0.0,
     end: float = 3.0,
 ) -> AnnotationViewModel:
-    view_model = make_annotation_view_model()
+    repository = FakeAnnotationRepository()
+    view_model = make_annotation_view_model(repository=repository)
     view_model.window_state = (start, end)
     view_model.set_annotation_state(
-        Annotation(
-            nodes=nodes,
-            types=[
-                AnnotationType(
-                    f"tier{idx}",
-                    [AnnotationLabel(*label, id=id) for id, label in enumerate(labels)],
-                )
-                for idx, labels in enumerate(tiers)
-            ],
+        repository.seed(
+            Annotation(
+                nodes=nodes,
+                types=[
+                    AnnotationType(
+                        f"tier{idx}",
+                        [
+                            AnnotationLabel(*label, id=id)
+                            for id, label in enumerate(labels)
+                        ],
+                    )
+                    for idx, labels in enumerate(tiers)
+                ],
+            )
         )
     )
     return view_model
@@ -356,7 +364,7 @@ def test_create_label_from_selection_adds_label_and_emits(qtbot: QtBot):
     view_model = make_annotated_view_model({0: 0.0, 1: 3.0}, [[], [(0, 1, "a")]])
 
     with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
-        view_model.create_label_from_selection(0, 1.0, 2.0)
+        view_model.create_label_from_selection(0, 1.0, 2.0, SAME_NODE_THRESHOLD)
 
     nodes = view_model.annotation_state.nodes
     labels = view_model.annotation_state.types[0].labels

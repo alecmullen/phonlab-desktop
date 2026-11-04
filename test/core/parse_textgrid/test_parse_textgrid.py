@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from support.annotation_repository import FakeAnnotationRepository
 
-from core.annotation.entity.annotation import AnnotationLabel
+from core.annotation.entity.annotation import Annotation, AnnotationLabel
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from res.constants import SAME_NODE_THRESHOLD
 
@@ -107,6 +107,14 @@ def write_textgrid(
     return str(path)
 
 
+def label_times(annotation: Annotation, tier: int) -> list[tuple]:
+    nodes = annotation.nodes
+    return [
+        (nodes[label.s_node], nodes[label.e_node], label.label)
+        for label in annotation.types[tier].labels
+    ]
+
+
 # --------------------------- invoke ---------------------------
 
 
@@ -129,13 +137,10 @@ def test_invoke_parses_multiple_tiers_sharing_nodes(tmp_path: Path):
 
     result = ParseTextGrid(FakeAnnotationRepository())(path)
 
-    assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
+    assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
     assert [t.type for t in result.types] == ["word", "phone"]
-    assert result.types[0].labels == [AnnotationLabel(0, 2, "hi", id=0)]
-    assert result.types[1].labels == [
-        AnnotationLabel(0, 1, "h", id=0),
-        AnnotationLabel(1, 2, "ay", id=1),
-    ]
+    assert label_times(result, 0) == [(0.0, 1.0, "hi")]
+    assert label_times(result, 1) == [(0.0, 0.4, "h"), (0.4, 1.0, "ay")]
 
 
 def test_invoke_merges_boundaries_within_threshold_across_tiers(tmp_path: Path):
@@ -149,7 +154,7 @@ def test_invoke_merges_boundaries_within_threshold_across_tiers(tmp_path: Path):
     result = ParseTextGrid(FakeAnnotationRepository())(path)
 
     # the "h"/"ay" boundary (0.4 vs 0.4 + threshold/2) should collapse to one node
-    assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
+    assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
 
 
 def test_invoke_parses_point_tier(tmp_path: Path):
@@ -186,10 +191,7 @@ def test_invoke_reads_utf_16_file(tmp_path: Path):
 
     result = ParseTextGrid(FakeAnnotationRepository())(path)
 
-    assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
+    assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
     assert [t.type for t in result.types] == ["word", "phone"]
-    assert result.types[0].labels == [AnnotationLabel(0, 2, "hi", id=0)]
-    assert result.types[1].labels == [
-        AnnotationLabel(0, 1, "h", id=0),
-        AnnotationLabel(1, 2, "ay", id=1),
-    ]
+    assert label_times(result, 0) == [(0.0, 1.0, "hi")]
+    assert label_times(result, 1) == [(0.0, 0.4, "h"), (0.4, 1.0, "ay")]
