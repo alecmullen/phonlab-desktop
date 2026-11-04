@@ -69,6 +69,7 @@ class DocumentViewModel(ViewModel):
         prep_audio: PrepAudio,
         filter_audio: FilterAudio,
         save_audio: SaveAudio,
+        file_stem: str | None = None,
     ):
         super().__init__()
 
@@ -91,7 +92,9 @@ class DocumentViewModel(ViewModel):
 
         self.audio_wave_view_models: list[AudioWaveViewModel] = []
         self.spectrogram_view_model = view_model_factory.create(SpectrogramViewModel)
-        self.annotation_view_model = view_model_factory.create(AnnotationViewModel)
+        self.annotation_view_model = view_model_factory.create(
+            AnnotationViewModel, file_stem
+        )
 
         self.state_changed.connect(self.on_state_changed)
         self.spectrogram_view_model.state_changed.connect(self.on_sgram_state_change)

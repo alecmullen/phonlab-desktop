@@ -1,11 +1,9 @@
-from dataclasses import replace
-
-from core.annotation.create_node import create_node
-from core.annotation.delete_interval import delete_annotation_interval
+from core.annotation.clear_interval import ClearInterval
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
 )
+from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case_sync import UseCaseSync
 
 
@@ -14,28 +12,38 @@ class ZeroLengthLabelError(ValueError):
 
 
 class CreateLabel(UseCaseSync[Annotation]):
+    def __init__(
+        self, clear_interval: ClearInterval, annotation_repository: AnnotationRepository
+    ):
+        self.clear_interval = clear_interval
+        self.annotation_repository = annotation_repository
+
     def __call__(
         self,
         annotation: Annotation,
-        type: int,
+        type_id: int,
         start: float,
         end: float,
-        same_node_threshold: float | None = None,
+        same_node_threshold: float = 0.0,
     ) -> Annotation:
-        annotation, s_node = create_node(annotation, start, same_node_threshold)
-        annotation, e_node = create_node(annotation, end, same_node_threshold)
+        annotation_id = annotation.get_id()
+        s_node, s_time = self.annotation_repository.create_node(
+            annotation_id, start, same_node_threshold
+        )
+        e_node, e_time = self.annotation_repository.create_node(
+            annotation_id, end, same_node_threshold
+        )
 
         if s_node == e_node:
             raise ZeroLengthLabelError()
 
-        annotation = delete_annotation_interval(annotation, [type], s_node, e_node)
+        annotation.nodes[s_node] = s_time
+        annotation.nodes[e_node] = e_time
 
-        type_labels = annotation.types[type].labels.copy()
+        self.clear_interval(annotation, [type_id], s_node, e_node)
 
-        type_labels.append(AnnotationLabel(s_node, e_node))
-        new_type = replace(annotation.types[type], labels=type_labels)
-
-        return replace(
-            annotation,
-            types=annotation.types[:type] + [new_type] + annotation.types[type + 1 :],
+        self.annotation_repository.create_label(
+            AnnotationLabel(s_node, e_node), type_id
         )
+
+        return self.annotation_repository.get_annotation_by_id(annotation_id)

@@ -10,7 +10,7 @@ class AnnotationEntity(BaseEntity):
     __tablename__ = "annotation"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    file_name: Mapped[str] = mapped_column(String(255), unique=True)
+    file_stem: Mapped[str] = mapped_column(String(255), unique=True)
 
     nodes: Mapped[list[AnnotationNodeEntity]] = relationship(
         cascade="all, delete-orphan",
@@ -20,4 +20,4 @@ class AnnotationEntity(BaseEntity):
     )
 
     def __repr__(self) -> str:
-        return f"AnnotationEntity(id={self.id}, file_name={self.file_name})"
+        return f"AnnotationEntity(id={self.id}, file_stem={self.file_stem})"

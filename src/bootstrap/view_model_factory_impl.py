@@ -1,7 +1,9 @@
 from typing import Any, cast
 
+from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.load_annotation import LoadAnnotation
 from core.database.connect_local_database import ConnectLocalDatabase
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
@@ -43,8 +45,10 @@ class ViewModelFactoryImpl(ViewModelFactory):
         self.track_formants = TrackFormants()
         self.compute_sgram = ComputeSpectrogram()
         self.compute_sgram_mmap = ComputeSpectrogramMmap()
-        self.create_label = CreateLabel()
+        self.clear_interval = ClearInterval(self.annotation_repository)
+        self.create_label = CreateLabel(self.clear_interval, self.annotation_repository)
         self.delete_node = DeleteNode()
+        self.load_annotation = LoadAnnotation(self.annotation_repository)
         self.parse_textgrid = ParseTextGrid(self.annotation_repository)
 
     def create[T: ViewModel](
@@ -70,7 +74,9 @@ class ViewModelFactoryImpl(ViewModelFactory):
         else:
             return cast(T, view_model)
 
-    def create_document_view_model(self) -> DocumentViewModel:
+    def create_document_view_model(
+        self, file_stem: str | None = None
+    ) -> DocumentViewModel:
         return DocumentViewModel(
             self,
             self.edit_audio,
@@ -78,6 +84,7 @@ class ViewModelFactoryImpl(ViewModelFactory):
             self.prep_audio,
             self.filter_audio,
             self.save_audio,
+            file_stem,
         )
 
     def create_spectrogram_view_model(self) -> SpectrogramViewModel:
@@ -88,9 +95,15 @@ class ViewModelFactoryImpl(ViewModelFactory):
             self.compute_sgram_mmap,
         )
 
-    def create_annotation_view_model(self) -> AnnotationViewModel:
+    def create_annotation_view_model(
+        self, file_stem: str | None = None
+    ) -> AnnotationViewModel:
         return AnnotationViewModel(
-            self.create_label, self.delete_node, self.parse_textgrid
+            self.create_label,
+            self.delete_node,
+            self.parse_textgrid,
+            self.load_annotation,
+            file_stem,
         )
 
     def create_audio_wave_view_model(self, channel_idx: int) -> AudioWaveViewModel:

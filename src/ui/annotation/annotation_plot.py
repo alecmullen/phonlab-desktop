@@ -178,7 +178,7 @@ class AnnotationPlot(DocumentPlot):
         if a0 is None:
             return
         if self.dragging_node is not None:
-            self.selected_node = self.dragging_node.node
+            self.selected_node = self.dragging_node.id
             self.dragging_node = None
             self.populate(self.view_model.annotation_view_state)
             a0.accept()
@@ -248,9 +248,9 @@ class AnnotationPlot(DocumentPlot):
             return
 
         if self.context_pos is not None:
-            type = int(self.context_pos.y())
+            type_idx = int(self.context_pos.y())
         elif self.selected_type is not None:
-            type = self.selected_type
+            type_idx = self.selected_type
         else:
             return
 
@@ -258,5 +258,5 @@ class AnnotationPlot(DocumentPlot):
 
         start, end = self.selection_region.getRegion()
         self.view_model.create_label_from_selection(
-            type, start, end, pixel_width * SAME_NODE_PIXEL_THRESH
+            type_idx, start, end, pixel_width * SAME_NODE_PIXEL_THRESH
         )

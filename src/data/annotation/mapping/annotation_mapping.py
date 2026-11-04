@@ -13,12 +13,13 @@ def entity_to_annotation(entity: AnnotationEntity) -> Annotation:
     return Annotation(
         {node_entity.id: node_entity.time for node_entity in entity.nodes},
         [entity_to_type(type_entity) for type_entity in entity.types],
+        entity.id,
     )
 
 
 def entity_to_type(entity: AnnotationTypeEntity) -> AnnotationType:
     return AnnotationType(
-        entity.name, [entity_to_label(label) for label in entity.labels]
+        entity.name, [entity_to_label(label) for label in entity.labels], entity.id
     )
 
 

@@ -7,10 +7,10 @@ from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
-    add_node_time,
 )
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case_sync import UseCaseSync
+from res.constants import SAME_NODE_THRESHOLD
 
 INTERVAL_TIER_NAME = "IntervalTier"
 POINT_TIER_NAME = "TextTier"
@@ -34,10 +34,12 @@ class ParseTextGrid(UseCaseSync[Annotation]):
             node_times: list[float] = []
             for tier in tiers:
                 for label in tier["labels"]:
-                    node_times = add_node_time(node_times, label[0])
-                    node_times = add_node_time(node_times, label[1])
+                    node_times.append(label[0])
+                    node_times.append(label[1])
 
-            nodes = self.annotation_repository.create_nodes(id, node_times)
+            nodes = self.annotation_repository.create_nodes(
+                id, node_times, SAME_NODE_THRESHOLD
+            )
             node_ids_db, node_times_db = zip(
                 *sorted(nodes.items(), key=lambda item: item[1])
             )
@@ -56,6 +58,7 @@ class ParseTextGrid(UseCaseSync[Annotation]):
 
             return self.annotation_repository.get_annotation_by_id(id)
         except Exception as err:
+            print(err)
             raise ParseTextGridError from err
 
 

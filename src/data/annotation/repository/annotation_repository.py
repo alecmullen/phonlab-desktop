@@ -1,10 +1,15 @@
-from core.annotation.entity.annotation import Annotation, AnnotationType
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+)
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_node import AnnotationNodeEntity
 from data.annotation.mapping.annotation_mapping import (
     entity_to_annotation,
+    label_to_entity,
     type_to_entity,
 )
 
@@ -13,26 +18,54 @@ class AnnotationRepositoryImpl(AnnotationRepository):
     def __init__(self, local_datasource: AnnotationDataSource):
         self.local_datasource = local_datasource
 
-    def create_annotation(self, filename: str) -> int:
-        entity = self.local_datasource.find_annotation_by_filename(filename)
+    def create_annotation(self, file_stem: str) -> int:
+        entity = self.local_datasource.find_annotation_by_file_stem(file_stem)
         if entity is not None:
             raise ValueError(
                 "Annotation for this file already exists in project database"
             )
 
         return self.local_datasource.add_annotation(
-            AnnotationEntity(file_name=filename)
+            AnnotationEntity(file_stem=file_stem)
         )
 
     def get_annotation_by_id(self, id: int) -> Annotation:
         entity = self.local_datasource.get_annotation_by_id(id)
         return entity_to_annotation(entity)
 
-    def create_nodes(self, annotation_id: int, nodes: list[float]) -> dict[int, float]:
-        node_entities = [
-            AnnotationNodeEntity(annotation_id=annotation_id, time=time)
-            for time in nodes
-        ]
+    def get_annotation_by_file_stem(self, file_stem: str) -> Annotation | None:
+        entity = self.local_datasource.find_annotation_by_file_stem(file_stem)
+        if entity is not None:
+            return entity_to_annotation(entity)
+        else:
+            return None
+
+    def create_node(
+        self, annotation_id: int, time: float, same_threshold: float = 0.0
+    ) -> tuple[int, float]:
+        node = self.local_datasource.find_node_by_time(
+            annotation_id, time, same_threshold
+        )
+        if node is None:
+            node = self.local_datasource.add_node(
+                AnnotationNodeEntity(annotation_id=annotation_id, time=time)
+            )
+        return (node.id, node.time)
+
+    def create_nodes(
+        self, annotation_id: int, nodes: list[float], same_threshold: float = 0.0
+    ) -> dict[int, float]:
+        node_entities = []
+        for time in nodes:
+            node_entity = self.local_datasource.find_node_by_time(
+                annotation_id, time, same_threshold
+            )
+            if node_entity is None:
+                node_entity = AnnotationNodeEntity(
+                    annotation_id=annotation_id, time=time
+                )
+            node_entities.append(node_entity)
+
         node_entities = self.local_datasource.add_nodes(node_entities)
         return {node.id: node.time for node in node_entities}
 
@@ -41,3 +74,17 @@ class AnnotationRepositoryImpl(AnnotationRepository):
         for entity in type_entities:
             entity.annotation_id = annotation_id
         self.local_datasource.add_types(type_entities)
+
+    def create_label(self, label: AnnotationLabel, type_id: int):
+        entity = label_to_entity(label)
+        entity.annotation_type_id = type_id
+        self.local_datasource.add_label(entity)
+
+    def update_label(self, label: AnnotationLabel, type_id: int):
+        entity = label_to_entity(label)
+        entity.annotation_type_id = type_id
+        self.local_datasource.merge_label(entity)
+
+    def delete_label(self, label: AnnotationLabel):
+        entity = label_to_entity(label)
+        self.local_datasource.delete_label(entity)

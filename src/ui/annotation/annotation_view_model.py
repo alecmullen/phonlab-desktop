@@ -4,6 +4,7 @@ from dataclasses import replace
 from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
 from core.annotation.delete_node import DeleteEndNodeError, DeleteNode
 from core.annotation.entity.annotation import Annotation
+from core.annotation.load_annotation import LoadAnnotation
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
@@ -26,10 +27,18 @@ class AnnotationViewModel(ViewModel):
         create_label: CreateLabel,
         delete_node: DeleteNode,
         parse_text_grid: ParseTextGrid,
+        load_annotation: LoadAnnotation,
+        filestem: str | None = None,
     ):
         super().__init__()
 
         self.annotation_state = AnnotationState()
+
+        if filestem is not None:
+            annotation = load_annotation(filestem)
+            if annotation is not None:
+                self.annotation_state = to_annotation_state(annotation)
+
         self.window_state: tuple[float, float] = (0.0, 0.0)
 
         self.annotation_view_state = AnnotationState()
@@ -44,18 +53,18 @@ class AnnotationViewModel(ViewModel):
 
         if not all(extent.has_point_label for extent in drag_node.extents):
             for node in self.annotation_state.nodes.values():
-                if node.node == drag_node.node:
+                if node.id == drag_node.id:
                     continue
                 if node.x < drag_node.x and node.x >= new_pos:
                     new_pos = node.x
                 if node.x > drag_node.x and node.x <= new_pos:
                     new_pos = node.x
 
-        self.annotation_state.nodes[drag_node.node] = replace(
-            self.annotation_state.nodes[drag_node.node], x=new_pos
+        self.annotation_state.nodes[drag_node.id] = replace(
+            self.annotation_state.nodes[drag_node.id], x=new_pos
         )
-        self.annotation_view_state.nodes[drag_node.node] = replace(
-            self.annotation_view_state.nodes[drag_node.node], x=new_pos
+        self.annotation_view_state.nodes[drag_node.id] = replace(
+            self.annotation_view_state.nodes[drag_node.id], x=new_pos
         )
 
         self.update_visible_annotation_change()
@@ -144,15 +153,16 @@ class AnnotationViewModel(ViewModel):
 
     def create_label_from_selection(
         self,
-        type: int,
+        type_idx: int,
         start: float,
         end: float,
-        same_node_threshold: float | None = None,
+        same_node_threshold: float,
     ):
         try:
+            annotation = to_annotation(self.annotation_state)
             annotation = self.create_label_use_case(
-                to_annotation(self.annotation_state),
-                type,
+                annotation,
+                annotation.types[type_idx].get_id(),
                 start,
                 end,
                 same_node_threshold,

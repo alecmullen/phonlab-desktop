@@ -22,17 +22,22 @@ class AnnotationTypeState(State):
     type: str
     labels: list[AnnotationLabelState]
 
+    id: int | None = None
+
 
 @dataclass(frozen=True)
 class AnnotationState(State):
     nodes: dict[int, AnnotationNodeState] = field(default_factory=dict)
     types: list[AnnotationTypeState] = field(default_factory=list)
 
+    id: int | None = None
+
 
 def to_annotation(annotation_state: AnnotationState) -> Annotation:
     return Annotation(
+        id=annotation_state.id,
         nodes={
-            node_state.node: node_state.x
+            node_state.id: node_state.x
             for node_state in annotation_state.nodes.values()
         },
         types=[
@@ -42,6 +47,7 @@ def to_annotation(annotation_state: AnnotationState) -> Annotation:
                     AnnotationLabel(label.s_node, label.e_node, label.label, label.id)
                     for label in type.labels
                 ],
+                type.id,
             )
             for type in annotation_state.types
         ],
@@ -50,6 +56,7 @@ def to_annotation(annotation_state: AnnotationState) -> Annotation:
 
 def to_annotation_state(annotation: Annotation) -> AnnotationState:
     return AnnotationState(
+        id=annotation.id,
         nodes={
             node: AnnotationNodeState(node, x) for node, x in annotation.nodes.items()
         },
@@ -62,6 +69,7 @@ def to_annotation_state(annotation: Annotation) -> AnnotationState:
                     )
                     for label in type.labels
                 ],
+                type.id,
             )
             for type in annotation.types
         ],
@@ -99,19 +107,17 @@ def update_annotation_state_from_window(
                     node_extents, label.e_node, tier, is_point
                 )
 
-        types.append(AnnotationTypeState(type.type, labels))
+        types.append(AnnotationTypeState(type.type, labels, type.id))
 
     nodes = {}
     for node in annotation.nodes.values():
-        if node.node not in node_extents:
+        if node.id not in node_extents:
             continue
 
-        node_state = to_node_state(
-            node.node, node.x, node_extents[node.node], start, end
-        )
-        nodes[node.node] = node_state
+        node_state = to_node_state(node.id, node.x, node_extents[node.id], start, end)
+        nodes[node.id] = node_state
 
-    return AnnotationState(nodes=nodes, types=types)
+    return AnnotationState(nodes=nodes, types=types, id=annotation.id)
 
 
 def update_extent_set(

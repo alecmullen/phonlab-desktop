@@ -76,7 +76,7 @@ def test_populate_adds_visible_nodes(qtbot: QtBot):
 
     plot.populate(MOCK_ANNOTATION_STATE)
 
-    assert {node.node for node in plot.visible_nodes} == {1, 2, 3}
+    assert {node.id for node in plot.visible_nodes} == {1, 2, 3}
 
 
 def test_populate_with_no_types_sets_empty_y_range_and_no_visible_nodes(qtbot: QtBot):

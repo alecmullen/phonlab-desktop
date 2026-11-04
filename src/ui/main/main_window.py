@@ -293,7 +293,10 @@ class MainWindow(QMainWindow):
                     self.splash = None
 
                 # Create new document
-                doc_view_model = self.view_model_factory.create(DocumentViewModel)
+                file_stem = Path(audio_filename).stem
+                doc_view_model = self.view_model_factory.create(
+                    DocumentViewModel, file_stem
+                )
                 doc_view_model.subscribe(self.on_doc_state_change)
                 doc = DocumentView(doc_view_model)
                 doc.origin_name = Path(audio_filename).name
@@ -312,7 +315,7 @@ class MainWindow(QMainWindow):
                     (
                         file
                         for file in filenames
-                        if file.endswith(f"{Path(audio_filename).stem}.TextGrid")
+                        if file.endswith(f"{file_stem}.TextGrid")
                     ),
                     None,
                 )

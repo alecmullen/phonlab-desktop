@@ -34,7 +34,7 @@ class NodeView(pg.GraphicsObject):
         red_ys = []
 
         for node in self.nodes:
-            if node.node != self.selected_node:
+            if node.id != self.selected_node:
                 blue_xs.append(node.x)
                 blue_ys.append(node.extents[0].tier)
             else:
@@ -68,7 +68,7 @@ class NodeView(pg.GraphicsObject):
         for node in self.nodes:
             self.prepareGeometryChange()
             started = False
-            if node.node == self.selected_node:
+            if node.id == self.selected_node:
                 solid_path = solid_path_red
                 dotted_path = dotted_path_red
             else:
