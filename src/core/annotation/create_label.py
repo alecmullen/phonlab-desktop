@@ -43,10 +43,15 @@ class CreateLabel(UseCaseSync[Annotation]):
             annotation, nodes=annotation.nodes | {s_node: s_time} | {e_node: e_time}
         )
 
-        self.clear_interval(annotation, [type_id], s_node, e_node)
+        annotation = self.clear_interval(annotation, [type_id], s_node, e_node)
 
-        self.annotation_repository.create_label(
+        label = self.annotation_repository.create_label(
             AnnotationLabel(s_node, e_node), type_id
         )
 
-        return self.annotation_repository.get_annotation_by_id(annotation_id)
+        types = [
+            type if type.id != type_id else replace(type, labels=type.labels + [label])
+            for type in annotation.types
+        ]
+
+        return replace(annotation, types=types)

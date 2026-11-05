@@ -1,5 +1,7 @@
-from sqlalchemy import exists, or_, select
-from sqlalchemy.orm import joinedload
+import time
+
+from sqlalchemy import delete, exists, or_, select
+from sqlalchemy.orm import selectinload
 
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_label import AnnotationLabelEntity
@@ -15,8 +17,8 @@ class AnnotationDataSource(DataSource):
                 select(AnnotationEntity)
                 .where(AnnotationEntity.file_stem == file_stem)
                 .options(
-                    joinedload(AnnotationEntity.nodes),
-                    joinedload(AnnotationEntity.types).subqueryload(
+                    selectinload(AnnotationEntity.nodes),
+                    selectinload(AnnotationEntity.types).selectinload(
                         AnnotationTypeEntity.labels
                     ),
                 )
@@ -27,17 +29,19 @@ class AnnotationDataSource(DataSource):
 
     def get_annotation_by_id(self, id: int) -> AnnotationEntity:
         with self.database.open_session() as session:
+            start_time = time.perf_counter()
             stmt = (
                 select(AnnotationEntity)
                 .where(AnnotationEntity.id == id)
                 .options(
-                    joinedload(AnnotationEntity.nodes),
-                    joinedload(AnnotationEntity.types).subqueryload(
+                    selectinload(AnnotationEntity.nodes),
+                    selectinload(AnnotationEntity.types).selectinload(
                         AnnotationTypeEntity.labels
                     ),
                 )
             )
             annotation = session.scalar(stmt)
+            print("GET ANNOT:", time.perf_counter() - start_time)
 
         if annotation is None:
             raise ValueError("Annotation with that id does not exist in database")
@@ -88,6 +92,14 @@ class AnnotationDataSource(DataSource):
                 session.refresh(node)
         return nodes
 
+    def delete_node(self, node_id: int):
+        with self.database.open_session() as session:
+            stmt = delete(AnnotationNodeEntity).where(
+                AnnotationNodeEntity.id == node_id
+            )
+            session.execute(stmt)
+            session.commit()
+
     def delete_node_if_no_labels(self, node: AnnotationNodeEntity):
         with self.database.open_session() as session:
             has_label = session.scalar(
@@ -109,10 +121,12 @@ class AnnotationDataSource(DataSource):
             session.add_all(types)
             session.commit()
 
-    def add_label(self, label: AnnotationLabelEntity):
+    def add_label(self, label: AnnotationLabelEntity) -> AnnotationLabelEntity:
         with self.database.open_session() as session:
             session.add(label)
             session.commit()
+            session.refresh(label)
+        return label
 
     def merge_label(self, label: AnnotationLabelEntity):
         with self.database.open_session() as session:

@@ -2,7 +2,7 @@ import logging
 from dataclasses import replace
 
 from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
-from core.annotation.delete_node import DeleteEndNodeError, DeleteNode
+from core.annotation.delete_node import DeleteNode, DeleteNodeError
 from core.annotation.entity.annotation import Annotation
 from core.annotation.load_annotation import LoadAnnotation
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
@@ -141,11 +141,9 @@ class AnnotationViewModel(ViewModel):
             annotation = self.delete_node_use_case(
                 to_annotation(self.annotation_state), node
             )
-        except DeleteEndNodeError:
+        except DeleteNodeError:
             self.state_changed.emit(
-                StatusMessageState(
-                    self.tr("Cannot delete end node with attached label")
-                )
+                StatusMessageState(self.tr("Cannot delete node due to attached labels"))
             )
             return
         self.annotation_state = to_annotation_state(annotation)

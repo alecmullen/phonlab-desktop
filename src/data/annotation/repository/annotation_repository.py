@@ -9,6 +9,7 @@ from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_node import AnnotationNodeEntity
 from data.annotation.mapping.annotation_mapping import (
     entity_to_annotation,
+    entity_to_label,
     label_to_entity,
     type_to_entity,
 )
@@ -69,16 +70,20 @@ class AnnotationRepositoryImpl(AnnotationRepository):
         node_entities = self.local_datasource.add_nodes(node_entities)
         return {node.id: node.time for node in node_entities}
 
+    def delete_node(self, node_id: int):
+        self.local_datasource.delete_node(node_id)
+
     def create_types(self, annotation_id: int, types: list[AnnotationType]):
         type_entities = [type_to_entity(type) for type in types]
         for entity in type_entities:
             entity.annotation_id = annotation_id
         self.local_datasource.add_types(type_entities)
 
-    def create_label(self, label: AnnotationLabel, type_id: int):
+    def create_label(self, label: AnnotationLabel, type_id: int) -> AnnotationLabel:
         entity = label_to_entity(label)
         entity.annotation_type_id = type_id
-        self.local_datasource.add_label(entity)
+        entity = self.local_datasource.add_label(entity)
+        return entity_to_label(entity)
 
     def update_label(self, label: AnnotationLabel, type_id: int):
         entity = label_to_entity(label)

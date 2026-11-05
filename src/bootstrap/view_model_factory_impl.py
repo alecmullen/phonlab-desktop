@@ -47,7 +47,7 @@ class ViewModelFactoryImpl(ViewModelFactory):
         self.compute_sgram_mmap = ComputeSpectrogramMmap()
         self.clear_interval = ClearInterval(self.annotation_repository)
         self.create_label = CreateLabel(self.clear_interval, self.annotation_repository)
-        self.delete_node = DeleteNode()
+        self.delete_node = DeleteNode(self.annotation_repository)
         self.load_annotation = LoadAnnotation(self.annotation_repository)
         self.parse_textgrid = ParseTextGrid(self.annotation_repository)
 

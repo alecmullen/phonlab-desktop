@@ -1,6 +1,6 @@
 import pytest
 
-from core.annotation.delete_node import DeleteEndNodeError, DeleteNode
+from core.annotation.delete_node import DeleteNodeError, DeleteNode
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
@@ -101,7 +101,7 @@ def test_delete_last_node_of_tier_with_attached_label_raises():
         {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a")], [(0, 2, "b")]]
     )
 
-    with pytest.raises(DeleteEndNodeError):
+    with pytest.raises(DeleteNodeError):
         DeleteNode()(annotation, 1)
 
 
@@ -109,12 +109,12 @@ def test_delete_last_node_of_tier_with_attached_label_raises():
 def test_delete_end_node_with_attached_label_raises(node: int):
     annotation = make_annotation({0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]])
 
-    with pytest.raises(DeleteEndNodeError):
+    with pytest.raises(DeleteNodeError):
         DeleteNode()(annotation, node)
 
 
 def test_delete_end_node_error_is_value_error():
-    assert issubclass(DeleteEndNodeError, ValueError)
+    assert issubclass(DeleteNodeError, ValueError)
 
 
 def test_delete_node_does_not_mutate_input():
