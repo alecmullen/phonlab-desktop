@@ -2,11 +2,11 @@ from dataclasses import dataclass, field
 
 from core.annotation.entity.annotation import (
     Annotation,
-    AnnotationLabel,
     AnnotationType,
 )
 from ui.annotation.state.annotation_label_state import (
     AnnotationLabelState,
+    to_label,
     update_label_state,
 )
 from ui.annotation.state.annotation_node_state import (
@@ -43,10 +43,7 @@ def to_annotation(annotation_state: AnnotationState) -> Annotation:
         types=[
             AnnotationType(
                 type.type,
-                [
-                    AnnotationLabel(label.s_node, label.e_node, label.label, label.id)
-                    for label in type.labels
-                ],
+                [to_label(label) for label in type.labels],
                 type.id,
             )
             for type in annotation_state.types

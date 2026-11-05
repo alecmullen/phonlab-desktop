@@ -216,8 +216,8 @@ class AnnotationPlot(DocumentPlot):
             a0.ignore()
 
     @pyqtSlot(int, str)
-    def on_label_edit(self, label_id: int, text: str):
-        self.view_model.change_label_text(label_id, text)
+    def on_label_edit(self, label: AnnotationLabelState, text: str):
+        self.view_model.change_label_text(label, text)
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos: QPointF):

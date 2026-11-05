@@ -25,15 +25,25 @@ class ClearInterval(UseCaseSync[Annotation]):
                 continue
 
             labels = []
+            deleted_nodes = set()
             for label in type.labels:
-                updated_labels = self._update_label(
+                updated_labels, deleted_ids = self._update_label(
                     label, type.get_id(), nodes, s_node_interval, e_node_interval
                 )
                 labels.extend(updated_labels)
+                deleted_nodes.update(deleted_ids)
 
             types.append(replace(type, labels=labels))
 
-        return replace(annotation, types=types)
+        return replace(
+            annotation,
+            types=types,
+            nodes={
+                id: time
+                for id, time in annotation.nodes.items()
+                if id not in deleted_nodes
+            },
+        )
 
     def _update_label(
         self,
@@ -42,41 +52,51 @@ class ClearInterval(UseCaseSync[Annotation]):
         nodes: dict[int, float],
         s_node_interval: int,
         e_node_interval: int,
-    ) -> list[AnnotationLabel]:
+    ) -> tuple[list[AnnotationLabel], list[int]]:
         label_range = self._nodes_to_tuple_range(nodes, label.s_node, label.e_node)
         interval_range = self._nodes_to_tuple_range(
             nodes, s_node_interval, e_node_interval
         )
 
         if self._label_outside_interval(label_range, interval_range):
-            return [label]
+            return [label], []
 
-        if self._label_inside_interval(label_range, interval_range):
-            self.annotation_repository.delete_label(label)
-            return []
-
+        potential_node_orphans = []
         labels = []
         split = False
-        if self._label_starts_before_interval(label_range, interval_range):
-            new_label = replace(label, e_node=s_node_interval)
-            self.annotation_repository.update_label(new_label, type_id)
+        if self._label_inside_interval(label_range, interval_range):
+            self.annotation_repository.delete_label(label)
+            potential_node_orphans.extend((label.s_node, label.e_node))
 
-            labels.append(new_label)
-            split = True
+        else:
+            if self._label_starts_before_interval(label_range, interval_range):
+                new_label = replace(label, e_node=s_node_interval)
+                self.annotation_repository.update_label(new_label)
 
-        if self._label_ends_after_interval(label_range, interval_range):
-            if split:
-                new_label = self.annotation_repository.create_label(
-                    AnnotationLabel(s_node=e_node_interval, e_node=label.e_node),
-                    type_id,
-                )
-            else:
-                new_label = replace(label, s_node=e_node_interval)
-                self.annotation_repository.update_label(new_label, type_id)
+                potential_node_orphans.append(label.e_node)
 
-            labels.append(new_label)
+                labels.append(new_label)
+                split = True
 
-        return labels
+            if self._label_ends_after_interval(label_range, interval_range):
+                if split:
+                    new_label = self.annotation_repository.create_label(
+                        AnnotationLabel(s_node=e_node_interval, e_node=label.e_node),
+                        type_id,
+                    )
+                else:
+                    new_label = replace(label, s_node=e_node_interval)
+                    self.annotation_repository.update_label(new_label)
+
+                    potential_node_orphans.append(label.s_node)
+
+                labels.append(new_label)
+
+        deleted_ids = self.annotation_repository.delete_nodes_if_no_labels(
+            potential_node_orphans
+        )
+
+        return labels, deleted_ids
 
     def _nodes_to_tuple_range(
         self, nodes: dict[int, float], s_node: int, e_node: int

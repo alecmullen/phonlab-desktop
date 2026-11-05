@@ -75,7 +75,7 @@ class FakeAnnotationRepository(AnnotationRepository):
             raise ValueError("Annotation with that id does not exist in database")
         return Annotation(dict(self.nodes[id]), list(self.types[id]), id)
 
-    def get_annotation_by_file_stem(self, file_stem: str) -> Annotation | None:
+    def find_annotation_by_file_stem(self, file_stem: str) -> Annotation | None:
         for id, stem in self.filenames.items():
             if stem == file_stem:
                 return self.get_annotation_by_id(id)

@@ -26,7 +26,7 @@ class EditableLabelItem(pg.TextItem):
         label: AnnotationLabelState,
         anchor: tuple[float, float],
         color: tuple[int, int, int],
-        on_edit: Callable[[int, str], None],
+        on_edit: Callable[[AnnotationLabelState, str], None],
         parent_plot: pg.PlotItem,
     ):
         pixel_size = parent_plot.getViewBox().viewPixelSize()
@@ -48,7 +48,7 @@ class EditableLabelItem(pg.TextItem):
 
         super().__init__(text=clipped_text, anchor=anchor, color=color)
 
-        self.label_id = label.id
+        self.label = label
 
         option = self.textItem.document().defaultTextOption()
         option.setWrapMode(QTextOption.WrapMode.WordWrap)
@@ -111,7 +111,7 @@ class EditableLabelItem(pg.TextItem):
 
             new_text = self.textItem.toPlainText()
             if new_text != start_text:
-                self.on_edit(self.label_id, new_text)
+                self.on_edit(self.label, new_text)
 
     def eventFilter(self, a0: QObject | None, a1: QEvent | None) -> bool:
         event = a1

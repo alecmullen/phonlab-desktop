@@ -26,7 +26,7 @@ class DeleteNode(UseCaseSync[Annotation]):
 
         self.annotation_repository.delete_node(node)
         nodes = {key: value for key, value in annotation.nodes.items() if key != node}
-        return Annotation(nodes=nodes, types=types)
+        return replace(annotation, nodes=nodes, types=types)
 
     def _remove_node_from_type_labels(
         self, node: int, type: AnnotationType
@@ -63,9 +63,7 @@ class DeleteNode(UseCaseSync[Annotation]):
         updated_labels = []
         for label in type.labels:
             if label.id in replacements:
-                self.annotation_repository.update_label(
-                    replacements[label.id], type.get_id()
-                )
+                self.annotation_repository.update_label(replacements[label.id])
                 updated_labels.append(replacements[label.id])
             elif node in (label.s_node, label.e_node):
                 self.annotation_repository.delete_label(label)

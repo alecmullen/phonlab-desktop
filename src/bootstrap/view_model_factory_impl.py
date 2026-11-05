@@ -4,6 +4,8 @@ from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.update_label import UpdateLabel
+from core.annotation.update_node import UpdateNode
 from core.database.connect_local_database import ConnectLocalDatabase
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
@@ -47,6 +49,8 @@ class ViewModelFactoryImpl(ViewModelFactory):
         self.compute_sgram_mmap = ComputeSpectrogramMmap()
         self.clear_interval = ClearInterval(self.annotation_repository)
         self.create_label = CreateLabel(self.clear_interval, self.annotation_repository)
+        self.update_label = UpdateLabel(self.annotation_repository)
+        self.update_node = UpdateNode(self.annotation_repository)
         self.delete_node = DeleteNode(self.annotation_repository)
         self.load_annotation = LoadAnnotation(self.annotation_repository)
         self.parse_textgrid = ParseTextGrid(self.annotation_repository)
@@ -100,6 +104,8 @@ class ViewModelFactoryImpl(ViewModelFactory):
     ) -> AnnotationViewModel:
         return AnnotationViewModel(
             self.create_label,
+            self.update_label,
+            self.update_node,
             self.delete_node,
             self.parse_textgrid,
             self.load_annotation,

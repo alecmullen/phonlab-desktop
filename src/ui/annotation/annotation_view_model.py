@@ -5,8 +5,10 @@ from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
 from core.annotation.delete_node import DeleteNode, DeleteNodeError
 from core.annotation.entity.annotation import Annotation
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.update_label import UpdateLabel
+from core.annotation.update_node import UpdateNode
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
-from ui.annotation.state.annotation_label_state import AnnotationLabelState
+from ui.annotation.state.annotation_label_state import AnnotationLabelState, to_label
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import (
@@ -25,6 +27,8 @@ class AnnotationViewModel(ViewModel):
     def __init__(
         self,
         create_label: CreateLabel,
+        update_label: UpdateLabel,
+        update_node: UpdateNode,
         delete_node: DeleteNode,
         parse_text_grid: ParseTextGrid,
         load_annotation: LoadAnnotation,
@@ -44,6 +48,8 @@ class AnnotationViewModel(ViewModel):
         self.annotation_view_state = AnnotationState()
 
         self.create_label_use_case = create_label
+        self.update_label_use_case = update_label
+        self.update_node_use_case = update_node
         self.delete_node_use_case = delete_node
         self.parse_textgrid_use_case = parse_text_grid
 
@@ -59,6 +65,8 @@ class AnnotationViewModel(ViewModel):
                     new_pos = node.x
                 if node.x > drag_node.x and node.x <= new_pos:
                     new_pos = node.x
+
+        self.update_node_use_case(drag_node.id, new_pos)
 
         self.annotation_state.nodes[drag_node.id] = replace(
             self.annotation_state.nodes[drag_node.id], x=new_pos
@@ -110,21 +118,24 @@ class AnnotationViewModel(ViewModel):
             )
             logger.exception("Error parsing TextGrid")
 
-    def change_label_text(self, label_id: int, text: str):
+    def change_label_text(self, label: AnnotationLabelState, text: str):
+        label = replace(label, label=text)
+        self.update_label_use_case(to_label(label))
+
         self.annotation_state = self._change_label_text_in_state(
-            label_id, text, self.annotation_state
+            label, self.annotation_state
         )
         self.annotation_view_state = self._change_label_text_in_state(
-            label_id, text, self.annotation_view_state
+            label, self.annotation_view_state
         )
 
     def _change_label_text_in_state(
-        self, label_id: int, text: str, annotation: AnnotationState
+        self, updated_label: AnnotationLabelState, annotation: AnnotationState
     ) -> AnnotationState:
         for type_idx, type in enumerate(annotation.types):
             for label_idx, label in enumerate(type.labels):
-                if label.id == label_id:
-                    new_label = replace(label, label=text)
+                if label.id == updated_label.id:
+                    new_label = replace(label, label=updated_label.label)
                     labels = type.labels.copy()
                     labels[label_idx] = new_label
 

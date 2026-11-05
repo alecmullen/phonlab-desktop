@@ -354,9 +354,7 @@ def test_delete_end_node_with_attached_label_shows_status_message(
 
     view_model.delete_node(node)
 
-    assert received == [
-        StatusMessageState("Cannot delete node due to attached labels")
-    ]
+    assert received == [StatusMessageState("Cannot delete node due to attached labels")]
     assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "b")]
 
 

@@ -14,7 +14,7 @@ class LabelView(pg.GraphicsObject):
         self,
         parent_plot: pg.PlotItem,
         labels: list[AnnotationLabelState],
-        on_edit_label: Callable[[int, str], None],
+        on_edit_label: Callable[[AnnotationLabelState, str], None],
     ):
         super().__init__()
         self.labels = labels

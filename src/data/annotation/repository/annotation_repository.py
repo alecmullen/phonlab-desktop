@@ -34,7 +34,7 @@ class AnnotationRepositoryImpl(AnnotationRepository):
         entity = self.local_datasource.get_annotation_by_id(id)
         return entity_to_annotation(entity)
 
-    def get_annotation_by_file_stem(self, file_stem: str) -> Annotation | None:
+    def find_annotation_by_file_stem(self, file_stem: str) -> Annotation | None:
         entity = self.local_datasource.find_annotation_by_file_stem(file_stem)
         if entity is not None:
             return entity_to_annotation(entity)
@@ -70,8 +70,14 @@ class AnnotationRepositoryImpl(AnnotationRepository):
         node_entities = self.local_datasource.add_nodes(node_entities)
         return {node.id: node.time for node in node_entities}
 
+    def update_node(self, node_id: int, time: float):
+        self.local_datasource.update_node(AnnotationNodeEntity(id=node_id, time=time))
+
     def delete_node(self, node_id: int):
         self.local_datasource.delete_node(node_id)
+
+    def delete_nodes_if_no_labels(self, ids: list[int]) -> list[int]:
+        return self.local_datasource.delete_nodes_if_no_labels(ids)
 
     def create_types(self, annotation_id: int, types: list[AnnotationType]):
         type_entities = [type_to_entity(type) for type in types]
@@ -85,9 +91,8 @@ class AnnotationRepositoryImpl(AnnotationRepository):
         entity = self.local_datasource.add_label(entity)
         return entity_to_label(entity)
 
-    def update_label(self, label: AnnotationLabel, type_id: int):
+    def update_label(self, label: AnnotationLabel):
         entity = label_to_entity(label)
-        entity.annotation_type_id = type_id
         self.local_datasource.merge_label(entity)
 
     def delete_label(self, label: AnnotationLabel):

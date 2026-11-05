@@ -1,8 +1,7 @@
 import pytest
-
 from support.annotation_repository import FakeAnnotationRepository
 
-from core.annotation.delete_node import DeleteNodeError, DeleteNode
+from core.annotation.delete_node import DeleteNode, DeleteNodeError
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,

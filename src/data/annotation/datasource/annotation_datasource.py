@@ -92,6 +92,11 @@ class AnnotationDataSource(DataSource):
                 session.refresh(node)
         return nodes
 
+    def update_node(self, node: AnnotationNodeEntity):
+        with self.database.open_session() as session:
+            session.merge(node)
+            session.commit()
+
     def delete_node(self, node_id: int):
         with self.database.open_session() as session:
             stmt = delete(AnnotationNodeEntity).where(
@@ -100,21 +105,28 @@ class AnnotationDataSource(DataSource):
             session.execute(stmt)
             session.commit()
 
-    def delete_node_if_no_labels(self, node: AnnotationNodeEntity):
+    def delete_nodes_if_no_labels(self, node_ids: list[int]) -> list[int]:
         with self.database.open_session() as session:
-            has_label = session.scalar(
-                select(
-                    exists().where(
+            stmt = (
+                delete(AnnotationNodeEntity)
+                .where(
+                    AnnotationNodeEntity.id.in_(node_ids),
+                    ~exists().where(
                         or_(
-                            AnnotationLabelEntity.start_node_id == node.id,
-                            AnnotationLabelEntity.end_node_id == node.id,
+                            AnnotationLabelEntity.start_node_id
+                            == AnnotationNodeEntity.id,
+                            AnnotationLabelEntity.end_node_id
+                            == AnnotationNodeEntity.id,
                         )
-                    )
+                    ),
                 )
+                .returning(AnnotationNodeEntity.id)
             )
-            if not has_label:
-                session.delete(node)
+            result = session.execute(stmt)
+            deleted_ids = [row.id for row in result.fetchall()]
             session.commit()
+
+        return deleted_ids
 
     def add_types(self, types: list[AnnotationTypeEntity]):
         with self.database.open_session() as session:
@@ -130,24 +142,11 @@ class AnnotationDataSource(DataSource):
 
     def merge_label(self, label: AnnotationLabelEntity):
         with self.database.open_session() as session:
-            old_s_node, old_e_node = None, None
-            old_label = session.get(AnnotationLabelEntity, label.id)
-            if old_label is not None:
-                old_s_node = old_label.start_node
-                old_e_node = old_label.end_node
-
             session.merge(label)
-            for node in (old_s_node, old_e_node):
-                if node is not None:
-                    self.delete_node_if_no_labels(node)
-
             session.commit()
 
     def delete_label(self, label: AnnotationLabelEntity):
         with self.database.open_session() as session:
             label = session.merge(label)
             session.delete(label)
-            for node in (label.start_node, label.end_node):
-                if node is not None:
-                    self.delete_node_if_no_labels(node)
             session.commit()

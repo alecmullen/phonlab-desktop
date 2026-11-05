@@ -8,4 +8,4 @@ class LoadAnnotation(UseCaseSync[Annotation | None]):
         self.annotation_respository = annotation_repository
 
     def __call__(self, file_stem: str) -> Annotation | None:
-        return self.annotation_respository.get_annotation_by_file_stem(file_stem)
+        return self.annotation_respository.find_annotation_by_file_stem(file_stem)
