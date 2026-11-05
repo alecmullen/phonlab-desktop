@@ -66,8 +66,10 @@ class ClearInterval(UseCaseSync[Annotation]):
 
         if self._label_ends_after_interval(label_range, interval_range):
             if split:
-                new_label = AnnotationLabel(s_node=e_node_interval, e_node=label.e_node)
-                self.annotation_repository.create_label(new_label, type_id)
+                new_label = self.annotation_repository.create_label(
+                    AnnotationLabel(s_node=e_node_interval, e_node=label.e_node),
+                    type_id,
+                )
             else:
                 new_label = replace(label, s_node=e_node_interval)
                 self.annotation_repository.update_label(new_label, type_id)

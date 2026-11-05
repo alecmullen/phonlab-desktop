@@ -98,10 +98,16 @@ class FakeAnnotationRepository(AnnotationRepository):
         annotation_id, idx = self._find_type(type_id)
         return list(self.types[annotation_id][idx].labels)
 
-    def create_label(self, label: AnnotationLabel, type_id: int):
+    def create_label(self, label: AnnotationLabel, type_id: int) -> AnnotationLabel:
         labels = self._labels(type_id)
         next_id = max((l.id for l in labels if l.id is not None), default=-1) + 1
-        self._set_labels(type_id, [*labels, replace(label, id=next_id)])
+        created = replace(label, id=next_id)
+        self._set_labels(type_id, [*labels, created])
+        return created
+
+    def delete_node(self, node_id: int):
+        for nodes in self.nodes.values():
+            nodes.pop(node_id, None)
 
     def update_label(self, label: AnnotationLabel, type_id: int):
         self._set_labels(

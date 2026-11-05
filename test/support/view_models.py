@@ -96,7 +96,7 @@ def make_annotation_view_model(
     repository = repository or FakeAnnotationRepository()
     return AnnotationViewModel(
         create_label or make_create_label(repository),
-        delete_node or DeleteNode(),
+        delete_node or DeleteNode(repository),
         parse_text_grid or ParseTextGrid(repository),
         load_annotation or LoadAnnotation(repository),
         filestem,

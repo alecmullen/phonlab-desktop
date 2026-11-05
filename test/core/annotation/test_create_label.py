@@ -136,7 +136,8 @@ def test_delete_node_after_splitting_label_merges_with_new_label():
     annotation = make_annotation({0: 0.0, 1: 3.0}, [[(0, 1, "a")]])
     annotation = create_label(annotation, 0, 1.0, 2.0)
 
-    result = DeleteNode()(annotation, 2)
+    repository = FakeAnnotationRepository()
+    result = DeleteNode(repository)(repository.seed(annotation), 2)
 
     assert label_times(result, 0) == [(0.0, 2.0, "a"), (2.0, 3.0, "")]
 
