@@ -1,3 +1,5 @@
+from itertools import count
+
 from support.annotation_repository import FakeAnnotationRepository
 
 from core.annotation.clear_interval import ClearInterval
@@ -11,12 +13,14 @@ from core.annotation.entity.annotation import (
 def make_annotation(
     nodes: dict[int, float], tiers: list[list[tuple[int, int, str]]]
 ) -> Annotation:
+    # label ids are unique across tiers, like the database's
+    label_ids = count()
     return Annotation(
         nodes=nodes,
         types=[
             AnnotationType(
                 f"tier{idx}",
-                [AnnotationLabel(*label, id=id) for id, label in enumerate(labels)],
+                [AnnotationLabel(*label, id=next(label_ids)) for label in labels],
             )
             for idx, labels in enumerate(tiers)
         ],
@@ -109,13 +113,22 @@ def test_delete_interval_only_changes_selected_tiers():
     assert [t.type for t in result.types] == ["tier0", "tier1", "tier2"]
 
 
-def test_delete_interval_keeps_nodes():
+def test_delete_interval_keeps_nodes_still_used_by_labels():
+    nodes = {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}
+    annotation = make_annotation(nodes, [[(0, 3, "a")]])
+
+    result = clear_interval(annotation, [0], 1, 2)
+
+    assert result.nodes == nodes
+
+
+def test_delete_interval_removes_nodes_orphaned_by_deleted_labels():
     nodes = {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}
     annotation = make_annotation(nodes, [[(1, 2, "a")]])
 
     result = clear_interval(annotation, [0], 0, 3)
 
-    assert result.nodes == nodes
+    assert result.nodes == {0: 0.0, 3: 3.0}
 
 
 def test_delete_interval_does_not_mutate_input():

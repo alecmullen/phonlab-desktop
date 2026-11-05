@@ -109,10 +109,34 @@ class FakeAnnotationRepository(AnnotationRepository):
         for nodes in self.nodes.values():
             nodes.pop(node_id, None)
 
-    def update_label(self, label: AnnotationLabel, type_id: int):
-        self._set_labels(
-            type_id, [label if l.id == label.id else l for l in self._labels(type_id)]
-        )
+    def update_label(self, label: AnnotationLabel):
+        for annotation_id, types in self.types.items():
+            for idx, type in enumerate(types):
+                if any(l.id == label.id for l in type.labels):
+                    self.types[annotation_id][idx] = replace(
+                        type,
+                        labels=[label if l.id == label.id else l for l in type.labels],
+                    )
+                    return
+
+    def update_node(self, node_id: int, time: float):
+        for nodes in self.nodes.values():
+            if node_id in nodes:
+                nodes[node_id] = time
+
+    def delete_nodes_if_no_labels(self, ids: list[int]) -> list[int]:
+        deleted = []
+        for id in set(ids):
+            used = any(
+                id in (l.s_node, l.e_node)
+                for types in self.types.values()
+                for type in types
+                for l in type.labels
+            )
+            if not used:
+                self.delete_node(id)
+                deleted.append(id)
+        return deleted
 
     def delete_label(self, label: AnnotationLabel):
         for annotation_id, types in self.types.items():

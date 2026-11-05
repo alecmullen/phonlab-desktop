@@ -60,12 +60,12 @@ def right_click(item: EditableLabelItem):
     item.mouseReleaseEvent(mouse_event(QEvent.Type.MouseButtonRelease))
 
 
-def test_init_stores_label_id_and_text(plot: pg.PlotItem):
+def test_init_stores_label_and_text(plot: pg.PlotItem):
     label = AnnotationLabelState(pos=(1.0, 0.5), size=(1.0, 0.5), label="abc")
 
     item = EditableLabelItem(label, (0.5, 0.5), (0, 0, 0), lambda: None, plot)
 
-    assert item.label_id == label.id
+    assert item.label == label
     assert item.toPlainText() == "abc"
     assert (item.pos().x(), item.pos().y()) == (1.0, 0.5)
 
@@ -148,26 +148,26 @@ def test_exit_editing_without_change_does_not_emit(
     item.setEditable(True)
 
     called = []
-    item.on_edit = lambda idx, txt: called.append((idx, txt))
+    item.on_edit = lambda label, txt: called.append((label, txt))
 
     item.setEditable(False)
 
     assert called == []
 
 
-def test_exit_editing_with_change_emits_id_and_text(
+def test_exit_editing_with_change_emits_label_and_text(
     qtbot: QtBot, item: EditableLabelItem
 ):
     item.setEditable(True)
 
     called = []
-    item.on_edit = lambda idx, txt: called.append((idx, txt))
+    item.on_edit = lambda label, txt: called.append((label, txt))
 
     item.setPlainText("changed")
 
     item.setEditable(False)
 
-    assert called == [(item.label_id, "changed")]
+    assert called == [(item.label, "changed")]
 
 
 @pytest.mark.parametrize(
@@ -202,14 +202,14 @@ def test_focus_out_commits_edit(qtbot: QtBot, item: EditableLabelItem):
     item.setEditable(True)
 
     called = []
-    item.on_edit = lambda idx, txt: called.append((idx, txt))
+    item.on_edit = lambda label, txt: called.append((label, txt))
 
     item.setPlainText("changed")
 
     handled = item.eventFilter(item.textItem, focus_out_event())
 
     assert handled is True
-    assert called == [(item.label_id, "changed")]
+    assert called == [(item.label, "changed")]
 
 
 def test_focus_out_without_change_does_not_call_on_edit(
@@ -218,7 +218,7 @@ def test_focus_out_without_change_does_not_call_on_edit(
     item.setEditable(True)
 
     called = []
-    item.on_edit = lambda idx, txt: called.append((idx, txt))
+    item.on_edit = lambda label, txt: called.append((label, txt))
 
     item.eventFilter(item.textItem, focus_out_event())
 

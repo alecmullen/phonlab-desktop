@@ -19,6 +19,8 @@ from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.update_label import UpdateLabel
+from core.annotation.update_node import UpdateNode
 from core.database.connect_local_database import ConnectLocalDatabase
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
@@ -87,6 +89,8 @@ def make_create_label(repository: FakeAnnotationRepository) -> CreateLabel:
 
 def make_annotation_view_model(
     create_label: CreateLabel | None = None,
+    update_label: UpdateLabel | None = None,
+    update_node: UpdateNode | None = None,
     delete_node: DeleteNode | None = None,
     parse_text_grid: ParseTextGrid | None = None,
     load_annotation: LoadAnnotation | None = None,
@@ -96,6 +100,8 @@ def make_annotation_view_model(
     repository = repository or FakeAnnotationRepository()
     return AnnotationViewModel(
         create_label or make_create_label(repository),
+        update_label or UpdateLabel(repository),
+        update_node or UpdateNode(repository),
         delete_node or DeleteNode(repository),
         parse_text_grid or ParseTextGrid(repository),
         load_annotation or LoadAnnotation(repository),

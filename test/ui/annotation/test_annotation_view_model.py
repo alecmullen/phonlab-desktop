@@ -393,3 +393,48 @@ def test_create_label_from_too_short_selection_shows_status_message(qtbot: QtBot
     assert len(received) == 1
     assert isinstance(received[0], StatusMessageState)
     assert view_model.annotation_state is previous
+
+
+def make_persisting_view_model() -> tuple[
+    AnnotationViewModel, FakeAnnotationRepository
+]:
+    repository = FakeAnnotationRepository()
+    view_model = make_annotation_view_model(repository=repository)
+    view_model.window_state = (0.0, 2.0)
+    view_model.set_annotation_state(
+        repository.seed(
+            Annotation(
+                nodes={0: 0.0, 1: 1.0, 2: 2.0},
+                types=[
+                    AnnotationType(
+                        "tier0",
+                        [
+                            AnnotationLabel(0, 1, "a", id=0),
+                            AnnotationLabel(1, 2, "b", id=1),
+                        ],
+                    )
+                ],
+            )
+        )
+    )
+    return view_model, repository
+
+
+def test_change_label_text_updates_state_and_repository():
+    view_model, repository = make_persisting_view_model()
+    label = view_model.annotation_state.types[0].labels[1]
+
+    view_model.change_label_text(label, "changed")
+
+    assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "changed")]
+    stored = repository.get_annotation_by_id(0)
+    assert [l.label for l in stored.types[0].labels] == ["a", "changed"]
+
+
+def test_change_node_state_persists_node_position(qtbot: QtBot):
+    view_model, repository = make_persisting_view_model()
+    node = view_model.annotation_state.nodes[1]
+
+    view_model.change_node_state(node, 1.5)
+
+    assert repository.get_annotation_by_id(0).nodes[1] == 1.5
