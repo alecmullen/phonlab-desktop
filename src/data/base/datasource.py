@@ -1,4 +1,4 @@
-from data.database import Database
+from data.base.database import Database
 
 
 class DataSource:

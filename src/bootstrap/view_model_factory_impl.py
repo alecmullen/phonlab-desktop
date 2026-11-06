@@ -18,7 +18,7 @@ from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import AnnotationRepositoryImpl
-from data.database import SQLiteDatabase
+from data.base.database import SQLiteDatabase
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.base.view_model import ViewModel
 from ui.base.view_model_factory import ViewModelFactory
