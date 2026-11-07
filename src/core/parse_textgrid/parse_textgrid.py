@@ -1,5 +1,4 @@
 import bisect
-from pathlib import Path
 
 import phonlab as phon
 
@@ -13,9 +12,6 @@ from core.annotation.repository.annotation_repository import AnnotationRepositor
 from core.base.use_case_sync import UseCaseSync
 from res.constants import SAME_NODE_THRESHOLD
 
-INTERVAL_TIER_NAME = "IntervalTier"
-POINT_TIER_NAME = "TextTier"
-
 
 class ParseTextGridError(ValueError):
     pass
@@ -25,12 +21,11 @@ class ParseTextGrid(UseCaseSync[Annotation]):
     def __init__(self, annotation_repository: AnnotationRepository):
         self.annotation_repository = annotation_repository
 
-    def __call__(self, filename: str) -> Annotation:
+    def __call__(self, file_path: str, file_stem: str) -> Annotation:
         try:
-            file_stem = Path(filename).stem
             id = self.annotation_repository.create_annotation(file_stem)
 
-            tiers = phon.read_textgrid_with(filename)
+            tiers = phon.read_textgrid_with(file_path)
 
             node_times: list[float] = []
             for tier in tiers:

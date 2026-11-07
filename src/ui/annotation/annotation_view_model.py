@@ -108,9 +108,9 @@ class AnnotationViewModel(ViewModel):
         except (KeyError, AttributeError):
             raise ValueError("Missing node in annotation")
 
-    def parse_textgrid(self, path: str):
+    def parse_textgrid(self, file_path: str, file_stem: str):
         try:
-            annotation = self.parse_textgrid_use_case(path)
+            annotation = self.parse_textgrid_use_case(file_path, file_stem)
             self.set_annotation_state(annotation)
         except ParseTextGridError:
             self.state_changed.emit(

@@ -73,6 +73,8 @@ class DocumentViewModel(ViewModel):
     ):
         super().__init__()
 
+        self.file_stem = file_stem
+
         self.raw_audio_state: AudioState = AudioState()
         self.audio_state: AudioState = AudioState()
         self.channel_state: ChannelState = ChannelState()
@@ -1364,8 +1366,9 @@ class DocumentViewModel(ViewModel):
             return
         self.undo_stack.append(cmd)
 
-    def parse_textgrid(self, path: str):
-        self.annotation_view_model.parse_textgrid(path)
+    def parse_textgrid(self, file_path: str):
+        if self.file_stem is not None:
+            self.annotation_view_model.parse_textgrid(file_path, self.file_stem)
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

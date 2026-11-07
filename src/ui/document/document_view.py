@@ -233,8 +233,8 @@ class DocumentView(QWidget):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
-    def load_textgrid(self, filename: str):
-        self.view_model.parse_textgrid(filename)
+    def load_textgrid(self, file_path: str):
+        self.view_model.parse_textgrid(file_path)
 
     def clear_plots(self):
         """Clear all current plots"""
