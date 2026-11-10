@@ -17,9 +17,7 @@ def test_default_filename_appends_textgrid_extension():
 
 
 def test_default_filename_flattens_project_relative_stem():
-    assert (
-        _default_filename("session1/speaker2/clip") == "clip.TextGrid"
-    )
+    assert _default_filename("session1/speaker2/clip") == "clip.TextGrid"
 
 
 def test_default_filename_sanitizes_invalid_characters():
