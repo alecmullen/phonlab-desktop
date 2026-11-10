@@ -1,5 +1,5 @@
 from ui.base.state import State
 
 
-class SaveToTextGridState(State):
+class SaveToTextGridAction(State):
     pass

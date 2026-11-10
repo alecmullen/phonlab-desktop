@@ -20,7 +20,7 @@ _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]')
 
 def _default_filename(tab_name: str) -> str:
     base = _INVALID_FILENAME_CHARS.sub("_", tab_name).strip()
-    return f"{Path(base).stem}.TextGrid"
+    return f"{base}.TextGrid"
 
 
 class SaveTextGridDialog(QDialog):

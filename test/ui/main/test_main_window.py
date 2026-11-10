@@ -196,6 +196,24 @@ def test_open_files_closes_splash_screen(
     assert main_window.splash is None
 
 
+def test_save_textgrid_opens_dialog_on_current_document(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    doc = add_document(main_window)
+    calls = []
+    monkeypatch.setattr(doc, "open_save_textgrid", lambda: calls.append(True))
+
+    main_window.save_textgrid()
+
+    assert calls == [True]
+
+
+def test_save_textgrid_does_nothing_without_a_document(main_window: MainWindow):
+    main_window.save_textgrid()
+
+    assert main_window.tab_widget.count() == 0
+
+
 # --------------------------- opening projects and documents ---------------------------
 
 

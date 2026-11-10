@@ -15,6 +15,7 @@ from core.transform_audio.filter_audio import FilterSpec
 from core.transform_audio.prep_audio import PrepAudio
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
+from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import (
@@ -987,6 +988,27 @@ def test_on_annot_state_changed_forwards_status_message(
         view_model.on_annot_state_changed(message)
 
     assert blocker.args[0] is message
+
+
+def test_on_annot_state_changed_forwards_save_textgrid_action(
+    view_model: DocumentViewModel, qtbot: QtBot
+):
+    action = SaveToTextGridAction()
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.on_annot_state_changed(action)
+
+    assert blocker.args[0] is action
+
+
+def test_save_textgrid_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.save_textgrid("/tmp/out.TextGrid", "long")
+
+    annotation_view_model.write_textgrid.assert_called_once_with(
+        "/tmp/out.TextGrid", "long"
+    )
 
 
 def test_on_annot_state_changed_selected_state_selects_and_plays(

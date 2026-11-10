@@ -4,7 +4,7 @@ import pytest
 from PyQt6.QtWidgets import QDialog, QFileDialog, QMessageBox
 from pytestqt.qtbot import QtBot
 
-from ui.main.component.save_textgrid_dialog import (
+from ui.document.component.save_textgrid_dialog import (
     SaveTextGridDialog,
     _default_filename,
 )
@@ -16,8 +16,10 @@ def test_default_filename_appends_textgrid_extension():
     assert _default_filename("myclip") == "myclip.TextGrid"
 
 
-def test_default_filename_replaces_audio_name_extension_only_by_appending():
-    assert _default_filename("myclip.wav") == "myclip.TextGrid"
+def test_default_filename_flattens_project_relative_stem():
+    assert (
+        _default_filename("session1/speaker2/clip") == "session1_speaker2_clip.TextGrid"
+    )
 
 
 def test_default_filename_sanitizes_invalid_characters():
@@ -28,19 +30,15 @@ def test_default_filename_strips_surrounding_whitespace():
     assert _default_filename("  myclip  ") == "myclip.TextGrid"
 
 
-def test_default_filename_keeps_existing_textgrid_extension():
-    assert _default_filename("myclip.TextGrid") == "myclip.TextGrid"
-
-
 # --------------------------- construction ---------------------------
 
 
 def make_dialog(
     qtbot: QtBot,
     origin_path: str = "/home/user/audio/myfile.wav",
-    tab_name: str = "myfile.wav",
+    file_stem: str = "myfile",
 ) -> SaveTextGridDialog:
-    dialog = SaveTextGridDialog(origin_path, tab_name)
+    dialog = SaveTextGridDialog(origin_path, file_stem)
     qtbot.addWidget(dialog)
     return dialog
 
@@ -158,7 +156,7 @@ def test_get_options_returns_options_when_accepted(
         SaveTextGridDialog, "exec", lambda self: QDialog.DialogCode.Accepted
     )
 
-    options = SaveTextGridDialog.get_options("/home/user/a.wav", "a.wav")
+    options = SaveTextGridDialog.get_options("/home/user/a.wav", "a")
 
     assert options == (str(Path("/home/user") / "a.TextGrid"), "short")
 
@@ -170,4 +168,4 @@ def test_get_options_returns_none_when_rejected(
         SaveTextGridDialog, "exec", lambda self: QDialog.DialogCode.Rejected
     )
 
-    assert SaveTextGridDialog.get_options("/home/user/a.wav", "a.wav") is None
+    assert SaveTextGridDialog.get_options("/home/user/a.wav", "a") is None

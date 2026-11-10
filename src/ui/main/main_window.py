@@ -21,7 +21,6 @@ from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
 from ui.main.component.open_audio_dialog import OpenAudioDialog
 from ui.main.component.save_audio_dialog import SaveAudioDialog
-from ui.main.component.save_textgrid_dialog import SaveTextGridDialog
 from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
@@ -439,22 +438,8 @@ class MainWindow(QMainWindow):
 
     def save_textgrid(self):
         doc = self.get_current_document()
-        if not doc:
-            return
-        index = self.tab_widget.indexOf(doc)
-        options = SaveTextGridDialog.get_options(
-            doc.origin_path or "", self.tab_widget.tabText(index), self
-        )
-        if options is None:
-            return
-        try:
-            doc.view_model.save_textgrid(*options)
-        except RuntimeError as err:
-            QMessageBox.critical(
-                self,
-                self.tr("Save TextGrid"),
-                self.tr("Could not save the file:\n{}").format(err),
-            )
+        if doc:
+            doc.open_save_textgrid()
 
     def show_audio_info(self):
         doc = self.get_current_document()

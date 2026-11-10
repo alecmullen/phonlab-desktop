@@ -21,6 +21,7 @@ from res.constants import (
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
+from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.base.view_model import ViewModel
@@ -125,7 +126,7 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
-        if isinstance(model, StatusMessageState):
+        if isinstance(model, (StatusMessageState, SaveToTextGridAction)):
             self.state_changed.emit(model)
         elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
