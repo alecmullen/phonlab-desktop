@@ -5,13 +5,15 @@ import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QMouseEvent, QShowEvent
 from pytestqt.qtbot import QtBot
-from core.annotation.repository.in_mem_annotation_repository import InMemAnnotationRepository
 from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
+)
+from core.annotation.repository.in_mem_annotation_repository import (
+    InMemAnnotationRepository,
 )
 from res.constants import SAME_NODE_PIXEL_THRESH
 from ui.annotation.annotation_plot import AnnotationPlot

@@ -70,7 +70,13 @@ class StubViewModelFactory(ViewModelFactory):
         if view_model_type in self.overrides:
             view_model = self.overrides[view_model_type]
         elif view_model_type is DocumentViewModel:
-            view_model = make_document_view_model(self, **self.document_use_cases)
+            file_stem, dir_path = (*args, None, None)[:2]
+            view_model = make_document_view_model(
+                self,
+                file_stem=kwargs.get("file_stem", file_stem),
+                dir_path=kwargs.get("dir_path", dir_path),
+                **self.document_use_cases,
+            )
         elif view_model_type is SpectrogramViewModel:
             view_model = make_spectrogram_view_model()
         elif view_model_type is AnnotationViewModel:
@@ -135,6 +141,8 @@ def make_document_view_model(
     prep_audio: PrepAudio | None = None,
     filter_audio: FilterAudio | None = None,
     save_audio: SaveAudio | None = None,
+    file_stem: str | None = None,
+    dir_path: str | None = None,
 ) -> DocumentViewModel:
     return DocumentViewModel(
         view_model_factory or StubViewModelFactory(),
@@ -143,4 +151,6 @@ def make_document_view_model(
         prep_audio or PrepAudio(),
         filter_audio or FilterAudio(),
         save_audio or mock_use_case(SaveAudio),
+        file_stem,
+        dir_path,
     )

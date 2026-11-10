@@ -4,13 +4,15 @@ from types import MappingProxyType
 
 import pytest
 from pytestqt.qtbot import QtBot
-from core.annotation.repository.in_mem_annotation_repository import InMemAnnotationRepository
 from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
+)
+from core.annotation.repository.in_mem_annotation_repository import (
+    InMemAnnotationRepository,
 )
 from res.constants import SAME_NODE_THRESHOLD
 from ui.annotation.annotation_view_model import AnnotationViewModel
@@ -189,7 +191,7 @@ def test_parse_textgrid_loads_annotation_state(tmp_path: Path):
     textgrid = tmp_path / "sample.TextGrid"
     textgrid.write_text(TEXTGRID_FIXTURE)
 
-    view_model.parse_textgrid(str(textgrid))
+    view_model.parse_textgrid(str(textgrid), "sample")
 
     assert {node.x for node in view_model.annotation_state.nodes.values()} == {
         0.0,
@@ -244,7 +246,7 @@ def test_parse_textgrid_shows_status_message_on_invalid_tier_type(tmp_path: Path
     received = []
     view_model.subscribe(received.append)
 
-    view_model.parse_textgrid(str(textgrid))
+    view_model.parse_textgrid(str(textgrid), "sample")
 
     status_messages = [s for s in received if isinstance(s, StatusMessageState)]
     assert len(status_messages) == 1

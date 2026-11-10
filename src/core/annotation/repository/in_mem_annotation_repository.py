@@ -65,7 +65,9 @@ class InMemAnnotationRepository(AnnotationRepository):
 
         existing = self.nodes[annotation_id]
         if len(existing) > 0:
-            node_ids, node_times = zip(*sorted(existing.items(), key=lambda item: item[1]))
+            node_ids, node_times = zip(
+                *sorted(existing.items(), key=lambda item: item[1])
+            )
         else:
             node_ids, node_times = (), ()
 

@@ -98,7 +98,7 @@ def fake_run_app_dependencies(
         def show(self) -> None:
             self.shown = True
 
-        def open_files(self, files: list[str]) -> None:
+        def open_single_document(self, files: list[str]) -> None:
             self.opened_files = files
 
     class FakeSplash:
@@ -116,7 +116,7 @@ def fake_run_app_dependencies(
     import ui.main.main_window as main_window_module
 
     monkeypatch.setattr(main_window_module, "MainWindow", FakeMainWindow)
-    monkeypatch.setattr(splash_module, "ClickableSplash", FakeSplash)
+    monkeypatch.setattr(splash_module, "OpenProjectDialog", FakeSplash)
 
     return FakeQApplication, FakeMainWindow, FakeSplash
 
