@@ -3,10 +3,17 @@ from dataclasses import replace
 import pyqtgraph as pg
 import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
-from PyQt6.QtGui import QKeyEvent, QMouseEvent, QShowEvent
+from PyQt6.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QMouseEvent, QShowEvent
 from pytestqt.qtbot import QtBot
+from support.annotation_repository import SeedableAnnotationRepository
+from support.view_models import make_annotation_view_model
 
-from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+)
+from res.constants import SAME_NODE_PIXEL_THRESH
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.component.node_view import NodeView
@@ -20,6 +27,7 @@ from ui.annotation.state.annotation_state import (
     AnnotationTypeState,
 )
 from ui.base.state import State
+from ui.common.context_menu_hint import ContextMenuHintAction
 
 MOCK_ANNOTATION_STATE = AnnotationState(
     nodes={
@@ -60,7 +68,7 @@ def show_plot_in_layout(plot: AnnotationPlot) -> pg.GraphicsLayoutWidget:
 
 
 def test_populate_adds_visible_nodes(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     layout = show_plot_in_layout(plot)
@@ -69,11 +77,11 @@ def test_populate_adds_visible_nodes(qtbot: QtBot):
 
     plot.populate(MOCK_ANNOTATION_STATE)
 
-    assert {node.node for node in plot.visible_nodes} == {1, 2, 3}
+    assert {node.id for node in plot.visible_nodes} == {1, 2, 3}
 
 
 def test_populate_with_no_types_sets_empty_y_range_and_no_visible_nodes(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     state = replace(MOCK_ANNOTATION_STATE, nodes={0: 0.0}, types=[])
@@ -85,7 +93,7 @@ def test_populate_with_no_types_sets_empty_y_range_and_no_visible_nodes(qtbot: Q
 
 
 def test_populate_filters_invisible_labels(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     layout = show_plot_in_layout(plot)
@@ -132,7 +140,7 @@ def test_populate_filters_invisible_labels(qtbot: QtBot):
 
 
 def test_populate_clears_previous_items(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     layout = show_plot_in_layout(plot)
@@ -158,7 +166,7 @@ def test_populate_clears_previous_items(qtbot: QtBot):
 def test_on_state_change_populates_for_annotation_state(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     calls = []
@@ -172,7 +180,7 @@ def test_on_state_change_populates_for_annotation_state(
 def test_on_state_change_ignores_other_state_types(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     calls = []
@@ -184,7 +192,7 @@ def test_on_state_change_ignores_other_state_types(
 
 
 def test_view_model_state_change_triggers_populate(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     layout = show_plot_in_layout(plot)
@@ -193,7 +201,7 @@ def test_view_model_state_change_triggers_populate(qtbot: QtBot):
 
     state = Annotation(
         nodes={0: 0.0, 1: 1.0},
-        types=[AnnotationType("word", [AnnotationLabel(0, 1, "hi")])],
+        types=[AnnotationType("word", [AnnotationLabel(0, 1, "hi", id=0)])],
     )
 
     view_model.set_annotation_state(state)
@@ -204,7 +212,7 @@ def test_view_model_state_change_triggers_populate(qtbot: QtBot):
 
 
 def test_show_time_axis_true_sets_bottom_label(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     plot.show_time_axis(True)
@@ -212,25 +220,8 @@ def test_show_time_axis_true_sets_bottom_label(qtbot: QtBot):
     assert plot.getAxis("bottom").labelText == "Time"
 
 
-def test_handle_mouse_release_without_drag_returns_false(qtbot: QtBot):
-    view_model = AnnotationViewModel()
-    plot = AnnotationPlot(view_model)
-
-    event = QMouseEvent(
-        QEvent.Type.MouseButtonRelease,
-        QPointF(0, 0),
-        Qt.MouseButton.LeftButton,
-        Qt.MouseButton.LeftButton,
-        Qt.KeyboardModifier.NoModifier,
-    )
-    event.scenePos = lambda: QPointF(0, 0)
-
-    plot.mouseReleaseEvent(event)
-    assert plot.dragging_node is None
-
-
 def test_handle_mouse_press_and_release_on_node(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     layout = show_plot_in_layout(plot)
@@ -260,12 +251,12 @@ def test_handle_mouse_press_and_release_on_node(qtbot: QtBot):
         Qt.KeyboardModifier.NoModifier,
     )
     release_event.scenePos = lambda: scene_pos
-    plot.mouseReleaseEvent(press_event)
+    plot.mouseReleaseEvent(release_event)
     assert plot.dragging_node is None
 
 
-def test_handle_mouse_press_away_from_node_returns_false(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+def test_mouse_press_away_from_node_does_not_start_drag(qtbot: QtBot):
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     layout = show_plot_in_layout(plot)
@@ -283,12 +274,13 @@ def test_handle_mouse_press_away_from_node_returns_false(qtbot: QtBot):
         Qt.KeyboardModifier.NoModifier,
     )
     event.scenePos = lambda: far_scene_pos
-    plot.mouseReleaseEvent(event)
+    plot.mousePressEvent(event)  # type: ignore[arg-type]
     assert plot.dragging_node is None
+    assert not event.isAccepted()
 
 
 def test_on_mouse_moved_while_dragging_updates_node_state(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     view_model.annotation_view_state = MOCK_ANNOTATION_STATE
     view_model.annotation_state = MOCK_ANNOTATION_STATE
     view_model.window_state = (0.0, 2.0)
@@ -309,7 +301,7 @@ def test_on_mouse_moved_while_dragging_updates_node_state(qtbot: QtBot):
 
 
 def test_on_mouse_moved_without_dragging_moves_cursor_when_in_control(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
 
     layout = show_plot_in_layout(plot)
@@ -324,32 +316,8 @@ def test_on_mouse_moved_without_dragging_moves_cursor_when_in_control(qtbot: QtB
     assert plot.cursor_line.value() == pytest.approx(0.75)
 
 
-def test_set_cursor_position_moves_line_and_removes_control(qtbot: QtBot):
-    view_model = AnnotationViewModel()
-    plot = AnnotationPlot(view_model)
-
-    plot.set_cursor_position(3.0)
-
-    assert plot.cursor_line.value() == 3.0
-    assert plot.has_cursor_control is False
-
-
-def test_set_mark_position_moves_line_and_sets_visibility(qtbot: QtBot):
-    view_model = AnnotationViewModel()
-    plot = AnnotationPlot(view_model)
-
-    assert plot.mark_line.isVisible() is False
-
-    plot.set_mark_position(2.5, True)
-    assert plot.mark_line.value() == 2.5
-    assert plot.mark_line.isVisible() is True
-
-    plot.set_mark_position(2.5, False)
-    assert plot.mark_line.isVisible() is False
-
-
 def test_show_time_axis_false_leaves_bottom_label_unset(qtbot: QtBot):
-    plot = AnnotationPlot(AnnotationViewModel())
+    plot = AnnotationPlot(make_annotation_view_model())
 
     plot.show_time_axis(False)
 
@@ -357,7 +325,7 @@ def test_show_time_axis_false_leaves_bottom_label_unset(qtbot: QtBot):
 
 
 def test_handle_single_click_on_label_selects_it(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
     layout = show_plot_in_layout(plot)
     qtbot.addWidget(layout)
@@ -376,7 +344,7 @@ def test_handle_single_click_on_label_selects_it(qtbot: QtBot):
 
 
 def test_handle_single_click_outside_labels_returns_false(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
     layout = show_plot_in_layout(plot)
     qtbot.addWidget(layout)
@@ -391,7 +359,7 @@ def test_handle_single_click_outside_labels_returns_false(qtbot: QtBot):
 def test_show_event_populates_from_view_model_state(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     plot = AnnotationPlot(view_model)
     calls = []
     monkeypatch.setattr(plot, "populate", lambda state: calls.append(state))
@@ -410,19 +378,19 @@ def _key_event(key: Qt.Key) -> QKeyEvent:
 
 
 def test_plot_has_no_selected_node_initially(qtbot: QtBot):
-    plot = AnnotationPlot(AnnotationViewModel())
+    plot = AnnotationPlot(make_annotation_view_model())
 
     assert plot.selected_node is None
 
 
 def test_plot_accepts_focus_on_click(qtbot: QtBot):
-    plot = AnnotationPlot(AnnotationViewModel())
+    plot = AnnotationPlot(make_annotation_view_model())
 
     assert plot.focusPolicy() == Qt.FocusPolicy.ClickFocus
 
 
 def test_populate_passes_no_selection_to_node_view(qtbot: QtBot):
-    plot = AnnotationPlot(AnnotationViewModel())
+    plot = AnnotationPlot(make_annotation_view_model())
     layout = show_plot_in_layout(plot)
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
@@ -435,7 +403,7 @@ def test_populate_passes_no_selection_to_node_view(qtbot: QtBot):
 
 
 def test_populate_passes_selected_node_to_node_view(qtbot: QtBot):
-    plot = AnnotationPlot(AnnotationViewModel())
+    plot = AnnotationPlot(make_annotation_view_model())
     layout = show_plot_in_layout(plot)
     qtbot.addWidget(layout)
     qtbot.waitExposed(layout)
@@ -447,7 +415,7 @@ def test_populate_passes_selected_node_to_node_view(qtbot: QtBot):
 
 
 def test_mouse_release_after_drag_selects_node_and_clears_drag(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     view_model.annotation_view_state = MOCK_ANNOTATION_STATE
     plot = AnnotationPlot(view_model)
     layout = show_plot_in_layout(plot)
@@ -469,7 +437,7 @@ def test_mouse_release_after_drag_selects_node_and_clears_drag(qtbot: QtBot):
 
 
 def test_mouse_release_after_drag_rerenders_node_as_selected(qtbot: QtBot):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     view_model.annotation_view_state = MOCK_ANNOTATION_STATE
     plot = AnnotationPlot(view_model)
     layout = show_plot_in_layout(plot)
@@ -493,7 +461,7 @@ def test_mouse_release_after_drag_rerenders_node_as_selected(qtbot: QtBot):
 
 
 def test_mouse_release_without_drag_keeps_selection(qtbot: QtBot):
-    plot = AnnotationPlot(AnnotationViewModel())
+    plot = AnnotationPlot(make_annotation_view_model())
     plot.selected_node = 1
 
     event = QMouseEvent(
@@ -510,7 +478,7 @@ def test_mouse_release_without_drag_keeps_selection(qtbot: QtBot):
 
 @pytest.mark.parametrize("key", [Qt.Key.Key_Delete, Qt.Key.Key_Backspace])
 def test_delete_keys_are_accepted_when_node_selected(qtbot: QtBot, key: Qt.Key):
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     view_model.delete_node = lambda x: None
 
     plot = AnnotationPlot(view_model)
@@ -524,7 +492,7 @@ def test_delete_keys_are_accepted_when_node_selected(qtbot: QtBot, key: Qt.Key):
 
 
 def test_other_keys_are_ignored(qtbot: QtBot):
-    plot = AnnotationPlot(AnnotationViewModel())
+    plot = AnnotationPlot(make_annotation_view_model())
     event = _key_event(Qt.Key.Key_A)
     event.accept()
 
@@ -534,6 +502,240 @@ def test_other_keys_are_ignored(qtbot: QtBot):
 
 
 def test_key_press_with_none_event_does_nothing(qtbot: QtBot):
-    plot = AnnotationPlot(AnnotationViewModel())
+    plot = AnnotationPlot(make_annotation_view_model())
 
     plot.keyPressEvent(None)
+
+
+def _create_label_action(plot: AnnotationPlot) -> ContextMenuHintAction:
+    return next(a for a in plot.actions() if isinstance(a, ContextMenuHintAction))
+
+
+def _shown_plot(
+    qtbot: QtBot, view_model: AnnotationViewModel
+) -> tuple[AnnotationPlot, pg.GraphicsLayoutWidget]:
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.getViewBox().setRange(xRange=(0.0, 4.0), yRange=(0.0, 2.0), padding=0)
+    return plot, layout
+
+
+def _record_create_label(view_model: AnnotationViewModel) -> list[tuple]:
+    calls = []
+    view_model.create_label_from_selection = (  # type: ignore[method-assign]
+        lambda *args: calls.append(args)
+    )
+    return calls
+
+
+def test_create_label_action_is_in_context_menu_with_shortcut(qtbot: QtBot):
+    plot = AnnotationPlot(make_annotation_view_model())
+
+    action = _create_label_action(plot)
+
+    assert action in plot.getViewBox().menu.actions()
+    assert action.shortcut() == QKeySequence("Ctrl+L")
+
+
+def test_create_label_action_triggers_create_label_from_selection(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    calls = _record_create_label(view_model)
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.update_selection_region(1.0, 2.0)
+    plot.selected_type = 1
+
+    _create_label_action(plot).trigger()
+
+    assert len(calls) == 1
+    assert calls[0][:-1] == (1, 1.0, 3.0)
+
+
+def test_right_click_stores_context_pos_and_ignores_event(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, make_annotation_view_model())
+    scene_pos = plot.getViewBox().mapViewToScene(QPointF(1.0, 1.5))
+
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonPress,
+        scene_pos,
+        Qt.MouseButton.RightButton,
+        Qt.MouseButton.RightButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    event.scenePos = lambda: scene_pos
+    plot.mousePressEvent(event)  # type: ignore[arg-type]
+
+    assert plot.context_pos is not None
+    assert plot.context_pos.x() == pytest.approx(1.0)
+    assert plot.context_pos.y() == pytest.approx(1.5)
+    assert not event.isAccepted()
+    assert plot.dragging_node is None
+
+
+def test_context_menu_close_clears_context_pos_after_event_loop(qtbot: QtBot):
+    plot = AnnotationPlot(make_annotation_view_model())
+    plot.context_pos = QPointF(1.0, 1.0)
+
+    plot.getViewBox().menu.aboutToHide.emit()
+
+    assert plot.context_pos is not None
+    qtbot.waitUntil(lambda: plot.context_pos is None, timeout=1000)
+
+
+def test_focus_out_unselects_node(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, make_annotation_view_model())
+    plot.selected_node = 2
+    plot.populate(MOCK_ANNOTATION_STATE)
+
+    plot.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
+
+    assert plot.selected_node is None
+    assert _node_views(plot)[0].selected_node is None
+
+
+def test_focus_out_without_selection_keeps_none(qtbot: QtBot):
+    plot = AnnotationPlot(make_annotation_view_model())
+
+    plot.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
+
+    assert plot.selected_node is None
+
+
+def test_mouse_moved_inside_view_selects_tier_under_cursor(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, make_annotation_view_model())
+
+    plot.on_mouse_moved(plot.getViewBox().mapViewToScene(QPointF(1.0, 1.5)))
+
+    assert plot.selected_type == 1
+
+
+def test_mouse_moved_outside_view_clears_tier_and_hides_indicator(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, make_annotation_view_model())
+    plot.update_selection_region(1.0, 1.0)
+    plot.on_mouse_moved(plot.getViewBox().mapViewToScene(QPointF(1.0, 0.5)))
+
+    plot.on_mouse_moved(plot.getViewBox().mapViewToScene(QPointF(1.0, 50.0)))
+
+    assert plot.selected_type is None
+    assert not plot.tier_selection.left_bar.isVisible()
+    assert not plot.tier_selection.right_bar.isVisible()
+
+
+def test_mouse_moved_with_selection_shows_indicator_on_tier(qtbot: QtBot):
+    plot, _layout = _shown_plot(qtbot, make_annotation_view_model())
+    plot.update_selection_region(1.0, 2.0)
+
+    plot.on_mouse_moved(plot.getViewBox().mapViewToScene(QPointF(2.0, 1.5)))
+
+    left_x, left_y = plot.tier_selection.left_bar.getData()
+    right_x, _ = plot.tier_selection.right_bar.getData()
+    assert plot.tier_selection.left_bar.isVisible()
+    assert list(left_x) == [1.0, 1.0]
+    assert list(right_x) == [3.0, 3.0]
+    assert list(left_y) == [1, 2]
+
+
+def test_create_label_from_selection_without_selection_does_nothing(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    calls = _record_create_label(view_model)
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.selected_type = 0
+
+    plot.create_label_from_selection()
+
+    assert calls == []
+
+
+def test_create_label_from_selection_without_tier_does_nothing(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    calls = _record_create_label(view_model)
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.update_selection_region(1.0, 2.0)
+
+    plot.create_label_from_selection()
+
+    assert calls == []
+
+
+def test_create_label_from_selection_prefers_context_menu_tier(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    calls = _record_create_label(view_model)
+    plot = AnnotationPlot(view_model)
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    plot.update_selection_region(1.0, 2.0)
+    plot.selected_type = 0
+    plot.context_pos = QPointF(0.5, 2.5)
+
+    plot.create_label_from_selection()
+
+    assert len(calls) == 1
+    assert calls[0][:-1] == (2, 1.0, 3.0)
+
+
+def test_create_label_from_selection_scales_threshold_with_pixel_width(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    calls = _record_create_label(view_model)
+    plot, _layout = _shown_plot(qtbot, view_model)
+    plot.update_selection_region(1.0, 2.0)
+    plot.selected_type = 0
+
+    plot.create_label_from_selection()
+
+    pixel_width = plot.getViewBox().viewPixelSize()[0]
+    assert calls[0][-1] == pytest.approx(pixel_width * SAME_NODE_PIXEL_THRESH)
+
+
+def test_create_label_from_selection_threshold_grows_when_zoomed_out(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    calls = _record_create_label(view_model)
+    plot, _layout = _shown_plot(qtbot, view_model)
+    plot.update_selection_region(1.0, 2.0)
+    plot.selected_type = 0
+
+    plot.create_label_from_selection()
+    plot.getViewBox().setXRange(0.0, 8.0, padding=0)
+    plot.create_label_from_selection()
+
+    assert calls[1][-1] == pytest.approx(calls[0][-1] * 2)
+
+
+def test_create_label_from_selection_snaps_to_node_within_pixel_threshold(
+    qtbot: QtBot,
+):
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(repository=repository)
+    view_model.window_state = (0.0, 4.0)
+    view_model.set_annotation_state(
+        repository.seed(
+            Annotation(
+                nodes={0: 0.0, 1: 1.0, 2: 3.0, 3: 4.0},
+                types=[AnnotationType("w", [])],
+            )
+        )
+    )
+    plot, _layout = _shown_plot(qtbot, view_model)
+    threshold = plot.getViewBox().viewPixelSize()[0] * SAME_NODE_PIXEL_THRESH
+    start = 1.0 + threshold / 2
+    end = 3.0 - threshold * 2
+    plot.update_selection_region(start, end - start)
+    plot.selected_type = 0
+
+    plot.create_label_from_selection()
+
+    nodes = view_model.annotation_state.nodes
+    [label] = view_model.annotation_state.types[0].labels
+    assert label.s_node == 1
+    assert label.e_node not in (2, 3)
+    assert nodes[label.e_node].x == pytest.approx(end)

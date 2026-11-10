@@ -1,0 +1,140 @@
+from itertools import count
+
+from support.annotation_repository import SeedableAnnotationRepository
+
+from core.annotation.clear_interval import ClearInterval
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+)
+
+
+def make_annotation(
+    nodes: dict[int, float], tiers: list[list[tuple[int, int, str]]]
+) -> Annotation:
+    # label ids are unique across tiers, like the database's
+    label_ids = count()
+    return Annotation(
+        nodes=nodes,
+        types=[
+            AnnotationType(
+                f"tier{idx}",
+                [AnnotationLabel(*label, id=next(label_ids)) for label in labels],
+            )
+            for idx, labels in enumerate(tiers)
+        ],
+    )
+
+
+def clear_interval(
+    annotation: Annotation, type_ids: list[int], s_node: int, e_node: int
+) -> Annotation:
+    repository = SeedableAnnotationRepository()
+    seeded = repository.seed(annotation)
+    ClearInterval(repository)(seeded, type_ids, s_node, e_node)
+    return repository.get_annotation_by_id(seeded.get_id())
+
+
+def label_spans(annotation: Annotation, tier: int) -> list[tuple]:
+    return sorted(
+        (label.s_node, label.e_node, label.label)
+        for label in annotation.types[tier].labels
+    )
+
+
+def test_delete_interval_keeps_labels_outside_interval():
+    annotation = make_annotation(
+        {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0, 4: 4.0, 5: 5.0},
+        [[(0, 1, "a"), (4, 5, "b")]],
+    )
+
+    result = clear_interval(annotation, [0], 2, 3)
+
+    assert label_spans(result, 0) == [(0, 1, "a"), (4, 5, "b")]
+
+
+def test_delete_interval_keeps_labels_touching_interval_boundaries():
+    annotation = make_annotation(
+        {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[(0, 1, "a"), (2, 3, "b")]]
+    )
+
+    result = clear_interval(annotation, [0], 1, 2)
+
+    assert label_spans(result, 0) == [(0, 1, "a"), (2, 3, "b")]
+
+
+def test_delete_interval_removes_labels_inside_interval():
+    annotation = make_annotation(
+        {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0},
+        [[(1, 2, "a"), (2, 2, "point")]],
+    )
+
+    result = clear_interval(annotation, [0], 0, 3)
+
+    assert label_spans(result, 0) == []
+
+
+def test_delete_interval_trims_label_overlapping_start():
+    annotation = make_annotation({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[(0, 2, "a")]])
+
+    result = clear_interval(annotation, [0], 1, 3)
+
+    assert label_spans(result, 0) == [(0, 1, "a")]
+
+
+def test_delete_interval_trims_label_overlapping_end():
+    annotation = make_annotation({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[(1, 3, "a")]])
+
+    result = clear_interval(annotation, [0], 0, 2)
+
+    assert label_spans(result, 0) == [(2, 3, "a")]
+
+
+def test_delete_interval_splits_label_spanning_interval_keeping_text_on_left():
+    annotation = make_annotation({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[(0, 3, "a")]])
+
+    result = clear_interval(annotation, [0], 1, 2)
+
+    assert label_spans(result, 0) == [(0, 1, "a"), (2, 3, "")]
+
+
+def test_delete_interval_only_changes_selected_tiers():
+    annotation = make_annotation(
+        {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0},
+        [[(0, 3, "a")], [(0, 3, "b")], [(0, 3, "c")]],
+    )
+
+    result = clear_interval(annotation, [0, 2], 1, 2)
+
+    assert label_spans(result, 0) == [(0, 1, "a"), (2, 3, "")]
+    assert label_spans(result, 1) == [(0, 3, "b")]
+    assert label_spans(result, 2) == [(0, 1, "c"), (2, 3, "")]
+    assert [t.type for t in result.types] == ["tier0", "tier1", "tier2"]
+
+
+def test_delete_interval_keeps_nodes_still_used_by_labels():
+    nodes = {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}
+    annotation = make_annotation(nodes, [[(0, 3, "a")]])
+
+    result = clear_interval(annotation, [0], 1, 2)
+
+    assert result.nodes == nodes
+
+
+def test_delete_interval_removes_nodes_orphaned_by_deleted_labels():
+    nodes = {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}
+    annotation = make_annotation(nodes, [[(1, 2, "a")]])
+
+    result = clear_interval(annotation, [0], 0, 3)
+
+    assert result.nodes == {0: 0.0, 3: 3.0}
+
+
+def test_delete_interval_does_not_mutate_input():
+    annotation = make_annotation({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[(0, 3, "a")]])
+    original_labels = list(annotation.types[0].labels)
+
+    clear_interval(annotation, [0], 1, 2)
+
+    assert annotation.types[0].labels == original_labels

@@ -2,29 +2,34 @@ import importlib.resources
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import cast
 
 import phonlab  # noqa: F401
+from platformdirs import PlatformDirs
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
+from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
+from ui.main.component.open_project_dialog import OpenProjectDialog, icon_path
 from ui.main.main_window import MainWindow
-from ui.main.splash import ClickableSplash, icon_path
-
-log_path = os.path.expanduser("~/Library/Logs/phonlab.log")
-logging.basicConfig(
-    filename=log_path,
-    level=logging.ERROR,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-
-logger = logging.getLogger(__name__)
 
 if getattr(sys, "frozen", False):
     # Create and set numba cache
     _numba_cache_dir = os.path.join(os.path.dirname(sys.executable), "numba_cache")
     os.makedirs(_numba_cache_dir, exist_ok=True)
     os.environ.setdefault("NUMBA_CACHE_DIR", _numba_cache_dir)
+
+    # Set up error logs
+    log_dir = Path(PlatformDirs("Phonlab").user_log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=log_dir / "phonlab.log",
+        level=logging.ERROR,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+
+logger = logging.getLogger(__name__)
 
 try:
     import librosa
@@ -50,10 +55,10 @@ if __name__ == "__main__":
         app = QApplication(sys.argv)
         app.setWindowIcon(QIcon(str(icon_path())))
 
-        mainWin = MainWindow()
+        mainWin = MainWindow(ViewModelFactoryImpl())
 
         # Create and show splash screen
-        splash = ClickableSplash(mainWin)
+        splash = OpenProjectDialog(mainWin)
         mainWin.splash = splash
 
         mainWin.show()
@@ -61,7 +66,7 @@ if __name__ == "__main__":
 
         # Optionally open a file if provided as command line argument
         if len(sys.argv) > 1:
-            mainWin.open_files(sys.argv[1:])
+            mainWin.open_single_document(sys.argv[1:])
 
         app.exec()
 

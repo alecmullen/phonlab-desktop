@@ -14,7 +14,7 @@ def tones() -> np.ndarray:
 
 
 def run_filter(x: np.ndarray, spec: FilterSpec) -> np.ndarray:
-    return FilterAudio({0: AudioSignal(x, FS)}, spec).invoke()[0].x
+    return FilterAudio()({0: AudioSignal(x, FS)}, spec)[0].x
 
 
 def magnitude(y: np.ndarray, hz: int) -> float:
@@ -58,7 +58,7 @@ def test_filters_every_channel_at_its_own_sample_rate():
         1: AudioSignal(tones()[:4000], FS),
     }
 
-    result = FilterAudio(channels, FilterSpec(FilterType.LOWPASS, high=500)).invoke()
+    result = FilterAudio()(channels, FilterSpec(FilterType.LOWPASS, high=500))
 
     assert result.keys() == channels.keys()
     assert len(result[1].x) == 4000

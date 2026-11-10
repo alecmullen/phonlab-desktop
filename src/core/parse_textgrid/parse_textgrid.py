@@ -2,65 +2,68 @@ import bisect
 
 import phonlab as phon
 
-from core.base.use_case_sync import UseCaseSync
-from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
-
-SAME_NODE_THRESHOLD = 0.005
-INTERVAL_TIER_NAME = "IntervalTier"
-POINT_TIER_NAME = "TextTier"
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+    add_node_time,
+)
+from core.annotation.repository.annotation_repository import AnnotationRepository
+from core.base.use_case import UseCase
+from res.constants import SAME_NODE_THRESHOLD
 
 
 class ParseTextGridError(ValueError):
     pass
 
 
-class ParseTextGrid(UseCaseSync):
-    def __init__(self, filename: str):
-        super().__init__()
-        self.filename = filename
+class ParseTextGrid(UseCase[Annotation]):
+    def __init__(self, annotation_repository: AnnotationRepository):
+        self.annotation_repository = annotation_repository
 
-    def invoke(self) -> Annotation:
+    def __call__(self, file_path: str, file_stem: str):
         try:
-            tiers = phon.read_textgrid_with(self.filename)
+            id = self.annotation_repository.create_annotation(file_stem)
+
+            tiers = phon.read_textgrid_with(file_path)
 
             node_times: list[float] = []
             for tier in tiers:
                 for label in tier["labels"]:
                     node_times = add_node_time(node_times, label[0])
                     node_times = add_node_time(node_times, label[1])
-            return Annotation(
-                nodes={idx: node for idx, node in enumerate(node_times)},
-                types=[
-                    AnnotationType(
-                        tier["name"],
-                        [to_label(node_times, label) for label in tier["labels"]],
-                    )
-                    for tier in tiers
-                ],
+
+            nodes = self.annotation_repository.create_nodes(
+                id, node_times, SAME_NODE_THRESHOLD
             )
+            node_ids_db, node_times_db = zip(
+                *sorted(nodes.items(), key=lambda item: item[1])
+            )
+
+            types = [
+                AnnotationType(
+                    tier["name"],
+                    [
+                        to_label(list(node_times_db), list(node_ids_db), label)
+                        for label in tier["labels"]
+                    ],
+                )
+                for tier in tiers
+            ]
+            self.annotation_repository.create_types(id, types)
+
+            yield self.annotation_repository.get_annotation_by_id(id)
         except Exception as err:
+            print(err)
             raise ParseTextGridError from err
 
 
-def add_node_time(node_times: list[float], new_time: float | None) -> list[float]:
-    if new_time is None:
-        return node_times
-
-    idx = bisect.bisect_left(node_times, new_time)
-
-    if (
-        idx < len(node_times) and abs(node_times[idx] - new_time) < SAME_NODE_THRESHOLD
-    ) or (idx - 1 >= 0 and abs(node_times[idx - 1] - new_time) < SAME_NODE_THRESHOLD):
-        return node_times
-
-    bisect.insort(node_times, new_time)
-    return node_times
-
-
-def to_label(node_times: list[float], label: tuple) -> AnnotationLabel:
-    s_node = bisect.bisect_left(node_times, label[0])
+def to_label(
+    node_times: list[float], node_ids: list[int], label: tuple
+) -> AnnotationLabel:
+    s_node_idx = bisect.bisect_left(node_times, label[0])
     if label[1] is None:
-        e_node = s_node
+        e_node_idx = s_node_idx
     else:
-        e_node = bisect.bisect_left(node_times, label[1])
-    return AnnotationLabel(s_node, e_node, label[2])
+        e_node_idx = bisect.bisect_left(node_times, label[1])
+    return AnnotationLabel(node_ids[s_node_idx], node_ids[e_node_idx], label[2])

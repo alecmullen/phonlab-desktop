@@ -41,11 +41,11 @@ def test_invoke_preps_each_retained_channel(monkeypatch: pytest.MonkeyPatch):
         0: AudioSignal(np.array([1.0, 2.0]), 16000),
         1: AudioSignal(np.array([3.0, 4.0]), 16000),
     }
-    use_case = PrepAudio(
+    use_case = PrepAudio()
+
+    result = use_case.run_sync(
         raw_signals, target_fs=8000, retained_channels=[0, 1], pre=0.94
     )
-
-    result = use_case.run_sync()
 
     assert result.keys() == {0, 1}
     np.testing.assert_array_equal(result[0].x, [2.0, 4.0])
@@ -66,9 +66,9 @@ def test_invoke_only_processes_retained_channels(monkeypatch: pytest.MonkeyPatch
         1: AudioSignal(np.array([2.0]), 16000),
         2: AudioSignal(np.array([3.0]), 16000),
     }
-    use_case = PrepAudio(raw_signals, target_fs=8000, retained_channels=[2])
+    use_case = PrepAudio()
 
-    result = use_case.run_sync()
+    result = use_case.run_sync(raw_signals, target_fs=8000, retained_channels=[2])
 
     assert result.keys() == {2}
     assert len(calls) == 1
@@ -77,44 +77,19 @@ def test_invoke_only_processes_retained_channels(monkeypatch: pytest.MonkeyPatch
 def test_invoke_defaults_pre_to_zero(monkeypatch: pytest.MonkeyPatch):
     calls = make_fake_prep_audio(monkeypatch)
     raw_signals = {0: AudioSignal(np.array([1.0]), 16000)}
-    use_case = PrepAudio(raw_signals, target_fs=8000, retained_channels=[0])
+    use_case = PrepAudio()
 
-    use_case.run_sync()
+    use_case.run_sync(raw_signals, target_fs=8000, retained_channels=[0])
 
     assert calls[0]["pre"] == 0
-
-
-def test_run_sync_stops_before_processing_any_channel_when_already_stopped(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    calls = make_fake_prep_audio(monkeypatch)
-    raw_signals = {0: AudioSignal(np.array([1.0]), 16000)}
-    use_case = PrepAudio(raw_signals, target_fs=8000, retained_channels=[0])
-    use_case.stop()
-
-    with pytest.raises(StopIteration):
-        use_case.run_sync()
-
-    assert calls == []
 
 
 def test_invoke_yields_empty_dict_when_no_retained_channels(
     monkeypatch: pytest.MonkeyPatch,
 ):
     calls = make_fake_prep_audio(monkeypatch)
-    use_case = PrepAudio({}, target_fs=8000, retained_channels=[])
-    use_case.stop()
-
-    result = use_case.run_sync()
+    use_case = PrepAudio()
+    result = use_case.run_sync({}, target_fs=8000, retained_channels=[])
 
     assert result == {}
     assert calls == []
-
-
-def test_stop_sets_should_stop_flag():
-    use_case = PrepAudio({}, target_fs=8000, retained_channels=[])
-    assert use_case.should_stop is False
-
-    use_case.stop()
-
-    assert use_case.should_stop is True

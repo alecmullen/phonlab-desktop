@@ -6,7 +6,7 @@ from core.spectrogram.entity.spectrogram import Spectrogram
 
 
 class ComputeSpectrogram(UseCase[Spectrogram]):
-    def __init__(
+    def __call__(
         self,
         x: np.ndarray,
         fs: int,
@@ -14,17 +14,5 @@ class ComputeSpectrogram(UseCase[Spectrogram]):
         step_size: float = 0.001,
         order: int = 9,
     ):
-        self.x = x
-        self.fs = fs
-        self.window_size = window_size
-        self.step_size = step_size
-        self.order = order
-
-    def invoke(self):
-        t, f, sxx = phon.compute_sgram(
-            self.x, self.fs, self.window_size, self.step_size, self.order
-        )
+        t, f, sxx = phon.compute_sgram(x, fs, window_size, step_size, order)
         yield Spectrogram(t, f, sxx)
-
-    def stop(self):
-        pass

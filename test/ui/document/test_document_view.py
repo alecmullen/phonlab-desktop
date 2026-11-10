@@ -4,14 +4,15 @@ import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QMessageBox
 from pytestqt.qtbot import QtBot
 
-import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
 from ui.annotation.annotation_plot import AnnotationPlot
+from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_special_dialog import (
@@ -19,6 +20,7 @@ from ui.document.component.paste_special_dialog import (
     PasteSpecialDialog,
 )
 from ui.document.component.resample_dialog import ResampleAudioDialog
+from ui.document.component.save_textgrid_dialog import SaveTextGridDialog
 from ui.document.component.scale_dialog import ScaleAudioDialog
 from ui.document.document_view import PLOT_ROW_SPACING, DocumentView
 from ui.document.document_view_model import DocumentViewModel
@@ -39,33 +41,9 @@ from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.waveform.component.delete_channel_dialog import DeleteChannelDialog
 
 
-class FakeAudioPlayer:
-    def __init__(self):
-        self.played: list[tuple[np.ndarray, int, float]] = []
-
-    def stop(self):
-        pass
-
-    def play(self, x: np.ndarray, fs: int, start: float):
-        self.played.append((x, fs, start))
-
-    class playback_poll:
-        @staticmethod
-        def connect(slot: object):
-            pass
-
-
 @pytest.fixture
-def view_model(monkeypatch: pytest.MonkeyPatch) -> DocumentViewModel:
-    monkeypatch.setattr(dvm_module, "AudioPlayer", FakeAudioPlayer)
-    vm = DocumentViewModel()
-    vm.prep_audio_spectrogram = lambda: None
-    return vm
-
-
-@pytest.fixture
-def view(qtbot: QtBot, view_model: DocumentViewModel) -> DocumentView:
-    document_view = DocumentView(view_model)
+def view(qtbot: QtBot, document_view_model: DocumentViewModel) -> DocumentView:
+    document_view = DocumentView(document_view_model)
     qtbot.addWidget(document_view)
     document_view.resize(800, 600)
     document_view.show()
@@ -74,8 +52,10 @@ def view(qtbot: QtBot, view_model: DocumentViewModel) -> DocumentView:
 
 
 @pytest.fixture
-def loaded_view(view: DocumentView, view_model: DocumentViewModel) -> DocumentView:
-    view_model.load_from_samples(
+def loaded_view(
+    view: DocumentView, document_view_model: DocumentViewModel
+) -> DocumentView:
+    document_view_model.load_from_samples(
         to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
     )
     QApplication.processEvents()
@@ -84,9 +64,9 @@ def loaded_view(view: DocumentView, view_model: DocumentViewModel) -> DocumentVi
 
 @pytest.fixture
 def stereo_loaded_view(
-    view: DocumentView, view_model: DocumentViewModel
+    view: DocumentView, document_view_model: DocumentViewModel
 ) -> DocumentView:
-    view_model.load_from_samples(
+    document_view_model.load_from_samples(
         AudioState(
             {
                 0: AudioChannelState(np.arange(20000, dtype=np.float64), 1000),
@@ -139,33 +119,6 @@ def test_load_from_samples_builds_wave_plot_and_sets_up_slider(
     assert loaded_view.first_plot is loaded_view.document_plots[0]
     assert loaded_view.slider.maximum() == 9999
     assert loaded_view.slider.pageStep() == 10000
-
-
-def test_toggle_wave_delegates_to_view_model(view: DocumentView):
-    calls = []
-    view.view_model.toggle_wave = lambda: calls.append(True)
-
-    view.toggle_wave()
-
-    assert calls == [True]
-
-
-def test_toggle_spectrogram_delegates_to_view_model(view: DocumentView):
-    calls = []
-    view.view_model.toggle_spectrogram = lambda: calls.append(True)
-
-    view.toggle_spectrogram()
-
-    assert calls == [True]
-
-
-def test_toggle_annotations_delegates_to_view_model(view: DocumentView):
-    calls = []
-    view.view_model.toggle_annotations = lambda: calls.append(True)
-
-    view.toggle_annotations()
-
-    assert calls == [True]
 
 
 # --------------------------- state dispatch ---------------------------
@@ -237,7 +190,7 @@ def test_update_slider_page_step_clamps_value_to_new_maximum(view: DocumentView)
 def test_mouse_drag_creates_selection_and_plays_it_on_release(
     loaded_view: DocumentView,
 ):
-    view_model = loaded_view.view_model
+    document_view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonPress)
     loaded_view.mousePressEvent(press)
 
@@ -248,8 +201,8 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
         loaded_view.document_plots[0].getViewBox().mapViewToScene(QPointF(4.0, 0))
     )
 
-    assert view_model.select_state.sel_start == pytest.approx(2.0, abs=1e-6)
-    assert view_model.select_state.sel_end == pytest.approx(4.0, abs=1e-6)
+    assert document_view_model.select_state.sel_start == pytest.approx(2.0, abs=1e-6)
+    assert document_view_model.select_state.sel_end == pytest.approx(4.0, abs=1e-6)
     assert loaded_view.is_dragging is True
 
     release = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonRelease)
@@ -257,11 +210,11 @@ def test_mouse_drag_creates_selection_and_plays_it_on_release(
 
     assert loaded_view.mouse_pressed is False
     assert loaded_view.is_dragging is False
-    assert len(view_model.audio_player.played) == 1
+    assert len(document_view_model.audio_player.played) == 1
 
 
 def test_shift_click_plays_visible_audio(loaded_view: DocumentView):
-    view_model = loaded_view.view_model
+    document_view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
     loaded_view.mousePressEvent(press)
 
@@ -275,25 +228,25 @@ def test_shift_click_plays_visible_audio(loaded_view: DocumentView):
 
     assert loaded_view.pending_single_click is None
     assert loaded_view.click_timer is None
-    assert len(view_model.audio_player.played) == 1
+    assert len(document_view_model.audio_player.played) == 1
 
 
 def test_double_click_zooms_to_selection(loaded_view: DocumentView):
-    view_model = loaded_view.view_model
-    view_model.start_selection(1.0)
-    view_model.continue_selection(5.0)
+    document_view_model = loaded_view.view_model
+    document_view_model.start_selection(1.0)
+    document_view_model.continue_selection(5.0)
 
     dbl_click = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonDblClick)
     loaded_view.mouseDoubleClickEvent(dbl_click)
 
-    assert view_model.document_window_state.start == 1000
-    assert view_model.document_window_state.end == 5000
+    assert document_view_model.document_window_state.start == 1000
+    assert document_view_model.document_window_state.end == 5000
 
 
 def test_click_after_release_sets_mark_at_click_position(
     qtbot: QtBot, loaded_view: DocumentView
 ):
-    view_model = loaded_view.view_model
+    document_view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
     loaded_view.mousePressEvent(press)
     release = mouse_event(
@@ -306,8 +259,8 @@ def test_click_after_release_sets_mark_at_click_position(
     assert loaded_view.click_timer is not None
     qtbot.wait(400)
 
-    assert view_model.mark_state.is_set is True
-    assert view_model.mark_state.position == pytest.approx(4.0, abs=0.01)
+    assert document_view_model.mark_state.is_set is True
+    assert document_view_model.mark_state.position == pytest.approx(4.0, abs=0.01)
 
 
 # --------------------------- scroll handling ---------------------------
@@ -503,20 +456,6 @@ def test_delete_button_click_cancelled_dialog_does_nothing(
     stereo_loaded_view.mousePressEvent(press)
 
     assert stereo_loaded_view.view_model.stereo_channels() is not None
-
-
-def test_layout_collapses_to_one_row_after_delete(
-    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(
-        DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
-    )
-
-    stereo_loaded_view.document_plots[1].delete_channel()
-    QApplication.processEvents()
-
-    assert len(stereo_loaded_view.document_plots) < 2
-    assert len(stereo_loaded_view.document_plots) == 1
 
 
 # --------------------------- paste special ---------------------------
@@ -889,12 +828,16 @@ def test_set_mark_if_in_plot_ignores_position_outside_plots(
 def test_play_window_or_selection_plays_selection_when_click_inside_it(
     loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = loaded_view.view_model
-    view_model.start_selection(2.0)
-    view_model.continue_selection(6.0)
+    document_view_model = loaded_view.view_model
+    document_view_model.start_selection(2.0)
+    document_view_model.continue_selection(6.0)
     calls = []
-    monkeypatch.setattr(view_model, "play_selected_audio", lambda: calls.append("sel"))
-    monkeypatch.setattr(view_model, "play_visible_audio", lambda: calls.append("vis"))
+    monkeypatch.setattr(
+        document_view_model, "play_selected_audio", lambda: calls.append("sel")
+    )
+    monkeypatch.setattr(
+        document_view_model, "play_visible_audio", lambda: calls.append("vis")
+    )
     plot = loaded_view.document_plots[0]
     inside = plot.getViewBox().mapViewToScene(QPointF(4.0, 0.0))
 
@@ -952,6 +895,9 @@ def test_update_load_progress_toggles_progress_bar(view: DocumentView):
         ("recenter_on_selection", "center_on_selection", ()),
         ("undo", "undo", ()),
         ("redo", "redo", ()),
+        ("toggle_wave", "toggle_wave", ()),
+        ("toggle_spectrogram", "toggle_spectrogram", ()),
+        ("toggle_annotations", "toggle_annotations", ()),
     ],
 )
 def test_view_methods_delegate_to_view_model(
@@ -1142,12 +1088,12 @@ def test_open_filter_dialog_cancelled_does_nothing(
 
 
 def test_wave_y_range_stays_centered_when_layout_rebuilds_after_y_zoom(
-    view: DocumentView, view_model: DocumentViewModel
+    view: DocumentView, document_view_model: DocumentViewModel
 ):
     """Paste Special (mono -> stereo) and Delete Channel (stereo -> mono)
     rebuild the wave plots; a persisted y zoom must not leave the new plot
     with pyqtgraph's default range pushed off-center by the limits."""
-    view_model.load_from_samples(
+    document_view_model.load_from_samples(
         to_audio_state({0: AudioSignal(np.sin(np.arange(20000) / 10) * 0.8, 1000)})
     )
     QApplication.processEvents()
@@ -1156,11 +1102,11 @@ def test_wave_y_range_stays_centered_when_layout_rebuilds_after_y_zoom(
     zoomed = view.wave_plots[0].getViewBox().viewRange()[1]
 
     clip = AudioState({0: AudioChannelState(np.sin(np.arange(2000) / 10) * 0.3, 1000)})
-    view_model.paste_special_new_channel_with_silence(1, 1.0, clip)
+    document_view_model.paste_special_new_channel_with_silence(1, 1.0, clip)
     QApplication.processEvents()
     assert view.wave_plots[0].getViewBox().viewRange()[1] == pytest.approx(zoomed)
 
-    view_model.delete_channel(1)
+    document_view_model.delete_channel(1)
     QApplication.processEvents()
     assert view.wave_plots[0].getViewBox().viewRange()[1] == pytest.approx(zoomed)
 
@@ -1189,3 +1135,114 @@ def test_paste_special_reverses_clip_when_requested(
 
     np.testing.assert_array_equal(pasted[0].channels[0].x, original[::-1])
     np.testing.assert_array_equal(clip.channels[0].x, original)  # not mutated
+
+
+def test_delete_button_mouse_click_converts_to_mono(
+    stereo_loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    """A real click reaches the button through its QGraphicsProxyWidget, which
+    must not be destroyed while it is still handling the mouse release."""
+    monkeypatch.setattr(
+        DeleteChannelDialog, "confirm", staticmethod(lambda parent: True)
+    )
+    proxy = stereo_loaded_view.document_plots[1].delete_button_proxy
+    graphics_widget = stereo_loaded_view.graphics_widget
+    viewport_pos = graphics_widget.mapFromScene(proxy.sceneBoundingRect().center())
+
+    QTest.mouseClick(
+        graphics_widget.viewport(), Qt.MouseButton.LeftButton, pos=viewport_pos
+    )
+    QApplication.processEvents()
+
+    assert stereo_loaded_view.view_model.stereo_channels() is None
+    assert len(stereo_loaded_view.document_plots) == 1
+
+
+# --------------------------- save TextGrid ---------------------------
+
+
+def stub_dialog(monkeypatch: pytest.MonkeyPatch, result: object, args: list):
+    def get_options(*a: object) -> object:
+        args.append(a)
+        return result
+
+    monkeypatch.setattr(SaveTextGridDialog, "get_options", staticmethod(get_options))
+
+
+def test_save_textgrid_action_opens_save_textgrid_dialog(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(view, "open_save_textgrid", lambda: calls.append(True))
+
+    view.on_state_change(SaveToTextGridAction())
+
+    assert calls == [True]
+
+
+def test_open_save_textgrid_defaults_to_origin_path_and_file_stem(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    view.origin_path = "/data/clip.wav"
+    view.view_model.file_stem = "clip"
+    args = []
+    stub_dialog(monkeypatch, None, args)
+
+    view.open_save_textgrid()
+
+    assert args == [("/data/clip.wav", "clip", view)]
+
+
+def test_open_save_textgrid_uses_empty_defaults_without_origin_or_stem(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    args = []
+    stub_dialog(monkeypatch, None, args)
+
+    view.open_save_textgrid()
+
+    assert args[0][:2] == ("", "")
+
+
+def test_open_save_textgrid_saves_with_chosen_options(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    stub_dialog(monkeypatch, ("/tmp/out.TextGrid", "long"), [])
+    calls = []
+    view.view_model.save_textgrid = lambda *args: calls.append(args)
+
+    view.open_save_textgrid()
+
+    assert calls == [("/tmp/out.TextGrid", "long")]
+
+
+def test_open_save_textgrid_does_not_save_when_dialog_cancelled(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    stub_dialog(monkeypatch, None, [])
+    calls = []
+    view.view_model.save_textgrid = lambda *args: calls.append(args)
+
+    view.open_save_textgrid()
+
+    assert calls == []
+
+
+def test_open_save_textgrid_reports_runtime_error(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    stub_dialog(monkeypatch, ("/tmp/out.TextGrid", "short"), [])
+
+    def fail(*args: object):
+        raise RuntimeError("overlapping intervals")
+
+    view.view_model.save_textgrid = fail
+    errors = []
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda *a: errors.append(a))
+    )
+
+    view.open_save_textgrid()
+
+    assert len(errors) == 1
+    assert "overlapping intervals" in errors[0][2]

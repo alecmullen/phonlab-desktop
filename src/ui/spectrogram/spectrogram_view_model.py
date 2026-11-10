@@ -9,6 +9,8 @@ from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from core.track_formants.entity.formant_track import FormantTrack
+from core.track_formants.track_formants import TrackFormants
 from core.transform_audio.prep_audio import PrepAudio
 from res.constants import (
     MAX_SGRAM_LENGTH,
@@ -25,25 +27,43 @@ from ui.document.state.audio_channel_state import (
 )
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.spectrogram.state.audio_prepped import AudioPrepped
+from ui.spectrogram.state.formant_settings import FormantSettingsState
+from ui.spectrogram.state.formant_track_state import (
+    FormantTrackState,
+    to_formant_track_state,
+)
 from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 
 class SpectrogramViewModel(ViewModel):
-    def __init__(self):
+    def __init__(
+        self,
+        track_formants: TrackFormants,
+        prep_audio: PrepAudio,
+        compute_spectrogram: ComputeSpectrogram,
+        compute_spectrogram_mmap: ComputeSpectrogramMmap,
+    ):
         super().__init__()
         self.spectrogram_settings = SpectrogramSettingsState()
         self.raw_audio_state: AudioChannelState | None = None
         self.prepped_audio_state: AudioChannelState | None = None
         self.sgram_state = SpectrogramState()
         self.window_state = SpectrogramWindowState()
+        self.formant_settings = FormantSettingsState()
 
         self._buffer_generation = 0
+        self._formant_generation = 0
         # Fixed seed: the displayed range is reproducible across app runs and tests
         self._percentile_rng = np.random.default_rng(0)
 
         self.state_changed.connect(self.on_state_changed)
+
+        self.track_formants_use_case = track_formants
+        self.prep_audio_use_case = prep_audio
+        self.compute_sgram_use_case = compute_spectrogram
+        self.compute_sgram_mmap_use_case = compute_spectrogram_mmap
 
     @pyqtSlot(object)
     def on_state_changed(self, model: State):
@@ -61,7 +81,7 @@ class SpectrogramViewModel(ViewModel):
         target_fs = self.spectrogram_settings.fs
 
         self.raw_audio_state = AudioChannelState(x, fs)
-        use_case = PrepAudio(
+        task = self.prep_audio_use_case(
             {0: AudioSignal(x, fs)}, target_fs, [0], pre=SPECTROGRAM_PRE_EMPHASIS
         )
         self.state_changed.emit(LoadProgressState(True))
@@ -71,11 +91,12 @@ class SpectrogramViewModel(ViewModel):
             new_state = to_audio_channel_state(prepped[0])
             self._rescale_window(self.prepped_audio_state, new_state)
             self.prepped_audio_state = new_state
+            self.clear_formants()
             self.invalidate_spectrogram()
             self.state_changed.emit(LoadProgressState(False))
             self.state_changed.emit(AudioPrepped())
 
-        self.launch_use_case("prep_audio", use_case, on_success, self.on_error)
+        self.launch_task("prep_audio", task, on_success, self.on_error)
 
     def _rescale_window(self, old: AudioChannelState | None, new: AudioChannelState):
         """Window indices are prepped-audio samples, so a change of the
@@ -105,7 +126,7 @@ class SpectrogramViewModel(ViewModel):
 
         window_samples = int(self.spectrogram_settings.window_size * fs)
         too_long = (end - start) / fs > MAX_SGRAM_LENGTH
-        too_short = (end - start) < window_samples
+        too_short = (end - start) < window_samples * 10
         if too_long or too_short:
             self.sgram_state = replace(
                 self.sgram_state, is_showing=False, is_loading=False
@@ -149,15 +170,15 @@ class SpectrogramViewModel(ViewModel):
     def compute_low_res_sgram(self, x: np.ndarray, fs: int, start: int, end: int):
         # SpectrogramSettingsState ensures that 'order' is large enough
         settings = replace(self.spectrogram_settings, step_size=0.003, order=7)
-        use_case = ComputeSpectrogram(
+        task = self.compute_sgram_use_case(
             x[start:end], fs, settings.window_size, settings.step_size, settings.order
         )
-        sgram = use_case.run_sync()
+        sgram = next(task)
         self.update_sgram_window_state(sgram.t, sgram.f, sgram.sxx, fs, start)
 
     def compute_sgram_window(self, x: np.ndarray, fs: int, start: int, end: int):
         settings = self.spectrogram_settings
-        use_case = ComputeSpectrogram(
+        task = self.compute_sgram_use_case(
             x[start:end], fs, settings.window_size, settings.step_size, settings.order
         )
 
@@ -169,7 +190,7 @@ class SpectrogramViewModel(ViewModel):
                 return
             self.update_sgram_window_state(sgram.t, sgram.f, sgram.sxx, fs, start)
 
-        self.launch_use_case("sgram_window", use_case, on_success, self.on_error)
+        self.launch_task("sgram_window", task, on_success, self.on_error)
 
     def update_sgram_window_state(
         self, t: np.ndarray, f: np.ndarray, sxx: np.ndarray, fs: int, start: int
@@ -203,12 +224,59 @@ class SpectrogramViewModel(ViewModel):
             self.update_sxx_percentiles(sgram.sxx_mmap[:, : sgram.frames_computed])
 
         settings = self.spectrogram_settings
-        use_case = ComputeSpectrogramMmap(
+        task = self.compute_sgram_mmap_use_case(
             x, fs, settings.window_size, settings.step_size, settings.order
         )
-        self.launch_use_case(
-            "sgram_mmap", use_case, on_success, self.on_error, only_once=True
+        self.launch_task("sgram_mmap", task, on_success, self.on_error, only_once=True)
+
+    def track_formants(self, settings: FormantSettingsState):
+        """Track formants in the audio under the current window, and emit them
+        as a FormantTrackState. They are dropped when the audio is re-prepped."""
+        self.formant_settings = settings
+
+        if self.raw_audio_state is None or self.prepped_audio_state is None:
+            return
+
+        raw = self.raw_audio_state
+        offset = self.window_state.start / self.prepped_audio_state.fs
+        start = int(offset * raw.fs)
+        end = int(self.window_state.end / self.prepped_audio_state.fs * raw.fs)
+
+        # track_formants does its own resampling and preemphasis, so it takes
+        # the raw audio rather than the spectrogram's prepped audio.
+        task = self.track_formants_use_case(
+            raw.x[start:end],
+            raw.fs,
+            settings.preemphasis,
+            settings.f0_min,
+            settings.f0_max,
+            settings.speaker,
         )
+
+        generation = self._formant_generation
+        self.state_changed.emit(LoadProgressState(True))
+
+        @pyqtSlot(object)
+        def on_success(track: FormantTrack):
+            if generation != self._formant_generation:
+                return
+            self.state_changed.emit(LoadProgressState(False))
+            self.state_changed.emit(to_formant_track_state(track, offset))
+
+        @pyqtSlot(object)
+        def on_error(err: Exception):
+            if generation == self._formant_generation:
+                self.state_changed.emit(LoadProgressState(False))
+            self.on_error(err)
+
+        self.launch_task("formants", task, on_success, on_error)
+
+    def clear_formants(self):
+        """Drop any formant dots and ignore a track still being computed."""
+        self._formant_generation += 1
+        if "formants" in self.job_managers:
+            self.state_changed.emit(LoadProgressState(False))
+        self.state_changed.emit(FormantTrackState())
 
     def adjust_gray_scale(self, adjustment: float):
         gray_cutoff = self.sgram_state.gray_cutoff + adjustment

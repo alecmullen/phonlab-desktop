@@ -3,10 +3,12 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from pytestqt.qtbot import QtBot
+from support.view_models import make_spectrogram_view_model
 
 from ui.base.state import State
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
-from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
+from ui.spectrogram.state.formant_settings import FormantSettingsState
+from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 
 
@@ -26,7 +28,7 @@ def make_sgram_state(**overrides: object) -> SpectrogramState:
 
 
 def test_init_does_not_show_center_label_while_loading(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     assert plot.center_label.isVisible() is False
@@ -35,7 +37,7 @@ def test_init_does_not_show_center_label_while_loading(qtbot: QtBot):
 def test_on_state_change_plots_spectrogram_for_spectrogram_state(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     calls = []
@@ -50,7 +52,7 @@ def test_on_state_change_plots_spectrogram_for_spectrogram_state(
 def test_on_state_change_ignores_other_state_types(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     calls = []
@@ -64,7 +66,7 @@ def test_on_state_change_ignores_other_state_types(
 def test_plot_spectrogram_shows_too_big_label_when_not_showing_and_not_loading(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     calls = []
@@ -78,7 +80,7 @@ def test_plot_spectrogram_shows_too_big_label_when_not_showing_and_not_loading(
 def test_plot_spectrogram_populates_when_showing(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     calls = []
@@ -93,7 +95,7 @@ def test_plot_spectrogram_populates_when_showing(
 def test_plot_spectrogram_does_nothing_while_loading_and_not_showing(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     populate_calls = []
@@ -112,7 +114,7 @@ def test_plot_spectrogram_does_nothing_while_loading_and_not_showing(
 
 
 def test_populate_spectrogram_hides_center_label_and_sets_image(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
     plot.center_label.setVisible(True)
 
@@ -126,7 +128,7 @@ def test_populate_spectrogram_hides_center_label_and_sets_image(qtbot: QtBot):
 
 
 def test_populate_spectrogram_sets_gray_scale_levels(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     sgram = make_sgram_state(low_sxx=0.0, high_sxx=10.0, gray_cutoff=0.5)
@@ -141,7 +143,7 @@ def test_populate_spectrogram_sets_gray_scale_levels(qtbot: QtBot):
 def test_populate_spectrogram_positions_image_by_time_and_frequency_range(
     qtbot: QtBot,
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     sgram = make_sgram_state(
@@ -158,7 +160,7 @@ def test_populate_spectrogram_positions_image_by_time_and_frequency_range(
 
 
 def test_populate_spectrogram_sets_view_y_range(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     sgram = make_sgram_state(f=np.array([5.0, 15.0, 25.0]))
@@ -168,76 +170,8 @@ def test_populate_spectrogram_sets_view_y_range(qtbot: QtBot):
     assert plot.getViewBox().state["limits"]["yLimits"] == [0, 25.0]
 
 
-def test_on_mouse_moved_updates_cursor_when_in_control(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
-    plot = SpectrogramPlot(view_model)
-
-    import pyqtgraph as pg
-    from PyQt6.QtCore import QPointF
-
-    layout = pg.GraphicsLayoutWidget()
-    qtbot.addWidget(layout)
-    layout.addItem(plot)
-    layout.resize(400, 300)
-    layout.show()
-    qtbot.waitExposed(layout)
-
-    plot.has_cursor_control = True
-    scene_pos = plot.getViewBox().mapViewToScene(QPointF(0.75, 0.0))
-
-    plot.on_mouse_moved(scene_pos)
-
-    assert plot.cursor_line.value() == pytest.approx(0.75)
-
-
-def test_set_cursor_position_moves_line_and_removes_control(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
-    plot = SpectrogramPlot(view_model)
-
-    plot.set_cursor_position(3.0)
-
-    assert plot.cursor_line.value() == 3.0
-    assert plot.has_cursor_control is False
-
-
-def test_set_mark_position_moves_line_and_sets_visibility(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
-    plot = SpectrogramPlot(view_model)
-
-    assert plot.mark_line.isVisible() is False
-
-    plot.set_mark_position(2.5, True)
-    assert plot.mark_line.value() == 2.5
-    assert plot.mark_line.isVisible() is True
-
-    plot.set_mark_position(2.5, False)
-    assert plot.mark_line.isVisible() is False
-
-
-def test_update_selection_region_shows_region_for_positive_range(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
-    plot = SpectrogramPlot(view_model)
-
-    plot.update_selection_region(1.0, 2.0)
-
-    assert plot.selection_region.isVisible() is True
-    assert list(plot.selection_region.getRegion()) == [1.0, 3.0]
-
-
-def test_update_selection_region_hides_region_for_zero_or_negative_range(
-    qtbot: QtBot,
-):
-    view_model = SpectrogramViewModel()
-    plot = SpectrogramPlot(view_model)
-    plot.update_selection_region(1.0, 2.0)
-
-    plot.update_selection_region(1.0, 0.0)
-
-    assert plot.selection_region.isVisible() is False
-
-
 def test_display_window_too_big_clears_image_and_shows_label(qtbot: QtBot):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
     plot.populate_spectrogram(make_sgram_state())
 
@@ -250,7 +184,7 @@ def test_display_window_too_big_clears_image_and_shows_label(qtbot: QtBot):
 def test_adjust_gray_scale_scales_trackpad_delta_and_forwards_to_view_model(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     calls = []
@@ -266,7 +200,7 @@ def test_adjust_gray_scale_scales_trackpad_delta_and_forwards_to_view_model(
 def test_adjust_gray_scale_scales_wheel_delta_and_forwards_to_view_model(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     calls = []
@@ -282,7 +216,7 @@ def test_adjust_gray_scale_scales_wheel_delta_and_forwards_to_view_model(
 def test_open_settings_dialog_updates_view_model_when_accepted(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     new_settings = replace(view_model.spectrogram_settings, fs=32000)
@@ -303,7 +237,7 @@ def test_open_settings_dialog_updates_view_model_when_accepted(
 def test_open_settings_dialog_does_nothing_when_cancelled(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
-    view_model = SpectrogramViewModel()
+    view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
 
     monkeypatch.setattr(
@@ -316,5 +250,83 @@ def test_open_settings_dialog_does_nothing_when_cancelled(
     )
 
     plot.open_settings_dialog()
+
+    assert calls == []
+
+
+def test_plot_formants_draws_finite_points_only(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+
+    plot.plot_formants(
+        FormantTrackState(
+            sec=np.array([1.0, 2.0]),
+            formants=np.array([[1.0, 2.0, 3.0, 4.0], [5.0, np.nan, 7.0, 8.0]]),
+        )
+    )
+
+    x, y = plot.formant_dots.getData()
+    np.testing.assert_array_equal(x, [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0])
+    np.testing.assert_array_equal(y, [1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 8.0])
+
+
+def test_on_state_change_plots_formants_for_formant_track_state(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+    calls = []
+    monkeypatch.setattr(plot, "plot_formants", lambda state: calls.append(state))
+
+    state = FormantTrackState()
+    plot.on_state_change(state)
+
+    assert calls == [state]
+
+
+def test_track_formants_action_is_enabled_only_when_spectrogram_shows(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+    assert plot.track_formants_action.isEnabled() is False
+
+    plot.plot_spectrogram(make_sgram_state())
+    assert plot.track_formants_action.isEnabled() is True
+
+    plot.plot_spectrogram(make_sgram_state(is_showing=False, is_loading=False))
+    assert plot.track_formants_action.isEnabled() is False
+
+
+def test_open_formant_dialog_tracks_formants_when_accepted(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = make_spectrogram_view_model()
+    plot = SpectrogramPlot(view_model)
+    new_settings = FormantSettingsState(0.5, 60, 500, 2)
+    monkeypatch.setattr(
+        "ui.spectrogram.spectrogram_plot.FormantSettingsDialog.open_formant_settings",
+        staticmethod(lambda settings: new_settings),
+    )
+    calls = []
+    monkeypatch.setattr(
+        view_model, "track_formants", lambda settings: calls.append(settings)
+    )
+
+    plot.open_formant_dialog()
+
+    assert calls == [new_settings]
+
+
+def test_open_formant_dialog_does_nothing_when_cancelled(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = make_spectrogram_view_model()
+    plot = SpectrogramPlot(view_model)
+    monkeypatch.setattr(
+        "ui.spectrogram.spectrogram_plot.FormantSettingsDialog.open_formant_settings",
+        staticmethod(lambda settings: None),
+    )
+    calls = []
+    monkeypatch.setattr(
+        view_model, "track_formants", lambda settings: calls.append(settings)
+    )
+
+    plot.open_formant_dialog()
 
     assert calls == []

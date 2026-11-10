@@ -10,6 +10,9 @@ from typing import ClassVar
 
 import pytest
 
+from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
+from ui.base.dependency_factory import ViewModelFactory
+
 PHONLAB_DESKTOP_PATH = (
     Path(__file__).resolve().parent.parent / "src" / "phonlab_desktop.py"
 )
@@ -85,7 +88,8 @@ def fake_run_app_dependencies(
     class FakeMainWindow:
         instances: ClassVar[list["FakeMainWindow"]] = []
 
-        def __init__(self):
+        def __init__(self, view_model_factory: ViewModelFactory):
+            self.view_model_factory = view_model_factory
             self.shown = False
             self.splash = None
             self.opened_files = None
@@ -94,7 +98,7 @@ def fake_run_app_dependencies(
         def show(self) -> None:
             self.shown = True
 
-        def open_files(self, files: list[str]) -> None:
+        def open_single_document(self, files: list[str]) -> None:
             self.opened_files = files
 
     class FakeSplash:
@@ -108,11 +112,11 @@ def fake_run_app_dependencies(
         def show(self) -> None:
             self.shown = True
 
+    import ui.main.component.open_project_dialog as splash_module
     import ui.main.main_window as main_window_module
-    import ui.main.splash as splash_module
 
     monkeypatch.setattr(main_window_module, "MainWindow", FakeMainWindow)
-    monkeypatch.setattr(splash_module, "ClickableSplash", FakeSplash)
+    monkeypatch.setattr(splash_module, "OpenProjectDialog", FakeSplash)
 
     return FakeQApplication, FakeMainWindow, FakeSplash
 
@@ -182,6 +186,7 @@ def test_run_app_shows_main_window_and_splash_and_starts_event_loop(
     main_window = fake_main_window_cls.instances[0]
     splash = fake_splash_cls.instances[0]
 
+    assert isinstance(main_window.view_model_factory, ViewModelFactoryImpl)
     assert main_window.shown is True
     assert splash.shown is True
     assert main_window.splash is splash

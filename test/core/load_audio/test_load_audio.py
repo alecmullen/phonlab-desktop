@@ -11,9 +11,9 @@ def test_invoke_yields_audio_signal_per_channel(monkeypatch: pytest.MonkeyPatch)
         return (np.array([1.0, 2.0]), np.array([3.0, 4.0]), 16000)
 
     monkeypatch.setattr(load_audio_module.phon, "loadsig", fake_loadsig)
-    use_case = LoadAudio("sound.wav")
+    use_case = LoadAudio()
 
-    result = use_case.run_sync()
+    result = use_case.run_sync("sound.wav")
 
     assert result.keys() == {0, 1}
     np.testing.assert_array_equal(result[0].x, [1.0, 2.0])
@@ -27,16 +27,10 @@ def test_invoke_handles_single_channel(monkeypatch: pytest.MonkeyPatch):
         return (np.array([5.0, 6.0, 7.0]), 8000)
 
     monkeypatch.setattr(load_audio_module.phon, "loadsig", fake_loadsig)
-    use_case = LoadAudio("mono.wav")
+    use_case = LoadAudio()
 
-    result = use_case.run_sync()
+    result = use_case.run_sync("mono.wav")
 
     assert result.keys() == {0}
     np.testing.assert_array_equal(result[0].x, [5.0, 6.0, 7.0])
     assert result[0].fs == 8000
-
-
-def test_stop_is_a_noop():
-    use_case = LoadAudio("sound.wav")
-
-    use_case.stop()

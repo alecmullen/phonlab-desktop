@@ -4,8 +4,16 @@ from types import MappingProxyType
 
 import pytest
 from pytestqt.qtbot import QtBot
+from support.annotation_repository import SeedableAnnotationRepository
+from support.job_manager import FakeJobManager
+from support.view_models import make_annotation_view_model
 
-from core.parse_textgrid.annotation import Annotation, AnnotationLabel, AnnotationType
+from core.annotation.entity.annotation import (
+    Annotation,
+    AnnotationLabel,
+    AnnotationType,
+)
+from res.constants import SAME_NODE_THRESHOLD
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import (
@@ -14,6 +22,7 @@ from ui.annotation.state.annotation_node_state import (
 )
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import AnnotationState
+from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.document.state.status_message_state import StatusMessageState
 
 MOCK_ANNOTATION_NODES = MappingProxyType(
@@ -37,7 +46,7 @@ MOCK_ANNOTATION_NODES = MappingProxyType(
 def make_view_model(
     nodes: dict[int, AnnotationNodeState], start: float, end: float
 ) -> AnnotationViewModel:
-    view_model = AnnotationViewModel()
+    view_model = make_annotation_view_model()
     view_model.annotation_state = AnnotationState(nodes=nodes, types=[])
     view_model.window_state = (start, end)
     view_model.annotation_view_state = AnnotationState(nodes=nodes, types=[])
@@ -177,12 +186,26 @@ item []:
 """
 
 
-def test_parse_textgrid_loads_annotation_state(tmp_path: Path):
+def run_parse_job(view_model: AnnotationViewModel):
+    """Runs the recorded parse job synchronously, as the worker thread would"""
+    job = view_model.job_managers["parse_textgrid"].jobs[0]
+    try:
+        result = next(job.task)
+    except Exception as err:  # noqa: BLE001
+        job.on_error(err)
+    else:
+        job.on_success(result)
+
+
+def test_parse_textgrid_loads_annotation_state(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
     view_model = make_view_model({}, 0.0, 1.0)
     textgrid = tmp_path / "sample.TextGrid"
     textgrid.write_text(TEXTGRID_FIXTURE)
 
-    view_model.parse_textgrid(str(textgrid))
+    view_model.parse_textgrid(str(textgrid), "sample")
+    run_parse_job(view_model)
 
     assert {node.x for node in view_model.annotation_state.nodes.values()} == {
         0.0,
@@ -215,20 +238,6 @@ item []:
 """
 
 
-def test_parse_textgrid_loads_point_tier(tmp_path: Path):
-    view_model = make_view_model({}, 0.0, 1.0)
-    textgrid = tmp_path / "point.TextGrid"
-    textgrid.write_text(POINT_TIER_TEXTGRID)
-
-    view_model.parse_textgrid(str(textgrid))
-
-    assert {node.x for node in view_model.annotation_state.nodes.values()} == {0.5}
-    assert [t.type for t in view_model.annotation_state.types] == ["mark"]
-    assert [label.label for label in view_model.annotation_state.types[0].labels] == [
-        "click"
-    ]
-
-
 BROKEN_TIER_TEXTGRID = """File type = "ooTextFile"
 Object class = "TextGrid"
 xmin = 0
@@ -244,14 +253,17 @@ item []:
 """
 
 
-def test_parse_textgrid_shows_status_message_on_invalid_tier_type(tmp_path: Path):
+def test_parse_textgrid_shows_status_message_on_invalid_tier_type(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
     view_model = make_view_model({}, 0.0, 1.0)
     textgrid = tmp_path / "broken.TextGrid"
     textgrid.write_text(BROKEN_TIER_TEXTGRID)
     received = []
     view_model.subscribe(received.append)
 
-    view_model.parse_textgrid(str(textgrid))
+    view_model.parse_textgrid(str(textgrid), "sample")
+    run_parse_job(view_model)
 
     status_messages = [s for s in received if isinstance(s, StatusMessageState)]
     assert len(status_messages) == 1
@@ -276,24 +288,30 @@ def test_select_label_with_missing_node_raises(qtbot: QtBot):
         view_model.select_label(AnnotationLabelState(s_node=0, e_node=99, label="x"))
 
 
-def make_annotation_view_model(
+def make_annotated_view_model(
     nodes: dict[int, float],
     tiers: list[list[tuple[int, int, str]]],
     start: float = 0.0,
     end: float = 3.0,
 ) -> AnnotationViewModel:
-    view_model = AnnotationViewModel()
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(repository=repository)
     view_model.window_state = (start, end)
     view_model.set_annotation_state(
-        Annotation(
-            nodes=nodes,
-            types=[
-                AnnotationType(
-                    f"tier{idx}",
-                    [AnnotationLabel(s, e, label) for s, e, label in labels],
-                )
-                for idx, labels in enumerate(tiers)
-            ],
+        repository.seed(
+            Annotation(
+                nodes=nodes,
+                types=[
+                    AnnotationType(
+                        f"tier{idx}",
+                        [
+                            AnnotationLabel(*label, id=id)
+                            for id, label in enumerate(labels)
+                        ],
+                    )
+                    for idx, labels in enumerate(tiers)
+                ],
+            )
         )
     )
     return view_model
@@ -307,14 +325,14 @@ def label_spans(view_model: AnnotationViewModel, tier: int) -> list[tuple]:
 
 
 def test_delete_node_missing_node_raises(qtbot: QtBot):
-    view_model = make_annotation_view_model({0: 0.0, 1: 1.0}, [[(0, 1, "a")]], end=1.0)
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[(0, 1, "a")]], end=1.0)
 
     with pytest.raises(ValueError):
         view_model.delete_node(99)
 
 
 def test_delete_node_merges_adjacent_interval_labels(qtbot: QtBot):
-    view_model = make_annotation_view_model(
+    view_model = make_annotated_view_model(
         {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
     )
     first_label_id = view_model.annotation_state.types[0].labels[0].id
@@ -330,78 +348,8 @@ def test_delete_node_merges_adjacent_interval_labels(qtbot: QtBot):
     assert blocker.args[0] is view_model.annotation_view_state
 
 
-def test_delete_node_merges_labels_on_every_tier_at_node(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0},
-        [[(0, 1, "a"), (1, 2, "b")], [(0, 1, "c"), (1, 2, "d")]],
-    )
-
-    view_model.delete_node(1)
-
-    assert label_spans(view_model, 0) == [(0, 2, "ab")]
-    assert label_spans(view_model, 1) == [(0, 2, "cd")]
-
-
-def test_delete_node_leaves_other_tiers_untouched(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0, 3: 1.5},
-        [[(0, 1, "a"), (1, 2, "b")], [(0, 3, "c"), (3, 2, "d")]],
-    )
-
-    view_model.delete_node(1)
-
-    assert label_spans(view_model, 0) == [(0, 2, "ab")]
-    assert label_spans(view_model, 1) == [(0, 3, "c"), (3, 2, "d")]
-
-
-def test_delete_node_removes_point_label(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.5, 1: 1.5}, [[(0, 0, "x"), (1, 1, "y")]]
-    )
-
-    with qtbot.waitSignal(view_model.state_changed, timeout=1000):
-        view_model.delete_node(0)
-
-    assert label_spans(view_model, 0) == [(1, 1, "y")]
-    assert 0 not in view_model.annotation_view_state.nodes
-
-
-def test_delete_node_extends_label_to_next_node_on_same_tier(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0, 4: 4.0},
-        [[(0, 1, "a"), (3, 4, "b")], [(0, 2, "c"), (2, 4, "d")]],
-        end=4.0,
-    )
-
-    view_model.delete_node(1)
-
-    assert label_spans(view_model, 0) == [(0, 3, "a"), (3, 4, "b")]
-    assert label_spans(view_model, 1) == [(0, 2, "c"), (2, 4, "d")]
-
-
-def test_delete_node_with_ids_out_of_time_order(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {5: 0.0, 3: 1.0, 0: 2.0, 1: 3.0},
-        [[(5, 3, "a"), (0, 1, "b")]],
-    )
-
-    view_model.delete_node(3)
-
-    assert label_spans(view_model, 0) == [(0, 1, "b"), (5, 0, "a")]
-
-
-def test_delete_node_removes_node_from_state(qtbot: QtBot):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
-    )
-
-    view_model.delete_node(1)
-
-    assert list(view_model.annotation_state.nodes) == [0, 2]
-
-
 def test_delete_node_does_not_mutate_previous_state(qtbot: QtBot):
-    view_model = make_annotation_view_model(
+    view_model = make_annotated_view_model(
         {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
     )
     previous = view_model.annotation_state
@@ -413,30 +361,11 @@ def test_delete_node_does_not_mutate_previous_state(qtbot: QtBot):
     assert 1 in previous.nodes
 
 
-def test_delete_last_node_of_tier_with_attached_label_shows_status_message(
-    qtbot: QtBot,
-):
-    view_model = make_annotation_view_model(
-        {0: 0.0, 1: 1.0, 2: 2.0},
-        [[(0, 1, "a")], [(0, 2, "b")]],
-    )
-    received = []
-    view_model.subscribe(received.append)
-
-    view_model.delete_node(1)
-
-    assert received == [
-        StatusMessageState("Cannot delete end node with attached label")
-    ]
-    assert label_spans(view_model, 0) == [(0, 1, "a")]
-    assert 1 in view_model.annotation_state.nodes
-
-
 @pytest.mark.parametrize("node", [0, 2])
 def test_delete_end_node_with_attached_label_shows_status_message(
     qtbot: QtBot, node: int
 ):
-    view_model = make_annotation_view_model(
+    view_model = make_annotated_view_model(
         {0: 0.0, 1: 1.0, 2: 2.0}, [[(0, 1, "a"), (1, 2, "b")]]
     )
     received = []
@@ -444,7 +373,110 @@ def test_delete_end_node_with_attached_label_shows_status_message(
 
     view_model.delete_node(node)
 
-    assert received == [
-        StatusMessageState("Cannot delete end node with attached label")
-    ]
+    assert received == [StatusMessageState("Cannot delete node due to attached labels")]
     assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "b")]
+
+
+def test_create_label_from_selection_adds_label_and_emits(qtbot: QtBot):
+    view_model = make_annotated_view_model({0: 0.0, 1: 3.0}, [[], [(0, 1, "a")]])
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.create_label_from_selection(0, 1.0, 2.0, SAME_NODE_THRESHOLD)
+
+    nodes = view_model.annotation_state.nodes
+    labels = view_model.annotation_state.types[0].labels
+    assert len(labels) == 1
+    assert (nodes[labels[0].s_node].x, nodes[labels[0].e_node].x) == (1.0, 2.0)
+    assert labels[0].label == ""
+    assert label_spans(view_model, 1) == [(0, 1, "a")]
+    assert blocker.args[0] is view_model.annotation_view_state
+
+
+def test_create_label_from_selection_uses_same_node_threshold(qtbot: QtBot):
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0, 2: 2.0, 3: 3.0}, [[]])
+
+    view_model.create_label_from_selection(0, 1.1, 1.9, 0.2)
+
+    assert list(view_model.annotation_state.nodes) == [0, 1, 2, 3]
+    assert label_spans(view_model, 0) == [(1, 2, "")]
+
+
+def test_create_label_from_too_short_selection_shows_status_message(qtbot: QtBot):
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0, 2: 3.0}, [[(0, 1, "a")]])
+    previous = view_model.annotation_state
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.create_label_from_selection(0, 1.05, 1.2, 0.35)
+
+    assert len(received) == 1
+    assert isinstance(received[0], StatusMessageState)
+    assert view_model.annotation_state is previous
+
+
+def make_persisting_view_model() -> tuple[
+    AnnotationViewModel, SeedableAnnotationRepository
+]:
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(repository=repository)
+    view_model.window_state = (0.0, 2.0)
+    view_model.set_annotation_state(
+        repository.seed(
+            Annotation(
+                nodes={0: 0.0, 1: 1.0, 2: 2.0},
+                types=[
+                    AnnotationType(
+                        "tier0",
+                        [
+                            AnnotationLabel(0, 1, "a", id=0),
+                            AnnotationLabel(1, 2, "b", id=1),
+                        ],
+                    )
+                ],
+            )
+        )
+    )
+    return view_model, repository
+
+
+def test_change_label_text_updates_state_and_repository():
+    view_model, repository = make_persisting_view_model()
+    label = view_model.annotation_state.types[0].labels[1]
+
+    view_model.change_label_text(label, "changed")
+
+    assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "changed")]
+    stored = repository.get_annotation_by_id(0)
+    assert [l.label for l in stored.types[0].labels] == ["a", "changed"]
+
+
+def test_change_node_state_persists_node_position(qtbot: QtBot):
+    view_model, repository = make_persisting_view_model()
+    node = view_model.annotation_state.nodes[1]
+
+    view_model.change_node_state(node, 1.5)
+
+    assert repository.get_annotation_by_id(0).nodes[1] == 1.5
+
+
+def test_parse_textgrid_sets_loading_state_until_job_finishes(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
+    view_model = make_view_model({}, 0.0, 1.0)
+    textgrid = tmp_path / "sample.TextGrid"
+    textgrid.write_text(TEXTGRID_FIXTURE)
+
+    view_model.parse_textgrid(str(textgrid), "sample")
+    assert view_model.loading_state.is_loading is True
+
+    run_parse_job(view_model)
+    assert view_model.loading_state.is_loading is False
+
+
+def test_trigger_write_textgrid_dialog_emits_save_action(qtbot: QtBot):
+    view_model = make_view_model({}, 0.0, 1.0)
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.trigger_write_textgrid_dialog()
+
+    assert isinstance(blocker.args[0], SaveToTextGridAction)

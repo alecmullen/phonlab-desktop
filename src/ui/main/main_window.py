@@ -14,17 +14,21 @@ from PyQt6.QtWidgets import (
 )
 
 from core.settings.app_settings import settings
+from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
-from ui.main.open_audio_dialog import OpenAudioDialog
-from ui.main.save_audio_dialog import SaveAudioDialog
+from ui.main.component.open_audio_dialog import OpenAudioDialog
+from ui.main.component.save_audio_dialog import SaveAudioDialog
+from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(
+        self, view_model_factory: ViewModelFactory, parent: QWidget | None = None
+    ):
         super().__init__(parent)
 
         self.setWindowTitle("Phonlab")
@@ -48,6 +52,9 @@ class MainWindow(QMainWindow):
         # ------- toolbar -------------
         self.create_toolbar()
 
+        self.view_model_factory = view_model_factory
+        self.view_model = view_model_factory.create(MainViewModel)
+
     def create_menus(self):
         """Create application menus"""
         mainMenu = self.menuBar()
@@ -58,7 +65,7 @@ class MainWindow(QMainWindow):
         )
         self.open_action.setStatusTip(self.tr("Open a sound file"))
         self.open_action.setShortcut("Ctrl+O")
-        self.open_action.triggered.connect(self.open_files)
+        self.open_action.triggered.connect(self.select_new_tab_files)
 
         self.close_action = QAction(
             QIcon.fromTheme("window-close"), self.tr("&Close"), self
@@ -73,6 +80,12 @@ class MainWindow(QMainWindow):
         )
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_action.triggered.connect(self.save_audio)
+
+        self.save_action = QAction(self.tr("Save to TextGrid…"), self)
+        self.save_action.setStatusTip(
+            self.tr("Save the current document's annotations to a TextGrid")
+        )
+        self.save_action.triggered.connect(self.save_textgrid)
 
         self.audio_info_action = QAction(self.tr("Audio &Info"), self)
         self.audio_info_action.setShortcut("Ctrl+I")
@@ -244,51 +257,138 @@ class MainWindow(QMainWindow):
             self.sgramview_action.setEnabled(True)
 
     @pyqtSlot()
-    def open_files(self, filenames: list[str] | None = None):
-        """Open a new audio file in a new tab"""
-        if filenames is None:
-            filenames, _ = QFileDialog.getOpenFileNames(self, filter=self.filters)
+    def select_project_to_open(self):
+        files_to_load: list[tuple[str, str, str | None]] = []
 
-        if len(filenames) > 0:
-            audio_filename = next(
-                (file for file in filenames if file.endswith(".wav")), None
+        dir_path = QFileDialog.getExistingDirectory(
+            self, self.tr("Open Phonlab Directory")
+        )
+        if dir_path == "":
+            return
+
+        dir = Path(dir_path)
+
+        config_file = next(dir.glob("phonlab.toml"), None)
+        if config_file is None:
+            answer = QMessageBox.question(
+                self,
+                self.tr("Initialize Project"),
+                self.tr(
+                    "No phonlab.toml found. Initialize phonlab project at {}?"
+                ).format(dir_path),
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self.select_project_to_open()
+                return
+            else:
+                self.view_model.set_dir_path(dir_path)
+                self.view_model.init_toml()
+
+        all_files = list(dir.glob("*"))
+        for path in all_files:
+            if str(path).endswith(".wav"):
+                file_stem = path.relative_to(dir_path).with_suffix("").as_posix()
+
+                annotation_file = next(
+                    (
+                        str(file)
+                        for file in all_files
+                        if str(file).endswith(f"{file_stem}.TextGrid")
+                    ),
+                    None,
+                )
+
+                files_to_load.append((file_stem, str(path), annotation_file))
+
+        self.open_files(files_to_load, dir_path)
+
+    def open_single_document(self, filenames: list[str], dir: str | None = None):
+        audio_files = [name for name in filenames if name.endswith(".wav")]
+        annotation_files = [name for name in filenames if name.endswith(".TextGrid")]
+        if len(audio_files) == 0:
+            raise ValueError(self.tr("Please include a .wav file"))
+        if len(audio_files) > 1 or len(annotation_files) > 1:
+            raise ValueError(
+                self.tr("Cannot select more than one .wav file and one .TextGrid file")
             )
 
-            if audio_filename is not None:
-                options = OpenAudioDialog.get_options(audio_filename, self)
-                if options is None:
-                    return
+        audio_file = audio_files[0]
+        if dir is None:
+            file_stem = Path(audio_file).with_suffix("").as_posix()
+        else:
+            file_stem = Path(audio_file).relative_to(dir).with_suffix("").as_posix()
 
-                if self.splash is not None:
-                    self.splash.close()
-                    self.splash = None
+        annotation_file = None
+        if len(annotation_files) > 0:
+            annotation_file = annotation_files[0]
 
-                # Create new document
-                doc_view_model = DocumentViewModel()
-                doc_view_model.subscribe(self.on_doc_state_change)
-                doc = DocumentView(doc_view_model)
-                doc.origin_name = Path(audio_filename).name
-                doc.origin_path = audio_filename
+        self.open_files([(file_stem, audio_file, annotation_file)], dir)
 
-                # Add tab with shortened filename
-                tab_name = doc.origin_name
-                index = self.tab_widget.addTab(doc, tab_name)
-                self.tab_widget.setCurrentIndex(index)
-                self.tab_widget.setTabToolTip(index, audio_filename)
+    @pyqtSlot()
+    def select_files_to_open(self, dir: str | None = None):
+        filenames, _ = QFileDialog.getOpenFileNames(
+            self, directory=dir, filter=self.filters
+        )
+        if len(filenames) == 0:
+            return
 
-                # Load the audio file
-                doc.load_audio(audio_filename, options)
+        try:
+            self.open_single_document(filenames, dir)
+        except ValueError as err:
+            QMessageBox.information(None, self.tr("Error"), str(err))
+            self.select_files_to_open(dir)
 
-                annotation_filename = next(
-                    (file for file in filenames if file.endswith(".TextGrid")), None
-                )
-                if annotation_filename is not None:
-                    doc.load_textgrid(annotation_filename)
+    @pyqtSlot()
+    def select_new_tab_files(self):
+        self.select_files_to_open(dir=self.view_model.dir_path)
+
+    def open_files(
+        self, paired_files: list[tuple[str, str, str | None]], dir_path: str | None
+    ):
+        """Open as audio file in separate tabs. paired_files is a list of tuples in the format
+        (file_stem, audio_file, annotation_file), where file_stem is the path to the audio file,
+        minus the suffix (relative path for project, absolute for ad-hoc singal document
+        editing). audio_file and annotation_file are the absolute paths to the respective .wav
+        and .TextGrid files"""
+
+        self.view_model.set_dir_path(dir_path)
+
+        for idx, (file_stem, audio_file, annotation_file) in enumerate(paired_files):
+            if idx > 4:
+                return
+            options = OpenAudioDialog.get_options(audio_file, self)
+            if options is None:
+                return
+
+            if self.splash is not None:
+                self.splash.close()
+                self.splash = None
+
+            # Create new document
+            doc_view_model = self.view_model_factory.create(
+                DocumentViewModel, file_stem, dir_path
+            )
+            doc_view_model.subscribe(self.on_doc_state_change)
+            doc = DocumentView(doc_view_model)
+            doc.origin_name = Path(audio_file).name
+            doc.origin_path = audio_file
+
+            # Add tab with shortened filename
+            tab_name = doc.origin_name
+            index = self.tab_widget.addTab(doc, tab_name)
+            self.tab_widget.setCurrentIndex(index)
+            self.tab_widget.setTabToolTip(index, audio_file)
+
+            # Load the audio file
+            doc.load_audio(audio_file, options)
+
+            if annotation_file is not None:
+                doc.load_textgrid(annotation_file)
 
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioState):
         """Open a new tab containing the just-copied/cut samples, without
         stealing focus from source_doc"""
-        doc_view_model = DocumentViewModel()
+        doc_view_model = self.view_model_factory.create(DocumentViewModel)
         doc_view_model.subscribe(self.on_doc_state_change)
         doc = DocumentView(doc_view_model)
 
@@ -335,6 +435,11 @@ class MainWindow(QMainWindow):
                 self.tr("Save Audio"),
                 self.tr("Could not save the file:\n{}").format(err),
             )
+
+    def save_textgrid(self):
+        doc = self.get_current_document()
+        if doc:
+            doc.open_save_textgrid()
 
     def show_audio_info(self):
         doc = self.get_current_document()

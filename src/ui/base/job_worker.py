@@ -1,6 +1,6 @@
 from PyQt6.QtCore import QObject, QRunnable, pyqtSignal, pyqtSlot
 
-from core.base.job import Job
+from ui.base.job import Job
 
 
 class JobWorker(QRunnable):
@@ -29,15 +29,14 @@ class JobWorker(QRunnable):
                 self.job = None
 
                 try:
-                    for result in job.use_case.invoke():
+                    for result in job.task:
                         self.signals.result.emit(result)
                         if self.should_stop:
-                            job.use_case.stop()
+                            job.task.close()
                             self.signals.finished.emit()
                             break
-                except Exception as err:
+                except Exception as err:  # noqa: BLE001
                     self.signals.error.emit(err)
-                    raise
             else:
                 self.signals.finished.emit()
                 break

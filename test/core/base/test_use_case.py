@@ -4,33 +4,24 @@ from core.base.use_case import UseCase
 
 
 class ConcreteUseCase(UseCase[int]):
-    def __init__(self, values: list[int]):
-        self.values = values
-        self.stopped = False
+    def __call__(self, *values: int) -> Generator[int, None, None]:
+        yield from values
 
-    def invoke(self) -> Generator[int, None, None]:
-        yield from self.values
 
-    def stop(self) -> None:
-        self.stopped = True
+def test_call_returns_a_generator_of_results():
+    use_case = ConcreteUseCase()
+
+    assert list(use_case(1, 2, 3)) == [1, 2, 3]
 
 
 def test_run_sync_returns_first_yielded_value():
-    use_case = ConcreteUseCase([1, 2, 3])
+    use_case = ConcreteUseCase()
 
-    assert use_case.run_sync() == 1
+    assert use_case.run_sync(1, 2, 3) == 1
 
 
 def test_run_sync_starts_a_fresh_generator_on_each_call():
-    use_case = ConcreteUseCase([1, 2, 3])
+    use_case = ConcreteUseCase()
 
-    assert use_case.run_sync() == 1
-    assert use_case.run_sync() == 1
-
-
-def test_run_sync_does_not_call_stop():
-    use_case = ConcreteUseCase([1])
-
-    use_case.run_sync()
-
-    assert use_case.stopped is False
+    assert use_case.run_sync(1, 2, 3) == 1
+    assert use_case.run_sync(4, 5, 6) == 4

@@ -3,7 +3,6 @@ import pytest
 from PyQt6.QtWidgets import QLabel
 from pytestqt.qtbot import QtBot
 
-import ui.document.document_view_model as dvm_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from ui.document.component.audio_info_dialog import AudioInfoDialog
 from ui.document.document_view import DocumentView
@@ -11,22 +10,9 @@ from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import to_audio_state
 
 
-class FakeAudioPlayer:
-    def stop(self):
-        pass
-
-    class playback_poll:
-        @staticmethod
-        def connect(slot: object):
-            pass
-
-
 @pytest.fixture
-def document_view(monkeypatch: pytest.MonkeyPatch) -> DocumentView:
-    monkeypatch.setattr(dvm_module, "AudioPlayer", FakeAudioPlayer)
-    vm = DocumentViewModel()
-    vm.prep_audio_spectrogram = lambda: None
-    return DocumentView(vm)
+def document_view(document_view_model: DocumentViewModel) -> DocumentView:
+    return DocumentView(document_view_model)
 
 
 def label_texts(dialog: AudioInfoDialog) -> list[str]:

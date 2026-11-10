@@ -26,11 +26,9 @@ def test_invoke_yields_spectrogram_built_from_phon_compute_sgram(
 
     monkeypatch.setattr(compute_sgram_module.phon, "compute_sgram", fake_compute_sgram)
     x = np.arange(10, dtype=np.float64)
-    use_case = ComputeSpectrogram(
-        x, fs=1000, window_size=0.02, step_size=0.005, order=8
-    )
+    use_case = ComputeSpectrogram()
 
-    result = use_case.run_sync()
+    result = use_case.run_sync(x, fs=1000, window_size=0.02, step_size=0.005, order=8)
 
     assert len(calls) == 1
     call = calls[0]
@@ -54,14 +52,8 @@ def test_invoke_uses_default_settings(monkeypatch: pytest.MonkeyPatch):
         return np.zeros(1), np.zeros(1), np.zeros((1, 1))
 
     monkeypatch.setattr(compute_sgram_module.phon, "compute_sgram", fake_compute_sgram)
-    use_case = ComputeSpectrogram(np.zeros(4), fs=1000)
+    use_case = ComputeSpectrogram()
 
-    use_case.run_sync()
+    use_case.run_sync(np.zeros(4), fs=1000)
 
     assert calls == [(0.008, 0.001, 9)]
-
-
-def test_stop_is_a_noop():
-    use_case = ComputeSpectrogram(np.zeros(4), fs=1000)
-
-    use_case.stop()

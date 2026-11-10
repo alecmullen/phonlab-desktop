@@ -1,30 +1,65 @@
 import logging
 from dataclasses import replace
 
-from core.parse_textgrid.annotation import Annotation
+from PyQt6.QtCore import pyqtSlot
+
+from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
+from core.annotation.delete_node import DeleteNode, DeleteNodeError
+from core.annotation.entity.annotation import Annotation
+from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.update_label import UpdateLabel
+from core.annotation.update_node import UpdateNode
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
-from ui.annotation.state.annotation_label_state import AnnotationLabelState
+from core.parse_textgrid.write_textgrid import TextgridType, WriteTextGrid
+from ui.annotation.state.annotation_label_state import AnnotationLabelState, to_label
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import (
     AnnotationState,
+    to_annotation,
     to_annotation_state,
     update_annotation_state_from_window,
 )
+from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.view_model import ViewModel
+from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.status_message_state import StatusMessageState
 
 logger = logging.getLogger(__name__)
 
 
 class AnnotationViewModel(ViewModel):
-    def __init__(self):
+    def __init__(
+        self,
+        create_label: CreateLabel,
+        update_label: UpdateLabel,
+        update_node: UpdateNode,
+        delete_node: DeleteNode,
+        parse_text_grid: ParseTextGrid,
+        write_text_grid: WriteTextGrid,
+        load_annotation: LoadAnnotation,
+        filestem: str | None = None,
+    ):
         super().__init__()
 
         self.annotation_state = AnnotationState()
+        self.loading_state = LoadProgressState()
+
+        if filestem is not None:
+            annotation = load_annotation(filestem)
+            if annotation is not None:
+                self.annotation_state = to_annotation_state(annotation)
+
         self.window_state: tuple[float, float] = (0.0, 0.0)
 
         self.annotation_view_state = AnnotationState()
+
+        self.create_label_use_case = create_label
+        self.update_label_use_case = update_label
+        self.update_node_use_case = update_node
+        self.delete_node_use_case = delete_node
+        self.parse_textgrid_use_case = parse_text_grid
+        self.write_textgrid_use_case = write_text_grid
 
     def change_node_state(self, drag_node: AnnotationNodeState, new_pos: float):
         new_pos = max(self.window_state[0], new_pos)
@@ -32,18 +67,20 @@ class AnnotationViewModel(ViewModel):
 
         if not all(extent.has_point_label for extent in drag_node.extents):
             for node in self.annotation_state.nodes.values():
-                if node.node == drag_node.node:
+                if node.id == drag_node.id:
                     continue
                 if node.x < drag_node.x and node.x >= new_pos:
                     new_pos = node.x
                 if node.x > drag_node.x and node.x <= new_pos:
                     new_pos = node.x
 
-        self.annotation_state.nodes[drag_node.node] = replace(
-            self.annotation_state.nodes[drag_node.node], x=new_pos
+        self.update_node_use_case(drag_node.id, new_pos)
+
+        self.annotation_state.nodes[drag_node.id] = replace(
+            self.annotation_state.nodes[drag_node.id], x=new_pos
         )
-        self.annotation_view_state.nodes[drag_node.node] = replace(
-            self.annotation_view_state.nodes[drag_node.node], x=new_pos
+        self.annotation_view_state.nodes[drag_node.id] = replace(
+            self.annotation_view_state.nodes[drag_node.id], x=new_pos
         )
 
         self.update_visible_annotation_change()
@@ -79,32 +116,83 @@ class AnnotationViewModel(ViewModel):
         except (KeyError, AttributeError):
             raise ValueError("Missing node in annotation")
 
-    def parse_textgrid(self, path: str):
-        use_case = ParseTextGrid(path)
-        try:
-            annotation = use_case.invoke()
+    def parse_textgrid(self, file_path: str, file_stem: str):
+        @pyqtSlot(object)
+        def on_success(annotation: Annotation):
+            self.set_loading_state(False)
             self.set_annotation_state(annotation)
-        except ParseTextGridError:
-            self.state_changed.emit(
-                StatusMessageState(self.tr("Error parsing TextGrid"))
-            )
-            logger.exception("Error parsing TextGrid")
 
-    def change_label_text(self, label_id: int, text: str):
+        @pyqtSlot(object)
+        def on_error(error: Exception):
+            self.set_loading_state(False)
+            if isinstance(error, ParseTextGridError):
+                self.state_changed.emit(
+                    StatusMessageState(self.tr("Error parsing TextGrid"))
+                )
+                logger.exception("Error parsing TextGrid")
+            else:
+                raise error
+
+        self.set_loading_state(True)
+
+        self.launch_task(
+            "parse_textgrid",
+            self.parse_textgrid_use_case(file_path, file_stem),
+            on_success,
+            on_error,
+        )
+
+    def trigger_write_textgrid_dialog(self):
+        self.state_changed.emit(SaveToTextGridAction())
+
+    def write_textgrid(self, file_path: str, tg_type: str):
+        try:
+            tg_type = TextgridType(tg_type)
+        except ValueError:
+            raise ValueError("TextGrid type parameter must be 'short' or 'long'")
+
+        @pyqtSlot()
+        def on_success():
+            self.state_changed.emit(StatusMessageState(self.tr("TextGrid saved")))
+
+        @pyqtSlot(object)
+        def on_error(error: Exception):
+            self.state_changed.emit(
+                StatusMessageState(self.tr("TextGrid failed to save"))
+            )
+            logger.error("Write TextGrid", exc_info=error)
+
+        self.launch_task(
+            "write_textgrid",
+            self.write_textgrid_use_case(
+                to_annotation(self.annotation_state), file_path, tg_type
+            ),
+            on_success,
+            on_error,
+        )
+
+    def set_loading_state(self, is_loading: bool):
+        self.loading_state = LoadProgressState(is_loading)
+        self.state_changed.emit(self.loading_state)
+
+    def change_label_text(self, label: AnnotationLabelState, text: str):
+        label = replace(label, label=text)
+        self.update_label_use_case(to_label(label))
+
         self.annotation_state = self._change_label_text_in_state(
-            label_id, text, self.annotation_state
+            label, self.annotation_state
         )
         self.annotation_view_state = self._change_label_text_in_state(
-            label_id, text, self.annotation_view_state
+            label, self.annotation_view_state
         )
 
     def _change_label_text_in_state(
-        self, label_id: int, text: str, annotation: AnnotationState
+        self, updated_label: AnnotationLabelState, annotation: AnnotationState
     ) -> AnnotationState:
         for type_idx, type in enumerate(annotation.types):
             for label_idx, label in enumerate(type.labels):
-                if label.id == label_id:
-                    new_label = replace(label, label=text)
+                if label.id == updated_label.id:
+                    new_label = replace(label, label=updated_label.label)
                     labels = type.labels.copy()
                     labels[label_idx] = new_label
 
@@ -117,69 +205,39 @@ class AnnotationViewModel(ViewModel):
         return annotation
 
     def delete_node(self, node: int):
-        if node not in self.annotation_state.nodes:
-            raise ValueError("Can't find node to delete")
-
-        types = []
-        for type in self.annotation_state.types:
-            try:
-                labels = self._labels_without_node(node, type.labels)
-            except ValueError as e:
-                self.state_changed.emit(StatusMessageState(str(e)))
-                return
-            types.append(replace(type, labels=labels))
-
-        nodes = {
-            key: value
-            for key, value in self.annotation_state.nodes.items()
-            if key != node
-        }
-        self.annotation_state = AnnotationState(nodes=nodes, types=types)
+        try:
+            annotation = self.delete_node_use_case(
+                to_annotation(self.annotation_state), node
+            )
+        except DeleteNodeError:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Cannot delete node due to attached labels"))
+            )
+            return
+        self.annotation_state = to_annotation_state(annotation)
         self.update_annotation_change()
 
-    def _labels_without_node(
-        self, node: int, labels: list[AnnotationLabelState]
-    ) -> list[AnnotationLabelState]:
-        """Returns the tier's labels with `node` removed, or None if the node is
-        an end node of the tier with an interval label attached."""
-        before = [
-            label for label in labels if label.e_node == node and label.s_node != node
-        ]
-        after = [
-            label for label in labels if label.s_node == node and label.e_node != node
-        ]
-
-        if len(before) == len(after) == 1:
-            replacements = {
-                before[0].id: replace(
-                    before[0],
-                    e_node=after[0].e_node,
-                    label=before[0].label + after[0].label,
-                )
-            }
-        else:
-            tier_nodes = sorted(
-                {n for label in labels for n in (label.s_node, label.e_node)},
-                key=lambda n: (self.annotation_state.nodes[n].x, n),
+    def create_label_from_selection(
+        self,
+        type_idx: int,
+        start: float,
+        end: float,
+        same_node_threshold: float,
+    ):
+        try:
+            annotation = to_annotation(self.annotation_state)
+            annotation = self.create_label_use_case(
+                annotation,
+                annotation.types[type_idx].get_id(),
+                start,
+                end,
+                same_node_threshold,
             )
-            if node not in tier_nodes:
-                return list(labels)
-
-            node_idx = tier_nodes.index(node)
-            before_node = tier_nodes[node_idx - 1] if node_idx > 0 else None
-            after_node = (
-                tier_nodes[node_idx + 1] if node_idx < len(tier_nodes) - 1 else None
+        except ZeroLengthLabelError:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Zoom in to create shorter labels"))
             )
+            return
 
-            if (before and after_node is None) or (after and before_node is None):
-                raise ValueError(self.tr("Cannot delete end node with attached label"))
-
-            replacements = {
-                label.id: replace(label, e_node=after_node) for label in before
-            } | {label.id: replace(label, s_node=before_node) for label in after}
-
-        return [
-            replacements.get(label.id, label)
-            for label in labels
-            if label.id in replacements or node not in (label.s_node, label.e_node)
-        ]
+        self.annotation_state = to_annotation_state(annotation)
+        self.update_annotation_change()
