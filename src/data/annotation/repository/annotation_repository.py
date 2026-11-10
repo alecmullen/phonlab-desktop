@@ -15,7 +15,7 @@ from data.annotation.mapping.annotation_mapping import (
 )
 
 
-class AnnotationRepositoryImpl(AnnotationRepository):
+class DataAnnotationRepository(AnnotationRepository):
     def __init__(self, local_datasource: AnnotationDataSource):
         self.local_datasource = local_datasource
 

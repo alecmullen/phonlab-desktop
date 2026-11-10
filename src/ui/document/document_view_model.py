@@ -21,9 +21,9 @@ from res.constants import (
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
+from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.base.view_model import ViewModel
-from ui.base.view_model_factory import ViewModelFactory
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
     AudioState,
@@ -70,6 +70,7 @@ class DocumentViewModel(ViewModel):
         filter_audio: FilterAudio,
         save_audio: SaveAudio,
         file_stem: str | None = None,
+        dir_path: str | None = None,
     ):
         super().__init__()
 
@@ -95,7 +96,7 @@ class DocumentViewModel(ViewModel):
         self.audio_wave_view_models: list[AudioWaveViewModel] = []
         self.spectrogram_view_model = view_model_factory.create(SpectrogramViewModel)
         self.annotation_view_model = view_model_factory.create(
-            AnnotationViewModel, file_stem
+            AnnotationViewModel, file_stem, dir_path
         )
 
         self.state_changed.connect(self.on_state_changed)

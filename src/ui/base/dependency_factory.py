@@ -10,3 +10,12 @@ class ViewModelFactory(Protocol):
         *args: Any,  # noqa: ANN401
         **kwargs: Any,  # noqa: ANN401
     ) -> T: ...
+
+
+class RepositoryFactory(Protocol):
+    def create[T](
+        self,
+        repository_type: type[T],
+        *args: Any,  # noqa: ANN401
+        **kwargs: Any,  # noqa: ANN401
+    ) -> T: ...

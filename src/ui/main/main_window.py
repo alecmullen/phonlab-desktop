@@ -14,8 +14,8 @@ from PyQt6.QtWidgets import (
 )
 
 from core.settings.app_settings import settings
+from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
-from ui.base.view_model_factory import ViewModelFactory
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
@@ -301,8 +301,10 @@ class MainWindow(QMainWindow):
         if len(audio_files) == 0:
             raise ValueError(self.tr("Please include a .wav file"))
         if len(audio_files) > 1 or len(annotation_files) > 1:
-            raise ValueError(self.tr("Cannot select more than one .wav file and one .TextGrid file"))
-        
+            raise ValueError(
+                self.tr("Cannot select more than one .wav file and one .TextGrid file")
+            )
+
         audio_file = audio_files[0]
         if dir is None:
             file_stem = Path(audio_file).with_suffix("").as_posix()
@@ -312,15 +314,17 @@ class MainWindow(QMainWindow):
         annotation_file = None
         if len(annotation_files) > 0:
             annotation_file = annotation_files[0]
-        
+
         self.open_files([(file_stem, audio_file, annotation_file)], dir)
 
     @pyqtSlot()
     def select_files_to_open(self, dir: str | None = None):
-        filenames, _ = QFileDialog.getOpenFileNames(self, directory=dir, filter=self.filters)
+        filenames, _ = QFileDialog.getOpenFileNames(
+            self, directory=dir, filter=self.filters
+        )
         if len(filenames) == 0:
             return
-        
+
         try:
             self.open_single_document(filenames, dir)
         except ValueError as err:
@@ -331,7 +335,9 @@ class MainWindow(QMainWindow):
     def select_new_tab_files(self):
         self.select_files_to_open(dir=self.view_model.dir_path)
 
-    def open_files(self, paired_files: list[tuple[str, str, str | None]], dir_path: str | None):
+    def open_files(
+        self, paired_files: list[tuple[str, str, str | None]], dir_path: str | None
+    ):
         """Open as audio file in separate tabs. paired_files is a list of tuples in the format
         (file_stem, audio_file, annotation_file), where file_stem is the path to the audio file,
         minus the suffix (relative path for project, absolute for ad-hoc singal document
@@ -353,7 +359,7 @@ class MainWindow(QMainWindow):
 
             # Create new document
             doc_view_model = self.view_model_factory.create(
-                DocumentViewModel, file_stem
+                DocumentViewModel, file_stem, dir_path
             )
             doc_view_model.subscribe(self.on_doc_state_change)
             doc = DocumentView(doc_view_model)

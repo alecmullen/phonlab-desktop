@@ -5,7 +5,7 @@ import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QMouseEvent, QShowEvent
 from pytestqt.qtbot import QtBot
-from support.annotation_repository import FakeAnnotationRepository
+from core.annotation.repository.in_mem_annotation_repository import InMemAnnotationRepository
 from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
@@ -714,7 +714,7 @@ def test_create_label_from_selection_threshold_grows_when_zoomed_out(qtbot: QtBo
 def test_create_label_from_selection_snaps_to_node_within_pixel_threshold(
     qtbot: QtBot,
 ):
-    repository = FakeAnnotationRepository()
+    repository = InMemAnnotationRepository()
     view_model = make_annotation_view_model(repository=repository)
     view_model.window_state = (0.0, 4.0)
     view_model.set_annotation_state(

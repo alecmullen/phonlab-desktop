@@ -11,7 +11,7 @@ from typing import ClassVar
 import pytest
 
 from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
-from ui.base.view_model_factory import ViewModelFactory
+from ui.base.dependency_factory import ViewModelFactory
 
 PHONLAB_DESKTOP_PATH = (
     Path(__file__).resolve().parent.parent / "src" / "phonlab_desktop.py"

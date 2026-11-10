@@ -1,16 +1,17 @@
-from support.annotation_repository import FakeAnnotationRepository
-
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
 )
+from core.annotation.repository.in_mem_annotation_repository import (
+    InMemAnnotationRepository,
+)
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 
 
-def seeded_repository() -> tuple[FakeAnnotationRepository, Annotation]:
-    repository = FakeAnnotationRepository()
+def seeded_repository() -> tuple[InMemAnnotationRepository, Annotation]:
+    repository = InMemAnnotationRepository()
     annotation = repository.seed(
         Annotation(
             nodes={0: 0.0, 1: 1.0},

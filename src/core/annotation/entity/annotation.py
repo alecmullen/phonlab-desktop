@@ -40,20 +40,6 @@ class Annotation:
 
 
 def get_matching_node(
-    nodes: dict[int, float], new_time: float, same_node_threshold: float | None = None
-) -> int | None:
-    if len(nodes) == 0:
-        return None
-
-    node_ids: tuple[int]
-    node_times: tuple[float]
-    node_ids, node_times = zip(*sorted(nodes.items(), key=lambda item: item[1]))
-    return _get_matching_node(
-        list(node_times), new_time, same_node_threshold, list(node_ids)
-    )
-
-
-def _get_matching_node(
     node_times: list[float],
     new_time: float,
     same_node_threshold: float | None = None,
@@ -86,7 +72,7 @@ def add_node_time(
     if new_time is None:
         return node_times
 
-    node = _get_matching_node(node_times, new_time, same_node_threshold)
+    node = get_matching_node(node_times, new_time, same_node_threshold)
 
     if node is None:
         bisect.insort(node_times, new_time)

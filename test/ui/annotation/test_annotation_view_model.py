@@ -4,7 +4,7 @@ from types import MappingProxyType
 
 import pytest
 from pytestqt.qtbot import QtBot
-from support.annotation_repository import FakeAnnotationRepository
+from core.annotation.repository.in_mem_annotation_repository import InMemAnnotationRepository
 from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
@@ -275,7 +275,7 @@ def make_annotated_view_model(
     start: float = 0.0,
     end: float = 3.0,
 ) -> AnnotationViewModel:
-    repository = FakeAnnotationRepository()
+    repository = InMemAnnotationRepository()
     view_model = make_annotation_view_model(repository=repository)
     view_model.window_state = (start, end)
     view_model.set_annotation_state(
@@ -396,9 +396,9 @@ def test_create_label_from_too_short_selection_shows_status_message(qtbot: QtBot
 
 
 def make_persisting_view_model() -> tuple[
-    AnnotationViewModel, FakeAnnotationRepository
+    AnnotationViewModel, InMemAnnotationRepository
 ]:
-    repository = FakeAnnotationRepository()
+    repository = InMemAnnotationRepository()
     view_model = make_annotation_view_model(repository=repository)
     view_model.window_state = (0.0, 2.0)
     view_model.set_annotation_state(

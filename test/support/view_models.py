@@ -12,16 +12,17 @@ computations are mocks (see `support.mocks`).
 
 from typing import Any, cast
 
-from support.annotation_repository import FakeAnnotationRepository
 from support.mocks import mock_use_case
 
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.repository.in_mem_annotation_repository import (
+    InMemAnnotationRepository,
+)
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
-from core.database.connect_local_database import ConnectLocalDatabase
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
@@ -32,8 +33,8 @@ from core.track_formants.track_formants import TrackFormants
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.base.dependency_factory import ViewModelFactory
 from ui.base.view_model import ViewModel
-from ui.base.view_model_factory import ViewModelFactory
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
@@ -83,7 +84,7 @@ class StubViewModelFactory(ViewModelFactory):
         return cast(T, view_model)
 
 
-def make_create_label(repository: FakeAnnotationRepository) -> CreateLabel:
+def make_create_label(repository: InMemAnnotationRepository) -> CreateLabel:
     return CreateLabel(ClearInterval(repository), repository)
 
 
@@ -95,9 +96,9 @@ def make_annotation_view_model(
     parse_text_grid: ParseTextGrid | None = None,
     load_annotation: LoadAnnotation | None = None,
     filestem: str | None = None,
-    repository: FakeAnnotationRepository | None = None,
+    repository: InMemAnnotationRepository | None = None,
 ) -> AnnotationViewModel:
-    repository = repository or FakeAnnotationRepository()
+    repository = repository or InMemAnnotationRepository()
     return AnnotationViewModel(
         create_label or make_create_label(repository),
         update_label or UpdateLabel(repository),
@@ -109,10 +110,8 @@ def make_annotation_view_model(
     )
 
 
-def make_main_view_model(
-    connect_local_database: ConnectLocalDatabase | None = None,
-) -> MainViewModel:
-    return MainViewModel(connect_local_database or mock_use_case(ConnectLocalDatabase))
+def make_main_view_model() -> MainViewModel:
+    return MainViewModel()
 
 
 def make_spectrogram_view_model(

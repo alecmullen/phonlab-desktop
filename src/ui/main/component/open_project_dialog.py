@@ -48,7 +48,9 @@ class OpenProjectDialog(QWidget):
         """
 
         self.open_proj_btn = QPushButton(self.tr("Open a project directory"), self)
-        self.open_file_btn = QPushButton(self.tr("Select files (.wav and .TextGrid)"), self)
+        self.open_file_btn = QPushButton(
+            self.tr("Select files (.wav and .TextGrid)"), self
+        )
 
         font = QFont("Arial", 14)
         self.open_proj_btn.setFont(font)

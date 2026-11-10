@@ -9,9 +9,10 @@ from core.annotation.entity.annotation import (
 from core.annotation.repository.annotation_repository import AnnotationRepository
 
 
-class FakeAnnotationRepository(AnnotationRepository):
+class InMemAnnotationRepository(AnnotationRepository):
     """In-memory repository that assigns ids like the database does, but counting
-    from 0 (labels per type) so tests can name ids by position"""
+    from 0 (labels per type) so tests can name ids by position. Also used for
+    in-memory annotaiton editing when no databse is connected"""
 
     def __init__(self):
         self.filenames: dict[int, str] = {}
@@ -46,7 +47,11 @@ class FakeAnnotationRepository(AnnotationRepository):
         self, annotation_id: int, time: float, same_threshold: float
     ) -> tuple[int, float]:
         existing = self.nodes[annotation_id]
-        match = get_matching_node(existing, time, same_threshold)
+        node_ids, node_times = zip(*sorted(existing.items(), key=lambda item: item[1]))
+
+        match = get_matching_node(
+            list(node_times), time, same_threshold, list(node_ids)
+        )
         if match is not None:
             return match, existing[match]
         node_id = max(existing, default=-1) + 1
@@ -57,9 +62,23 @@ class FakeAnnotationRepository(AnnotationRepository):
         self, annotation_id: int, nodes: list[float], same_threshold: float
     ) -> dict[int, float]:
         created: dict[int, float] = {}
+
+        existing = self.nodes[annotation_id]
+        if len(existing) > 0:
+            node_ids, node_times = zip(*sorted(existing.items(), key=lambda item: item[1]))
+        else:
+            node_ids, node_times = (), ()
+
         for time in nodes:
-            node_id, node_time = self.create_node(annotation_id, time, same_threshold)
-            created[node_id] = node_time
+            match = get_matching_node(
+                list(node_times), time, same_threshold, list(node_ids)
+            )
+            if match is None:
+                node_id = max(existing, default=-1) + 1
+                existing[node_id] = time
+            else:
+                node_id, time = match, existing[match]
+            created[node_id] = time
         return created
 
     def create_types(self, annotation_id: int, types: list[AnnotationType]):

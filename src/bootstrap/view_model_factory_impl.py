@@ -1,12 +1,14 @@
 from typing import Any, cast
 
-from core.annotation.clear_interval import ClearInterval
+from bootstrap.use_case_factory_impl import UseCaseFactory
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.repository.in_mem_annotation_repository import (
+    InMemAnnotationRepository,
+)
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
-from core.database.connect_local_database import ConnectLocalDatabase
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
@@ -17,11 +19,11 @@ from core.track_formants.track_formants import TrackFormants
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
-from data.annotation.repository.annotation_repository import AnnotationRepositoryImpl
+from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.base.dependency_factory import ViewModelFactory
 from ui.base.view_model import ViewModel
-from ui.base.view_model_factory import ViewModelFactory
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
@@ -31,29 +33,13 @@ from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 class ViewModelFactoryImpl(ViewModelFactory):
     def __init__(self):
         self.database = SQLiteDatabase()
-
         self.annotation_datasource = AnnotationDataSource(self.database)
-
-        self.annotation_repository = AnnotationRepositoryImpl(
+        self.data_annotation_repository = DataAnnotationRepository(
             self.annotation_datasource
         )
 
-        self.connect_local_db = ConnectLocalDatabase(self.database)
-        self.edit_audio = EditAudio()
-        self.load_audio = LoadAudio()
-        self.prep_audio = PrepAudio()
-        self.filter_audio = FilterAudio()
-        self.save_audio = SaveAudio()
-        self.track_formants = TrackFormants()
-        self.compute_sgram = ComputeSpectrogram()
-        self.compute_sgram_mmap = ComputeSpectrogramMmap()
-        self.clear_interval = ClearInterval(self.annotation_repository)
-        self.create_label = CreateLabel(self.clear_interval, self.annotation_repository)
-        self.update_label = UpdateLabel(self.annotation_repository)
-        self.update_node = UpdateNode(self.annotation_repository)
-        self.delete_node = DeleteNode(self.annotation_repository)
-        self.load_annotation = LoadAnnotation(self.annotation_repository)
-        self.parse_textgrid = ParseTextGrid(self.annotation_repository)
+        self.dir_use_case_factories: dict[str, UseCaseFactory]
+        self.in_mem_use_case_factory = UseCaseFactory(InMemAnnotationRepository())
 
     def create[T: ViewModel](
         self,
@@ -78,37 +64,61 @@ class ViewModelFactoryImpl(ViewModelFactory):
         else:
             return cast(T, view_model)
 
+    def get_use_case_factory(self, dir_path: str | None) -> UseCaseFactory:
+        if dir_path is None:
+            use_case_factory = self.in_mem_use_case_factory
+        else:
+            if dir_path in self.dir_use_case_factories:
+                use_case_factory = self.dir_use_case_factories[dir_path]
+            else:
+                database = SQLiteDatabase()
+                database.connect(dir_path)
+                annotation_datasource = AnnotationDataSource(database)
+                annotation_repository = DataAnnotationRepository(annotation_datasource)
+
+                use_case_factory = UseCaseFactory(annotation_repository)
+                self.dir_use_case_factories[dir_path] = use_case_factory
+
+        return use_case_factory
+
     def create_document_view_model(
-        self, file_stem: str | None = None
+        self, file_stem: str | None = None, dir_path: str | None = None
     ) -> DocumentViewModel:
+        use_case_factory = self.get_use_case_factory(dir_path)
+
         return DocumentViewModel(
             self,
-            self.edit_audio,
-            self.load_audio,
-            self.prep_audio,
-            self.filter_audio,
-            self.save_audio,
+            use_case_factory.provide(EditAudio),
+            use_case_factory.provide(LoadAudio),
+            use_case_factory.provide(PrepAudio),
+            use_case_factory.provide(FilterAudio),
+            use_case_factory.provide(SaveAudio),
             file_stem,
+            dir_path,
         )
 
     def create_spectrogram_view_model(self) -> SpectrogramViewModel:
+        use_case_factory = self.get_use_case_factory(None)
+
         return SpectrogramViewModel(
-            self.track_formants,
-            self.prep_audio,
-            self.compute_sgram,
-            self.compute_sgram_mmap,
+            use_case_factory.provide(TrackFormants),
+            use_case_factory.provide(PrepAudio),
+            use_case_factory.provide(ComputeSpectrogram),
+            use_case_factory.provide(ComputeSpectrogramMmap),
         )
 
     def create_annotation_view_model(
-        self, file_stem: str | None = None
+        self, file_stem: str | None = None, dir_path: str | None = None
     ) -> AnnotationViewModel:
+        use_case_factory = self.get_use_case_factory(dir_path)
+
         return AnnotationViewModel(
-            self.create_label,
-            self.update_label,
-            self.update_node,
-            self.delete_node,
-            self.parse_textgrid,
-            self.load_annotation,
+            use_case_factory.provide(CreateLabel),
+            use_case_factory.provide(UpdateLabel),
+            use_case_factory.provide(UpdateNode),
+            use_case_factory.provide(DeleteNode),
+            use_case_factory.provide(ParseTextGrid),
+            use_case_factory.provide(LoadAnnotation),
             file_stem,
         )
 
@@ -116,4 +126,4 @@ class ViewModelFactoryImpl(ViewModelFactory):
         return AudioWaveViewModel(channel_idx)
 
     def create_main_view_model(self) -> MainViewModel:
-        return MainViewModel(self.connect_local_db)
+        return MainViewModel()
