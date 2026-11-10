@@ -109,6 +109,11 @@ def write_textgrid(
     return str(path)
 
 
+def parse(path: Path) -> Annotation:
+    """ParseTextGrid is a generator; the annotation is its single yielded value"""
+    return next(ParseTextGrid(InMemAnnotationRepository())(str(path), "sample"))
+
+
 def label_times(annotation: Annotation, tier: int) -> list[tuple]:
     nodes = annotation.nodes
     return [
@@ -123,7 +128,7 @@ def label_times(annotation: Annotation, tier: int) -> list[tuple]:
 def test_invoke_parses_single_tier_textgrid(tmp_path: Path):
     path = write_textgrid(tmp_path, SIMPLE_TEXTGRID)
 
-    result = ParseTextGrid(InMemAnnotationRepository())(str(path), "sample")
+    result = parse(path)
 
     assert result.nodes == {0: 0.0, 1: 0.5, 2: 1.0}
     assert len(result.types) == 1
@@ -137,7 +142,7 @@ def test_invoke_parses_single_tier_textgrid(tmp_path: Path):
 def test_invoke_parses_multiple_tiers_sharing_nodes(tmp_path: Path):
     path = write_textgrid(tmp_path, TWO_TIER_TEXTGRID)
 
-    result = ParseTextGrid(InMemAnnotationRepository())(str(path), "sample")
+    result = parse(path)
 
     assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
     assert [t.type for t in result.types] == ["word", "phone"]
@@ -153,7 +158,7 @@ def test_invoke_merges_boundaries_within_threshold_across_tiers(tmp_path: Path):
     )
     path = write_textgrid(tmp_path, content)
 
-    result = ParseTextGrid(InMemAnnotationRepository())(str(path), "sample")
+    result = parse(path)
 
     # the "h"/"ay" boundary (0.4 vs 0.4 + threshold/2) should collapse to one node
     assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
@@ -162,7 +167,7 @@ def test_invoke_merges_boundaries_within_threshold_across_tiers(tmp_path: Path):
 def test_invoke_parses_point_tier(tmp_path: Path):
     path = write_textgrid(tmp_path, POINT_TIER_TEXTGRID)
 
-    result = ParseTextGrid(InMemAnnotationRepository())(str(path), "sample")
+    result = parse(path)
 
     assert result.nodes == {0: 0.25, 1: 0.75}
     assert len(result.types) == 1
@@ -178,20 +183,20 @@ def test_invoke_raises_parse_text_grid_error_for_unknown_tier_type(tmp_path: Pat
     path = write_textgrid(tmp_path, UNKNOWN_TIER_TEXTGRID)
 
     with pytest.raises(ParseTextGridError):
-        ParseTextGrid(InMemAnnotationRepository())(str(path), "sample")
+        parse(path)
 
 
 def test_invoke_raises_parse_text_grid_error_for_truncated_file(tmp_path: Path):
     path = write_textgrid(tmp_path, "xmin = 0\nxmax = 1.0\n")
 
     with pytest.raises(ParseTextGridError):
-        ParseTextGrid(InMemAnnotationRepository())(str(path), "sample")
+        parse(path)
 
 
 def test_invoke_reads_utf_16_file(tmp_path: Path):
     path = write_textgrid(tmp_path, TWO_TIER_TEXTGRID, encoding="utf-16")
 
-    result = ParseTextGrid(InMemAnnotationRepository())(str(path), "sample")
+    result = parse(path)
 
     assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
     assert [t.type for t in result.types] == ["word", "phone"]

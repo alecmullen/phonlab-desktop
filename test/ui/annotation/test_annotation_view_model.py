@@ -4,6 +4,7 @@ from types import MappingProxyType
 
 import pytest
 from pytestqt.qtbot import QtBot
+from support.job_manager import FakeJobManager
 from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
@@ -186,12 +187,26 @@ item []:
 """
 
 
-def test_parse_textgrid_loads_annotation_state(tmp_path: Path):
+def run_parse_job(view_model: AnnotationViewModel):
+    """Runs the recorded parse job synchronously, as the worker thread would"""
+    job = view_model.job_managers["parse_textgrid"].jobs[0]
+    try:
+        result = next(job.task)
+    except Exception as err:  # noqa: BLE001
+        job.on_error(err)
+    else:
+        job.on_success(result)
+
+
+def test_parse_textgrid_loads_annotation_state(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
     view_model = make_view_model({}, 0.0, 1.0)
     textgrid = tmp_path / "sample.TextGrid"
     textgrid.write_text(TEXTGRID_FIXTURE)
 
     view_model.parse_textgrid(str(textgrid), "sample")
+    run_parse_job(view_model)
 
     assert {node.x for node in view_model.annotation_state.nodes.values()} == {
         0.0,
@@ -239,7 +254,9 @@ item []:
 """
 
 
-def test_parse_textgrid_shows_status_message_on_invalid_tier_type(tmp_path: Path):
+def test_parse_textgrid_shows_status_message_on_invalid_tier_type(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
     view_model = make_view_model({}, 0.0, 1.0)
     textgrid = tmp_path / "broken.TextGrid"
     textgrid.write_text(BROKEN_TIER_TEXTGRID)
@@ -247,6 +264,7 @@ def test_parse_textgrid_shows_status_message_on_invalid_tier_type(tmp_path: Path
     view_model.subscribe(received.append)
 
     view_model.parse_textgrid(str(textgrid), "sample")
+    run_parse_job(view_model)
 
     status_messages = [s for s in received if isinstance(s, StatusMessageState)]
     assert len(status_messages) == 1
@@ -440,3 +458,17 @@ def test_change_node_state_persists_node_position(qtbot: QtBot):
     view_model.change_node_state(node, 1.5)
 
     assert repository.get_annotation_by_id(0).nodes[1] == 1.5
+
+
+def test_parse_textgrid_sets_loading_state_until_job_finishes(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
+    view_model = make_view_model({}, 0.0, 1.0)
+    textgrid = tmp_path / "sample.TextGrid"
+    textgrid.write_text(TEXTGRID_FIXTURE)
+
+    view_model.parse_textgrid(str(textgrid), "sample")
+    assert view_model.loading_state.is_loading is True
+
+    run_parse_job(view_model)
+    assert view_model.loading_state.is_loading is False

@@ -141,9 +141,11 @@ def test_open_files_also_loads_a_paired_textgrid(
     )
 
     doc = main_window.get_current_document()
+    annotation_view_model = doc.view_model.annotation_view_model
+    job = annotation_view_model.job_managers["parse_textgrid"].jobs[0]
+    job.on_success(next(job.task))
     assert {
-        node.x
-        for node in doc.view_model.annotation_view_model.annotation_state.nodes.values()
+        node.x for node in annotation_view_model.annotation_state.nodes.values()
     } == {0.0, 1.0}
 
 
