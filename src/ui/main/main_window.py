@@ -275,6 +275,7 @@ class MainWindow(QMainWindow):
                 self.select_project_to_open()
                 return
             else:
+                self.view_model.set_dir_path(dir_path)
                 self.view_model.init_toml()
 
         all_files = list(dir.glob("*"))

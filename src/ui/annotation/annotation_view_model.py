@@ -1,6 +1,8 @@
 import logging
 from dataclasses import replace
 
+from PyQt6.QtCore import pyqtSlot
+
 from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
 from core.annotation.delete_node import DeleteNode, DeleteNodeError
 from core.annotation.entity.annotation import Annotation
@@ -18,6 +20,7 @@ from ui.annotation.state.annotation_state import (
     update_annotation_state_from_window,
 )
 from ui.base.view_model import ViewModel
+from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.status_message_state import StatusMessageState
 
 logger = logging.getLogger(__name__)
@@ -37,6 +40,7 @@ class AnnotationViewModel(ViewModel):
         super().__init__()
 
         self.annotation_state = AnnotationState()
+        self.loading_state = LoadProgressState()
 
         if filestem is not None:
             annotation = load_annotation(filestem)
@@ -109,14 +113,34 @@ class AnnotationViewModel(ViewModel):
             raise ValueError("Missing node in annotation")
 
     def parse_textgrid(self, file_path: str, file_stem: str):
-        try:
-            annotation = self.parse_textgrid_use_case(file_path, file_stem)
+        @pyqtSlot(object)
+        def on_success(annotation: Annotation):
+            self.set_loading_state(False)
             self.set_annotation_state(annotation)
-        except ParseTextGridError:
-            self.state_changed.emit(
-                StatusMessageState(self.tr("Error parsing TextGrid"))
-            )
-            logger.exception("Error parsing TextGrid")
+
+        @pyqtSlot(object)
+        def on_error(error: Exception):
+            self.set_loading_state(False)
+            if isinstance(error, ParseTextGridError):
+                self.state_changed.emit(
+                    StatusMessageState(self.tr("Error parsing TextGrid"))
+                )
+                logger.exception("Error parsing TextGrid")
+            else:
+                raise error
+
+        self.set_loading_state(True)
+
+        self.launch_task(
+            "parse_textgrid",
+            self.parse_textgrid_use_case(file_path, file_stem),
+            on_success,
+            on_error,
+        )
+
+    def set_loading_state(self, is_loading: bool):
+        self.loading_state = LoadProgressState(is_loading)
+        self.state_changed.emit(self.loading_state)
 
     def change_label_text(self, label: AnnotationLabelState, text: str):
         label = replace(label, label=text)

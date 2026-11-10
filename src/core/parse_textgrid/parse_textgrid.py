@@ -9,7 +9,7 @@ from core.annotation.entity.annotation import (
     add_node_time,
 )
 from core.annotation.repository.annotation_repository import AnnotationRepository
-from core.base.use_case_sync import UseCaseSync
+from core.base.use_case import UseCase
 from res.constants import SAME_NODE_THRESHOLD
 
 
@@ -17,11 +17,11 @@ class ParseTextGridError(ValueError):
     pass
 
 
-class ParseTextGrid(UseCaseSync[Annotation]):
+class ParseTextGrid(UseCase[Annotation]):
     def __init__(self, annotation_repository: AnnotationRepository):
         self.annotation_repository = annotation_repository
 
-    def __call__(self, file_path: str, file_stem: str) -> Annotation:
+    def __call__(self, file_path: str, file_stem: str):
         try:
             id = self.annotation_repository.create_annotation(file_stem)
 
@@ -52,7 +52,7 @@ class ParseTextGrid(UseCaseSync[Annotation]):
             ]
             self.annotation_repository.create_types(id, types)
 
-            return self.annotation_repository.get_annotation_by_id(id)
+            yield self.annotation_repository.get_annotation_by_id(id)
         except Exception as err:
             print(err)
             raise ParseTextGridError from err

@@ -26,6 +26,8 @@ from ui.annotation.state.annotation_state import AnnotationState
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
+from ui.common.loading_overlay import LoadingOverlay
+from ui.document.state.load_progress_state import LoadProgressState
 
 
 class AnnotationPlot(DocumentPlot):
@@ -48,6 +50,8 @@ class AnnotationPlot(DocumentPlot):
         self.set_up_menu()
         self.ctrlMenu.menuAction().setVisible(False)
 
+        self.loading_overlay = LoadingOverlay(self)
+
         self.context_pos: QPointF | None = None
 
         self.visible_nodes: list[AnnotationNodeState] = []
@@ -61,6 +65,8 @@ class AnnotationPlot(DocumentPlot):
         self.tier_selection = TierSelectionIndicator(self)
 
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+
+        self.toggle_loading_overlay(self.view_model.loading_state.is_loading)
 
     def set_up_menu(self):
         shortcut = QKeySequence("Ctrl+L")
@@ -88,6 +94,8 @@ class AnnotationPlot(DocumentPlot):
     def on_state_change(self, model: State):
         if isinstance(model, AnnotationState):
             self.populate(model)
+        if isinstance(model, LoadProgressState):
+            self.toggle_loading_overlay(model.is_loading)
 
     def show_time_axis(self, show: bool):
         if show:
@@ -97,6 +105,12 @@ class AnnotationPlot(DocumentPlot):
     def showEvent(self, a0: QShowEvent):
         super().showEvent(a0)
         self.populate(self.view_model.annotation_view_state)
+
+    def toggle_loading_overlay(self, is_loading: bool):
+        if is_loading:
+            self.loading_overlay.show()
+        else:
+            self.loading_overlay.hide()
 
     def clear_annotations(self):
         for item in self.allChildItems():

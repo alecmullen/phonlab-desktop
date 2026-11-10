@@ -38,7 +38,7 @@ class ViewModelFactoryImpl(ViewModelFactory):
             self.annotation_datasource
         )
 
-        self.dir_use_case_factories: dict[str, UseCaseFactory]
+        self.dir_use_case_factories: dict[str, UseCaseFactory] = {}
         self.in_mem_use_case_factory = UseCaseFactory(InMemAnnotationRepository())
 
     def create[T: ViewModel](
