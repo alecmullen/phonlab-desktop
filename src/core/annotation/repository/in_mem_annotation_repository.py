@@ -10,15 +10,16 @@ from core.annotation.repository.annotation_repository import AnnotationRepositor
 
 
 class InMemAnnotationRepository(AnnotationRepository):
-    """In-memory repository that assigns ids like the database does, but counting
-    from 0 (labels per type) so tests can name ids by position. Also used for
-    in-memory annotaiton editing when no databse is connected"""
+    """In-memory repository that assigns ids like the database does: type and label
+    ids are unique across the whole repository (counting from 0). Also used for
+    in-memory annotation editing when no database is connected"""
 
     def __init__(self):
         self.filenames: dict[int, str] = {}
         self.nodes: dict[int, dict[int, float]] = {}
         self.types: dict[int, list[AnnotationType]] = {}
         self._next_type_id = 0
+        self._next_label_id = 0
 
     def create_annotation(self, file_stem: str) -> int:
         if file_stem in self.filenames.values():
@@ -73,7 +74,10 @@ class InMemAnnotationRepository(AnnotationRepository):
 
     def create_types(self, annotation_id: int, types: list[AnnotationType]):
         for type in types:
-            labels = [replace(label, id=idx) for idx, label in enumerate(type.labels)]
+            labels = []
+            for label in type.labels:
+                labels.append(replace(label, id=self._next_label_id))
+                self._next_label_id += 1
             self.types[annotation_id].append(
                 replace(type, labels=labels, id=self._next_type_id)
             )
@@ -109,8 +113,8 @@ class InMemAnnotationRepository(AnnotationRepository):
 
     def create_label(self, label: AnnotationLabel, type_id: int) -> AnnotationLabel:
         labels = self._labels(type_id)
-        next_id = max((l.id for l in labels if l.id is not None), default=-1) + 1
-        created = replace(label, id=next_id)
+        created = replace(label, id=self._next_label_id)
+        self._next_label_id += 1
         self._set_labels(type_id, [*labels, created])
         return created
 

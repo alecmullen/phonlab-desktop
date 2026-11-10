@@ -19,7 +19,8 @@ _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]')
 
 
 def _default_filename(tab_name: str) -> str:
-    base = _INVALID_FILENAME_CHARS.sub("_", tab_name).strip()
+    base = Path(tab_name).stem
+    base = _INVALID_FILENAME_CHARS.sub("_", base).strip()
     return f"{base}.TextGrid"
 
 
