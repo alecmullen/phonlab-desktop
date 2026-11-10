@@ -20,6 +20,7 @@ from ui.annotation.state.annotation_state import (
     to_annotation_state,
     update_annotation_state_from_window,
 )
+from ui.annotation.state.save_to_textgrid_state import SaveToTextGridState
 from ui.base.view_model import ViewModel
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.status_message_state import StatusMessageState
@@ -140,6 +141,9 @@ class AnnotationViewModel(ViewModel):
             on_success,
             on_error,
         )
+
+    def trigger_write_textgrid_dialog(self):
+        self.state_changed.emit(SaveToTextGridState())
 
     def write_textgrid(self, file_path: str, tg_type: str):
         try:

@@ -6,7 +6,6 @@ from enum import StrEnum
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
-    AnnotationType,
 )
 from core.base.use_case import UseCase
 
@@ -53,7 +52,8 @@ class WriteTextGrid(UseCase):
 
     def _to_praat_short_tier(
         self,
-        type: AnnotationType,
+        tier_name: str,
+        labels: list[AnnotationLabel],
         nodes: dict[int, float],
         is_point_tier: bool,
         xmin: str,
@@ -66,19 +66,20 @@ class WriteTextGrid(UseCase):
 
         lines = [
             '"IntervalTier"' if not is_point_tier else '"TextTier"',
-            '"' + type.type + '"',
+            '"' + tier_name + '"',
             xmin,
             xmax,
-            str(len(type.labels)),
+            str(len(labels)),
         ]
-        if len(type.labels) > 0:
-            lines.append(self._to_praat_short_label_str(type.labels, nodes, is_point_tier))
+        if len(labels) > 0:
+            lines.append(self._to_praat_short_label_str(labels, nodes, is_point_tier))
         return "\n".join(lines)
 
     def _to_praat_long_tier(
         self,
         idx: int,
-        type: AnnotationType,
+        tier_name: str,
+        labels: list[AnnotationLabel],
         nodes: dict[int, float],
         is_point_tier: bool,
         xmin: str,
@@ -93,18 +94,21 @@ class WriteTextGrid(UseCase):
         sizelbl = "intervals" if not is_point_tier else "points"
         tier = f"""    item [{idx}]:
         class = {tclass}
-        name = "{type.type}"
+        name = "{tier_name}"
         xmin = {xmin}
         xmax = {xmax}
-        {sizelbl}: size = {len(type.labels)!s}"""
-        if len(type.labels) > 0:
+        {sizelbl}: size = {len(labels)!s}"""
+        if len(labels) > 0:
             tier += "\n        " + self._to_praat_long_label_str(
-                type.labels, nodes, is_point_tier
+                labels, nodes, is_point_tier
             )
         return tier
 
     def _to_praat_short_label_str(
-        self, labels: list[AnnotationLabel], nodes: dict[int, float], is_point_tier: bool
+        self,
+        labels: list[AnnotationLabel],
+        nodes: dict[int, float],
+        is_point_tier: bool,
     ) -> str:
         """
         Return a string representing the labels of a tier in praat_short format.
@@ -116,7 +120,7 @@ class WriteTextGrid(UseCase):
             else f"{nodes[label.s_node]}"
             for label in labels
         ]
-        replacements = [('"', '""'), (r'^', '"'), (r"\Z", '"')]
+        replacements = [('"', '""'), (r"^", '"'), (r"\Z", '"')]
         texts = []
         for label in labels:
             text = label.label
@@ -213,12 +217,18 @@ class WriteTextGrid(UseCase):
 
             if tg_type != TextgridType.LONG:
                 tiertext = self._to_praat_short_tier(
-                    type, annotation.nodes, is_point_tier, str(xmin), str(xmax)
+                    type.type,
+                    labels,
+                    annotation.nodes,
+                    is_point_tier,
+                    str(xmin),
+                    str(xmax),
                 )
             else:
                 tiertext = self._to_praat_long_tier(
-                    tier_idx,
-                    type,
+                    tier_idx + 1,
+                    type.type,
+                    labels,
                     annotation.nodes,
                     is_point_tier,
                     str(xmin),
