@@ -33,6 +33,7 @@ class SaveTextGridDialog(QDialog):
         default_filename = _default_filename(tab_name)
 
         self.directory_edit = QLineEdit(str(default_dir))
+        self.directory_edit.setMinimumWidth(200)
         browse_button = QPushButton(self.tr("Browse…"))
         browse_button.clicked.connect(self._browse_directory)
         dir_row = QWidget()
@@ -42,6 +43,7 @@ class SaveTextGridDialog(QDialog):
         dir_layout.addWidget(browse_button)
 
         self.filename_edit = QLineEdit(default_filename)
+        self.filename_edit.setMinimumWidth(200)
 
         self.tg_type_selector = QComboBox()
         self.tg_type_selector.addItem("short", "short")
