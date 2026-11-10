@@ -1,13 +1,12 @@
 from itertools import count
 
+from support.annotation_repository import SeedableAnnotationRepository
+
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
-)
-from core.annotation.repository.in_mem_annotation_repository import (
-    InMemAnnotationRepository,
 )
 
 
@@ -31,7 +30,7 @@ def make_annotation(
 def clear_interval(
     annotation: Annotation, type_ids: list[int], s_node: int, e_node: int
 ) -> Annotation:
-    repository = InMemAnnotationRepository()
+    repository = SeedableAnnotationRepository()
     seeded = repository.seed(annotation)
     ClearInterval(repository)(seeded, type_ids, s_node, e_node)
     return repository.get_annotation_by_id(seeded.get_id())

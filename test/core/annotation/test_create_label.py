@@ -1,4 +1,5 @@
 import pytest
+from support.annotation_repository import SeedableAnnotationRepository
 from support.view_models import make_create_label
 
 from core.annotation.create_label import ZeroLengthLabelError
@@ -7,9 +8,6 @@ from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
-)
-from core.annotation.repository.in_mem_annotation_repository import (
-    InMemAnnotationRepository,
 )
 from res.constants import SAME_NODE_THRESHOLD
 
@@ -36,7 +34,7 @@ def create_label(
     end: float,
     same_node_threshold: float = SAME_NODE_THRESHOLD,
 ) -> Annotation:
-    repository = InMemAnnotationRepository()
+    repository = SeedableAnnotationRepository()
     seeded = repository.seed(annotation)
     return make_create_label(repository)(
         seeded, type_id, start, end, same_node_threshold
@@ -138,7 +136,7 @@ def test_delete_node_after_splitting_label_merges_with_new_label():
     annotation = make_annotation({0: 0.0, 1: 3.0}, [[(0, 1, "a")]])
     annotation = create_label(annotation, 0, 1.0, 2.0)
 
-    repository = InMemAnnotationRepository()
+    repository = SeedableAnnotationRepository()
     result = DeleteNode(repository)(repository.seed(annotation), 2)
 
     assert label_times(result, 0) == [(0.0, 2.0, "a"), (2.0, 3.0, "")]

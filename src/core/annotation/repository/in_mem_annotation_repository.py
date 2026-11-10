@@ -20,18 +20,6 @@ class InMemAnnotationRepository(AnnotationRepository):
         self.types: dict[int, list[AnnotationType]] = {}
         self._next_type_id = 0
 
-    def seed(self, annotation: Annotation) -> Annotation:
-        """Stores an annotation as-is (ids included) and returns it with its id"""
-        id = len(self.filenames)
-        self.filenames[id] = f"seeded{id}"
-        self.nodes[id] = dict(annotation.nodes)
-        self.types[id] = []
-        for idx, type in enumerate(annotation.types):
-            type_id = type.id if type.id is not None else idx
-            self.types[id].append(replace(type, id=type_id, labels=list(type.labels)))
-            self._next_type_id = max(self._next_type_id, type_id + 1)
-        return self.get_annotation_by_id(id)
-
     def create_annotation(self, file_stem: str) -> int:
         if file_stem in self.filenames.values():
             raise ValueError(

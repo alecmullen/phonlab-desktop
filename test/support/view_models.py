@@ -12,15 +12,13 @@ computations are mocks (see `support.mocks`).
 
 from typing import Any, cast
 
+from support.annotation_repository import SeedableAnnotationRepository
 from support.mocks import mock_use_case
 
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
-from core.annotation.repository.in_mem_annotation_repository import (
-    InMemAnnotationRepository,
-)
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
@@ -90,7 +88,7 @@ class StubViewModelFactory(ViewModelFactory):
         return cast(T, view_model)
 
 
-def make_create_label(repository: InMemAnnotationRepository) -> CreateLabel:
+def make_create_label(repository: SeedableAnnotationRepository) -> CreateLabel:
     return CreateLabel(ClearInterval(repository), repository)
 
 
@@ -102,9 +100,9 @@ def make_annotation_view_model(
     parse_text_grid: ParseTextGrid | None = None,
     load_annotation: LoadAnnotation | None = None,
     filestem: str | None = None,
-    repository: InMemAnnotationRepository | None = None,
+    repository: SeedableAnnotationRepository | None = None,
 ) -> AnnotationViewModel:
-    repository = repository or InMemAnnotationRepository()
+    repository = repository or SeedableAnnotationRepository()
     return AnnotationViewModel(
         create_label or make_create_label(repository),
         update_label or UpdateLabel(repository),

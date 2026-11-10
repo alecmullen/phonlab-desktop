@@ -1,13 +1,11 @@
 import pytest
+from support.annotation_repository import SeedableAnnotationRepository
 
 from core.annotation.delete_node import DeleteNode, DeleteNodeError
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
-)
-from core.annotation.repository.in_mem_annotation_repository import (
-    InMemAnnotationRepository,
 )
 
 
@@ -27,7 +25,7 @@ def make_annotation(
 
 
 def delete_node(annotation: Annotation, node: int) -> Annotation:
-    repository = InMemAnnotationRepository()
+    repository = SeedableAnnotationRepository()
     return DeleteNode(repository)(repository.seed(annotation), node)
 
 
