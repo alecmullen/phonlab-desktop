@@ -5,7 +5,6 @@ from core.annotation.entity.annotation import (
 )
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_label import AnnotationLabelEntity
-from data.annotation.entity.annotation_node import AnnotationNodeEntity
 from data.annotation.entity.annotation_type import AnnotationTypeEntity
 
 
@@ -27,21 +26,6 @@ def entity_to_label(entity: AnnotationLabelEntity) -> AnnotationLabel:
     return AnnotationLabel(
         entity.start_node_id, entity.end_node_id, entity.label_text, entity.id
     )
-
-
-def annotation_to_entity(annotation: Annotation, filename: str) -> AnnotationEntity:
-    entity = AnnotationEntity(
-        file_name=filename,
-        nodes=[
-            AnnotationNodeEntity(id=id, time=time)
-            for id, time in annotation.nodes.items()
-        ],
-        types=[type_to_entity(type) for type in annotation.types],
-    )
-
-    if annotation.id is not None:
-        entity.id = annotation.id
-    return entity
 
 
 def type_to_entity(type: AnnotationType) -> AnnotationTypeEntity:

@@ -57,8 +57,8 @@ class EditAudio(UseCaseSync[EditResult | None]):
             or edit_command.end_time <= edit_command.start_time
         ):
             return None
-        start_idx = int(round(edit_command.start_time * fs))
-        end_idx = int(round(edit_command.end_time * fs))
+        start_idx = round(edit_command.start_time * fs)
+        end_idx = round(edit_command.end_time * fs)
 
         if settings.cut_and_paste_at_zero_crossings:
             snapped_start = self._nearest_zero_crossing(ref_channel, start_idx)
