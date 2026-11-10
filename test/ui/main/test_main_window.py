@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QKeyEvent
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 from pytestqt.qtbot import QtBot
 from support.audio_player import FakeAudioPlayer
 from support.job_manager import FakeJobManager
@@ -194,6 +194,192 @@ def test_open_files_closes_splash_screen(
 
     assert closed == [True]
     assert main_window.splash is None
+
+
+# --------------------------- opening projects and documents ---------------------------
+
+
+@pytest.fixture
+def opened(main_window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> list:
+    """Records the `open_files` calls instead of creating tabs"""
+    calls: list = []
+    monkeypatch.setattr(
+        main_window,
+        "open_files",
+        lambda files, dir_path: calls.append((files, dir_path)),
+    )
+    return calls
+
+
+def patch_directory_dialog(monkeypatch: pytest.MonkeyPatch, *answers: str):
+    remaining = list(answers)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getExistingDirectory",
+        staticmethod(lambda *args, **kwargs: remaining.pop(0)),
+    )
+
+
+def patch_file_dialog(monkeypatch: pytest.MonkeyPatch, *selections: list[str]):
+    remaining = list(selections)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileNames",
+        staticmethod(lambda *args, **kwargs: (remaining.pop(0), "")),
+    )
+
+
+def test_select_project_does_nothing_when_dialog_is_cancelled(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, opened: list
+):
+    patch_directory_dialog(monkeypatch, "")
+
+    main_window.select_project_to_open()
+
+    assert opened == []
+
+
+def test_select_project_opens_every_wav_with_its_paired_textgrid(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    (tmp_path / "phonlab.toml").write_text("")
+    (tmp_path / "a.wav").write_bytes(b"")
+    (tmp_path / "a.TextGrid").write_text("")
+    (tmp_path / "b.wav").write_bytes(b"")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    [(files, dir_path)] = opened
+    assert dir_path == str(tmp_path)
+    assert sorted(files) == [
+        ("a", str(tmp_path / "a.wav"), str(tmp_path / "a.TextGrid")),
+        ("b", str(tmp_path / "b.wav"), None),
+    ]
+
+
+def test_select_project_initializes_toml_when_user_agrees(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.Yes),
+    )
+
+    main_window.select_project_to_open()
+
+    assert (tmp_path / "phonlab.toml").is_file()
+    assert opened == [([], str(tmp_path))]
+
+
+def test_select_project_asks_again_when_user_declines_initializing(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    patch_directory_dialog(monkeypatch, str(tmp_path), "")
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.No),
+    )
+
+    main_window.select_project_to_open()
+
+    assert not (tmp_path / "phonlab.toml").exists()
+    assert opened == []
+
+
+def test_open_single_document_uses_absolute_stem_without_dir(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav = str(tmp_path / "sound.wav")
+
+    main_window.open_single_document([wav])
+
+    assert opened == [([(str(tmp_path / "sound"), wav, None)], None)]
+
+
+def test_open_single_document_uses_relative_stem_within_dir(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav = str(tmp_path / "sound.wav")
+    textgrid = str(tmp_path / "sound.TextGrid")
+
+    main_window.open_single_document([wav, textgrid], str(tmp_path))
+
+    assert opened == [([("sound", wav, textgrid)], str(tmp_path))]
+
+
+def test_open_single_document_raises_for_more_than_one_wav(
+    main_window: MainWindow, opened: list
+):
+    with pytest.raises(ValueError):
+        main_window.open_single_document(["a.wav", "b.wav"])
+
+    assert opened == []
+
+
+def test_select_files_does_nothing_when_dialog_is_cancelled(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, opened: list
+):
+    patch_file_dialog(monkeypatch, [])
+
+    main_window.select_files_to_open()
+
+    assert opened == []
+
+
+def test_select_files_opens_selected_document(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, opened: list
+):
+    patch_file_dialog(monkeypatch, ["/data/sound.wav"])
+
+    main_window.select_files_to_open()
+
+    assert opened == [([("/data/sound", "/data/sound.wav", None)], None)]
+
+
+def test_select_files_reports_invalid_selection_and_asks_again(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, opened: list
+):
+    patch_file_dialog(monkeypatch, ["only.TextGrid"], [])
+    messages: list = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda *args, **kwargs: messages.append(args)),
+    )
+
+    main_window.select_files_to_open()
+
+    assert len(messages) == 1
+    assert opened == []
+
+
+def test_select_new_tab_files_starts_in_current_project_dir(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    main_window.view_model.set_dir_path("/project")
+    directories: list = []
+    monkeypatch.setattr(
+        main_window,
+        "select_files_to_open",
+        lambda dir=None: directories.append(dir),
+    )
+
+    main_window.select_new_tab_files()
+
+    assert directories == ["/project"]
 
 
 # --------------------------- copy/cut open a clip tab ---------------------------

@@ -45,31 +45,31 @@ def test_nearest_zero_crossing_returns_index_unchanged_when_no_crossing_found():
 
 
 def test_nearest_zero_crossing_finds_nearby_crossing():
-    channel = make_channel([1, 1, 1, -1, -1])
+    channel = make_channel([-1, -1, -1, 1, 1])
 
     assert EditAudio()._nearest_zero_crossing(channel, 0) == 2
 
 
 def test_nearest_zero_crossing_prefers_smaller_magnitude_sample_after_crossing():
-    channel = make_channel([3, -1])
+    channel = make_channel([-3, 1])
 
     assert EditAudio()._nearest_zero_crossing(channel, 0) == 1
 
 
 def test_nearest_zero_crossing_prefers_smaller_magnitude_sample_before_crossing():
-    channel = make_channel([1, -3])
+    channel = make_channel([-1, 3])
 
     assert EditAudio()._nearest_zero_crossing(channel, 0) == 0
 
 
 def test_nearest_zero_crossing_treats_zero_as_positive():
-    channel = make_channel([1, 0, -1])
+    channel = make_channel([-1, 0, 1])
 
     assert EditAudio()._nearest_zero_crossing(channel, 1) == 1
 
 
 def test_nearest_zero_crossing_respects_search_radius():
-    x = [1.0] * 20 + [-1.0] * 20
+    x = [-1.0] * 20 + [1.0] * 20
     channel = make_channel(x)
 
     # search_radius is 5 samples (5ms @ 1000Hz); the crossing at 19/20 is
@@ -78,14 +78,14 @@ def test_nearest_zero_crossing_respects_search_radius():
 
 
 def test_nearest_zero_crossing_finds_crossing_within_radius():
-    x = [1.0] * 20 + [-1.0] * 20
+    x = [-1.0] * 20 + [1.0] * 20
     channel = make_channel(x)
 
     assert EditAudio()._nearest_zero_crossing(channel, 17) == 19
 
 
 def test_nearest_zero_crossing_boundary_is_one_past_preceding_crossing():
-    channel = make_channel([1, 1, 1, -1, -1])
+    channel = make_channel([-1, -1, -1, 1, 1])
 
     assert EditAudio()._nearest_zero_crossing_boundary(channel, 1) == 3
 
@@ -119,8 +119,8 @@ def test_selected_range_snaps_to_nearby_zero_crossings_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setattr(settings, "cut_and_paste_at_zero_crossings", True)
-    x = [1.0] * 9 + [-1.0] * 9 + [1.0] * 9 + [-1.0] * 9
-    assert selected_range(make_channel(x), start_time=0.01, end_time=0.02) == (8, 18)
+    x = [-1.0] * 9 + [1.0] * 5 + [-1.0] * 5 + [1.0] * 20
+    assert selected_range(make_channel(x), start_time=0.01, end_time=0.02) == (8, 19)
 
 
 def test_selected_range_keeps_raw_indices_when_no_crossings_nearby(
