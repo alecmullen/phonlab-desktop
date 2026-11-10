@@ -14,21 +14,22 @@ from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
 from ui.main.component.open_project_dialog import OpenProjectDialog, icon_path
 from ui.main.main_window import MainWindow
 
-log_dir = Path(PlatformDirs("Phonlab").user_log_dir)
-log_dir.mkdir(parents=True, exist_ok=True)
-logging.basicConfig(
-    filename=log_dir / "phonlab.log",
-    level=logging.ERROR,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-
-logger = logging.getLogger(__name__)
-
 if getattr(sys, "frozen", False):
     # Create and set numba cache
     _numba_cache_dir = os.path.join(os.path.dirname(sys.executable), "numba_cache")
     os.makedirs(_numba_cache_dir, exist_ok=True)
     os.environ.setdefault("NUMBA_CACHE_DIR", _numba_cache_dir)
+
+    # Set up error logs
+    log_dir = Path(PlatformDirs("Phonlab").user_log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=log_dir / "phonlab.log",
+        level=logging.ERROR,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )    
+
+logger = logging.getLogger(__name__)
 
 try:
     import librosa

@@ -45,7 +45,7 @@ class SaveTextGridDialog(QDialog):
 
         self.tg_type_selector = QComboBox()
         self.tg_type_selector.addItem("short", "short")
-        self.tg_type_selector.addItem("long", "short")
+        self.tg_type_selector.addItem("long", "long")
         self.tg_type_selector.setCurrentIndex(0)
 
         form = QFormLayout()

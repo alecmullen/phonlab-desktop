@@ -156,7 +156,7 @@ class AnnotationViewModel(ViewModel):
             self.state_changed.emit(
                 StatusMessageState(self.tr("TextGrid failed to save"))
             )
-            print(error)
+            logger.error("Write TextGrid", exc_info=error)
 
         self.launch_task(
             "write_textgrid",

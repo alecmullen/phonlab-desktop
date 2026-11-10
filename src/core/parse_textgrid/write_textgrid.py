@@ -72,7 +72,7 @@ class WriteTextGrid(UseCase):
             str(len(type.labels)),
         ]
         if len(type.labels) > 0:
-            lines.append(self._to_praat_short_label_str(type.labels, nodes))
+            lines.append(self._to_praat_short_label_str(type.labels, nodes, is_point_tier))
         return "\n".join(lines)
 
     def _to_praat_long_tier(
@@ -92,11 +92,11 @@ class WriteTextGrid(UseCase):
         tclass = '"IntervalTier"' if not is_point_tier else '"TextTier"'
         sizelbl = "intervals" if not is_point_tier else "points"
         tier = f"""    item [{idx}]:
-            class = {tclass}
-            name = "{type.type}"
-            xmin = {xmin}
-            xmax = {xmax}
-            {sizelbl}: size = {len(type.labels)!s}"""
+        class = {tclass}
+        name = "{type.type}"
+        xmin = {xmin}
+        xmax = {xmax}
+        {sizelbl}: size = {len(type.labels)!s}"""
         if len(type.labels) > 0:
             tier += "\n        " + self._to_praat_long_label_str(
                 type.labels, nodes, is_point_tier
@@ -104,7 +104,7 @@ class WriteTextGrid(UseCase):
         return tier
 
     def _to_praat_short_label_str(
-        self, labels: list[AnnotationLabel], nodes: dict[int, float]
+        self, labels: list[AnnotationLabel], nodes: dict[int, float], is_point_tier: bool
     ) -> str:
         """
         Return a string representing the labels of a tier in praat_short format.
@@ -112,11 +112,11 @@ class WriteTextGrid(UseCase):
 
         ts = [
             f"{nodes[label.s_node]}\n{nodes[label.e_node]}"
-            if label.e_node != label.s_node
+            if not is_point_tier
             else f"{nodes[label.s_node]}"
             for label in labels
         ]
-        replacements = [('"', '""'), (r"\Z", '"')]
+        replacements = [('"', '""'), (r'^', '"'), (r"\Z", '"')]
         texts = []
         for label in labels:
             text = label.label
@@ -143,7 +143,7 @@ class WriteTextGrid(UseCase):
 
         ts = [
             f"{intvl.format(idx + 1)}xmin = {nodes[label.s_node]}\n            xmax = {nodes[label.e_node]}"
-            if label.e_node != label.s_node
+            if not is_point_tier
             else f"{intvl.format(idx + 1)}number = {nodes[label.s_node]}"
             for idx, label in enumerate(labels)
         ]
@@ -157,7 +157,7 @@ class WriteTextGrid(UseCase):
 
         label_name = "mark" if is_point_tier else "text"
         return "\n        ".join(
-            [f"{t}\n            {label_name} = {txt}" for t, txt in zip(ts, texts)]
+            [f'{t}\n            {label_name} = "{txt}' for t, txt in zip(ts, texts)]
         )
 
     def __call__(
@@ -186,7 +186,7 @@ class WriteTextGrid(UseCase):
             try:
                 if not is_point_tier:
                     assert all(
-                        annotation.nodes[label.e_node] > annotation.nodes[label.s_node]
+                        annotation.nodes[label.e_node] >= annotation.nodes[label.s_node]
                         for label in labels
                     )
             except AssertionError:
@@ -228,3 +228,4 @@ class WriteTextGrid(UseCase):
 
         with open(file_path, "w", encoding=codec) as out:
             out.write(tg)
+            yield
