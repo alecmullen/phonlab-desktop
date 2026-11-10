@@ -27,7 +27,7 @@ class EditAudio(UseCaseSync[EditResult | None]):
         window = ref_channel.x[lo : hi + 1].astype(np.float64)
         signs = np.sign(window)
         signs[signs == 0] = 1
-        crossing_offsets = np.where(np.diff(signs) != 0)[0]
+        crossing_offsets = np.where(np.diff(signs) > 0)[0]
         if len(crossing_offsets) == 0:
             return index  # no crossing nearby; leave the original position untouched
 
@@ -57,8 +57,8 @@ class EditAudio(UseCaseSync[EditResult | None]):
             or edit_command.end_time <= edit_command.start_time
         ):
             return None
-        start_idx = int(edit_command.start_time * fs)
-        end_idx = int(edit_command.end_time * fs)
+        start_idx = int(round(edit_command.start_time * fs))
+        end_idx = int(round(edit_command.end_time * fs))
 
         if settings.cut_and_paste_at_zero_crossings:
             snapped_start = self._nearest_zero_crossing(ref_channel, start_idx)

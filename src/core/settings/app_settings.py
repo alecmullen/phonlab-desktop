@@ -7,7 +7,7 @@ class AppSettings:
     settings UI yet); a future Settings menu should just read/write the
     fields on the shared `settings` instance below."""
 
-    cut_and_paste_at_zero_crossings: bool = True
+    cut_and_paste_at_zero_crossings: bool = False
 
     enable_annotation = True
 
