@@ -5,13 +5,14 @@ import pytest
 from PyQt6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 from pytestqt.qtbot import QtBot
 
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
 from ui.annotation.annotation_plot import AnnotationPlot
+from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_special_dialog import (
@@ -19,6 +20,7 @@ from ui.document.component.paste_special_dialog import (
     PasteSpecialDialog,
 )
 from ui.document.component.resample_dialog import ResampleAudioDialog
+from ui.document.component.save_textgrid_dialog import SaveTextGridDialog
 from ui.document.component.scale_dialog import ScaleAudioDialog
 from ui.document.document_view import PLOT_ROW_SPACING, DocumentView
 from ui.document.document_view_model import DocumentViewModel
@@ -1154,3 +1156,93 @@ def test_delete_button_mouse_click_converts_to_mono(
 
     assert stereo_loaded_view.view_model.stereo_channels() is None
     assert len(stereo_loaded_view.document_plots) == 1
+
+
+# --------------------------- save TextGrid ---------------------------
+
+
+def stub_dialog(monkeypatch: pytest.MonkeyPatch, result: object, args: list):
+    def get_options(*a: object) -> object:
+        args.append(a)
+        return result
+
+    monkeypatch.setattr(SaveTextGridDialog, "get_options", staticmethod(get_options))
+
+
+def test_save_textgrid_action_opens_save_textgrid_dialog(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(view, "open_save_textgrid", lambda: calls.append(True))
+
+    view.on_state_change(SaveToTextGridAction())
+
+    assert calls == [True]
+
+
+def test_open_save_textgrid_defaults_to_origin_path_and_file_stem(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    view.origin_path = "/data/clip.wav"
+    view.view_model.file_stem = "clip"
+    args = []
+    stub_dialog(monkeypatch, None, args)
+
+    view.open_save_textgrid()
+
+    assert args == [("/data/clip.wav", "clip", view)]
+
+
+def test_open_save_textgrid_uses_empty_defaults_without_origin_or_stem(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    args = []
+    stub_dialog(monkeypatch, None, args)
+
+    view.open_save_textgrid()
+
+    assert args[0][:2] == ("", "")
+
+
+def test_open_save_textgrid_saves_with_chosen_options(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    stub_dialog(monkeypatch, ("/tmp/out.TextGrid", "long"), [])
+    calls = []
+    view.view_model.save_textgrid = lambda *args: calls.append(args)
+
+    view.open_save_textgrid()
+
+    assert calls == [("/tmp/out.TextGrid", "long")]
+
+
+def test_open_save_textgrid_does_not_save_when_dialog_cancelled(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    stub_dialog(monkeypatch, None, [])
+    calls = []
+    view.view_model.save_textgrid = lambda *args: calls.append(args)
+
+    view.open_save_textgrid()
+
+    assert calls == []
+
+
+def test_open_save_textgrid_reports_runtime_error(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    stub_dialog(monkeypatch, ("/tmp/out.TextGrid", "short"), [])
+
+    def fail(*args: object):
+        raise RuntimeError("overlapping intervals")
+
+    view.view_model.save_textgrid = fail
+    errors = []
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda *a: errors.append(a))
+    )
+
+    view.open_save_textgrid()
+
+    assert len(errors) == 1
+    assert "overlapping intervals" in errors[0][2]

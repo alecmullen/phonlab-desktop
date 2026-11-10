@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QMessageBox,
     QProgressBar,
     QScrollBar,
     QVBoxLayout,
@@ -21,6 +22,7 @@ from PyQt6.QtWidgets import (
 
 from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
+from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
@@ -29,6 +31,7 @@ from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.paste_special_dialog import PasteSpecialDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
+from ui.document.component.save_textgrid_dialog import SaveTextGridDialog
 from ui.document.component.scale_dialog import ScaleAudioDialog
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
@@ -228,6 +231,8 @@ class DocumentView(QWidget):
             self.open_filter_dialog()
         elif isinstance(model, AudioInfoAction):
             self.open_audio_info()
+        elif isinstance(model, SaveToTextGridAction):
+            self.open_save_textgrid()
 
     def load_audio(self, filename: str, options: AudioOpenOptionsState):
         """Load an audio file into this document"""
@@ -819,6 +824,21 @@ class DocumentView(QWidget):
             origin_name,
             self,
         )
+
+    def open_save_textgrid(self):
+        options = SaveTextGridDialog.get_options(
+            self.origin_path or "", self.view_model.file_stem or "", self
+        )
+        if options is None:
+            return
+        try:
+            self.view_model.save_textgrid(*options)
+        except RuntimeError as err:
+            QMessageBox.critical(
+                self,
+                self.tr("Save TextGrid"),
+                self.tr("Could not save the file:\n{}").format(err),
+            )
 
     def cleanup(self):
         """Clean up resources when closing document"""

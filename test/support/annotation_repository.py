@@ -20,4 +20,7 @@ class SeedableAnnotationRepository(InMemAnnotationRepository):
             type_id = type.id if type.id is not None else idx
             self.types[id].append(replace(type, id=type_id, labels=list(type.labels)))
             self._next_type_id = max(self._next_type_id, type_id + 1)
+            for label in self.types[id][-1].labels:
+                if label.id is not None:
+                    self._next_label_id = max(self._next_label_id, label.id + 1)
         return self.get_annotation_by_id(id)
