@@ -4,6 +4,8 @@ from types import MappingProxyType
 
 import pytest
 from pytestqt.qtbot import QtBot
+from support.annotation_repository import SeedableAnnotationRepository
+from support.job_manager import FakeJobManager
 from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
@@ -11,6 +13,7 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
+from res.constants import SAME_NODE_THRESHOLD
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import (
@@ -182,12 +185,26 @@ item []:
 """
 
 
-def test_parse_textgrid_loads_annotation_state(tmp_path: Path):
+def run_parse_job(view_model: AnnotationViewModel):
+    """Runs the recorded parse job synchronously, as the worker thread would"""
+    job = view_model.job_managers["parse_textgrid"].jobs[0]
+    try:
+        result = next(job.task)
+    except Exception as err:  # noqa: BLE001
+        job.on_error(err)
+    else:
+        job.on_success(result)
+
+
+def test_parse_textgrid_loads_annotation_state(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
     view_model = make_view_model({}, 0.0, 1.0)
     textgrid = tmp_path / "sample.TextGrid"
     textgrid.write_text(TEXTGRID_FIXTURE)
 
-    view_model.parse_textgrid(str(textgrid))
+    view_model.parse_textgrid(str(textgrid), "sample")
+    run_parse_job(view_model)
 
     assert {node.x for node in view_model.annotation_state.nodes.values()} == {
         0.0,
@@ -235,14 +252,17 @@ item []:
 """
 
 
-def test_parse_textgrid_shows_status_message_on_invalid_tier_type(tmp_path: Path):
+def test_parse_textgrid_shows_status_message_on_invalid_tier_type(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
     view_model = make_view_model({}, 0.0, 1.0)
     textgrid = tmp_path / "broken.TextGrid"
     textgrid.write_text(BROKEN_TIER_TEXTGRID)
     received = []
     view_model.subscribe(received.append)
 
-    view_model.parse_textgrid(str(textgrid))
+    view_model.parse_textgrid(str(textgrid), "sample")
+    run_parse_job(view_model)
 
     status_messages = [s for s in received if isinstance(s, StatusMessageState)]
     assert len(status_messages) == 1
@@ -273,18 +293,24 @@ def make_annotated_view_model(
     start: float = 0.0,
     end: float = 3.0,
 ) -> AnnotationViewModel:
-    view_model = make_annotation_view_model()
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(repository=repository)
     view_model.window_state = (start, end)
     view_model.set_annotation_state(
-        Annotation(
-            nodes=nodes,
-            types=[
-                AnnotationType(
-                    f"tier{idx}",
-                    [AnnotationLabel(id, *label) for id, label in enumerate(labels)],
-                )
-                for idx, labels in enumerate(tiers)
-            ],
+        repository.seed(
+            Annotation(
+                nodes=nodes,
+                types=[
+                    AnnotationType(
+                        f"tier{idx}",
+                        [
+                            AnnotationLabel(*label, id=id)
+                            for id, label in enumerate(labels)
+                        ],
+                    )
+                    for idx, labels in enumerate(tiers)
+                ],
+            )
         )
     )
     return view_model
@@ -346,9 +372,7 @@ def test_delete_end_node_with_attached_label_shows_status_message(
 
     view_model.delete_node(node)
 
-    assert received == [
-        StatusMessageState("Cannot delete end node with attached label")
-    ]
+    assert received == [StatusMessageState("Cannot delete node due to attached labels")]
     assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "b")]
 
 
@@ -356,7 +380,7 @@ def test_create_label_from_selection_adds_label_and_emits(qtbot: QtBot):
     view_model = make_annotated_view_model({0: 0.0, 1: 3.0}, [[], [(0, 1, "a")]])
 
     with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
-        view_model.create_label_from_selection(0, 1.0, 2.0)
+        view_model.create_label_from_selection(0, 1.0, 2.0, SAME_NODE_THRESHOLD)
 
     nodes = view_model.annotation_state.nodes
     labels = view_model.annotation_state.types[0].labels
@@ -387,3 +411,62 @@ def test_create_label_from_too_short_selection_shows_status_message(qtbot: QtBot
     assert len(received) == 1
     assert isinstance(received[0], StatusMessageState)
     assert view_model.annotation_state is previous
+
+
+def make_persisting_view_model() -> tuple[
+    AnnotationViewModel, SeedableAnnotationRepository
+]:
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(repository=repository)
+    view_model.window_state = (0.0, 2.0)
+    view_model.set_annotation_state(
+        repository.seed(
+            Annotation(
+                nodes={0: 0.0, 1: 1.0, 2: 2.0},
+                types=[
+                    AnnotationType(
+                        "tier0",
+                        [
+                            AnnotationLabel(0, 1, "a", id=0),
+                            AnnotationLabel(1, 2, "b", id=1),
+                        ],
+                    )
+                ],
+            )
+        )
+    )
+    return view_model, repository
+
+
+def test_change_label_text_updates_state_and_repository():
+    view_model, repository = make_persisting_view_model()
+    label = view_model.annotation_state.types[0].labels[1]
+
+    view_model.change_label_text(label, "changed")
+
+    assert label_spans(view_model, 0) == [(0, 1, "a"), (1, 2, "changed")]
+    stored = repository.get_annotation_by_id(0)
+    assert [l.label for l in stored.types[0].labels] == ["a", "changed"]
+
+
+def test_change_node_state_persists_node_position(qtbot: QtBot):
+    view_model, repository = make_persisting_view_model()
+    node = view_model.annotation_state.nodes[1]
+
+    view_model.change_node_state(node, 1.5)
+
+    assert repository.get_annotation_by_id(0).nodes[1] == 1.5
+
+
+def test_parse_textgrid_sets_loading_state_until_job_finishes(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
+    view_model = make_view_model({}, 0.0, 1.0)
+    textgrid = tmp_path / "sample.TextGrid"
+    textgrid.write_text(TEXTGRID_FIXTURE)
+
+    view_model.parse_textgrid(str(textgrid), "sample")
+    assert view_model.loading_state.is_loading is True
+
+    run_parse_job(view_model)
+    assert view_model.loading_state.is_loading is False

@@ -1,6 +1,5 @@
 from collections.abc import Generator
 
-import pytest
 from pytestqt.qtbot import QtBot
 
 from ui.base.job import Job
@@ -61,14 +60,13 @@ def test_run_does_nothing_and_emits_finished_when_no_job_queued(qtbot: QtBot):
         worker.run()
 
 
-def test_run_emits_error_and_reraises_when_task_raises(qtbot: QtBot):
+def test_run_emits_error_when_task_raises(qtbot: QtBot):
     results = []
     errors = []
     boom = ValueError("boom")
     worker = make_worker(fake_task([1, 2], error=boom), results, errors)
 
-    with pytest.raises(ValueError):
-        worker.run()
+    worker.run()
 
     assert results == [1, 2]
     assert errors == [boom]

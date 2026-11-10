@@ -5,6 +5,7 @@ import pytest
 from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QMouseEvent, QShowEvent
 from pytestqt.qtbot import QtBot
+from support.annotation_repository import SeedableAnnotationRepository
 from support.view_models import make_annotation_view_model
 
 from core.annotation.entity.annotation import (
@@ -76,7 +77,7 @@ def test_populate_adds_visible_nodes(qtbot: QtBot):
 
     plot.populate(MOCK_ANNOTATION_STATE)
 
-    assert {node.node for node in plot.visible_nodes} == {1, 2, 3}
+    assert {node.id for node in plot.visible_nodes} == {1, 2, 3}
 
 
 def test_populate_with_no_types_sets_empty_y_range_and_no_visible_nodes(qtbot: QtBot):
@@ -200,7 +201,7 @@ def test_view_model_state_change_triggers_populate(qtbot: QtBot):
 
     state = Annotation(
         nodes={0: 0.0, 1: 1.0},
-        types=[AnnotationType("word", [AnnotationLabel(0, 0, 1, "hi")])],
+        types=[AnnotationType("word", [AnnotationLabel(0, 1, "hi", id=0)])],
     )
 
     view_model.set_annotation_state(state)
@@ -713,11 +714,15 @@ def test_create_label_from_selection_threshold_grows_when_zoomed_out(qtbot: QtBo
 def test_create_label_from_selection_snaps_to_node_within_pixel_threshold(
     qtbot: QtBot,
 ):
-    view_model = make_annotation_view_model()
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(repository=repository)
     view_model.window_state = (0.0, 4.0)
     view_model.set_annotation_state(
-        Annotation(
-            nodes={0: 0.0, 1: 1.0, 2: 3.0, 3: 4.0}, types=[AnnotationType("w", [])]
+        repository.seed(
+            Annotation(
+                nodes={0: 0.0, 1: 1.0, 2: 3.0, 3: 4.0},
+                types=[AnnotationType("w", [])],
+            )
         )
     )
     plot, _layout = _shown_plot(qtbot, view_model)

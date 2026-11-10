@@ -35,9 +35,8 @@ class JobWorker(QRunnable):
                             job.task.close()
                             self.signals.finished.emit()
                             break
-                except Exception as err:
+                except Exception as err:  # noqa: BLE001
                     self.signals.error.emit(err)
-                    raise
             else:
                 self.signals.finished.emit()
                 break

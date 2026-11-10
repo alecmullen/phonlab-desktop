@@ -26,6 +26,8 @@ from ui.annotation.state.annotation_state import AnnotationState
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
+from ui.common.loading_overlay import LoadingOverlay
+from ui.document.state.load_progress_state import LoadProgressState
 
 
 class AnnotationPlot(DocumentPlot):
@@ -48,6 +50,8 @@ class AnnotationPlot(DocumentPlot):
         self.set_up_menu()
         self.ctrlMenu.menuAction().setVisible(False)
 
+        self.loading_overlay = LoadingOverlay(self)
+
         self.context_pos: QPointF | None = None
 
         self.visible_nodes: list[AnnotationNodeState] = []
@@ -61,6 +65,8 @@ class AnnotationPlot(DocumentPlot):
         self.tier_selection = TierSelectionIndicator(self)
 
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+
+        self.toggle_loading_overlay(self.view_model.loading_state.is_loading)
 
     def set_up_menu(self):
         shortcut = QKeySequence("Ctrl+L")
@@ -88,6 +94,8 @@ class AnnotationPlot(DocumentPlot):
     def on_state_change(self, model: State):
         if isinstance(model, AnnotationState):
             self.populate(model)
+        if isinstance(model, LoadProgressState):
+            self.toggle_loading_overlay(model.is_loading)
 
     def show_time_axis(self, show: bool):
         if show:
@@ -97,6 +105,12 @@ class AnnotationPlot(DocumentPlot):
     def showEvent(self, a0: QShowEvent):
         super().showEvent(a0)
         self.populate(self.view_model.annotation_view_state)
+
+    def toggle_loading_overlay(self, is_loading: bool):
+        if is_loading:
+            self.loading_overlay.show()
+        else:
+            self.loading_overlay.hide()
 
     def clear_annotations(self):
         for item in self.allChildItems():
@@ -178,7 +192,7 @@ class AnnotationPlot(DocumentPlot):
         if a0 is None:
             return
         if self.dragging_node is not None:
-            self.selected_node = self.dragging_node.node
+            self.selected_node = self.dragging_node.id
             self.dragging_node = None
             self.populate(self.view_model.annotation_view_state)
             a0.accept()
@@ -216,8 +230,8 @@ class AnnotationPlot(DocumentPlot):
             a0.ignore()
 
     @pyqtSlot(int, str)
-    def on_label_edit(self, label_id: int, text: str):
-        self.view_model.change_label_text(label_id, text)
+    def on_label_edit(self, label: AnnotationLabelState, text: str):
+        self.view_model.change_label_text(label, text)
 
     @pyqtSlot(object)
     def on_mouse_moved(self, pos: QPointF):
@@ -248,9 +262,9 @@ class AnnotationPlot(DocumentPlot):
             return
 
         if self.context_pos is not None:
-            type = int(self.context_pos.y())
+            type_idx = int(self.context_pos.y())
         elif self.selected_type is not None:
-            type = self.selected_type
+            type_idx = self.selected_type
         else:
             return
 
@@ -258,5 +272,5 @@ class AnnotationPlot(DocumentPlot):
 
         start, end = self.selection_region.getRegion()
         self.view_model.create_label_from_selection(
-            type, start, end, pixel_width * SAME_NODE_PIXEL_THRESH
+            type_idx, start, end, pixel_width * SAME_NODE_PIXEL_THRESH
         )

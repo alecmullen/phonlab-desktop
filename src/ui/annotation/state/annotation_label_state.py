@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field, replace
 
+from core.annotation.entity.annotation import AnnotationLabel
 from res.constants import LABEL_HEIGHT_RATIO
 from ui.base.state import State
 
 
 @dataclass(frozen=True)
 class AnnotationLabelState(State):
-    id: int = 0
+    id: int | None = None
 
     s_node: int = 0
     e_node: int = 0
@@ -15,6 +16,12 @@ class AnnotationLabelState(State):
     is_visible: bool = False
     pos: tuple[float, float] = field(default_factory=tuple)
     size: tuple[float, float] = field(default_factory=tuple)
+
+
+def to_label(label_state: AnnotationLabelState) -> AnnotationLabel:
+    return AnnotationLabel(
+        label_state.s_node, label_state.e_node, label_state.label, label_state.id
+    )
 
 
 def update_label_state(

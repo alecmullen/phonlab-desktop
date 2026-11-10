@@ -20,9 +20,9 @@ from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
+from ui.main.component.open_audio_dialog import OpenAudioDialog
+from ui.main.component.save_audio_dialog import SaveOptions
 from ui.main.main_window import MainWindow
-from ui.main.open_audio_dialog import OpenAudioDialog
-from ui.main.save_audio_dialog import SaveOptions
 from ui.main.state.audio_open_options import AudioOpenOptionsState
 
 
@@ -98,7 +98,7 @@ def test_open_files_creates_a_tab_and_loads_audio(
         staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
     )
 
-    main_window.open_files([str(wav_path)])
+    main_window.open_files([("sound", str(wav_path), None)], str(tmp_path))
 
     assert main_window.tab_widget.count() == 1
     assert main_window.tab_widget.tabText(0) == "sound.wav"
@@ -136,12 +136,16 @@ def test_open_files_also_loads_a_paired_textgrid(
         staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
     )
 
-    main_window.open_files([str(wav_path), str(textgrid_path)])
+    main_window.open_files(
+        [("sound", str(wav_path), str(textgrid_path))], str(tmp_path)
+    )
 
     doc = main_window.get_current_document()
+    annotation_view_model = doc.view_model.annotation_view_model
+    job = annotation_view_model.job_managers["parse_textgrid"].jobs[0]
+    job.on_success(next(job.task))
     assert {
-        node.x
-        for node in doc.view_model.annotation_view_model.annotation_state.nodes.values()
+        node.x for node in annotation_view_model.annotation_state.nodes.values()
     } == {0.0, 1.0}
 
 
@@ -154,18 +158,19 @@ def test_open_files_does_nothing_when_dialog_is_cancelled(
         OpenAudioDialog, "get_options", staticmethod(lambda filename, parent=None: None)
     )
 
-    main_window.open_files([str(wav_path)])
+    main_window.open_files([("sound", str(wav_path), None)], str(tmp_path))
 
     assert main_window.tab_widget.count() == 0
 
 
-def test_open_files_does_nothing_without_a_wav_file(
+def test_open_single_document_raises_without_a_wav_file(
     main_window: MainWindow, tmp_path: Path
 ):
     textgrid_path = tmp_path / "only.TextGrid"
     textgrid_path.write_text("")
 
-    main_window.open_files([str(textgrid_path)])
+    with pytest.raises(ValueError):
+        main_window.open_single_document([str(textgrid_path)])
 
     assert main_window.tab_widget.count() == 0
 
@@ -185,7 +190,7 @@ def test_open_files_closes_splash_screen(
         "FakeSplash", (), {"close": lambda self: closed.append(True)}
     )()
 
-    main_window.open_files([str(wav_path)])
+    main_window.open_files([("sound", str(wav_path), None)], str(tmp_path))
 
     assert closed == [True]
     assert main_window.splash is None

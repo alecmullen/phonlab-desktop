@@ -11,7 +11,7 @@ class AnnotationNodeExtentState(State):
 
 @dataclass(frozen=True)
 class AnnotationNodeState(State):
-    node: int = 0
+    id: int = 0
     x: float = 0.0
     extents: list[AnnotationNodeExtentState] = field(default_factory=list)
 

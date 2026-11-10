@@ -2,7 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from core.annotation.entity.annotation import AnnotationLabel
+from core.annotation.entity.annotation import Annotation, AnnotationLabel
+from core.annotation.repository.in_mem_annotation_repository import (
+    InMemAnnotationRepository,
+)
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from res.constants import SAME_NODE_THRESHOLD
 
@@ -106,35 +109,45 @@ def write_textgrid(
     return str(path)
 
 
+def parse(path: Path) -> Annotation:
+    """ParseTextGrid is a generator; the annotation is its single yielded value"""
+    return next(ParseTextGrid(InMemAnnotationRepository())(str(path), "sample"))
+
+
+def label_times(annotation: Annotation, tier: int) -> list[tuple]:
+    nodes = annotation.nodes
+    return [
+        (nodes[label.s_node], nodes[label.e_node], label.label)
+        for label in annotation.types[tier].labels
+    ]
+
+
 # --------------------------- invoke ---------------------------
 
 
 def test_invoke_parses_single_tier_textgrid(tmp_path: Path):
     path = write_textgrid(tmp_path, SIMPLE_TEXTGRID)
 
-    result = ParseTextGrid()(path)
+    result = parse(path)
 
     assert result.nodes == {0: 0.0, 1: 0.5, 2: 1.0}
     assert len(result.types) == 1
     assert result.types[0].type == "word"
     assert result.types[0].labels == [
-        AnnotationLabel(0, 0, 1, "hello"),
-        AnnotationLabel(1, 1, 2, "world"),
+        AnnotationLabel(0, 1, "hello", id=0),
+        AnnotationLabel(1, 2, "world", id=1),
     ]
 
 
 def test_invoke_parses_multiple_tiers_sharing_nodes(tmp_path: Path):
     path = write_textgrid(tmp_path, TWO_TIER_TEXTGRID)
 
-    result = ParseTextGrid()(path)
+    result = parse(path)
 
-    assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
+    assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
     assert [t.type for t in result.types] == ["word", "phone"]
-    assert result.types[0].labels == [AnnotationLabel(0, 0, 2, "hi")]
-    assert result.types[1].labels == [
-        AnnotationLabel(0, 0, 1, "h"),
-        AnnotationLabel(1, 1, 2, "ay"),
-    ]
+    assert label_times(result, 0) == [(0.0, 1.0, "hi")]
+    assert label_times(result, 1) == [(0.0, 0.4, "h"), (0.4, 1.0, "ay")]
 
 
 def test_invoke_merges_boundaries_within_threshold_across_tiers(tmp_path: Path):
@@ -145,24 +158,24 @@ def test_invoke_merges_boundaries_within_threshold_across_tiers(tmp_path: Path):
     )
     path = write_textgrid(tmp_path, content)
 
-    result = ParseTextGrid()(path)
+    result = parse(path)
 
     # the "h"/"ay" boundary (0.4 vs 0.4 + threshold/2) should collapse to one node
-    assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
+    assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
 
 
 def test_invoke_parses_point_tier(tmp_path: Path):
     path = write_textgrid(tmp_path, POINT_TIER_TEXTGRID)
 
-    result = ParseTextGrid()(path)
+    result = parse(path)
 
     assert result.nodes == {0: 0.25, 1: 0.75}
     assert len(result.types) == 1
     assert result.types[0].type == "mark"
     # a point's start and end node are the same, since it has zero duration
     assert result.types[0].labels == [
-        AnnotationLabel(0, 0, 0, "a"),
-        AnnotationLabel(1, 1, 1, "b"),
+        AnnotationLabel(0, 0, "a", id=0),
+        AnnotationLabel(1, 1, "b", id=1),
     ]
 
 
@@ -170,25 +183,22 @@ def test_invoke_raises_parse_text_grid_error_for_unknown_tier_type(tmp_path: Pat
     path = write_textgrid(tmp_path, UNKNOWN_TIER_TEXTGRID)
 
     with pytest.raises(ParseTextGridError):
-        ParseTextGrid()(path)
+        parse(path)
 
 
 def test_invoke_raises_parse_text_grid_error_for_truncated_file(tmp_path: Path):
     path = write_textgrid(tmp_path, "xmin = 0\nxmax = 1.0\n")
 
     with pytest.raises(ParseTextGridError):
-        ParseTextGrid()(path)
+        parse(path)
 
 
 def test_invoke_reads_utf_16_file(tmp_path: Path):
     path = write_textgrid(tmp_path, TWO_TIER_TEXTGRID, encoding="utf-16")
 
-    result = ParseTextGrid()(path)
+    result = parse(path)
 
-    assert result.nodes == {0: 0.0, 1: 0.4, 2: 1.0}
+    assert sorted(result.nodes.values()) == [0.0, 0.4, 1.0]
     assert [t.type for t in result.types] == ["word", "phone"]
-    assert result.types[0].labels == [AnnotationLabel(0, 0, 2, "hi")]
-    assert result.types[1].labels == [
-        AnnotationLabel(0, 0, 1, "h"),
-        AnnotationLabel(1, 1, 2, "ay"),
-    ]
+    assert label_times(result, 0) == [(0.0, 1.0, "hi")]
+    assert label_times(result, 1) == [(0.0, 0.4, "h"), (0.4, 1.0, "ay")]

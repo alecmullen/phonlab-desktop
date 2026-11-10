@@ -1028,9 +1028,19 @@ def test_select_and_play_selects_range_and_plays_it(view_model: DocumentViewMode
 def test_parse_textgrid_delegates_to_annotation_view_model(
     view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
 ):
+    view_model.file_stem = "a"
+
     view_model.parse_textgrid("a.TextGrid")
 
-    annotation_view_model.parse_textgrid.assert_called_once_with("a.TextGrid")
+    annotation_view_model.parse_textgrid.assert_called_once_with("a.TextGrid", "a")
+
+
+def test_parse_textgrid_does_nothing_without_file_stem(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.parse_textgrid("a.TextGrid")
+
+    annotation_view_model.parse_textgrid.assert_not_called()
 
 
 def test_window_change_updates_annotation_window_in_seconds(

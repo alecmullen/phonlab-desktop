@@ -21,9 +21,9 @@ from res.constants import (
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
+from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.base.view_model import ViewModel
-from ui.base.view_model_factory import ViewModelFactory
 from ui.document.state.audio_channel_state import (
     AudioChannelState,
     AudioState,
@@ -69,8 +69,12 @@ class DocumentViewModel(ViewModel):
         prep_audio: PrepAudio,
         filter_audio: FilterAudio,
         save_audio: SaveAudio,
+        file_stem: str | None = None,
+        dir_path: str | None = None,
     ):
         super().__init__()
+
+        self.file_stem = file_stem
 
         self.raw_audio_state: AudioState = AudioState()
         self.audio_state: AudioState = AudioState()
@@ -91,7 +95,9 @@ class DocumentViewModel(ViewModel):
 
         self.audio_wave_view_models: list[AudioWaveViewModel] = []
         self.spectrogram_view_model = view_model_factory.create(SpectrogramViewModel)
-        self.annotation_view_model = view_model_factory.create(AnnotationViewModel)
+        self.annotation_view_model = view_model_factory.create(
+            AnnotationViewModel, file_stem, dir_path
+        )
 
         self.state_changed.connect(self.on_state_changed)
         self.spectrogram_view_model.state_changed.connect(self.on_sgram_state_change)
@@ -1361,8 +1367,9 @@ class DocumentViewModel(ViewModel):
             return
         self.undo_stack.append(cmd)
 
-    def parse_textgrid(self, path: str):
-        self.annotation_view_model.parse_textgrid(path)
+    def parse_textgrid(self, file_path: str):
+        if self.file_stem is not None:
+            self.annotation_view_model.parse_textgrid(file_path, self.file_stem)
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):
