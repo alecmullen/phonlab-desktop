@@ -12,6 +12,7 @@ from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
+from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.save_audio.save_audio import SaveAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
@@ -118,6 +119,7 @@ class ViewModelFactoryImpl(ViewModelFactory):
             use_case_factory.provide(UpdateNode),
             use_case_factory.provide(DeleteNode),
             use_case_factory.provide(ParseTextGrid),
+            use_case_factory.provide(WriteTextGrid),
             use_case_factory.provide(LoadAnnotation),
             file_stem,
         )

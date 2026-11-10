@@ -744,6 +744,9 @@ class DocumentViewModel(ViewModel):
             raise RuntimeError("Cannot save audio that is not loaded")
         self.save_audio_use_case(path, channels, target_fs, scale)
 
+    def save_textgrid(self, file_path: str, tg_type: str):
+        self.annotation_view_model.write_textgrid(file_path, tg_type)
+
     def toggle_channel_active(self, idx: int, is_active: bool):
         """Activate/deactivate channel `idx` for playback/spectrogram
         purposes - refused if it would leave no channel active."""

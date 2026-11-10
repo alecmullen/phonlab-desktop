@@ -10,6 +10,7 @@ from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
+from core.parse_textgrid.write_textgrid import TextgridType, WriteTextGrid
 from ui.annotation.state.annotation_label_state import AnnotationLabelState, to_label
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
@@ -34,6 +35,7 @@ class AnnotationViewModel(ViewModel):
         update_node: UpdateNode,
         delete_node: DeleteNode,
         parse_text_grid: ParseTextGrid,
+        write_text_grid: WriteTextGrid,
         load_annotation: LoadAnnotation,
         filestem: str | None = None,
     ):
@@ -56,6 +58,7 @@ class AnnotationViewModel(ViewModel):
         self.update_node_use_case = update_node
         self.delete_node_use_case = delete_node
         self.parse_textgrid_use_case = parse_text_grid
+        self.write_textgrid_use_case = write_text_grid
 
     def change_node_state(self, drag_node: AnnotationNodeState, new_pos: float):
         new_pos = max(self.window_state[0], new_pos)
@@ -134,6 +137,32 @@ class AnnotationViewModel(ViewModel):
         self.launch_task(
             "parse_textgrid",
             self.parse_textgrid_use_case(file_path, file_stem),
+            on_success,
+            on_error,
+        )
+
+    def write_textgrid(self, file_path: str, tg_type: str):
+        try:
+            tg_type = TextgridType(tg_type)
+        except ValueError:
+            raise ValueError("TextGrid type parameter must be 'short' or 'long'")
+
+        @pyqtSlot()
+        def on_success():
+            self.state_changed.emit(StatusMessageState(self.tr("TextGrid saved")))
+
+        @pyqtSlot(object)
+        def on_error(error: Exception):
+            self.state_changed.emit(
+                StatusMessageState(self.tr("TextGrid failed to save"))
+            )
+            print(error)
+
+        self.launch_task(
+            "write_textgrid",
+            self.write_textgrid_use_case(
+                to_annotation(self.annotation_state), file_path, tg_type
+            ),
             on_success,
             on_error,
         )

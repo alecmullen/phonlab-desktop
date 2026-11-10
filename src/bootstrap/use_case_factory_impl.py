@@ -10,6 +10,7 @@ from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
+from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.save_audio.save_audio import SaveAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
@@ -37,6 +38,7 @@ class UseCaseFactory:
         self.delete_node = DeleteNode(self.annotation_repository)
         self.load_annotation = LoadAnnotation(self.annotation_repository)
         self.parse_textgrid = ParseTextGrid(self.annotation_repository)
+        self.write_textgrid = WriteTextGrid()
 
     def provide[T](
         self,
@@ -73,6 +75,8 @@ class UseCaseFactory:
             use_case = self.load_annotation
         if use_case_type is ParseTextGrid:
             use_case = self.parse_textgrid
+        if use_case_type is WriteTextGrid:
+            use_case = self.write_textgrid
 
         if use_case is None:
             raise TypeError(f"No provider method for {use_case_type!s} found")

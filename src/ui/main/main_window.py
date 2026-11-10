@@ -21,6 +21,7 @@ from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
 from ui.main.component.open_audio_dialog import OpenAudioDialog
 from ui.main.component.save_audio_dialog import SaveAudioDialog
+from ui.main.component.save_textgrid_dialog import SaveTextGridDialog
 from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
@@ -80,6 +81,12 @@ class MainWindow(QMainWindow):
         )
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_action.triggered.connect(self.save_audio)
+
+        self.save_action = QAction(self.tr("Save to TextGrid…"), self)
+        self.save_action.setStatusTip(
+            self.tr("Save the current document's annotations to a TextGrid")
+        )
+        self.save_action.triggered.connect(self.save_textgrid)
 
         self.audio_info_action = QAction(self.tr("Audio &Info"), self)
         self.audio_info_action.setShortcut("Ctrl+I")
@@ -427,6 +434,25 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self,
                 self.tr("Save Audio"),
+                self.tr("Could not save the file:\n{}").format(err),
+            )
+
+    def save_textgrid(self):
+        doc = self.get_current_document()
+        if not doc:
+            return
+        index = self.tab_widget.indexOf(doc)
+        options = SaveTextGridDialog.get_options(
+            doc.origin_path or "", self.tab_widget.tabText(index), self
+        )
+        if options is None:
+            return
+        try:
+            doc.view_model.save_textgrid(*options)
+        except RuntimeError as err:
+            QMessageBox.critical(
+                self,
+                self.tr("Save TextGrid"),
                 self.tr("Could not save the file:\n{}").format(err),
             )
 
