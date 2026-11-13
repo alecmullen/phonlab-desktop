@@ -57,6 +57,15 @@ class AnnotationDataSource(DataSource):
 
         return id
 
+    def clear_annotation(self, annotation_id: int):
+        with self.database.open_session() as session:
+            annotation = session.get(AnnotationEntity, annotation_id)
+            if annotation is None:
+                raise ValueError("Annotation with that id does not exist in database")
+            annotation.types.clear()
+            annotation.nodes.clear()
+            session.commit()
+
     def find_node_by_time(
         self, annotation_id: int, time: float, threshold: float
     ) -> AnnotationNodeEntity | None:

@@ -17,6 +17,7 @@ from core.project.scan_project_files import is_audio_file, is_textgrid_file
 from core.settings.app_settings import settings
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
+from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
@@ -348,6 +349,9 @@ class MainWindow(QMainWindow):
         self.view_model.set_dir_path(dir_path)
         self.save_layout_action.setEnabled(dir_path is not None)
 
+        # Set by a "to all" answer, so the user is asked at most once per call
+        overwrite_all: bool | None = None
+
         for idx, (file_stem, audio_file, annotation_file) in enumerate(paired_files):
             if idx > 4:
                 return
@@ -378,8 +382,30 @@ class MainWindow(QMainWindow):
             # Load the audio file
             doc.load_audio(audio_file, options)
 
-            if annotation_file is not None:
-                doc.load_textgrid(annotation_file)
+            if annotation_file is None:
+                continue
+
+            overwrite = False
+            if doc.view_model.has_annotation():
+                # The database already has an annotation for this file
+                if overwrite_all is None:
+                    answer = ask_overwrite_annotation(
+                        self, annotation_file, allow_all=True
+                    )
+                    if answer == QMessageBox.StandardButton.YesToAll:
+                        overwrite_all = True
+                    elif answer == QMessageBox.StandardButton.NoToAll:
+                        overwrite_all = False
+                    overwrite = answer in (
+                        QMessageBox.StandardButton.Yes,
+                        QMessageBox.StandardButton.YesToAll,
+                    )
+                else:
+                    overwrite = overwrite_all
+                if not overwrite:
+                    continue
+
+            doc.load_textgrid(annotation_file, overwrite)
 
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioState):
         """Open a new tab containing the just-copied/cut samples, without

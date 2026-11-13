@@ -480,3 +480,45 @@ def test_trigger_write_textgrid_dialog_emits_save_action(qtbot: QtBot):
         view_model.trigger_write_textgrid_dialog()
 
     assert isinstance(blocker.args[0], SaveToTextGridAction)
+
+
+def test_opens_empty_for_a_stem_without_annotation():
+    repository = SeedableAnnotationRepository()
+    repository.create_annotation("sample")
+
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+
+    state = view_model.annotation_state
+    assert state.id is not None  # bound to the registered database row
+    assert state.nodes == {}
+    assert state.types == []
+
+
+def test_has_annotation_is_false_for_empty_annotation():
+    assert make_annotation_view_model().has_annotation() is False
+
+
+def test_has_annotation_is_true_for_annotation_loaded_from_repository():
+    repository = SeedableAnnotationRepository()
+    id = repository.create_annotation("sample")
+    repository.create_types(id, [AnnotationType("word", [])])
+
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+
+    assert view_model.has_annotation() is True
+
+
+def test_parse_textgrid_overwrites_loaded_annotation_when_requested(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
+    repository = SeedableAnnotationRepository()
+    id = repository.create_annotation("sample")
+    repository.create_types(id, [AnnotationType("old", [])])
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+    textgrid = tmp_path / "sample.TextGrid"
+    textgrid.write_text(TEXTGRID_FIXTURE)
+
+    view_model.parse_textgrid(str(textgrid), "sample", overwrite=True)
+    run_parse_job(view_model)
+
+    assert [t.type for t in view_model.annotation_state.types] == ["word"]

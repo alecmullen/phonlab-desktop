@@ -150,6 +150,110 @@ def test_open_files_also_loads_a_paired_textgrid(
     } == {0.0, 1.0}
 
 
+def stub_overwrite_scenario(
+    monkeypatch: pytest.MonkeyPatch,
+    has_annotation: bool,
+    *answers: QMessageBox.StandardButton,
+) -> tuple[list, list]:
+    """Every document reports `has_annotation`; returns the (path, overwrite) calls to
+    `load_textgrid` and the TextGrid names the user was asked about"""
+    loaded: list = []
+    asked: list = []
+    remaining = list(answers)
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
+    )
+    monkeypatch.setattr(
+        DocumentViewModel, "has_annotation", lambda self: has_annotation
+    )
+    monkeypatch.setattr(
+        DocumentView,
+        "load_textgrid",
+        lambda self, path, overwrite=False: loaded.append((Path(path).name, overwrite)),
+    )
+
+    def question(
+        parent: object, title: str, text: str, *args: object, **kwargs: object
+    ) -> QMessageBox.StandardButton:
+        asked.append(text)
+        return remaining.pop(0)
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return loaded, asked
+
+
+def paired_files(tmp_path: Path, *stems: str) -> list[tuple[str, str, str]]:
+    return [
+        (stem, str(tmp_path / f"{stem}.wav"), str(tmp_path / f"{stem}.TextGrid"))
+        for stem in stems
+    ]
+
+
+def test_open_files_loads_textgrid_without_asking_when_database_is_empty(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(monkeypatch, False)
+
+    main_window.open_files(paired_files(tmp_path, "a"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", False)]
+    assert asked == []
+
+
+def test_open_files_overwrites_existing_annotation_when_user_says_yes(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.Yes
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", True)]
+    assert asked == ["Overwrite the existing database with annotation from a.TextGrid?"]
+
+
+def test_open_files_skips_textgrid_when_user_says_no(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == [("b.TextGrid", True)]
+    assert len(asked) == 2
+
+
+def test_open_files_asks_once_and_overwrites_all_on_yes_to_all(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.YesToAll
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", True), ("b.TextGrid", True)]
+    assert len(asked) == 1
+
+
+def test_open_files_asks_once_and_skips_all_on_no_to_all(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.NoToAll
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == []
+    assert len(asked) == 1
+
+
 def test_open_files_does_nothing_when_dialog_is_cancelled(
     main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):

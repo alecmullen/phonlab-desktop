@@ -202,3 +202,39 @@ def test_invoke_reads_utf_16_file(tmp_path: Path):
     assert [t.type for t in result.types] == ["word", "phone"]
     assert label_times(result, 0) == [(0.0, 1.0, "hi")]
     assert label_times(result, 1) == [(0.0, 0.4, "h"), (0.4, 1.0, "ay")]
+
+
+def test_invoke_fills_annotation_that_exists_without_content(tmp_path: Path):
+    path = write_textgrid(tmp_path, SIMPLE_TEXTGRID)
+    repository = InMemAnnotationRepository()
+    repository.create_annotation("sample")
+    registered = repository.find_annotation_by_file_stem("sample")
+
+    result = next(ParseTextGrid(repository)(path, "sample"))
+
+    assert result.id == registered.id
+    assert result.types[0].type == "word"
+    assert len(repository.filenames) == 1
+
+
+def test_invoke_raises_when_stem_already_has_annotation_content(tmp_path: Path):
+    path = write_textgrid(tmp_path, SIMPLE_TEXTGRID)
+    repository = InMemAnnotationRepository()
+    parse_use_case = ParseTextGrid(repository)
+    next(parse_use_case(path, "sample"))
+
+    with pytest.raises(ParseTextGridError):
+        next(parse_use_case(path, "sample"))
+
+
+def test_invoke_replaces_existing_annotation_when_overwrite_is_true(tmp_path: Path):
+    repository = InMemAnnotationRepository()
+    parse_use_case = ParseTextGrid(repository)
+    next(parse_use_case(write_textgrid(tmp_path, TWO_TIER_TEXTGRID), "sample"))
+    path = write_textgrid(tmp_path, SIMPLE_TEXTGRID, "other.TextGrid")
+
+    result = next(parse_use_case(path, "sample", overwrite=True))
+
+    assert [type.type for type in result.types] == ["word"]
+    assert len(repository.filenames) == 1
+    assert repository.get_annotation_by_id(result.get_id()) == result

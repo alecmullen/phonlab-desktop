@@ -30,6 +30,9 @@ class DataAnnotationRepository(AnnotationRepository):
             AnnotationEntity(file_stem=file_stem)
         )
 
+    def clear_annotation(self, annotation_id: int) -> None:
+        self.local_datasource.clear_annotation(annotation_id)
+
     def get_annotation_by_id(self, id: int) -> Annotation:
         entity = self.local_datasource.get_annotation_by_id(id)
         return entity_to_annotation(entity)
