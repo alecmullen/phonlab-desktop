@@ -327,3 +327,34 @@ def test_two_resets_make_two_backups(
 
     assert first != second
     assert len(list(tmp_path.glob("*.bak"))) == 2
+
+
+# --------------------------- tier names ---------------------------
+
+
+def test_list_tier_names_is_empty_for_an_empty_database(
+    repository: DataAnnotationRepository,
+):
+    assert repository.list_tier_names() == []
+
+
+def test_list_tier_names_has_each_name_once_across_annotations_sorted(
+    repository: DataAnnotationRepository,
+):
+    first, second = repository.create_annotation("a"), repository.create_annotation("b")
+    repository.create_types(
+        first, [AnnotationType("word", []), AnnotationType("Break", [])]
+    )
+    repository.create_types(
+        second, [AnnotationType("word", []), AnnotationType("phone", [])]
+    )
+
+    assert repository.list_tier_names() == ["Break", "phone", "word"]
+
+
+def test_list_tier_names_includes_tiers_that_have_labels(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)  # a "word" tier with labels
+
+    assert repository.list_tier_names() == ["word"]

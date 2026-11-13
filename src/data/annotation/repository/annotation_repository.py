@@ -43,6 +43,9 @@ class DataAnnotationRepository(AnnotationRepository):
         entity = self.local_datasource.get_annotation_by_id(id)
         return entity_to_annotation(entity)
 
+    def list_tier_names(self) -> list[str]:
+        return self.local_datasource.list_tier_names()
+
     def find_annotation_by_file_stem(self, file_stem: str) -> Annotation | None:
         entity = self.local_datasource.find_annotation_by_file_stem(file_stem)
         if entity is not None:
