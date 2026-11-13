@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.project.scan_project_files import is_audio_file, is_textgrid_file
 from core.settings.app_settings import settings
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
@@ -34,7 +35,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Phonlab")
         self.resize(1200, 800)
 
-        self.filters = "Sound files and TextGrids (*.wav *.TextGrid)"
+        self.filters = (
+            "Sound files and TextGrids (*.wav *.WAV *.TextGrid *.textgrid *.TEXTGRID)"
+        )
         self.splash = None
         self.clipboard: AudioState | None = None
         self.clip_counters: dict[str, int] = {}
@@ -266,8 +269,6 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def select_project_to_open(self):
-        files_to_load: list[tuple[str, str, str | None]] = []
-
         dir_path = QFileDialog.getExistingDirectory(
             self, self.tr("Open Phonlab Directory")
         )
@@ -292,27 +293,12 @@ class MainWindow(QMainWindow):
                 self.view_model.set_dir_path(dir_path)
                 self.view_model.init_toml()
 
-        all_files = list(dir.glob("*"))
-        for path in all_files:
-            if str(path).endswith(".wav"):
-                file_stem = path.relative_to(dir_path).with_suffix("").as_posix()
-
-                annotation_file = next(
-                    (
-                        str(file)
-                        for file in all_files
-                        if str(file).endswith(f"{file_stem}.TextGrid")
-                    ),
-                    None,
-                )
-
-                files_to_load.append((file_stem, str(path), annotation_file))
-
-        self.open_files(files_to_load, dir_path)
+        self.view_model.set_dir_path(dir_path)
+        self.open_files(self.view_model.project_files(), dir_path)
 
     def open_single_document(self, filenames: list[str], dir: str | None = None):
-        audio_files = [name for name in filenames if name.endswith(".wav")]
-        annotation_files = [name for name in filenames if name.endswith(".TextGrid")]
+        audio_files = [name for name in filenames if is_audio_file(name)]
+        annotation_files = [name for name in filenames if is_textgrid_file(name)]
         if len(audio_files) == 0:
             raise ValueError(self.tr("Please include a .wav file"))
         if len(audio_files) > 1 or len(annotation_files) > 1:

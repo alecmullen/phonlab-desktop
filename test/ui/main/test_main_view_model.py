@@ -103,3 +103,20 @@ def test_save_window_layout_saves_current_plan_to_project():
 def test_save_window_layout_raises_without_a_project():
     with pytest.raises(ValueError):
         make_main_view_model().save_window_layout()
+
+
+def test_project_files_pairs_audio_with_textgrid_ignoring_case(tmp_path: Path):
+    view_model = make_main_view_model()
+    view_model.set_dir_path(str(tmp_path))
+    for name in ("a.WAV", "a.textgrid", "b.wav", "notes.txt"):
+        (tmp_path / name).write_bytes(b"")
+
+    assert view_model.project_files() == [
+        ("a", str(tmp_path / "a.WAV"), str(tmp_path / "a.textgrid")),
+        ("b", str(tmp_path / "b.wav"), None),
+    ]
+
+
+def test_project_files_raises_without_dir_path():
+    with pytest.raises(ValueError):
+        make_main_view_model().project_files()

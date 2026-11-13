@@ -299,6 +299,71 @@ def test_select_project_initializes_toml_when_user_agrees(
     assert opened == [([], str(tmp_path))]
 
 
+def test_select_project_treats_extensions_case_insensitively(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    (tmp_path / "phonlab.toml").write_text("")
+    for name in (
+        "lower.wav",
+        "upper.WAV",
+        "mixed.Wav",
+        "mixed.textgrid",
+        "upper.TEXTGRID",
+        "notes.wav.txt",
+    ):
+        (tmp_path / name).write_bytes(b"")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    [(files, _)] = opened
+    assert sorted(files) == [
+        ("lower", str(tmp_path / "lower.wav"), None),
+        ("mixed", str(tmp_path / "mixed.Wav"), str(tmp_path / "mixed.textgrid")),
+        ("upper", str(tmp_path / "upper.WAV"), str(tmp_path / "upper.TEXTGRID")),
+    ]
+
+
+def test_select_project_does_not_pair_textgrid_whose_name_only_ends_like_the_stem(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    (tmp_path / "phonlab.toml").write_text("")
+    (tmp_path / "a.wav").write_bytes(b"")
+    (tmp_path / "xa.TextGrid").write_bytes(b"")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    [(files, _)] = opened
+    assert files == [("a", str(tmp_path / "a.wav"), None)]
+
+
+def test_open_single_document_accepts_uppercase_wav(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav = str(tmp_path / "sound.WAV")
+
+    main_window.open_single_document([wav], str(tmp_path))
+
+    assert opened == [([("sound", wav, None)], str(tmp_path))]
+
+
+def test_open_single_document_accepts_textgrid_with_any_case_suffix(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav, textgrid = str(tmp_path / "a.wav"), str(tmp_path / "a.textgrid")
+
+    main_window.open_single_document([wav, textgrid], str(tmp_path))
+
+    assert opened == [([("a", wav, textgrid)], str(tmp_path))]
+
+
 def test_select_project_asks_again_when_user_declines_initializing(
     main_window: MainWindow,
     monkeypatch: pytest.MonkeyPatch,
