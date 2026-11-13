@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 from pytestqt.qtbot import QtBot
 from support.audio_player import FakeAudioPlayer
@@ -636,6 +636,42 @@ def test_key_press_for_unhandled_key_does_not_touch_document(main_window: MainWi
 
 
 # --------------------------- save / info dialogs ---------------------------
+
+
+def file_menu_actions(main_window: MainWindow) -> dict[str, QAction]:
+    menu_bar = main_window.menuBar()
+    file_menu = next(a.menu() for a in menu_bar.actions() if a.text() == "&File")
+    return {a.text(): a for a in file_menu.actions() if not a.isSeparator()}
+
+
+def test_file_menu_offers_both_save_audio_and_save_textgrid(main_window: MainWindow):
+    actions = file_menu_actions(main_window)
+
+    assert actions["&Save…"] is main_window.save_action
+    assert actions["Save to TextGrid…"] is main_window.save_textgrid_action
+    assert main_window.save_action is not main_window.save_textgrid_action
+
+
+def test_save_menu_items_open_their_own_dialogs(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    doc = add_document(main_window)
+    calls = []
+    monkeypatch.setattr(
+        main_window_module.SaveAudioDialog,
+        "get_options",
+        staticmethod(lambda doc, name, parent=None: calls.append("audio")),
+    )
+    doc.open_save_textgrid = lambda: calls.append("textgrid")
+
+    main_window.save_action.trigger()
+    main_window.save_textgrid_action.trigger()
+
+    assert calls == ["audio", "textgrid"]
+
+
+def test_save_menu_item_has_the_standard_save_shortcut(main_window: MainWindow):
+    assert main_window.save_action.shortcut() == QKeySequence.StandardKey.Save
 
 
 def test_save_audio_invokes_save_use_case_with_selected_options(

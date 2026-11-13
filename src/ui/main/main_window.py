@@ -81,11 +81,11 @@ class MainWindow(QMainWindow):
         self.save_action.setShortcut(QKeySequence.StandardKey.Save)
         self.save_action.triggered.connect(self.save_audio)
 
-        self.save_action = QAction(self.tr("Save to TextGrid…"), self)
-        self.save_action.setStatusTip(
+        self.save_textgrid_action = QAction(self.tr("Save to TextGrid…"), self)
+        self.save_textgrid_action.setStatusTip(
             self.tr("Save the current document's annotations to a TextGrid")
         )
-        self.save_action.triggered.connect(self.save_textgrid)
+        self.save_textgrid_action.triggered.connect(self.save_textgrid)
 
         self.audio_info_action = QAction(self.tr("Audio &Info"), self)
         self.audio_info_action.setShortcut("Ctrl+I")
@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
             fileMenu.addAction(self.close_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.save_action)
+            fileMenu.addAction(self.save_textgrid_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.audio_info_action)
             fileMenu.addSeparator()
