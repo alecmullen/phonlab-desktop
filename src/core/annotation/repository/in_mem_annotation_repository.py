@@ -51,7 +51,12 @@ class InMemAnnotationRepository(AnnotationRepository):
         self, annotation_id: int, time: float, same_threshold: float
     ) -> tuple[int, float]:
         existing = self.nodes[annotation_id]
-        node_ids, node_times = zip(*sorted(existing.items(), key=lambda item: item[1]))
+        if len(existing) > 0:
+            node_ids, node_times = zip(
+                *sorted(existing.items(), key=lambda item: item[1])
+            )
+        else:
+            node_ids, node_times = (), ()
 
         match = get_matching_node(
             list(node_times), time, same_threshold, list(node_ids)
@@ -102,6 +107,10 @@ class InMemAnnotationRepository(AnnotationRepository):
         if id not in self.filenames:
             raise ValueError("Annotation with that id does not exist in database")
         return Annotation(dict(self.nodes[id]), list(self.types[id]), id)
+
+    def list_tier_names(self) -> list[str]:
+        names = {type.type for types in self.types.values() for type in types}
+        return sorted(names, key=lambda name: (name.casefold(), name))
 
     def find_annotation_by_file_stem(self, file_stem: str) -> Annotation | None:
         for id, stem in self.filenames.items():

@@ -3,14 +3,22 @@ from dataclasses import replace
 
 from PyQt6.QtCore import pyqtSlot
 
+from core.annotation.add_tiers import (
+    AddTiers,
+    DuplicateTierNameError,
+    EmptyTierNameError,
+    NoTiersError,
+)
 from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
 from core.annotation.delete_node import DeleteNode, DeleteNodeError
 from core.annotation.entity.annotation import Annotation
+from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from core.parse_textgrid.write_textgrid import TextgridType, WriteTextGrid
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_label_state import AnnotationLabelState, to_label
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
@@ -38,6 +46,8 @@ class AnnotationViewModel(ViewModel):
         parse_text_grid: ParseTextGrid,
         write_text_grid: WriteTextGrid,
         load_annotation: LoadAnnotation,
+        add_tiers: AddTiers,
+        list_tier_names: ListTierNames,
         filestem: str | None = None,
     ):
         super().__init__()
@@ -63,6 +73,8 @@ class AnnotationViewModel(ViewModel):
         self.delete_node_use_case = delete_node
         self.parse_textgrid_use_case = parse_text_grid
         self.write_textgrid_use_case = write_text_grid
+        self.add_tiers_use_case = add_tiers
+        self.list_tier_names_use_case = list_tier_names
 
     def change_node_state(self, drag_node: AnnotationNodeState, new_pos: float):
         new_pos = max(self.window_state[0], new_pos)
@@ -159,6 +171,47 @@ class AnnotationViewModel(ViewModel):
             self.parse_textgrid_use_case(file_path, file_stem, overwrite),
             on_success,
             on_error,
+        )
+
+    def trigger_add_tiers_dialog(self):
+        """Ask the user which tiers to add, offering the tier names in the project
+        database"""
+        if self.filestem is None:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Tiers cannot be added to this document"))
+            )
+            return
+
+        self.state_changed.emit(
+            AddTiersAction(
+                self.list_tier_names_use_case(),
+                [type.type for type in self.annotation_state.types],
+            )
+        )
+
+    def add_tiers(self, names: list[str]):
+        if self.filestem is None:
+            return
+
+        try:
+            annotation = self.add_tiers_use_case(self.filestem, names)
+        except NoTiersError:
+            self.state_changed.emit(StatusMessageState(self.tr("No tiers to add")))
+            return
+        except EmptyTierNameError:
+            self.state_changed.emit(StatusMessageState(self.tr("A tier needs a name")))
+            return
+        except DuplicateTierNameError as err:
+            self.state_changed.emit(
+                StatusMessageState(
+                    self.tr("This file already has a tier named {}").format(err.name)
+                )
+            )
+            return
+
+        self.set_annotation_state(annotation)
+        self.state_changed.emit(
+            StatusMessageState(self.tr("Added {} tier(s)").format(len(names)))
         )
 
     def trigger_write_textgrid_dialog(self):

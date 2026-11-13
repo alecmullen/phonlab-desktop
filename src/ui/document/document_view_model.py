@@ -20,6 +20,7 @@ from res.constants import (
     MAX_UNDO_HISTORY,
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.dependency_factory import ViewModelFactory
@@ -136,7 +137,9 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
-        if isinstance(model, (StatusMessageState, SaveToTextGridAction)):
+        if isinstance(
+            model, (StatusMessageState, SaveToTextGridAction, AddTiersAction)
+        ):
             self.state_changed.emit(model)
         elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
@@ -794,6 +797,12 @@ class DocumentViewModel(ViewModel):
         if not channels:
             raise RuntimeError("Cannot save audio that is not loaded")
         self.save_audio_use_case(path, channels, target_fs, scale)
+
+    def trigger_add_tiers(self):
+        self.annotation_view_model.trigger_add_tiers_dialog()
+
+    def add_tiers(self, names: list[str]):
+        self.annotation_view_model.add_tiers(names)
 
     def save_textgrid(self, file_path: str, tg_type: str):
         self.annotation_view_model.write_textgrid(file_path, tg_type)

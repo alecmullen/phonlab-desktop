@@ -14,6 +14,7 @@ from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
 from core.transform_audio.prep_audio import PrepAudio
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
@@ -1155,6 +1156,33 @@ def test_on_annot_state_changed_forwards_save_textgrid_action(
         view_model.on_annot_state_changed(action)
 
     assert blocker.args[0] is action
+
+
+def test_on_annot_state_changed_forwards_add_tiers_action(
+    view_model: DocumentViewModel, qtbot: QtBot
+):
+    action = AddTiersAction(["word"], [])
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.on_annot_state_changed(action)
+
+    assert blocker.args[0] is action
+
+
+def test_trigger_add_tiers_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.trigger_add_tiers()
+
+    annotation_view_model.trigger_add_tiers_dialog.assert_called_once_with()
+
+
+def test_add_tiers_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.add_tiers(["word", "phone"])
+
+    annotation_view_model.add_tiers.assert_called_once_with(["word", "phone"])
 
 
 def test_save_textgrid_delegates_to_annotation_view_model(

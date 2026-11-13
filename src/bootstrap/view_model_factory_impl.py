@@ -1,8 +1,10 @@
 from typing import Any, cast
 
 from bootstrap.use_case_factory_impl import UseCaseFactory
+from core.annotation.add_tiers import AddTiers
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
@@ -125,6 +127,8 @@ class ViewModelFactoryImpl(ViewModelFactory):
             use_case_factory.provide(ParseTextGrid),
             use_case_factory.provide(WriteTextGrid),
             use_case_factory.provide(LoadAnnotation),
+            use_case_factory.provide(AddTiers),
+            use_case_factory.provide(ListTierNames),
             file_stem,
         )
 

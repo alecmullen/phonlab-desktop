@@ -12,6 +12,8 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
 from ui.annotation.annotation_plot import AnnotationPlot
+from ui.annotation.component.add_tiers_dialog import AddTiersDialog
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
@@ -1236,6 +1238,54 @@ def test_save_textgrid_action_opens_save_textgrid_dialog(
     monkeypatch.setattr(view, "open_save_textgrid", lambda: calls.append(True))
 
     view.on_state_change(SaveToTextGridAction())
+
+    assert calls == [True]
+
+
+def test_add_tiers_action_asks_which_tiers_and_adds_them(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    asked: list = []
+    added: list = []
+
+    def get_names(
+        available: list[str], existing: list[str], parent: object
+    ) -> list[str]:
+        asked.append((available, existing))
+        return ["word", "tone"]
+
+    monkeypatch.setattr(AddTiersDialog, "get_names", staticmethod(get_names))
+    monkeypatch.setattr(view.view_model, "add_tiers", added.append)
+
+    view.on_state_change(AddTiersAction(["word", "break"], ["break"]))
+
+    assert asked == [(["word", "break"], ["break"])]
+    assert added == [["word", "tone"]]
+
+
+def test_add_tiers_adds_nothing_when_the_dialog_is_cancelled(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    added: list = []
+    monkeypatch.setattr(
+        AddTiersDialog, "get_names", staticmethod(lambda *args, **kwargs: None)
+    )
+    monkeypatch.setattr(view.view_model, "add_tiers", added.append)
+
+    view.on_state_change(AddTiersAction(["word"], []))
+
+    assert added == []
+
+
+def test_open_add_tiers_asks_the_view_model_to_start_adding_tiers(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls: list = []
+    monkeypatch.setattr(
+        view.view_model, "trigger_add_tiers", lambda: calls.append(True)
+    )
+
+    view.open_add_tiers()
 
     assert calls == [True]
 
