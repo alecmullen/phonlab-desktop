@@ -11,6 +11,7 @@ from pytestqt.qtbot import QtBot
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
+from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
@@ -241,6 +242,41 @@ def test_double_click_zooms_to_selection(loaded_view: DocumentView):
 
     assert document_view_model.document_window_state.start == 1000
     assert document_view_model.document_window_state.end == 5000
+
+
+def test_shift_double_click_plays_the_selection_again_instead_of_zooming(
+    loaded_view: DocumentView,
+):
+    document_view_model = loaded_view.view_model
+    document_view_model.start_selection(1.0)
+    document_view_model.continue_selection(5.0)
+    window_before = document_view_model.document_window_state
+
+    dbl_click = mouse_event(
+        loaded_view,
+        2.0,
+        QEvent.Type.MouseButtonDblClick,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    loaded_view.mouseDoubleClickEvent(dbl_click)
+
+    assert document_view_model.document_window_state == window_before
+    assert document_view_model.select_state.is_selected
+    assert len(document_view_model.audio_player.played) == 1
+
+
+def test_a_single_click_waits_as_long_as_the_double_click_interval(
+    loaded_view: DocumentView,
+):
+    loaded_view.mousePressEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
+    )
+    loaded_view.mouseReleaseEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonRelease)
+    )
+
+    assert loaded_view.click_timer is not None
+    assert loaded_view.click_timer.interval() == DOUBLE_CLICK_INTERVAL_MS
 
 
 def test_click_after_release_sets_mark_at_click_position(
