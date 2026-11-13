@@ -1246,3 +1246,48 @@ def test_open_save_textgrid_reports_runtime_error(
 
     assert len(errors) == 1
     assert "overlapping intervals" in errors[0][2]
+
+
+# --------------------------- row heights follow the graphics widget ---------------------------
+
+
+def test_resizing_the_graphics_widget_resizes_the_plot_rows(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(loaded_view, "apply_row_heights", lambda: calls.append(True))
+    loaded_view.graphics_widget.resized.disconnect()
+    loaded_view.graphics_widget.resized.connect(loaded_view.apply_row_heights)
+
+    loaded_view.graphics_widget.resized.emit()
+
+    assert calls == [True]
+
+
+def plots_bottom(view: DocumentView) -> float:
+    return max(plot.sceneBoundingRect().bottom() for plot in view.document_plots)
+
+
+def test_a_document_built_while_hidden_fills_the_space_it_is_later_shown_in(
+    qtbot: QtBot, document_view_model: DocumentViewModel
+):
+    """A tab opened in the background has its plots laid out while its page is still
+    at the default size, and is only resized when first shown, after the window
+    may have been made bigger"""
+    view = DocumentView(document_view_model)
+    qtbot.addWidget(view)
+    view.resize(640, 480)
+    document_view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
+    )
+    document_view_model.toggle_annotations()
+    QApplication.processEvents()
+    assert not view.isVisible()
+
+    view.resize(1000, 900)
+    view.show()
+    qtbot.waitExposed(view)
+    QApplication.processEvents()
+
+    space = view.graphics_widget.viewport().height()
+    assert plots_bottom(view) > space - 40
