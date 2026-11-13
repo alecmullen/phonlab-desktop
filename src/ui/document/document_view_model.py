@@ -83,6 +83,9 @@ class DocumentViewModel(ViewModel):
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
+
+        # Whether this document's tab is on screen (see set_shown)
+        self.is_shown = True
         self.playback_state = PlaybackState()
         self.mark_state: MarkState = MarkState()
         self.audio_loaded_state: AudioLoaded = AudioLoaded()
@@ -383,7 +386,27 @@ class DocumentViewModel(ViewModel):
 
         self.spectrogram_view_model.prep_audio(x, fs)
 
+    def set_shown(self, shown: bool):
+        """Tell the document whether its tab is the one on screen. The spectrogram
+        is only computed for a shown document, so opening many files at once
+        computes one spectrogram, and each of the others when its tab is first
+        looked at"""
+        if shown == self.is_shown:
+            return
+        self.is_shown = shown
+
+        if (
+            shown
+            and self.plot_layout_state.has_spectrogram()
+            and self.primary_channel() is not None
+            and not self.spectrogram_view_model.sgram_state.is_showing
+        ):
+            self.update_spectrogram()
+
     def update_spectrogram(self):
+        if not self.is_shown:
+            return  # set_shown() catches up when the document is shown
+
         primary_channel = self.primary_channel()
         if primary_channel is None:
             raise RuntimeError("Missing primary audio channel")
