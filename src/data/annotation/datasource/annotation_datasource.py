@@ -57,6 +57,25 @@ class AnnotationDataSource(DataSource):
 
         return id
 
+    def add_annotations_if_missing(self, file_stems: list[str]):
+        with self.database.open_session() as session:
+            existing = set(
+                session.scalars(
+                    select(AnnotationEntity.file_stem).where(
+                        AnnotationEntity.file_stem.in_(file_stems)
+                    )
+                )
+            )
+            session.add_all(
+                AnnotationEntity(file_stem=stem)
+                for stem in dict.fromkeys(file_stems)
+                if stem not in existing
+            )
+            session.commit()
+
+    def reset(self) -> str | None:
+        return self.database.reset()
+
     def clear_annotation(self, annotation_id: int):
         with self.database.open_session() as session:
             annotation = session.get(AnnotationEntity, annotation_id)
