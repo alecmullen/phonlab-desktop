@@ -7,10 +7,12 @@ from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 from pytestqt.qtbot import QtBot
+from support.annotation_repository import SeedableAnnotationRepository
 from support.audio_player import FakeAudioPlayer
 from support.job_manager import FakeJobManager
 from support.mocks import mock_use_case
-from support.view_models import StubViewModelFactory
+from support.textgrid import write_simple_textgrid
+from support.view_models import StubViewModelFactory, make_main_view_model
 
 import ui.document.document_view as doc_view_module
 import ui.main.main_window as main_window_module
@@ -23,6 +25,7 @@ from ui.document.state.audio_channel_state import AudioChannelState, AudioState
 from ui.document.state.plot_layout_state import PlotType
 from ui.main.component.open_audio_dialog import OpenAudioDialog
 from ui.main.component.save_audio_dialog import SaveOptions
+from ui.main.main_view_model import MainViewModel
 from ui.main.main_window import MainWindow
 from ui.main.state.audio_open_options import AudioOpenOptionsState
 
@@ -38,13 +41,25 @@ def save_audio() -> SaveAudio:
 
 
 @pytest.fixture
+def project_repository() -> SeedableAnnotationRepository:
+    """The project database behind `main_window`"""
+    return SeedableAnnotationRepository()
+
+
+@pytest.fixture
 def main_window(
     qtbot: QtBot,
     fake_audio_player: type[FakeAudioPlayer],
     fake_job_manager: type[FakeJobManager],
     save_audio: SaveAudio,
+    project_repository: SeedableAnnotationRepository,
 ) -> MainWindow:
-    win = MainWindow(StubViewModelFactory(save_audio=save_audio))
+    win = MainWindow(
+        StubViewModelFactory(
+            {MainViewModel: make_main_view_model(project_repository)},
+            save_audio=save_audio,
+        )
+    )
     qtbot.addWidget(win)
     return win
 
@@ -148,6 +163,110 @@ def test_open_files_also_loads_a_paired_textgrid(
     assert {
         node.x for node in annotation_view_model.annotation_state.nodes.values()
     } == {0.0, 1.0}
+
+
+def stub_overwrite_scenario(
+    monkeypatch: pytest.MonkeyPatch,
+    has_annotation: bool,
+    *answers: QMessageBox.StandardButton,
+) -> tuple[list, list]:
+    """Every document reports `has_annotation`; returns the (path, overwrite) calls to
+    `load_textgrid` and the TextGrid names the user was asked about"""
+    loaded: list = []
+    asked: list = []
+    remaining = list(answers)
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
+    )
+    monkeypatch.setattr(
+        DocumentViewModel, "has_annotation", lambda self: has_annotation
+    )
+    monkeypatch.setattr(
+        DocumentView,
+        "load_textgrid",
+        lambda self, path, overwrite=False: loaded.append((Path(path).name, overwrite)),
+    )
+
+    def question(
+        parent: object, title: str, text: str, *args: object, **kwargs: object
+    ) -> QMessageBox.StandardButton:
+        asked.append(text)
+        return remaining.pop(0)
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return loaded, asked
+
+
+def paired_files(tmp_path: Path, *stems: str) -> list[tuple[str, str, str]]:
+    return [
+        (stem, str(tmp_path / f"{stem}.wav"), str(tmp_path / f"{stem}.TextGrid"))
+        for stem in stems
+    ]
+
+
+def test_open_files_loads_textgrid_without_asking_when_database_is_empty(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(monkeypatch, False)
+
+    main_window.open_files(paired_files(tmp_path, "a"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", False)]
+    assert asked == []
+
+
+def test_open_files_overwrites_existing_annotation_when_user_says_yes(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.Yes
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", True)]
+    assert asked == ["Overwrite the existing database with annotation from a.TextGrid?"]
+
+
+def test_open_files_skips_textgrid_when_user_says_no(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == [("b.TextGrid", True)]
+    assert len(asked) == 2
+
+
+def test_open_files_asks_once_and_overwrites_all_on_yes_to_all(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.YesToAll
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", True), ("b.TextGrid", True)]
+    assert len(asked) == 1
+
+
+def test_open_files_asks_once_and_skips_all_on_no_to_all(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.NoToAll
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == []
+    assert len(asked) == 1
 
 
 def test_open_files_does_nothing_when_dialog_is_cancelled(
@@ -258,26 +377,151 @@ def test_select_project_does_nothing_when_dialog_is_cancelled(
     assert opened == []
 
 
-def test_select_project_opens_every_wav_with_its_paired_textgrid(
+def run_import_job(main_window: MainWindow):
+    """Runs the recorded project import job synchronously, as the worker would"""
+    job = main_window.view_model.job_managers["project_import"].jobs[0]
+    for result in job.task:
+        job.on_success(result)
+
+
+def make_project(tmp_path: Path, *names: str, database: bool = False) -> Path:
+    (tmp_path / "phonlab.toml").write_text("")
+    for name in names:
+        if name.lower().endswith(".textgrid"):
+            write_simple_textgrid(tmp_path / name)
+        else:
+            (tmp_path / name).write_bytes(b"")
+    if database:
+        (tmp_path / "phonlab.db").write_bytes(b"")
+    return tmp_path
+
+
+def test_select_project_builds_database_from_textgrids_before_opening_files(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    assert opened == []  # still importing
+    run_import_job(main_window)
+    [(files, dir_path)] = opened
+    assert dir_path == str(tmp_path)
+    # Annotations come from the database, so no TextGrid is passed on to be read
+    assert sorted(files) == [
+        ("a", str(tmp_path / "a.wav"), None),
+        ("b", str(tmp_path / "b.wav"), None),
+    ]
+    assert sorted(project_repository.filenames.values()) == ["a", "b"]
+    a = project_repository.find_annotation_by_file_stem("a")
+    assert a is not None and [type.type for type in a.types] == ["word"]
+
+
+def test_select_project_with_existing_database_opens_without_reading_textgrids(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", database=True)
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    assert opened == [([("a", str(tmp_path / "a.wav"), None)], str(tmp_path))]
+    assert "project_import" not in main_window.view_model.job_managers
+    assert project_repository.filenames == {}
+
+
+def test_select_project_treats_extensions_case_insensitively(
     main_window: MainWindow,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     opened: list,
 ):
-    (tmp_path / "phonlab.toml").write_text("")
-    (tmp_path / "a.wav").write_bytes(b"")
-    (tmp_path / "a.TextGrid").write_text("")
-    (tmp_path / "b.wav").write_bytes(b"")
+    make_project(
+        tmp_path,
+        "lower.wav",
+        "upper.WAV",
+        "mixed.Wav",
+        "notes.wav.txt",
+        database=True,
+    )
     patch_directory_dialog(monkeypatch, str(tmp_path))
 
     main_window.select_project_to_open()
 
-    [(files, dir_path)] = opened
-    assert dir_path == str(tmp_path)
-    assert sorted(files) == [
-        ("a", str(tmp_path / "a.wav"), str(tmp_path / "a.TextGrid")),
-        ("b", str(tmp_path / "b.wav"), None),
-    ]
+    [(files, _)] = opened
+    assert sorted(stem for stem, _, _ in files) == ["lower", "mixed", "upper"]
+
+
+def test_select_project_reads_textgrid_with_any_case_suffix_on_first_open(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.textgrid")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+    run_import_job(main_window)
+
+    a = project_repository.find_annotation_by_file_stem("a")
+    assert a is not None and len(a.types) == 1
+
+
+def test_select_project_reports_unreadable_textgrid_and_still_opens(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav")
+    (tmp_path / "a.TextGrid").write_text("not a textgrid")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda parent, title, text, *a: warnings.append(text)),
+    )
+
+    main_window.select_project_to_open()
+    run_import_job(main_window)
+
+    assert len(warnings) == 1 and "a" in warnings[0]
+    assert len(opened) == 1
+
+
+def test_select_project_does_not_open_files_when_import_fails(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda parent, title, text, *a: warnings.append(text)),
+    )
+
+    main_window.select_project_to_open()
+    job = main_window.view_model.job_managers["project_import"].jobs[0]
+    job.on_error(RuntimeError("disk full"))
+
+    assert opened == []
+    assert len(warnings) == 1 and "disk full" in warnings[0]
 
 
 def test_select_project_initializes_toml_when_user_agrees(
@@ -294,9 +538,20 @@ def test_select_project_initializes_toml_when_user_agrees(
     )
 
     main_window.select_project_to_open()
+    run_import_job(main_window)
 
     assert (tmp_path / "phonlab.toml").is_file()
     assert opened == [([], str(tmp_path))]
+
+
+def test_open_single_document_accepts_uppercase_wav(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav = str(tmp_path / "sound.WAV")
+
+    main_window.open_single_document([wav], str(tmp_path))
+
+    assert opened == [([("sound", wav, None)], str(tmp_path))]
 
 
 def test_select_project_asks_again_when_user_declines_initializing(
@@ -903,3 +1158,186 @@ def test_close_event_cleans_up_all_documents_and_accepts(main_window: MainWindow
 
     assert doc.view_model.audio_player.stopped is True
     assert event.isAccepted() is True
+
+
+# --------------------------- project menu ---------------------------
+
+
+def test_project_actions_are_disabled_until_a_project_is_open(
+    main_window: MainWindow, tmp_path: Path
+):
+    assert not main_window.add_files_action.isEnabled()
+    assert not main_window.rebuild_action.isEnabled()
+
+    main_window.view_model.set_dir_path(str(tmp_path))
+    main_window.update_project_actions()
+
+    assert main_window.add_files_action.isEnabled()
+    assert main_window.rebuild_action.isEnabled()
+
+
+def test_menus_are_ordered_file_edit_project_view(main_window: MainWindow):
+    titles = [
+        action.text().replace("&", "") for action in main_window.menuBar().actions()
+    ]
+
+    assert titles == ["File", "Edit", "Project", "View"]
+
+
+def test_project_menu_lists_the_project_actions(main_window: MainWindow):
+    menu = next(
+        action.menu()
+        for action in main_window.menuBar().actions()
+        if action.text().replace("&", "") == "Project"
+    )
+
+    assert menu.actions() == [main_window.add_files_action, main_window.rebuild_action]
+
+
+def capture_information(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    messages: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda parent, title, text, *a: messages.append(text)),
+    )
+    return messages
+
+
+def test_add_new_files_registers_new_stems_and_reads_textgrids_for_empty_ones(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "old.wav", "new.wav", "new.TextGrid", "old.TextGrid")
+    project_repository.create_annotation("old")  # in the database, but empty
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = capture_information(monkeypatch)
+
+    main_window.add_new_files()
+    run_import_job(main_window)
+
+    assert sorted(project_repository.filenames.values()) == ["new", "old"]
+    for stem in ("new", "old"):
+        annotation = project_repository.find_annotation_by_file_stem(stem)
+        assert annotation is not None and len(annotation.types) == 1
+    assert messages == ["Added 1 new files and read 2 TextGrids."]
+
+
+def test_add_new_files_leaves_existing_annotations_alone(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    capture_information(monkeypatch)
+    main_window.add_new_files()
+    run_import_job(main_window)
+    before = project_repository.find_annotation_by_file_stem("a")
+    main_window.view_model.job_managers.clear()
+
+    main_window.add_new_files()
+    run_import_job(main_window)
+
+    assert project_repository.find_annotation_by_file_stem("a") == before
+
+
+def test_add_new_files_reloads_annotations_of_open_documents(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    capture_information(monkeypatch)
+    reloaded: list[DocumentViewModel] = []
+    monkeypatch.setattr(
+        DocumentViewModel, "reload_annotation", lambda self: reloaded.append(self)
+    )
+    first, second = add_document(main_window), add_document(main_window, "two.wav")
+
+    main_window.add_new_files()
+    run_import_job(main_window)
+
+    assert reloaded == [first.view_model, second.view_model]
+
+
+def test_add_new_files_reports_unreadable_textgrids(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav")
+    (tmp_path / "a.TextGrid").write_text("not a textgrid")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = capture_information(monkeypatch)
+
+    main_window.add_new_files()
+    run_import_job(main_window)
+
+    [message] = messages
+    assert "Could not read the TextGrid for: a" in message
+
+
+def test_rebuild_project_does_nothing_when_user_declines(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav")
+    project_repository.create_annotation("stale")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.No),
+    )
+
+    main_window.rebuild_project()
+
+    assert "project_import" not in main_window.view_model.job_managers
+    assert list(project_repository.filenames.values()) == ["stale"]
+
+
+def test_rebuild_project_rereads_textgrids_into_a_new_database(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    project_repository.create_annotation("stale")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    questions: list[str] = []
+
+    def question(
+        parent: object, title: str, text: str, *args: object
+    ) -> QMessageBox.StandardButton:
+        questions.append(text)
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    messages = capture_information(monkeypatch)
+    reloaded: list[DocumentViewModel] = []
+    monkeypatch.setattr(
+        DocumentViewModel, "reload_annotation", lambda self: reloaded.append(self)
+    )
+    doc = add_document(main_window)
+
+    main_window.rebuild_project()
+    run_import_job(main_window)
+
+    assert str(tmp_path) in questions[0]
+    assert list(project_repository.filenames.values()) == ["a"]
+    assert messages == ["Rebuilt the project database from 1 TextGrids."]
+    assert reloaded == [doc.view_model]
+
+
+def test_open_single_document_accepts_textgrid_with_any_case_suffix(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav, textgrid = str(tmp_path / "a.wav"), str(tmp_path / "a.textgrid")
+
+    main_window.open_single_document([wav, textgrid], str(tmp_path))
+
+    assert opened == [([("a", wav, textgrid)], str(tmp_path))]

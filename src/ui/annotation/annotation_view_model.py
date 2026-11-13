@@ -45,6 +45,9 @@ class AnnotationViewModel(ViewModel):
         self.annotation_state = AnnotationState()
         self.loading_state = LoadProgressState()
 
+        self.filestem = filestem
+        self.load_annotation_use_case = load_annotation
+
         if filestem is not None:
             annotation = load_annotation(filestem)
             if annotation is not None:
@@ -116,7 +119,23 @@ class AnnotationViewModel(ViewModel):
         except (KeyError, AttributeError):
             raise ValueError("Missing node in annotation")
 
-    def parse_textgrid(self, file_path: str, file_stem: str):
+    def reload_annotation(self):
+        """Show the annotation currently in the database, e.g. after files were added
+        to the project"""
+        if self.filestem is None:
+            return
+        annotation = self.load_annotation_use_case(self.filestem)
+        if annotation is None:
+            self.annotation_state = AnnotationState()
+            self.update_annotation_change()
+        else:
+            self.set_annotation_state(annotation)
+
+    def has_annotation(self) -> bool:
+        """True if there are any nodes or tiers, e.g. loaded from the project database"""
+        return bool(self.annotation_state.nodes or self.annotation_state.types)
+
+    def parse_textgrid(self, file_path: str, file_stem: str, overwrite: bool = False):
         @pyqtSlot(object)
         def on_success(annotation: Annotation):
             self.set_loading_state(False)
@@ -137,7 +156,7 @@ class AnnotationViewModel(ViewModel):
 
         self.launch_task(
             "parse_textgrid",
-            self.parse_textgrid_use_case(file_path, file_stem),
+            self.parse_textgrid_use_case(file_path, file_stem, overwrite),
             on_success,
             on_error,
         )
