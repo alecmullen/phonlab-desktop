@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 
 import numpy as np
@@ -123,6 +123,13 @@ class DocumentViewModel(ViewModel):
     def on_sgram_state_change(self, model: State):
         if isinstance(model, (LoadProgressState, AudioPrepped)):
             self.state_changed.emit(model)
+        if (
+            isinstance(model, AudioPrepped)
+            and self.plot_layout_state.has_spectrogram()
+            and not self.spectrogram_view_model.sgram_state.is_showing
+        ):
+            # The spectrogram was asked for before its audio was ready
+            self.update_spectrogram()
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
@@ -178,6 +185,26 @@ class DocumentViewModel(ViewModel):
             plots.remove(PlotType.ANNOTATION)
 
         self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
+        self.state_changed.emit(self.plot_layout_state)
+
+    def set_plots(self, plots: Iterable[PlotType]):
+        """Show exactly `plots` (at least one), e.g. to carry the display plan
+        of another document over to this one."""
+        new_plots = set(plots) or {PlotType.WAVEFORM}
+        if new_plots == self.plot_layout_state.plots:
+            return
+
+        self.plot_layout_state = replace(self.plot_layout_state, plots=new_plots)
+        if self.primary_channel() is None:
+            # Nothing to plot yet; the view lays out the plots once audio loads
+            return
+
+        if self.plot_layout_state.has_waveform():
+            self.update_audio_waveform()
+        if self.plot_layout_state.has_spectrogram():
+            self.update_spectrogram()
+        if self.plot_layout_state.has_annotation():
+            self.update_annotation_state()
         self.state_changed.emit(self.plot_layout_state)
 
     def load_audio(self, filepath: str, options: AudioOpenOptionsState):

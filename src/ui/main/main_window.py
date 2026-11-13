@@ -87,6 +87,13 @@ class MainWindow(QMainWindow):
         )
         self.export_annotation_action.triggered.connect(self.save_textgrid)
 
+        self.save_layout_action = QAction(self.tr("Save Window &Layout"), self)
+        self.save_layout_action.setStatusTip(
+            self.tr("Save which plots are shown in the project file")
+        )
+        self.save_layout_action.setEnabled(False)
+        self.save_layout_action.triggered.connect(self.save_window_layout)
+
         self.audio_info_action = QAction(self.tr("Audio &Info"), self)
         self.audio_info_action.setShortcut("Ctrl+I")
         self.audio_info_action.setStatusTip(
@@ -109,6 +116,8 @@ class MainWindow(QMainWindow):
             fileMenu.addSeparator()
             fileMenu.addAction(self.save_audio_action)
             fileMenu.addAction(self.export_annotation_action)
+            fileMenu.addSeparator()
+            fileMenu.addAction(self.save_layout_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.audio_info_action)
             fileMenu.addSeparator()
@@ -353,6 +362,7 @@ class MainWindow(QMainWindow):
         and .TextGrid files"""
 
         self.view_model.set_dir_path(dir_path)
+        self.save_layout_action.setEnabled(dir_path is not None)
 
         for idx, (file_stem, audio_file, annotation_file) in enumerate(paired_files):
             if idx > 4:
@@ -370,6 +380,7 @@ class MainWindow(QMainWindow):
                 DocumentViewModel, file_stem, dir_path
             )
             doc_view_model.subscribe(self.on_doc_state_change)
+            doc_view_model.set_plots(self.view_model.display_plan)
             doc = DocumentView(doc_view_model)
             doc.origin_name = Path(audio_file).name
             doc.origin_path = audio_file
@@ -391,6 +402,7 @@ class MainWindow(QMainWindow):
         stealing focus from source_doc"""
         doc_view_model = self.view_model_factory.create(DocumentViewModel)
         doc_view_model.subscribe(self.on_doc_state_change)
+        doc_view_model.set_plots(self.view_model.display_plan)
         doc = DocumentView(doc_view_model)
 
         # Always name after the ORIGINAL source file
@@ -414,6 +426,8 @@ class MainWindow(QMainWindow):
         doc = self.get_current_document()
 
         if doc is not None:
+            # Every document shows the plots the user last chose
+            doc.view_model.set_plots(self.view_model.display_plan)
             self.sgramview_action.setEnabled(
                 doc.view_model.spectrogram_view_model.prepped_audio_state is not None
             )
@@ -442,6 +456,20 @@ class MainWindow(QMainWindow):
         if doc:
             doc.open_save_textgrid()
 
+    def save_window_layout(self):
+        try:
+            self.view_model.save_window_layout()
+        except (OSError, ValueError) as err:
+            QMessageBox.critical(
+                self,
+                self.tr("Save Window Layout"),
+                self.tr("Could not save the window layout:\n{}").format(err),
+            )
+            return
+        status_bar = self.statusBar()
+        if status_bar is not None:
+            status_bar.showMessage(self.tr("Window layout saved to project"), 3000)
+
     def show_audio_info(self):
         doc = self.get_current_document()
         if doc:
@@ -465,16 +493,19 @@ class MainWindow(QMainWindow):
         doc = self.get_current_document()
         if doc:
             doc.toggle_wave()
+            self.view_model.set_display_plan(doc.view_model.plot_layout_state.plots)
 
     def plot_wave_sgram(self):
         doc = self.get_current_document()
         if doc:
             doc.toggle_spectrogram()
+            self.view_model.set_display_plan(doc.view_model.plot_layout_state.plots)
 
     def plot_annotations(self):
         doc = self.get_current_document()
         if doc:
             doc.toggle_annotations()
+            self.view_model.set_display_plan(doc.view_model.plot_layout_state.plots)
 
     def show_all(self):
         doc = self.get_current_document()
