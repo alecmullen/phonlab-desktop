@@ -70,16 +70,16 @@ class AnnotationPlot(DocumentPlot):
 
     def set_up_menu(self):
         shortcut = QKeySequence("Ctrl+L")
-        create_label_action = ContextMenuHintAction(
+        self.create_label_action = ContextMenuHintAction(
             self.tr("Create Label"),
             shortcut.toString(QKeySequence.SequenceFormat.NativeText),
             parent=self,
         )
-        create_label_action.setShortcut(shortcut)
-        create_label_action.triggered.connect(self.create_label_from_selection)
+        self.create_label_action.setShortcut(shortcut)
+        self.create_label_action.triggered.connect(self.create_label_from_selection)
 
-        self.addAction(create_label_action)
-        self.getViewBox().menu.addAction(create_label_action)
+        self.addAction(self.create_label_action)
+        self.getViewBox().menu.addAction(self.create_label_action)
 
         add_tiers_action = ContextMenuHintAction(
             self.tr("Add Tiers..."),
@@ -102,6 +102,13 @@ class AnnotationPlot(DocumentPlot):
         self.getViewBox().menu.addAction(export_annotation_action)
 
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
+
+    def set_shortcuts_active(self, active: bool):
+        """Every document has an annotation plot with the same shortcut, and Qt counts
+        the plots of tabs that are not on screen too, so the shortcut is ambiguous
+        (and does nothing) as soon as a second document is open. Only the plot of the
+        document on screen should have its shortcut active"""
+        self.create_label_action.setEnabled(active)
 
     @pyqtSlot()
     def on_context_menu_about_to_close(self):

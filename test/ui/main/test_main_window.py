@@ -19,6 +19,7 @@ import ui.main.main_window as main_window_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
+from ui.annotation.annotation_plot import AnnotationPlot
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
@@ -1473,3 +1474,58 @@ def test_add_tiers_leaves_the_annotation_plot_alone_if_it_is_shown(
 
 def test_add_tiers_does_nothing_without_a_document(main_window: MainWindow):
     main_window.add_tiers()  # must not raise
+
+
+# --------------------------- Ctrl+L with several documents open ---------------------------
+
+
+def open_two_documents_with_annotation(
+    main_window: MainWindow, qtbot: QtBot
+) -> tuple[DocumentView, DocumentView]:
+    docs = []
+    for name in ("one.wav", "two.wav"):
+        doc = add_document(main_window, name)
+        load_signal(doc, np.zeros(2000), fs=1000)
+        doc.view_model.toggle_annotations()
+        QApplication.processEvents()
+        docs.append(doc)
+    main_window.show()
+    qtbot.waitExposed(main_window)
+    main_window.activateWindow()
+    QApplication.processEvents()
+    return docs[0], docs[1]
+
+
+def test_ctrl_l_is_not_ambiguous_with_two_documents_open(
+    main_window: MainWindow, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    from PyQt6.QtCore import qInstallMessageHandler
+    from PyQt6.QtTest import QTest
+
+    open_two_documents_with_annotation(main_window, qtbot)
+    messages: list[str] = []
+    previous = qInstallMessageHandler(lambda mode, ctx, msg: messages.append(msg))
+    try:
+        QTest.keyClick(main_window, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+        QApplication.processEvents()
+    finally:
+        qInstallMessageHandler(previous)
+
+    assert [m for m in messages if "mbiguous" in m] == []
+
+
+def test_ctrl_l_reaches_the_annotation_of_the_document_on_screen_only(
+    main_window: MainWindow, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    from PyQt6.QtTest import QTest
+
+    first, second = open_two_documents_with_annotation(main_window, qtbot)
+    reached: list[DocumentView] = []
+    for doc in (first, second):
+        plot = next(p for p in doc.document_plots if isinstance(p, AnnotationPlot))
+        plot.create_label_action.triggered.connect(lambda *_, d=doc: reached.append(d))
+
+    QTest.keyClick(main_window, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+    QApplication.processEvents()
+
+    assert reached == [second]  # the second tab is the one on screen

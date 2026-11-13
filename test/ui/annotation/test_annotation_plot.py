@@ -772,3 +772,15 @@ def test_plot_shows_tiers_that_have_no_labels_and_no_nodes(qtbot: QtBot):
 
     ticks = plot.getAxis("left")._tickLevels
     assert [label for _, label in ticks[0]] == ["word", "phone"]
+
+
+def test_create_label_shortcut_can_be_switched_off_and_on(qtbot: QtBot):
+    plot = AnnotationPlot(make_annotation_view_model())
+    assert plot.create_label_action.isEnabled()
+    assert plot.create_label_action.shortcut() == QKeySequence("Ctrl+L")
+
+    plot.set_shortcuts_active(False)
+    assert not plot.create_label_action.isEnabled()
+
+    plot.set_shortcuts_active(True)
+    assert plot.create_label_action.isEnabled()
