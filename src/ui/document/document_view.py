@@ -31,6 +31,7 @@ from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.audio_info_dialog import AudioInfoDialog
+from ui.document.component.document_graphics_widget import DocumentGraphicsWidget
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
@@ -78,7 +79,8 @@ class DocumentView(QWidget):
         pg.setConfigOptions(antialias=True)
 
         # Create graphics layout widget
-        self.graphics_widget = pg.GraphicsLayoutWidget()
+        self.graphics_widget = DocumentGraphicsWidget()
+        self.graphics_widget.resized.connect(self.apply_row_heights)
 
         # Initialize plot items (will be created in plot methods)
         self.document_plots: list[DocumentPlot] = []
