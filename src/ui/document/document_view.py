@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
+from res.constants import DOUBLE_CLICK_INTERVAL_MS, PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
@@ -567,6 +567,12 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
+        if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+            # A second Shift+click is a request to hear it again, not to zoom
+            self.play_window_or_selection(scene_pos)
+            a0.accept()
+            return
+
         mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
 
@@ -598,7 +604,7 @@ class DocumentView(QWidget):
                     self.click_timer = QTimer()
                     self.click_timer.setSingleShot(True)
                     self.click_timer.timeout.connect(self.handle_single_click)
-                    self.click_timer.start(250)
+                    self.click_timer.start(DOUBLE_CLICK_INTERVAL_MS)
 
         a0.accept()
 

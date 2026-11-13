@@ -11,6 +11,13 @@ AUDIO_FILE_SUFFIXES = (".wav",)
 TEXTGRID_FILE_SUFFIXES = (".textgrid",)
 PROJECT_DATABASE_FILENAME = "phonlab.db"
 
+# -- Mouse --
+# Two clicks closer together than this are a double-click. The system's setting is
+# often 500 ms, which turns a second click made to hear a selection again into a
+# double-click that zooms. A single click also waits this long, in case a second
+# click makes it a double-click
+DOUBLE_CLICK_INTERVAL_MS = 250
+
 # -- Document Window --
 DEFAULT_WINDOW_LENGTH = 10
 PLOT_ROW_SPACING = 8
