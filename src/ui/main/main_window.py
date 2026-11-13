@@ -242,6 +242,19 @@ class MainWindow(QMainWindow):
             projectMenu.addAction(self.rebuild_action)
         self.update_project_actions()
 
+        self.add_tiers_action = QAction(self.tr("&Add Tiers…"), self)
+        self.add_tiers_action.setStatusTip(
+            self.tr("Add annotation tiers to the current file")
+        )
+        self.add_tiers_action.setEnabled(False)
+        self.add_tiers_action.triggered.connect(self.add_tiers)
+
+        # Annotation Menu
+        if settings.enable_annotation and mainMenu is not None:
+            annotationMenu = mainMenu.addMenu(self.tr("&Annotation"))
+            if annotationMenu is not None:
+                annotationMenu.addAction(self.add_tiers_action)
+
         # View Menu
         if mainMenu is not None:
             viewMenu = mainMenu.addMenu("&View")
@@ -609,6 +622,8 @@ class MainWindow(QMainWindow):
     def on_tab_changed(self, index: int):
         doc = self.get_current_document()
 
+        self.add_tiers_action.setEnabled(doc is not None)
+
         # Only the tab on screen computes its spectrogram, a hidden one waits
         for tab_index in range(self.tab_widget.count()):
             tab = self.tab_widget.widget(tab_index)
@@ -640,6 +655,17 @@ class MainWindow(QMainWindow):
                 self.tr("Save Audio"),
                 self.tr("Could not save the file:\n{}").format(err),
             )
+
+    @pyqtSlot()
+    def add_tiers(self):
+        doc = self.get_current_document()
+        if doc is None:
+            return
+
+        # So the new tiers can be seen
+        if not doc.view_model.plot_layout_state.has_annotation():
+            self.plot_annotations()
+        doc.open_add_tiers()
 
     def save_textgrid(self):
         doc = self.get_current_document()

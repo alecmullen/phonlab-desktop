@@ -17,6 +17,7 @@ from res.constants import SAME_NODE_PIXEL_THRESH
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.component.node_view import NodeView
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_node_state import (
     AnnotationNodeExtentState,
     AnnotationNodeState,
@@ -739,3 +740,35 @@ def test_create_label_from_selection_snaps_to_node_within_pixel_threshold(
     assert label.s_node == 1
     assert label.e_node not in (2, 3)
     assert nodes[label.e_node].x == pytest.approx(end)
+
+
+def test_context_menu_offers_add_tiers_and_it_asks_which_tiers(qtbot: QtBot):
+    view_model = make_annotation_view_model(filestem="sample")
+    plot = AnnotationPlot(view_model)
+    received: list[State] = []
+    view_model.subscribe(received.append)
+    menu_actions = plot.getViewBox().menu.actions()
+
+    action = next(
+        a
+        for a in plot.actions()
+        if isinstance(a, ContextMenuHintAction) and a.action_text == "Add Tiers..."
+    )
+    action.trigger()
+
+    assert action in menu_actions
+    assert any(isinstance(state, AddTiersAction) for state in received)
+
+
+def test_plot_shows_tiers_that_have_no_labels_and_no_nodes(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    plot = AnnotationPlot(view_model)
+
+    plot.populate(
+        AnnotationState(
+            types=[AnnotationTypeState("word", []), AnnotationTypeState("phone", [])]
+        )
+    )
+
+    ticks = plot.getAxis("left")._tickLevels
+    assert [label for _, label in ticks[0]] == ["word", "phone"]

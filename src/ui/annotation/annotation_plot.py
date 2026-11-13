@@ -81,6 +81,15 @@ class AnnotationPlot(DocumentPlot):
         self.addAction(create_label_action)
         self.getViewBox().menu.addAction(create_label_action)
 
+        add_tiers_action = ContextMenuHintAction(
+            self.tr("Add Tiers..."),
+            parent=self,
+        )
+        add_tiers_action.triggered.connect(self.view_model.trigger_add_tiers_dialog)
+
+        self.addAction(add_tiers_action)
+        self.getViewBox().menu.addAction(add_tiers_action)
+
         export_annotation_action = ContextMenuHintAction(
             self.tr("Export Annotation..."),
             parent=self,

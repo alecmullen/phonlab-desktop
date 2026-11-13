@@ -22,6 +22,8 @@ from PyQt6.QtWidgets import (
 
 from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
+from ui.annotation.component.add_tiers_dialog import AddTiersDialog
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
@@ -234,6 +236,8 @@ class DocumentView(QWidget):
             self.open_audio_info()
         elif isinstance(model, SaveToTextGridAction):
             self.open_save_textgrid()
+        elif isinstance(model, AddTiersAction):
+            self.open_add_tiers_dialog(model)
 
     def load_audio(self, filename: str, options: AudioOpenOptionsState):
         """Load an audio file into this document"""
@@ -831,6 +835,15 @@ class DocumentView(QWidget):
             origin_name,
             self,
         )
+
+    def open_add_tiers(self):
+        """Offer to add tiers to this document's annotation"""
+        self.view_model.trigger_add_tiers()
+
+    def open_add_tiers_dialog(self, action: AddTiersAction):
+        names = AddTiersDialog.get_names(action.available, action.existing, self)
+        if names is not None:
+            self.view_model.add_tiers(names)
 
     def open_save_textgrid(self):
         options = SaveTextGridDialog.get_options(

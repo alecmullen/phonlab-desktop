@@ -1176,12 +1176,12 @@ def test_project_actions_are_disabled_until_a_project_is_open(
     assert main_window.rebuild_action.isEnabled()
 
 
-def test_menus_are_ordered_file_edit_project_view(main_window: MainWindow):
+def test_menus_are_ordered_file_edit_project_annotation_view(main_window: MainWindow):
     titles = [
         action.text().replace("&", "") for action in main_window.menuBar().actions()
     ]
 
-    assert titles == ["File", "Edit", "Project", "View"]
+    assert titles == ["File", "Edit", "Project", "Annotation", "View"]
 
 
 def test_project_menu_lists_the_project_actions(main_window: MainWindow):
@@ -1394,3 +1394,82 @@ def test_clip_tab_opens_hidden_behind_its_source(main_window: MainWindow):
     assert isinstance(clip, DocumentView)
     assert not clip.view_model.is_shown
     assert source.view_model.is_shown
+
+
+# --------------------------- annotation menu ---------------------------
+
+
+def test_annotation_menu_offers_add_tiers(main_window: MainWindow):
+    menu = next(
+        action.menu()
+        for action in main_window.menuBar().actions()
+        if action.text().replace("&", "") == "Annotation"
+    )
+
+    assert menu.actions() == [main_window.add_tiers_action]
+
+
+def test_add_tiers_is_disabled_until_a_document_is_open(main_window: MainWindow):
+    assert not main_window.add_tiers_action.isEnabled()
+
+    add_document(main_window)
+
+    assert main_window.add_tiers_action.isEnabled()
+
+
+def test_add_tiers_is_disabled_again_when_the_last_document_closes(
+    main_window: MainWindow,
+):
+    add_document(main_window)
+
+    main_window.close_current_tab()
+
+    assert not main_window.add_tiers_action.isEnabled()
+
+
+def test_add_tiers_asks_the_current_document_which_tiers_to_add(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    opened: list[DocumentView] = []
+    monkeypatch.setattr(
+        DocumentView, "open_add_tiers", lambda self: opened.append(self)
+    )
+    add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+    load_signal(second, np.zeros(2000), fs=1000)
+
+    main_window.add_tiers_action.trigger()
+
+    assert opened == [second]
+
+
+def test_add_tiers_shows_the_annotation_plot_if_it_is_hidden(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(DocumentView, "open_add_tiers", lambda self: None)
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    assert not doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.add_tiers()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+    assert PlotType.ANNOTATION in main_window.view_model.display_plan
+
+
+def test_add_tiers_leaves_the_annotation_plot_alone_if_it_is_shown(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(DocumentView, "open_add_tiers", lambda self: None)
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    main_window.plot_annotations()
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.add_tiers()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+
+def test_add_tiers_does_nothing_without_a_document(main_window: MainWindow):
+    main_window.add_tiers()  # must not raise
