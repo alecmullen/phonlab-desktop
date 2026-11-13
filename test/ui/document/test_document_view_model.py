@@ -466,6 +466,88 @@ def test_spectrogram_requested_before_prep_is_shown_once_audio_is_prepped(
     assert calls == [True]
 
 
+# --------------------------- spectrogram only for the shown document ---------------------------
+
+
+def test_a_document_is_shown_by_default(view_model: DocumentViewModel):
+    assert view_model.is_shown
+
+
+def test_hidden_document_does_not_compute_its_spectrogram(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_shown_document_computes_its_spectrogram_when_audio_is_prepped(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    spectrogram_view_model.set_window_state.reset_mock()
+
+    view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
+
+    spectrogram_view_model.set_window_state.assert_called_once()
+
+
+def test_hidden_document_computes_its_spectrogram_once_it_is_shown(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_called_once()
+
+
+def test_showing_a_document_without_a_spectrogram_plot_computes_nothing(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_showing_a_document_before_its_audio_loads_computes_nothing(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_showing_a_document_whose_spectrogram_is_already_up_does_not_recompute(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    view_model.set_shown(False)
+    spectrogram_view_model.set_window_state.reset_mock()
+    spectrogram_view_model.sgram_state = replace(
+        spectrogram_view_model.sgram_state, is_showing=True
+    )
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
 # --------------------------- primary_channel ---------------------------
 
 

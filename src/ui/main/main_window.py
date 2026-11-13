@@ -401,6 +401,7 @@ class MainWindow(QMainWindow):
         doc_view_model = self.view_model_factory.create(DocumentViewModel)
         doc_view_model.subscribe(self.on_doc_state_change)
         doc_view_model.set_plots(self.view_model.display_plan)
+        doc_view_model.set_shown(False)  # opened behind the source document
         doc = DocumentView(doc_view_model)
 
         # Always name after the ORIGINAL source file
@@ -422,6 +423,12 @@ class MainWindow(QMainWindow):
 
     def on_tab_changed(self, index: int):
         doc = self.get_current_document()
+
+        # Only the tab on screen computes its spectrogram, a hidden one waits
+        for tab_index in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(tab_index)
+            if isinstance(tab, DocumentView):
+                tab.view_model.set_shown(tab is doc)
 
         if doc is not None:
             # Every document shows the plots the user last chose
