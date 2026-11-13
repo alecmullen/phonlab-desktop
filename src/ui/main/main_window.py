@@ -74,18 +74,18 @@ class MainWindow(QMainWindow):
         self.close_action.setShortcut("Ctrl+W")
         self.close_action.triggered.connect(self.close_current_tab)
 
-        self.save_action = QAction(self.tr("&Save…"), self)
-        self.save_action.setStatusTip(
+        self.save_audio_action = QAction(self.tr("Save &Audio…"), self)
+        self.save_audio_action.setStatusTip(
             self.tr("Save the current document's audio to a file")
         )
-        self.save_action.setShortcut(QKeySequence.StandardKey.Save)
-        self.save_action.triggered.connect(self.save_audio)
+        self.save_audio_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_audio_action.triggered.connect(self.save_audio)
 
-        self.save_textgrid_action = QAction(self.tr("Save to TextGrid…"), self)
-        self.save_textgrid_action.setStatusTip(
-            self.tr("Save the current document's annotations to a TextGrid")
+        self.export_annotation_action = QAction(self.tr("&Export Annotation…"), self)
+        self.export_annotation_action.setStatusTip(
+            self.tr("Export the current document's annotations to a file")
         )
-        self.save_textgrid_action.triggered.connect(self.save_textgrid)
+        self.export_annotation_action.triggered.connect(self.save_textgrid)
 
         self.audio_info_action = QAction(self.tr("Audio &Info"), self)
         self.audio_info_action.setShortcut("Ctrl+I")
@@ -107,8 +107,8 @@ class MainWindow(QMainWindow):
             fileMenu.addAction(self.open_action)
             fileMenu.addAction(self.close_action)
             fileMenu.addSeparator()
-            fileMenu.addAction(self.save_action)
-            fileMenu.addAction(self.save_textgrid_action)
+            fileMenu.addAction(self.save_audio_action)
+            fileMenu.addAction(self.export_annotation_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.audio_info_action)
             fileMenu.addSeparator()

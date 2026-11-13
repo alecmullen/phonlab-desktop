@@ -644,12 +644,14 @@ def file_menu_actions(main_window: MainWindow) -> dict[str, QAction]:
     return {a.text(): a for a in file_menu.actions() if not a.isSeparator()}
 
 
-def test_file_menu_offers_both_save_audio_and_save_textgrid(main_window: MainWindow):
+def test_file_menu_offers_both_save_audio_and_export_annotation(
+    main_window: MainWindow,
+):
     actions = file_menu_actions(main_window)
 
-    assert actions["&Save…"] is main_window.save_action
-    assert actions["Save to TextGrid…"] is main_window.save_textgrid_action
-    assert main_window.save_action is not main_window.save_textgrid_action
+    assert actions["Save &Audio…"] is main_window.save_audio_action
+    assert actions["&Export Annotation…"] is main_window.export_annotation_action
+    assert main_window.save_audio_action is not main_window.export_annotation_action
 
 
 def test_save_menu_items_open_their_own_dialogs(
@@ -664,14 +666,14 @@ def test_save_menu_items_open_their_own_dialogs(
     )
     doc.open_save_textgrid = lambda: calls.append("textgrid")
 
-    main_window.save_action.trigger()
-    main_window.save_textgrid_action.trigger()
+    main_window.save_audio_action.trigger()
+    main_window.export_annotation_action.trigger()
 
     assert calls == ["audio", "textgrid"]
 
 
 def test_save_menu_item_has_the_standard_save_shortcut(main_window: MainWindow):
-    assert main_window.save_action.shortcut() == QKeySequence.StandardKey.Save
+    assert main_window.save_audio_action.shortcut() == QKeySequence.StandardKey.Save
 
 
 def test_save_audio_invokes_save_use_case_with_selected_options(

@@ -81,16 +81,16 @@ class AnnotationPlot(DocumentPlot):
         self.addAction(create_label_action)
         self.getViewBox().menu.addAction(create_label_action)
 
-        save_to_textgrid_action = ContextMenuHintAction(
-            self.tr("Save to TextGrid..."),
+        export_annotation_action = ContextMenuHintAction(
+            self.tr("Export Annotation..."),
             parent=self,
         )
-        save_to_textgrid_action.triggered.connect(
+        export_annotation_action.triggered.connect(
             self.view_model.trigger_write_textgrid_dialog
         )
 
-        self.addAction(save_to_textgrid_action)
-        self.getViewBox().menu.addAction(save_to_textgrid_action)
+        self.addAction(export_annotation_action)
+        self.getViewBox().menu.addAction(export_annotation_action)
 
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
 
