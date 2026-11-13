@@ -4,8 +4,10 @@ from PyQt6.QtGui import (
     QAction,
     QDragEnterEvent,
     QDropEvent,
+    QHideEvent,
     QMouseEvent,
     QResizeEvent,
+    QShowEvent,
     QWheelEvent,
 )
 from PyQt6.QtWidgets import (
@@ -343,6 +345,7 @@ class DocumentView(QWidget):
                 is_bottom_plot=is_bottom,
             )
             self.add_shared_context_menu_actions(annot_plot.getViewBox())
+            annot_plot.set_shortcuts_active(self.isVisible())
             self.graphics_widget.addItem(annot_plot, row=row, col=0)
             annot_plot.show()
             return [annot_plot]
@@ -613,6 +616,19 @@ class DocumentView(QWidget):
 
         self.pending_single_click = None
         self.click_timer = None
+
+    def showEvent(self, a0: QShowEvent | None):
+        super().showEvent(a0)
+        self.set_plot_shortcuts_active(True)
+
+    def hideEvent(self, a0: QHideEvent | None):
+        super().hideEvent(a0)
+        self.set_plot_shortcuts_active(False)
+
+    def set_plot_shortcuts_active(self, active: bool):
+        for plot in self.document_plots:
+            if isinstance(plot, AnnotationPlot):
+                plot.set_shortcuts_active(active)
 
     def resizeEvent(self, a0: QResizeEvent | None):
         if a0 is None:
