@@ -9,7 +9,10 @@ from ui.base.state import State
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.spectrogram.state.formant_settings import FormantSettingsState
 from ui.spectrogram.state.formant_track_state import FormantTrackState
-from ui.spectrogram.state.spectrogram_state import SpectrogramState
+from ui.spectrogram.state.spectrogram_state import (
+    SpectrogramState,
+    SpectrogramUnavailable,
+)
 
 
 def make_sgram_state(**overrides: object) -> SpectrogramState:
@@ -70,11 +73,19 @@ def test_plot_spectrogram_shows_too_big_label_when_not_showing_and_not_loading(
     plot = SpectrogramPlot(view_model)
 
     calls = []
-    monkeypatch.setattr(plot, "display_window_too_big", lambda: calls.append(True))
+    monkeypatch.setattr(
+        plot, "display_spectrogram_unavailable", lambda reason: calls.append(reason)
+    )
 
-    plot.plot_spectrogram(make_sgram_state(is_showing=False, is_loading=False))
+    plot.plot_spectrogram(
+        make_sgram_state(
+            is_showing=False,
+            is_loading=False,
+            unavailable=SpectrogramUnavailable.TOO_SHORT,
+        )
+    )
 
-    assert calls == [True]
+    assert calls == [SpectrogramUnavailable.TOO_SHORT]
 
 
 def test_plot_spectrogram_populates_when_showing(
@@ -104,7 +115,9 @@ def test_plot_spectrogram_does_nothing_while_loading_and_not_showing(
         plot, "populate_spectrogram", lambda state: populate_calls.append(state)
     )
     monkeypatch.setattr(
-        plot, "display_window_too_big", lambda: too_big_calls.append(True)
+        plot,
+        "display_spectrogram_unavailable",
+        lambda reason: too_big_calls.append(True),
     )
 
     plot.plot_spectrogram(make_sgram_state(is_showing=False, is_loading=True))
@@ -170,15 +183,57 @@ def test_populate_spectrogram_sets_view_y_range(qtbot: QtBot):
     assert plot.getViewBox().state["limits"]["yLimits"] == [0, 25.0]
 
 
-def test_display_window_too_big_clears_image_and_shows_label(qtbot: QtBot):
+def test_display_spectrogram_unavailable_clears_image_and_shows_label(qtbot: QtBot):
     view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
     plot.populate_spectrogram(make_sgram_state())
 
-    plot.display_window_too_big()
+    plot.display_spectrogram_unavailable(SpectrogramUnavailable.TOO_LONG)
 
     assert plot.center_label.isVisible() is True
     assert plot.spec_img.image is None
+
+
+def test_too_long_window_says_to_zoom_in(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+
+    plot.display_spectrogram_unavailable(SpectrogramUnavailable.TOO_LONG)
+
+    assert plot.center_label.text == "Zoom in to a smaller chunk to see a spectrogram"
+
+
+def test_too_short_window_says_to_zoom_out(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+
+    plot.display_spectrogram_unavailable(SpectrogramUnavailable.TOO_SHORT)
+
+    assert plot.center_label.text == "Zoom out to a larger chunk to see a spectrogram"
+
+
+def test_the_message_follows_the_reason_when_the_window_changes(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+
+    plot.display_spectrogram_unavailable(SpectrogramUnavailable.TOO_SHORT)
+    plot.display_spectrogram_unavailable(SpectrogramUnavailable.TOO_LONG)
+
+    assert plot.center_label.text == "Zoom in to a smaller chunk to see a spectrogram"
+
+
+def test_plot_spectrogram_shows_the_message_for_the_reason_in_the_state(
+    qtbot: QtBot,
+):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+
+    plot.plot_spectrogram(
+        make_sgram_state(
+            is_showing=False,
+            is_loading=False,
+            unavailable=SpectrogramUnavailable.TOO_SHORT,
+        )
+    )
+
+    assert plot.center_label.isVisible() is True
+    assert plot.center_label.text == "Zoom out to a larger chunk to see a spectrogram"
 
 
 def test_adjust_gray_scale_scales_trackpad_delta_and_forwards_to_view_model(
