@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
     QAction,
     QDragEnterEvent,
@@ -81,6 +81,9 @@ class DocumentView(QWidget):
         # Create graphics layout widget
         self.graphics_widget = DocumentGraphicsWidget()
         self.graphics_widget.resized.connect(self.apply_row_heights)
+        # Connected once: the scene outlives the plots, which are rebuilt
+        # whenever the layout changes. on_mouse_moved tells the plots
+        self.graphics_widget.scene().sigMouseMoved.connect(self.on_mouse_moved)
 
         # Initialize plot items (will be created in plot methods)
         self.document_plots: list[DocumentPlot] = []
@@ -128,6 +131,7 @@ class DocumentView(QWidget):
         # mouse interaction state
         self.mouse_pressed = False
         self.is_dragging = False
+        self.press_scene_pos: QPointF | None = None
         self.pending_single_click: QPointF | None = None
         self.click_timer = None
 
@@ -287,14 +291,6 @@ class DocumentView(QWidget):
                 height += axis_height
             layout.setRowFixedHeight(row_index, height)
 
-    def connect_plot_signals(self):
-        """Connect mouse signals to all plots"""
-        scene = self.graphics_widget.scene()
-        scene.sigMouseMoved.connect(self.on_mouse_moved)
-
-        for plot in self.document_plots:
-            scene.sigMouseMoved.connect(plot.on_mouse_moved)
-
     def toggle_wave(self):
         self.view_model.toggle_wave()
 
@@ -325,7 +321,6 @@ class DocumentView(QWidget):
         self.row_weights = row_weights
         self.apply_row_heights()
 
-        self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
         self.update_mark(self.view_model.mark_state)
         self.update_document_window(self.view_model.document_window_state)
@@ -503,26 +498,28 @@ class DocumentView(QWidget):
         return pos - self.graphics_widget.pos().toPointF()
 
     def on_mouse_moved(self, pos: QPointF):
-        # Determine which plot the mouse is over
-
-        mouse_over_plot = False
         for plot in self.document_plots:
-            if plot.sceneBoundingRect().contains(pos):
-                mouse_over_plot = True
+            plot.on_mouse_moved(pos)
 
-                mouse_point = plot.getViewBox().mapSceneToView(pos)
-                x = mouse_point.x()
-                y = mouse_point.y()
-
-                if isinstance(plot, SpectrogramPlot):
-                    status_msg = self.tr(
-                        "Cursor time: {:.3f}s, frequency: {:.0f} Hz"
-                    ).format(x, y)
-                else:
-                    status_msg = self.tr("Cursor time: {:.3f}s").format(x)
-
-        if not mouse_over_plot:
+        if self.mouse_pressed and not self.left_button_is_down():
+            # The release was never delivered (it can go missing, e.g. with a
+            # touch-surface mouse), so the selection would follow the pointer for
+            # ever. Treat it as released
+            press_pos = pos if self.press_scene_pos is None else self.press_scene_pos
+            self.end_press(press_pos, Qt.KeyboardModifier.NoModifier)
             return
+
+        # While dragging, the nearest plot stands in when the pointer leaves the
+        # plots: over the margins and gaps, or outside the window
+        plot_under = self._get_document_plot_at(pos)
+        plot = plot_under
+        if plot is None and self.mouse_pressed:
+            plot = self._nearest_document_plot(pos)
+        if plot is None:
+            return
+
+        mouse_point = plot.getViewBox().mapSceneToView(pos)
+        x = mouse_point.x()
 
         if self.mouse_pressed:
             if not self.is_dragging:
@@ -530,8 +527,43 @@ class DocumentView(QWidget):
             else:
                 self.view_model.continue_selection(x)
             self.is_dragging = True
-        else:
+        elif plot_under is not None:
+            y = mouse_point.y()
+            if isinstance(plot, SpectrogramPlot):
+                status_msg = self.tr(
+                    "Cursor time: {:.3f}s, frequency: {:.0f} Hz"
+                ).format(x, y)
+            else:
+                status_msg = self.tr("Cursor time: {:.3f}s").format(x)
             self.message_label.setText(status_msg)
+
+    def left_button_is_down(self) -> bool:
+        return bool(QApplication.mouseButtons() & Qt.MouseButton.LeftButton)
+
+    def _nearest_document_plot(self, scene_pos: QPointF) -> DocumentPlot | None:
+        """The plot closest to scene_pos, for positions in the margins and gaps around
+        the plots"""
+
+        def distance(plot: DocumentPlot) -> float:
+            rect = plot.sceneBoundingRect()
+            dx = max(rect.left() - scene_pos.x(), 0.0, scene_pos.x() - rect.right())
+            dy = max(rect.top() - scene_pos.y(), 0.0, scene_pos.y() - rect.bottom())
+            return dx * dx + dy * dy
+
+        return min(self.document_plots, key=distance, default=None)
+
+    def _plot_to_press_in(self, scene_pos: QPointF) -> DocumentPlot | None:
+        """The plot a press at scene_pos is on. The margins and gaps between plots
+        count as the nearest plot, so a drag started a few pixels off the edge of
+        a plot still selects"""
+        clicked_plot = self._get_document_plot_at(scene_pos)
+        if clicked_plot is not None:
+            return clicked_plot
+
+        graphics_area = QRectF(self.graphics_widget.viewport().rect())
+        if graphics_area.contains(scene_pos):
+            return self._nearest_document_plot(scene_pos)
+        return None
 
     def mousePressEvent(self, a0: QMouseEvent | None):
         """Handle left mouse button press"""
@@ -541,14 +573,18 @@ class DocumentView(QWidget):
             self.context_pos = self.map_scene_to_graphics_widget(a0.position())
             return
 
+        if a0.button() != Qt.MouseButton.LeftButton:
+            # Only the left button makes selections, and only its release ends
+            # them. A press by another button would never be ended
+            return
+
         scene_pos = self.map_scene_to_graphics_widget(a0.position())
 
-        clicked_plot = self._get_document_plot_at(scene_pos)
-
-        if clicked_plot is None:
+        if self._plot_to_press_in(scene_pos) is None:
             return
 
         self.mouse_pressed = True
+        self.press_scene_pos = scene_pos
         a0.accept()
 
     def mouseDoubleClickEvent(self, a0: QMouseEvent | None):
@@ -592,26 +628,30 @@ class DocumentView(QWidget):
             return
 
         scene_pos = self.map_scene_to_graphics_widget(a0.position())
-
-        if self.mouse_pressed:
-            self.mouse_pressed = False
-
-            if self.is_dragging:
-                self.is_dragging = False
-                self.view_model.play_selected_audio()
-            else:
-                if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                    self.play_for_shift_click(scene_pos)
-                else:
-                    self.pending_single_click = scene_pos
-                    if self.click_timer is not None:
-                        self.click_timer.stop()
-                    self.click_timer = QTimer()
-                    self.click_timer.setSingleShot(True)
-                    self.click_timer.timeout.connect(self.handle_single_click)
-                    self.click_timer.start(DOUBLE_CLICK_INTERVAL_MS)
-
+        self.end_press(scene_pos, a0.modifiers())
         a0.accept()
+
+    def end_press(self, scene_pos: QPointF, modifiers: Qt.KeyboardModifier):
+        """The left button is up: finish the selection being dragged, or treat the
+        press as a click"""
+        if not self.mouse_pressed:
+            return
+
+        self.mouse_pressed = False
+
+        if self.is_dragging:
+            self.is_dragging = False
+            self.view_model.play_selected_audio()
+        elif modifiers == Qt.KeyboardModifier.ShiftModifier:
+            self.play_for_shift_click(scene_pos)
+        else:
+            self.pending_single_click = scene_pos
+            if self.click_timer is not None:
+                self.click_timer.stop()
+            self.click_timer = QTimer()
+            self.click_timer.setSingleShot(True)
+            self.click_timer.timeout.connect(self.handle_single_click)
+            self.click_timer.start(DOUBLE_CLICK_INTERVAL_MS)
 
     def play_for_shift_click(self, scene_pos: QPointF):
         """Shift+click plays: the audio between the nodes of the label clicked in the

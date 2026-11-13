@@ -2,7 +2,7 @@ from itertools import pairwise
 
 import numpy as np
 import pytest
-from PyQt6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
+from PyQt6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRectF, Qt, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -191,8 +191,9 @@ def test_update_slider_page_step_clamps_value_to_new_maximum(view: DocumentView)
 
 
 def test_mouse_drag_creates_selection_and_plays_it_on_release(
-    loaded_view: DocumentView,
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
     document_view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonPress)
     loaded_view.mousePressEvent(press)
@@ -812,8 +813,9 @@ def test_on_mouse_moved_outside_plots_keeps_message(loaded_view: DocumentView):
 
 
 def test_on_mouse_moved_while_pressed_starts_then_continues_selection(
-    loaded_view: DocumentView,
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
     loaded_view.mouse_pressed = True
     plot = loaded_view.document_plots[0]
 
@@ -1552,3 +1554,238 @@ def test_a_document_built_while_hidden_fills_the_space_it_is_later_shown_in(
 
     space = view.graphics_widget.viewport().height()
     assert plots_bottom(view) > space - 40
+
+
+# --------------------------- selections that start or end off the plots ---------------------------
+
+
+def press_at(
+    view: DocumentView,
+    scene_pos: QPointF,
+    button: Qt.MouseButton = Qt.MouseButton.LeftButton,
+) -> None:
+    """Press the mouse at a scene position. The event position is in the document
+    view's own coordinates, which are offset from the graphics area's by its layout
+    margin"""
+    in_graphics_widget = view.graphics_widget.mapFromScene(scene_pos)
+    pos = QPointF(view.graphics_widget.mapToParent(in_graphics_widget))
+    view.mousePressEvent(
+        QMouseEvent(
+            QEvent.Type.MouseButtonPress,
+            pos,
+            button,
+            button,
+            Qt.KeyboardModifier.NoModifier,
+        )
+    )
+
+
+def wave_rect(view: DocumentView) -> QRectF:
+    return view.document_plots[0].sceneBoundingRect()
+
+
+def test_press_in_the_margin_beside_a_plot_starts_a_selection(
+    loaded_view: DocumentView,
+):
+    rect = wave_rect(loaded_view)
+
+    press_at(loaded_view, QPointF(rect.right() + 4, rect.center().y()))
+
+    assert loaded_view.mouse_pressed is True
+
+
+def test_press_in_the_gap_between_plots_starts_a_selection(
+    all_plots_view: DocumentView,
+):
+    wave, sgram = all_plots_view.document_plots[0], all_plots_view.document_plots[1]
+    gap_y = (wave.sceneBoundingRect().bottom() + sgram.sceneBoundingRect().top()) / 2
+    assert all_plots_view._get_document_plot_at(QPointF(300, gap_y)) is None
+
+    press_at(all_plots_view, QPointF(300, gap_y))
+
+    assert all_plots_view.mouse_pressed is True
+
+
+def test_press_in_the_top_margin_starts_a_selection(loaded_view: DocumentView):
+    rect = wave_rect(loaded_view)
+
+    press_at(loaded_view, QPointF(rect.center().x(), rect.top() - 4))
+
+    assert loaded_view.mouse_pressed is True
+
+
+def test_press_outside_the_graphics_area_does_not_start_a_selection(
+    loaded_view: DocumentView,
+):
+    press_at(loaded_view, QPointF(-500, -500))
+
+    assert loaded_view.mouse_pressed is False
+
+
+@pytest.mark.parametrize(
+    "button",
+    [
+        Qt.MouseButton.MiddleButton,
+        Qt.MouseButton.BackButton,
+        Qt.MouseButton.RightButton,
+    ],
+)
+def test_only_the_left_button_starts_a_selection(
+    loaded_view: DocumentView, button: Qt.MouseButton
+):
+    """A selection is ended by the release of the left button, so a press by any
+    other button would leave it running for ever"""
+    press_at(loaded_view, scene_center(loaded_view.document_plots[0]), button)
+
+    assert loaded_view.mouse_pressed is False
+
+
+def test_a_drag_keeps_selecting_when_the_pointer_leaves_the_plots(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
+    plot = loaded_view.document_plots[0]
+    rect = plot.sceneBoundingRect()
+    press_at(loaded_view, scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot))
+    inside_end = loaded_view.view_model.select_state.sel_end
+
+    # Dragged out past the right edge of the plot, over the margin
+    loaded_view.on_mouse_moved(QPointF(rect.right() + 6, rect.center().y()))
+
+    state = loaded_view.view_model.select_state
+    assert state.sel_end > inside_end
+    assert state.sel_start == pytest.approx(state.sel_anchor)
+
+
+def test_a_drag_out_of_the_window_ends_at_the_end_of_the_audio(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
+    plot = loaded_view.document_plots[0]
+    press_at(loaded_view, scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot))
+
+    loaded_view.on_mouse_moved(QPointF(5000, plot.sceneBoundingRect().center().y()))
+
+    channel = loaded_view.view_model.primary_channel()
+    assert channel is not None
+    assert loaded_view.view_model.select_state.sel_end == pytest.approx(channel.t[-1])
+
+
+def test_moving_with_no_button_down_shows_status_and_does_not_select(
+    loaded_view: DocumentView,
+):
+    loaded_view.message_label.setText("")
+    rect = wave_rect(loaded_view)
+
+    loaded_view.on_mouse_moved(QPointF(rect.right() + 4, rect.center().y()))
+
+    assert loaded_view.view_model.select_state.is_selected is False
+    assert loaded_view.message_label.text() == ""  # off the plots: no cursor time
+
+
+# --------------------------- a release that never arrives ---------------------------
+
+
+def test_a_missing_release_is_made_up_when_the_pointer_moves_without_the_button(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = loaded_view.document_plots[0]
+    held = {"down": True}
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: held["down"])
+    press_at(loaded_view, scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(30, 0))
+    assert loaded_view.is_dragging is True
+    selection = loaded_view.view_model.select_state
+
+    held["down"] = False  # the release was lost
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(80, 0))
+
+    assert loaded_view.mouse_pressed is False
+    assert loaded_view.is_dragging is False
+    assert loaded_view.view_model.select_state == selection  # no longer following
+    assert len(loaded_view.view_model.audio_player.played) == 1
+
+
+def test_the_selection_keeps_following_the_pointer_while_the_button_is_down(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
+    plot = loaded_view.document_plots[0]
+    press_at(loaded_view, scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot))
+
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(40, 0))
+    first_end = loaded_view.view_model.select_state.sel_end
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(90, 0))
+
+    assert loaded_view.mouse_pressed is True
+    assert loaded_view.view_model.select_state.sel_end > first_end
+    assert loaded_view.view_model.audio_player.played == []
+
+
+def test_a_lost_release_after_a_click_without_drag_is_treated_as_a_click(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: False)
+    plot = loaded_view.document_plots[0]
+    press_scene = scene_center(plot)
+    press_at(loaded_view, press_scene)
+
+    loaded_view.on_mouse_moved(press_scene + QPointF(5, 0))
+
+    assert loaded_view.mouse_pressed is False
+    assert loaded_view.pending_single_click == loaded_view.press_scene_pos
+    assert loaded_view.view_model.select_state.is_selected is False
+
+
+def test_left_button_is_down_reads_the_application_state(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        QApplication, "mouseButtons", staticmethod(lambda: Qt.MouseButton.LeftButton)
+    )
+    assert loaded_view.left_button_is_down() is True
+
+    monkeypatch.setattr(
+        QApplication, "mouseButtons", staticmethod(lambda: Qt.MouseButton.RightButton)
+    )
+    assert loaded_view.left_button_is_down() is False
+
+
+# --------------------------- mouse-move connections ---------------------------
+
+
+def move_receivers(view: DocumentView) -> int:
+    scene = view.graphics_widget.scene()
+    return scene.receivers(scene.sigMouseMoved)
+
+
+def test_rebuilding_the_layout_does_not_add_mouse_move_connections(
+    loaded_view: DocumentView,
+):
+    before = move_receivers(loaded_view)
+
+    for _ in range(3):
+        loaded_view.view_model.toggle_spectrogram()
+        QApplication.processEvents()
+        loaded_view.view_model.toggle_spectrogram()
+        QApplication.processEvents()
+
+    assert move_receivers(loaded_view) == before == 1
+
+
+def test_a_mouse_move_reaches_each_plot_once(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls: list[int] = []
+    for index, plot in enumerate(all_plots_view.document_plots):
+        monkeypatch.setattr(
+            plot, "on_mouse_moved", lambda pos, index=index: calls.append(index)
+        )
+
+    all_plots_view.on_mouse_moved(QPointF(300, 100))
+
+    assert sorted(calls) == [0, 1, 2]
