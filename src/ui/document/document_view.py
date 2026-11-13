@@ -601,7 +601,7 @@ class DocumentView(QWidget):
                 self.view_model.play_selected_audio()
             else:
                 if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                    self.play_window_or_selection(scene_pos)
+                    self.play_for_shift_click(scene_pos)
                 else:
                     self.pending_single_click = scene_pos
                     if self.click_timer is not None:
@@ -612,6 +612,17 @@ class DocumentView(QWidget):
                     self.click_timer.start(DOUBLE_CLICK_INTERVAL_MS)
 
         a0.accept()
+
+    def play_for_shift_click(self, scene_pos: QPointF):
+        """Shift+click plays: the audio between the nodes of the label clicked in the
+        annotation plot, anywhere else the selection or the visible window"""
+        clicked_plot = self._get_document_plot_at(scene_pos)
+        if isinstance(clicked_plot, AnnotationPlot) and clicked_plot.handle_shift_click(
+            scene_pos
+        ):
+            return
+
+        self.play_window_or_selection(scene_pos)
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
