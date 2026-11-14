@@ -146,7 +146,24 @@ def test_voiced_only_blanks_the_formants_of_voiceless_frames(
 
     df = measure_formants(X, FS, FormantOptions(FormantMethod.LPC, voiced_only=True))
 
-    assert vad_calls == [0.8]
+    assert vad_calls == [0.8]  # the default threshold
     assert df["F1"].iloc[0] == 1.0
     assert df.loc[1, ["F1", "F2", "F3", "F4"]].isna().all()
     assert list(df.columns) == ["sec", "F1", "F2", "F3", "F4"]
+
+
+def test_voiced_only_uses_the_voicing_threshold(
+    calls: list, monkeypatch: pytest.MonkeyPatch
+):
+    thresholds = []
+
+    def fake_vad(x: np.ndarray, fs: int, threshold: float) -> pd.DataFrame:
+        thresholds.append(threshold)
+        return pd.DataFrame({"sec": [0.01, 0.02], "voiced": [True, True]})
+
+    monkeypatch.setattr(measure_formants_module.phon, "VAD", fake_vad)
+
+    options = FormantOptions(FormantMethod.LPC, voiced_only=True, voicing_threshold=0.6)
+    measure_formants(X, FS, options)
+
+    assert thresholds == [0.6]

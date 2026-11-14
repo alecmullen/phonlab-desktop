@@ -12,6 +12,7 @@ from res.constants import (
     FORMANT_SPEAKER,
     FORMANT_STEP_SEC,
     FORMANT_TOP_FREQUENCY,
+    FORMANT_VOICING_THRESHOLD,
 )
 from ui.base.state import State
 
@@ -41,6 +42,7 @@ class FormantSettingsState(State):
     step: float = FORMANT_STEP_SEC
     length: float = FORMANT_LENGTH_SEC["ifc"]
     voiced_only: bool = False
+    voicing_threshold: float = FORMANT_VOICING_THRESHOLD
 
     def with_method(self, method: FormantMethodState) -> "FormantSettingsState":
         """These settings for another method, with its usual preemphasis and
@@ -65,4 +67,5 @@ def to_formant_options(settings: FormantSettingsState) -> FormantOptions:
         step=settings.step,
         length=settings.length,
         voiced_only=settings.voiced_only,
+        voicing_threshold=settings.voicing_threshold,
     )
