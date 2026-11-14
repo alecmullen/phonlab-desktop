@@ -2,14 +2,13 @@ from dataclasses import replace
 
 import pyqtgraph as pg
 import pytest
-from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QFocusEvent, QKeyEvent, QKeySequence, QMouseEvent, QShowEvent
 from PyQt6.QtTest import QTest
 from pytestqt.qtbot import QtBot
 from support.annotation_repository import SeedableAnnotationRepository
 from support.view_models import make_annotation_view_model
 
-import ui.annotation.annotation_plot as annotation_plot_module
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
@@ -378,6 +377,24 @@ def test_the_mouse_alone_does_not_start_editing_a_label(
     QTest.mouseClick(layout.viewport(), button, pos=pos)
 
     assert editing_labels(plot) == []
+
+
+def test_right_click_over_a_label_opens_the_context_menu(qtbot: QtBot):
+    """As in the waveform and spectrogram plots. Right clicks over a label used to
+    start editing it instead (a one-button mouse makes a right click with
+    Control+click)"""
+    plot, layout = _shown_plot(qtbot, make_annotation_view_model())
+    plot.populate(MOCK_ANNOTATION_STATE)
+    menu = plot.getViewBox().menu
+    pos = layout.mapFromScene(label_scene_pos(plot))
+
+    QTest.mouseClick(layout.viewport(), Qt.MouseButton.RightButton, pos=pos)
+
+    try:
+        assert menu.isVisible()
+        assert editing_labels(plot) == []
+    finally:
+        menu.hide()
 
 
 def test_handle_shift_click_on_label_selects_and_plays_it(qtbot: QtBot):
@@ -862,82 +879,3 @@ def test_create_label_shortcut_can_be_switched_off_and_on(qtbot: QtBot):
 
     plot.set_shortcuts_active(True)
     assert plot.create_label_action.isEnabled()
-
-
-# --------------------------- Control+click opens the context menu ---------------------------
-
-
-def left_press(plot: AnnotationPlot, modifiers: Qt.KeyboardModifier) -> QMouseEvent:
-    scene_pos = plot.getViewBox().mapViewToScene(QPointF(50.0, 0.5))  # no node here
-    event = QMouseEvent(
-        QEvent.Type.MouseButtonPress,
-        scene_pos,
-        Qt.MouseButton.LeftButton,
-        Qt.MouseButton.LeftButton,
-        modifiers,
-    )
-    event.scenePos = lambda: scene_pos  # type: ignore[method-assign]
-    event.screenPos = lambda: QPoint(120, 80)  # type: ignore[attr-defined]
-    return event
-
-
-def test_control_click_opens_the_context_menu_where_the_system_does_not(
-    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(
-        annotation_plot_module, "control_click_opens_context_menu", lambda: True
-    )
-    plot, _layout = _shown_plot(qtbot, make_annotation_view_model())
-    popups: list[QPoint] = []
-    monkeypatch.setattr(plot.getViewBox().menu, "popup", popups.append)
-    event = left_press(plot, Qt.KeyboardModifier.ControlModifier)
-
-    plot.mousePressEvent(event)  # type: ignore[arg-type]
-
-    assert popups == [QPoint(120, 80)]
-    assert event.isAccepted()
-    assert plot.context_pos is not None
-
-
-def test_control_click_is_left_to_the_system_on_macos(
-    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
-):
-    """macOS reports Control+click as a right click, which the plot ignores so that
-    the view box raises its own menu"""
-    monkeypatch.setattr(
-        annotation_plot_module, "control_click_opens_context_menu", lambda: False
-    )
-    plot, _layout = _shown_plot(qtbot, make_annotation_view_model())
-    popups: list[QPoint] = []
-    monkeypatch.setattr(plot.getViewBox().menu, "popup", popups.append)
-    event = left_press(plot, Qt.KeyboardModifier.ControlModifier)
-
-    plot.mousePressEvent(event)  # type: ignore[arg-type]
-
-    assert popups == []
-    assert not event.isAccepted()
-
-
-def test_plain_left_click_does_not_open_the_context_menu(
-    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(
-        annotation_plot_module, "control_click_opens_context_menu", lambda: True
-    )
-    plot, _layout = _shown_plot(qtbot, make_annotation_view_model())
-    popups: list[QPoint] = []
-    monkeypatch.setattr(plot.getViewBox().menu, "popup", popups.append)
-    event = left_press(plot, Qt.KeyboardModifier.NoModifier)
-
-    plot.mousePressEvent(event)  # type: ignore[arg-type]
-
-    assert popups == []
-    assert not event.isAccepted()
-
-
-def test_control_click_helper_is_false_only_on_macos(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(annotation_plot_module.sys, "platform", "darwin")
-    assert annotation_plot_module.control_click_opens_context_menu() is False
-
-    monkeypatch.setattr(annotation_plot_module.sys, "platform", "linux")
-    assert annotation_plot_module.control_click_opens_context_menu() is True
