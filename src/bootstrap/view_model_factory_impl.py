@@ -14,6 +14,8 @@ from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.save_audio.save_audio import SaveAudio
+from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.save_display_plan import SaveDisplayPlan
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
@@ -128,4 +130,9 @@ class ViewModelFactoryImpl(ViewModelFactory):
         return AudioWaveViewModel(channel_idx)
 
     def create_main_view_model(self) -> MainViewModel:
-        return MainViewModel()
+        use_case_factory = self.get_use_case_factory(None)
+
+        return MainViewModel(
+            use_case_factory.provide(LoadDisplayPlan),
+            use_case_factory.provide(SaveDisplayPlan),
+        )

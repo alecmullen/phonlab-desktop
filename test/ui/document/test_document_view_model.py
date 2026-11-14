@@ -34,11 +34,14 @@ from ui.document.state.status_message_state import StatusMessageState
 from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
+from ui.spectrogram.state.spectrogram_state import SpectrogramState
 
 
 @pytest.fixture
 def spectrogram_view_model() -> SpectrogramViewModel:
-    return mock_view_model(SpectrogramViewModel)
+    view_model = mock_view_model(SpectrogramViewModel)
+    view_model.sgram_state = SpectrogramState()
+    return view_model
 
 
 @pytest.fixture
@@ -390,6 +393,77 @@ def test_toggle_annotations_adds_and_removes_annotations(
 
     view_model.toggle_annotations()
     assert PlotType.ANNOTATION not in view_model.plot_layout_state.plots
+
+
+def test_set_plots_replaces_the_layout_and_emits_it(view_model: DocumentViewModel):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.update_spectrogram = lambda: None
+    emitted = []
+    view_model.subscribe(emitted.append)
+
+    view_model.set_plots({PlotType.WAVEFORM, PlotType.SPECTROGRAM})
+
+    expected = PlotLayoutState({PlotType.WAVEFORM, PlotType.SPECTROGRAM})
+    assert view_model.plot_layout_state == expected
+    assert expected in emitted
+
+
+def test_set_plots_with_no_plots_falls_back_to_waveform(view_model: DocumentViewModel):
+    view_model.set_plots({PlotType.ANNOTATION})
+
+    view_model.set_plots(set())
+
+    assert view_model.plot_layout_state.plots == {PlotType.WAVEFORM}
+
+
+def test_set_plots_with_the_current_layout_emits_nothing(view_model: DocumentViewModel):
+    emitted = []
+    view_model.subscribe(emitted.append)
+
+    view_model.set_plots({PlotType.WAVEFORM})
+
+    assert emitted == []
+
+
+def test_set_plots_updates_the_new_plots_when_audio_is_loaded(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    calls = []
+    view_model.update_spectrogram = lambda: calls.append("spectrogram")
+    view_model.update_annotation_state = lambda: calls.append("annotation")
+
+    view_model.set_plots({PlotType.SPECTROGRAM, PlotType.ANNOTATION})
+
+    assert calls == ["spectrogram", "annotation"]
+
+
+def test_set_plots_before_audio_loads_only_records_the_layout(
+    view_model: DocumentViewModel,
+):
+    def fail():
+        raise AssertionError("no audio to plot yet")
+
+    view_model.update_spectrogram = fail
+    emitted = []
+    view_model.subscribe(emitted.append)
+
+    view_model.set_plots({PlotType.SPECTROGRAM})
+
+    assert PlotType.SPECTROGRAM in view_model.plot_layout_state.plots
+    assert emitted == []
+
+
+def test_spectrogram_requested_before_prep_is_shown_once_audio_is_prepped(
+    view_model: DocumentViewModel,
+):
+    calls = []
+    view_model.update_spectrogram = lambda: calls.append(True)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+
+    view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
+
+    assert calls == [True]
 
 
 # --------------------------- primary_channel ---------------------------
