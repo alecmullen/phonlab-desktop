@@ -44,7 +44,7 @@ class MainViewModel(ViewModel):
 
     def set_display_plan(self, plots: Iterable[PlotType]):
         """Make `plots` the display plan for the rest of the session"""
-        settings.display_plan = plot_names(plots_from_names(plot_names(plots)))
+        settings.display_plan = plot_names(plots)
 
     def save_window_layout(self):
         """Save the display plan in the project file, so the project opens

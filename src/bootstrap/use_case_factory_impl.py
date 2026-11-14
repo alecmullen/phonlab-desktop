@@ -81,7 +81,6 @@ class UseCaseFactory:
             use_case = self.parse_textgrid
         if use_case_type is WriteTextGrid:
             use_case = self.write_textgrid
-
         if use_case_type is LoadDisplayPlan:
             use_case = self.load_display_plan
         if use_case_type is SaveDisplayPlan:
