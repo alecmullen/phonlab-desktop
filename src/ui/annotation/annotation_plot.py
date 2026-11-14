@@ -1,7 +1,5 @@
-import sys
-
 import pyqtgraph as pg
-from PyQt6.QtCore import QPoint, QPointF, Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
     QFocusEvent,
     QFont,
@@ -30,12 +28,6 @@ from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.common.loading_overlay import LoadingOverlay
 from ui.document.state.load_progress_state import LoadProgressState
-
-
-def control_click_opens_context_menu() -> bool:
-    """On macOS the system already turns Control+click into a right click. Elsewhere
-    the plot has to do it"""
-    return sys.platform != "darwin"
 
 
 class AnnotationPlot(DocumentPlot):
@@ -208,18 +200,11 @@ class AnnotationPlot(DocumentPlot):
         pos = self.getViewBox().mapSceneToView(a0.scenePos())
 
         if a0.button() == Qt.MouseButton.RightButton:
+            # The context menu, which the view box raises on this click as it does
+            # in the other plots (a one-button mouse makes a right click with
+            # Control+click)
             self.context_pos = pos
             a0.ignore()
-            return
-
-        if (
-            a0.button() == Qt.MouseButton.LeftButton
-            and a0.modifiers() & Qt.KeyboardModifier.ControlModifier
-            and control_click_opens_context_menu()
-        ):
-            self.context_pos = pos
-            self.getViewBox().menu.popup(QPoint(a0.screenPos()))
-            a0.accept()
             return
 
         pixel_size = self.getViewBox().viewPixelSize()
