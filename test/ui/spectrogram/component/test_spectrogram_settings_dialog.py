@@ -6,7 +6,10 @@ from ui.spectrogram.component.spectrogram_settings_dialog import (
     TOP_FREQUENCY_OPTIONS,
     SpectrogramSettingsDialog,
 )
-from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
+from ui.spectrogram.state.spectrogram_settings import (
+    SpectrogramSettingsState,
+    SpectrogramTypeState,
+)
 
 
 def test_dropdown_is_populated_with_sorted_top_frequency_options(qtbot: QtBot):
@@ -61,3 +64,75 @@ def test_open_spectrogram_settings_returns_none_when_rejected(
     )
 
     assert result is None
+
+
+def test_type_dropdown_offers_the_four_types_and_shows_the_current_one(qtbot: QtBot):
+    settings = SpectrogramSettingsState().with_type(SpectrogramTypeState.LPC)
+    dialog = SpectrogramSettingsDialog(settings)
+    qtbot.addWidget(dialog)
+
+    dropdown = dialog.type_dropdown
+    assert [dropdown.itemData(i) for i in range(dropdown.count())] == list(
+        SpectrogramTypeState
+    )
+    assert dropdown.currentData() == SpectrogramTypeState.LPC
+    # Opening the dialog must not replace the user's own window and step
+    assert dialog.window_spin.value() == 30
+    assert dialog.step_spin.value() == 4
+
+
+def test_choosing_a_type_fills_in_its_usual_window_and_step(qtbot: QtBot):
+    dialog = SpectrogramSettingsDialog(SpectrogramSettingsState())
+    qtbot.addWidget(dialog)
+
+    dialog.type_dropdown.setCurrentIndex(
+        dialog.type_dropdown.findData(SpectrogramTypeState.MULTITAPER)
+    )
+
+    assert dialog.window_spin.value() == 20
+    assert dialog.step_spin.value() == 4
+
+    dialog.type_dropdown.setCurrentIndex(
+        dialog.type_dropdown.findData(SpectrogramTypeState.FFT)
+    )
+
+    assert dialog.window_spin.value() == 8
+    assert dialog.step_spin.value() == 1
+
+
+def test_the_step_can_be_lowered_after_choosing_a_slow_type(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    def fake_exec(self: SpectrogramSettingsDialog) -> QDialog.DialogCode:
+        self.type_dropdown.setCurrentIndex(
+            self.type_dropdown.findData(SpectrogramTypeState.LPC)
+        )
+        self.step_spin.setValue(1)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(SpectrogramSettingsDialog, "exec", fake_exec)
+
+    result = SpectrogramSettingsDialog.open_spectrogram_settings(
+        SpectrogramSettingsState()
+    )
+
+    assert result.type == SpectrogramTypeState.LPC
+    assert result.window_size == pytest.approx(0.03)
+    assert result.step_size == pytest.approx(0.001)
+
+
+def test_the_returned_order_follows_the_new_window(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    def fake_exec(self: SpectrogramSettingsDialog) -> QDialog.DialogCode:
+        self.window_spin.setValue(8)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(SpectrogramSettingsDialog, "exec", fake_exec)
+    # A long window earlier made the order bigger than the default
+    original = SpectrogramSettingsState(window_size=0.04)
+    assert original.order == 10
+
+    result = SpectrogramSettingsDialog.open_spectrogram_settings(original)
+
+    assert result.order == 9  # the default again
