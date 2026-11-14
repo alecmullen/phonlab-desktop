@@ -42,7 +42,7 @@ SPECTROGRAM_PERCENTILE_SAMPLE_SIZE = 100_000
 
 # -- Formant Tracking --
 FORMANT_PREEMPHASIS = 0.94
-FORMANT_SPEAKER = 1  # 0 = long vocal tract (male), 1 = medium (female), 2 = child
+FORMANT_SPEAKER = 1  # 0 = long vocal tract, 1 = medium, 2 = short
 
 # -- Audio Processing __
 DEFAULT_FILTER_ORDER = 8

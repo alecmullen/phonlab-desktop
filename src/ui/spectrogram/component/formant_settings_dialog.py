@@ -29,9 +29,9 @@ class FormantSettingsDialog(QDialog):
         layout.addRow(self.tr("Preemphasis:"), self.preemphasis_spin)
 
         self.speaker_combo = QComboBox()
-        self.speaker_combo.addItem(self.tr("Long vocal tract (male)"), 0)
-        self.speaker_combo.addItem(self.tr("Medium (female)"), 1)
-        self.speaker_combo.addItem(self.tr("Small (child)"), 2)
+        self.speaker_combo.addItem(self.tr("Long vocal tract"), 0)
+        self.speaker_combo.addItem(self.tr("Medium"), 1)
+        self.speaker_combo.addItem(self.tr("Short vocal tract"), 2)
         self.speaker_combo.setCurrentIndex(
             self.speaker_combo.findData(settings.speaker)
         )
