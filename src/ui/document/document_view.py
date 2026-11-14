@@ -114,6 +114,13 @@ class DocumentView(QWidget):
         bottom_layout.addWidget(self.message_label)
         bottom_layout.addStretch(1)
 
+        # What is loading. The bar's own text is not drawn while it is busy
+        # (no percentage), on some platforms, so it is said beside the bar.
+        self.progress_label = QLabel("")
+        self.progress_label.setVisible(False)
+        bottom_layout.addWidget(self.progress_label)
+        bottom_layout.addSpacing(6)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximumWidth(200)
         self.progress_bar.setTextVisible(True)
@@ -487,11 +494,12 @@ class DocumentView(QWidget):
 
     def update_load_progress(self, progress: LoadProgressState):
         self.progress_bar.setVisible(progress.is_loading)
+        self.progress_label.setVisible(progress.is_loading)
         if progress.is_loading:
             self.progress_bar.setRange(0, 0)  # no known percentage, just "busy"
-            self.progress_bar.setFormat(
-                progress.message or self.tr("Loading full file…")
-            )
+            message = progress.message or self.tr("Loading full file…")
+            self.progress_bar.setFormat(message)
+            self.progress_label.setText(message)
         else:
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setFormat(self.tr("Computing %p%"))
