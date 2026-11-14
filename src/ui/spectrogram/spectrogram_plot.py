@@ -1,4 +1,5 @@
 import numpy as np
+import phonlab as phon
 import pyqtgraph as pg
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
@@ -43,10 +44,10 @@ class SpectrogramPlot(DocumentPlot):
         lut = pg.colormap.get("CET-L1").getLookupTable(nPts=256)[::-1]
         self.spec_img.setLookupTable(lut)
 
-        # The frequency (Hz) of each row of the spectrogram, and whether the rows
-        # are evenly spaced in Hz. If not, the plot's vertical axis counts rows
-        # (so they stay evenly spaced) and a frequency is found among them
-        self.row_frequencies = np.zeros(0)
+        # Where the rows of the spectrogram are on the vertical axis. It is in Hz,
+        # unless the rows are evenly spaced in mels: then it is in mels, with the
+        # frequencies written on it in Hz
+        self.row_positions = np.zeros(0)
         self.is_mel = False
         self.formant_track = FormantTrackState()
 
@@ -100,9 +101,7 @@ class SpectrogramPlot(DocumentPlot):
 
     def to_axis(self, hz: np.ndarray) -> np.ndarray:
         """Where frequencies (Hz) are on the vertical axis"""
-        if not self.is_mel:
-            return hz
-        return np.interp(hz, self.row_frequencies, np.arange(len(self.row_frequencies)))
+        return phon.Hz_to_mel(hz) if self.is_mel else hz
 
     def plot_formants(self, track: FormantTrackState):
         """Draw F1-F4 as red dots; frames without a measurement are skipped."""
@@ -110,10 +109,12 @@ class SpectrogramPlot(DocumentPlot):
         t = np.repeat(track.sec, track.formants.shape[1])
         f = track.formants.reshape(-1)
         valid = np.isfinite(f)
+        y = np.full(f.shape, np.nan)
+        y[valid] = self.to_axis(f[valid])
         if self.is_mel:
-            # The rows only reach so far: don't pile the dots up against the edge
-            valid &= (f >= self.row_frequencies[0]) & (f <= self.row_frequencies[-1])
-        self.formant_dots.setData(x=t[valid], y=self.to_axis(f[valid]))
+            # The rows only reach so far
+            valid &= (y >= self.row_positions[0]) & (y <= self.row_positions[-1])
+        self.formant_dots.setData(x=t[valid], y=y[valid])
 
     def plot_spectrogram(self, sgram: SpectrogramState):
         self.track_formants_action.setEnabled(sgram.is_showing)
@@ -127,23 +128,25 @@ class SpectrogramPlot(DocumentPlot):
 
         self.center_label.setVisible(False)
 
-        self.row_frequencies = sgram.f
+        self.row_positions = sgram.f
         self.is_mel = sgram.frequency_scale == FrequencyScale.MEL
         axis = self.getAxis("left")
         if self.is_mel:
-            # Row k is centered on k. The labels are in Hz, at the rows' places
-            bottom, top = -0.5, len(sgram.f) - 0.5
+            # Each row is centered on its position
+            half_row = (sgram.f[1] - sgram.f[0]) / 2
+            bottom, top = sgram.f[0] - half_row, sgram.f[-1] + half_row
             labeled = [
-                hz for hz in MEL_AXIS_TICKS_HZ if sgram.f[0] <= hz <= sgram.f[-1]
+                hz
+                for hz in MEL_AXIS_TICKS_HZ
+                if sgram.f[0] <= phon.Hz_to_mel(hz) <= sgram.f[-1]
             ]
             places = self.to_axis(np.array(labeled, dtype=float))
-            ticks = list(zip(places.tolist(), map(str, labeled)))
-            axis.setTicks([ticks])
+            axis.setTicks([list(zip(places.tolist(), map(str, labeled)))])
+            self.getViewBox().setLimits(yMin=bottom, yMax=top)
         else:
             bottom, top = sgram.f[0], sgram.f[-1]
             axis.setTicks(None)
-
-        self.getViewBox().setLimits(yMin=0 if not self.is_mel else bottom, yMax=top)
+            self.getViewBox().setLimits(yMin=0, yMax=top)
         self.getViewBox().setYRange(bottom, top)
 
         vmin = sgram.low_sxx + (sgram.high_sxx - sgram.low_sxx) * sgram.gray_cutoff

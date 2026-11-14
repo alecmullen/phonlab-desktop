@@ -104,21 +104,19 @@ def test_cepstral_of_no_audio_is_an_error():
         )
 
 
-def test_mel_rows_are_given_in_hz_and_are_evenly_spaced_on_the_mel_scale(
+def test_mel_rows_are_evenly_spaced_on_the_mel_scale_from_80_to_7600_hz(
     speech: np.ndarray,
 ):
-    x = speech[: 2 * FS]
     fs = 16000
-    x = phon.prep_audio(x, FS, target_fs=fs, preemph=0.94)[0]
+    x = phon.prep_audio(speech[: 2 * FS], FS, target_fs=fs, preemph=0.94)[0]
 
     t, f, sxx = compute_typed_sgram(x, fs, SpectrogramType.MEL, 0.064, 0.004, ORDER)
 
+    # The rows' frequencies are in mels, as phonlab gives them
     assert len(f) == 80
-    assert f[0] == pytest.approx(80)
-    assert f[-1] == pytest.approx(7600)
-    mels = phon.Hz_to_mel(f)
-    np.testing.assert_allclose(np.diff(mels), np.diff(mels)[0])
-    assert np.diff(f)[-1] > 5 * np.diff(f)[0]  # so, not evenly spaced in Hz
+    assert f[0] == pytest.approx(phon.Hz_to_mel(80))
+    assert f[-1] == pytest.approx(phon.Hz_to_mel(7600))
+    np.testing.assert_allclose(np.diff(f), np.diff(f)[0])
     assert sxx.shape == (80, len(t))
     assert t[1] - t[0] == pytest.approx(0.004)
 
