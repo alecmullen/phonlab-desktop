@@ -29,10 +29,6 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
             # Estimate total frames needed (with buffer)
             estimated_frames = int(frames_per_sec * (len(x) / fs) * 1.2)
 
-            # Every computation needs files of its own: this use case is shared by
-            # all documents, and a file recreated or deleted by one computation
-            # would pull the pages out from under another one still mapped to it
-            # (a bus error, SIGBUS, when it next touches them)
             temp_dir = tempfile.gettempdir()
             mmap_file = self.new_temp_file(temp_dir, "spectrogram_")
             ts_file = self.new_temp_file(temp_dir, "spectrogram_ts_")
@@ -41,8 +37,6 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
                 mmap_file, ts_file, n_freqs, estimated_frames
             )
 
-            # The spectrogram outlives this generator, which ends normally once all
-            # chunks are computed. Remove the files when it is no longer referenced
             remove_file_when_released(sxx_mmap, mmap_file)
             remove_file_when_released(t_mmap, ts_file)
 
@@ -157,5 +151,4 @@ def remove_quietly(path: str):
     try:
         os.remove(path)
     except OSError:
-        # Already removed, or (on Windows) still mapped by something else
         pass
