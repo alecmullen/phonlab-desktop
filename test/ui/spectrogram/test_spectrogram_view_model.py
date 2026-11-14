@@ -763,7 +763,7 @@ def test_track_formants_uses_raw_audio_under_window(
 ):
     track_formants = mock_use_case(TrackFormants)
     view_model = make_formant_view_model(track_formants)
-    settings = FormantSettingsState(0.9, 80, 300, 2)
+    settings = FormantSettingsState(0.9, 2)
 
     view_model.track_formants(settings)
 
@@ -771,7 +771,7 @@ def test_track_formants_uses_raw_audio_under_window(
     x, fs, *params = track_formants.call_args.args
     assert len(x) == 2000
     assert fs == 1000
-    assert params == [0.9, 80, 300, 2]
+    assert params == [0.9, 2]
 
 
 def test_track_formants_emits_track_at_absolute_times(
