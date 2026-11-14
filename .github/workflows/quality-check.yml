@@ -36,7 +36,14 @@ jobs:
       - name: Run Automated Tests
         run: uv run pytest --cov-report=xml:coverage.xml --cov=src .
 
+      # The comment can only be posted on pull requests from this repository. A
+      # pull request from a fork gets a read-only token, and on a push the action
+      # would have to comment on the commit, which needs contents: write. Either
+      # way the step used to fail, turning a passing run red
       - name: Coverage comment
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
         uses: MishaKav/pytest-coverage-comment@v1
         with:
             pytest-xml-coverage-path: ./coverage.xml
