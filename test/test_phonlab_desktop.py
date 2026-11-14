@@ -90,11 +90,19 @@ def fake_run_app_dependencies(
             self.exec_called = True
             return 0
 
+    class FakeMainViewModel:
+        def __init__(self):
+            self.warmed_up = False
+
+        def warm_up_formant_tracking(self) -> None:
+            self.warmed_up = True
+
     class FakeMainWindow:
         instances: ClassVar[list["FakeMainWindow"]] = []
 
         def __init__(self, view_model_factory: ViewModelFactory):
             self.view_model_factory = view_model_factory
+            self.view_model = FakeMainViewModel()
             self.shown = False
             self.splash = None
             self.opened_files = None
@@ -193,6 +201,7 @@ def test_run_app_shows_main_window_and_splash_and_starts_event_loop(
 
     assert isinstance(main_window.view_model_factory, ViewModelFactoryImpl)
     assert main_window.shown is True
+    assert main_window.view_model.warmed_up is True
     assert splash.shown is True
     assert main_window.splash is splash
     assert main_window.opened_files is None
