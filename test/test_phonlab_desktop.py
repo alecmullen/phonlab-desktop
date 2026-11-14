@@ -11,6 +11,7 @@ from typing import ClassVar
 import pytest
 
 from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
+from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.base.dependency_factory import ViewModelFactory
 
 PHONLAB_DESKTOP_PATH = (
@@ -76,10 +77,14 @@ def fake_run_app_dependencies(
             self.argv = argv
             self.exec_called = False
             self.window_icon = None
+            self.double_click_interval = None
             FakeQApplication.instances.append(self)
 
         def setWindowIcon(self, icon: object) -> None:
             self.window_icon = icon
+
+        def setDoubleClickInterval(self, milliseconds: int) -> None:
+            self.double_click_interval = milliseconds
 
         def exec(self) -> int:
             self.exec_called = True
@@ -195,6 +200,22 @@ def test_run_app_shows_main_window_and_splash_and_starts_event_loop(
     window_icon = fake_app_cls.instances[0].window_icon
     assert window_icon is not None
     assert not window_icon.isNull()
+
+
+def test_run_app_shortens_the_double_click_interval(
+    monkeypatch: pytest.MonkeyPatch,
+    mock_librosa_load: list,
+    fake_run_app_dependencies: tuple[type, type, type],
+    qapp: object,
+):
+    fake_app_cls = fake_run_app_dependencies[0]
+    monkeypatch.delenv("PHONLAB_WARMUP_ONLY", raising=False)
+    monkeypatch.setattr(sys, "argv", ["phonlab_desktop.py"])
+
+    with patched_qapplication(fake_app_cls):
+        load_module("__main__")
+
+    assert fake_app_cls.instances[0].double_click_interval == DOUBLE_CLICK_INTERVAL_MS
 
 
 def test_run_app_opens_files_passed_as_command_line_arguments(
