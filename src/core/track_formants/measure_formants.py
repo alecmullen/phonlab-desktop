@@ -7,7 +7,7 @@ import phonlab as phon
 from core.track_formants.entity.formant_method import FormantMethod
 from core.track_formants.entity.formant_options import FormantOptions
 from core.track_formants.formant_lock import FORMANT_LOCK
-from res.constants import FORMANT_LPC_SAMPLE_RATE, FORMANT_VOICING_THRESHOLD
+from res.constants import FORMANT_LPC_SAMPLE_RATE
 
 FORMANT_COLUMNS = ["F1", "F2", "F3", "F4"]
 ORDER_METHODS = (FormantMethod.LPC, FormantMethod.RLPC, FormantMethod.TVLP)
@@ -20,7 +20,7 @@ def measure_formants(x: np.ndarray, fs: int, options: FormantOptions) -> pd.Data
     preemphasis, so `x` is the raw audio."""
     df = _track(x, fs, options)
     if options.voiced_only:
-        df = _without_voiceless_frames(df, x, fs)
+        df = _without_voiceless_frames(df, x, fs, options.voicing_threshold)
     return df[["sec", *FORMANT_COLUMNS]]
 
 
@@ -75,10 +75,12 @@ def _track(x: np.ndarray, fs: int, options: FormantOptions) -> pd.DataFrame:
                 )
 
 
-def _without_voiceless_frames(df: pd.DataFrame, x: np.ndarray, fs: int) -> pd.DataFrame:
+def _without_voiceless_frames(
+    df: pd.DataFrame, x: np.ndarray, fs: int, threshold: float
+) -> pd.DataFrame:
     """`df` with the formants of frames that phon.VAD() finds voiceless set
     to NaN"""
-    vad = phon.VAD(x, fs, threshold=FORMANT_VOICING_THRESHOLD)
+    vad = phon.VAD(x, fs, threshold=threshold)
     df = phon.align_timeseries(df, vad, ts="sec", other_columns=["voiced"])
     df.loc[~df["voiced"].astype(bool), FORMANT_COLUMNS] = np.nan
     return df

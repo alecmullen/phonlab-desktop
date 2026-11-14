@@ -131,6 +131,18 @@ class FormantSettingsDialog(QDialog):
         self.voiced_check.setChecked(settings.voiced_only)
         self.form.addRow(self.voiced_check)
 
+        self.threshold_spin = QDoubleSpinBox()
+        self.threshold_spin.setRange(0.0, 1.0)
+        self.threshold_spin.setSingleStep(0.05)
+        self.threshold_spin.setDecimals(2)
+        self.threshold_spin.setValue(settings.voicing_threshold)
+        self.threshold_spin.setToolTip(
+            self.tr("A frame is voiced if its probability of voicing is above this")
+        )
+        self.threshold_spin.setEnabled(settings.voiced_only)
+        self.voiced_check.toggled.connect(self.threshold_spin.setEnabled)
+        self.form.addRow(self.tr("Voicing threshold:"), self.threshold_spin)
+
         self.slow_warning = QLabel(
             self.tr(
                 "TVLP is slower than the other methods. Tracking the whole "
@@ -166,7 +178,7 @@ class FormantSettingsDialog(QDialog):
         method = self.method()
         shown: dict[QWidget, bool] = {
             self.speaker_combo: method == M.IFC,
-            self.order_spin: method in (M.LPC, M.RLPC, M.TVLP.value),
+            self.order_spin: method in (M.LPC, M.RLPC, M.TVLP),
             self.top_frequency_spin: method in (M.RLPC, M.TVLP),
             self.median_f0_spin: method == M.TVLP,
             self.delta_f_spin: method == M.DPPT,
@@ -202,6 +214,7 @@ class FormantSettingsDialog(QDialog):
                 step=round(dialog.step_spin.value() / 1000, 6),
                 length=round(dialog.length_spin.value() / 1000, 6),
                 voiced_only=dialog.voiced_check.isChecked(),
+                voicing_threshold=dialog.threshold_spin.value(),
             )
         return None
 
