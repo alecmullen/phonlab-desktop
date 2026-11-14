@@ -242,14 +242,12 @@ class SpectrogramViewModel(ViewModel):
         start = int(offset * raw.fs)
         end = int(self.window_state.end / self.prepped_audio_state.fs * raw.fs)
 
-        # track_formants does its own resampling and preemphasis, so it takes
+        # IFC_formants does its own resampling and preemphasis, so it takes
         # the raw audio rather than the spectrogram's prepped audio.
         task = self.track_formants_use_case(
             raw.x[start:end],
             raw.fs,
             settings.preemphasis,
-            settings.f0_min,
-            settings.f0_max,
             settings.speaker,
         )
 
