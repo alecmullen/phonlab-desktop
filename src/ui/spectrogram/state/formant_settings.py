@@ -6,9 +6,11 @@ from core.track_formants.entity.formant_options import FormantOptions
 from res.constants import (
     FORMANT_AUTO_ORDER,
     FORMANT_DELTA_F,
+    FORMANT_LENGTH_SEC,
     FORMANT_MEDIAN_F0,
     FORMANT_PREEMPHASIS,
     FORMANT_SPEAKER,
+    FORMANT_STEP_SEC,
     FORMANT_TOP_FREQUENCY,
 )
 from ui.base.state import State
@@ -36,11 +38,18 @@ class FormantSettingsState(State):
     top_frequency: int = FORMANT_TOP_FREQUENCY
     median_f0: int = FORMANT_MEDIAN_F0
     delta_f: int = FORMANT_DELTA_F
+    step: float = FORMANT_STEP_SEC
+    length: float = FORMANT_LENGTH_SEC["ifc"]
+    voiced_only: bool = False
 
     def with_method(self, method: FormantMethodState) -> "FormantSettingsState":
-        """These settings for another method, with its usual preemphasis"""
+        """These settings for another method, with its usual preemphasis and
+        analysis window length"""
         return replace(
-            self, method=method, preemphasis=FORMANT_PREEMPHASIS[method.value]
+            self,
+            method=method,
+            preemphasis=FORMANT_PREEMPHASIS[method.value],
+            length=FORMANT_LENGTH_SEC[method.value],
         )
 
 
@@ -53,4 +62,7 @@ def to_formant_options(settings: FormantSettingsState) -> FormantOptions:
         top_frequency=settings.top_frequency,
         median_f0=settings.median_f0,
         delta_f=settings.delta_f,
+        step=settings.step,
+        length=settings.length,
+        voiced_only=settings.voiced_only,
     )

@@ -14,6 +14,7 @@ from core.track_formants.entity.formant_track import FormantTrack
 from core.track_formants.track_formants import TrackFormants
 from core.transform_audio.prep_audio import PrepAudio
 from res.constants import (
+    FORMANT_MIN_ORDER,
     MAX_SGRAM_LENGTH,
     SPECTROGRAM_HIGH_PERCENTILE,
     SPECTROGRAM_LOW_PERCENTILE,
@@ -27,6 +28,7 @@ from ui.document.state.audio_channel_state import (
     to_audio_channel_state,
 )
 from ui.document.state.load_progress_state import LoadProgressState
+from ui.document.state.status_message_state import StatusMessageState
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.spectrogram.state.formant_settings import (
     FormantSettingsState,
@@ -319,6 +321,14 @@ class SpectrogramViewModel(ViewModel):
                 # The rest of the file is tracked in the background
                 is_first_chunk = False
                 self.state_changed.emit(LoadProgressState(False))
+                if chunk.order > 0 and settings.order < FORMANT_MIN_ORDER:
+                    self.state_changed.emit(
+                        StatusMessageState(
+                            self.tr("Automatic LPC order chosen: {}").format(
+                                chunk.order
+                            )
+                        )
+                    )
             self.emit_formants()
 
         @pyqtSlot(object)

@@ -125,7 +125,7 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_sgram_state_change(self, model: State):
-        if isinstance(model, (LoadProgressState, AudioPrepped)):
+        if isinstance(model, (LoadProgressState, AudioPrepped, StatusMessageState)):
             self.state_changed.emit(model)
         if (
             isinstance(model, AudioPrepped)

@@ -21,6 +21,7 @@ from res.constants import SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
 from ui.base.state import State
 from ui.document.state.audio_channel_state import AudioChannelState
 from ui.document.state.load_progress_state import LoadProgressState
+from ui.document.state.status_message_state import StatusMessageState
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.spectrogram.state.formant_settings import (
@@ -949,6 +950,54 @@ def test_track_formants_emits_dots_in_the_window_as_chunks_arrive(
 
     assert LoadProgressState(False) not in received  # only the first chunk
     np.testing.assert_allclose(received[-1].sec, [1.5, 2.0, 2.5])
+
+
+def test_automatic_lpc_order_is_reported_when_the_first_chunk_arrives(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    received = []
+    view_model.subscribe(received.append)
+    view_model.track_formants(FormantSettingsState(FormantMethodState.LPC))
+    job = view_model.job_managers["formants"].jobs[0]
+    received.clear()
+
+    job.on_success(replace(piece(1.5), order=14))
+    job.on_success(replace(piece(2.5), order=14))
+
+    messages = [s for s in received if isinstance(s, StatusMessageState)]
+    assert [m.message for m in messages] == ["Automatic LPC order chosen: 14"]
+
+
+def test_a_chosen_lpc_order_is_not_reported(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    received = []
+    view_model.subscribe(received.append)
+    view_model.track_formants(FormantSettingsState(FormantMethodState.LPC, order=12))
+    job = view_model.job_managers["formants"].jobs[0]
+
+    job.on_success(replace(piece(1.5), order=12))
+
+    assert not any(isinstance(s, StatusMessageState) for s in received)
+
+
+def test_a_method_without_an_order_reports_nothing(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    received = []
+    view_model.subscribe(received.append)
+    view_model.track_formants(FormantSettingsState())
+    job = view_model.job_managers["formants"].jobs[0]
+
+    job.on_success(piece(1.5))
+
+    assert not any(isinstance(s, StatusMessageState) for s in received)
 
 
 def test_set_window_state_emits_the_dots_for_the_new_window(qtbot: QtBot):
