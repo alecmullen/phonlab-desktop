@@ -1,9 +1,13 @@
+import threading
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 import pytest
 
 import core.track_formants.measure_formants as measure_formants_module
 import core.track_formants.track_formants as track_formants_module
+from core.play_audio.playback_gate import PLAYBACK_GATE
 from core.track_formants.entity.formant_method import FormantMethod
 from core.track_formants.entity.formant_options import FormantOptions
 from core.track_formants.formant_lock import FORMANT_LOCK
@@ -176,3 +180,57 @@ def test_chunks_of_a_method_without_an_order_have_order_zero(ifc_calls: list[dic
     chunk = next(TrackFormants()(ramp(1), FS))
 
     assert chunk.order == 0
+
+
+def run_in_thread(
+    target: Callable[[], object],
+) -> tuple[threading.Thread, threading.Event]:
+    done = threading.Event()
+
+    def run():
+        target()
+        done.set()
+
+    thread = threading.Thread(target=run)
+    thread.start()
+    return thread, done
+
+
+def test_tracking_does_not_start_a_chunk_while_audio_plays(
+    short_chunks: None, ifc_calls: list[dict]
+):
+    chunks = TrackFormants()(ramp(10), FS)
+    next(chunks)
+    started = len(ifc_calls)
+
+    with PLAYBACK_GATE.playing():
+        thread, done = run_in_thread(lambda: next(chunks))
+        assert not done.wait(0.2)  # waiting for playback to end
+        assert len(ifc_calls) == started
+
+    assert done.wait(5)
+    thread.join()
+    assert len(ifc_calls) == started + 1
+
+
+def test_tracking_waits_before_the_first_chunk_too(
+    short_chunks: None, ifc_calls: list[dict]
+):
+    with PLAYBACK_GATE.playing():
+        thread, done = run_in_thread(lambda: next(TrackFormants()(ramp(10), FS)))
+        assert not done.wait(0.2)
+        assert ifc_calls == []
+
+    assert done.wait(5)
+    thread.join()
+    assert len(ifc_calls) == 1
+
+
+def test_tracking_is_not_slowed_when_no_audio_plays(
+    short_chunks: None, ifc_calls: list[dict]
+):
+    assert not PLAYBACK_GATE.is_playing()
+
+    chunks = list(TrackFormants()(ramp(10), FS))
+
+    assert len(chunks) == 4
