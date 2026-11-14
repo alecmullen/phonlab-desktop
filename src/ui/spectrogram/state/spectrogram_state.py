@@ -1,9 +1,17 @@
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 import numpy as np
 
 from res.constants import DEFAULT_GRAY_CUTOFF
 from ui.base.state import State
+
+
+class SpectrogramUnavailable(StrEnum):
+    """Why there is no spectrogram for the window being looked at"""
+
+    TOO_LONG = "too_long"
+    TOO_SHORT = "too_short"
 
 
 @dataclass(frozen=True)
@@ -21,6 +29,7 @@ class SpectrogramState(State):
 
     is_showing: bool = False
     is_loading: bool = True
+    unavailable: SpectrogramUnavailable | None = None
 
     gray_cutoff: float = DEFAULT_GRAY_CUTOFF
     low_sxx: float = float("inf")
