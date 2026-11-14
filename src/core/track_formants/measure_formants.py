@@ -18,7 +18,10 @@ def measure_formants(x: np.ndarray, fs: int, options: FormantOptions) -> pd.Data
     `sec` column (the time of each frame, from the start of `x`) and the
     columns F1-F4 in Hz. Every method does its own resampling and
     preemphasis, so `x` is the raw audio."""
-    df = _track(x, fs, options)
+    # A method that finds fewer than four formants (a low LPC order, or a low
+    # top frequency, leaves room for only a few) returns fewer columns: the
+    # missing formants are NaN
+    df = _track(x, fs, options).reindex(columns=["sec", *FORMANT_COLUMNS])
     if options.voiced_only:
         df = _without_voiceless_frames(df, x, fs, options.voicing_threshold)
     return df[["sec", *FORMANT_COLUMNS]]
