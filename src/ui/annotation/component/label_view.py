@@ -22,14 +22,26 @@ class LabelView(pg.GraphicsObject):
         self.view_rect: QRectF = parent_plot.getViewBox().viewRect()
         self.setPos(self.view_rect.left(), self.view_rect.bottom())
 
+        self.label_items: list[EditableLabelItem] = []
         for label in labels:
             label_item = EditableLabelItem(
                 label, (0.5, 0.5), (0, 0, 0), on_edit_label, parent_plot
             )
             label_item.setParentItem(self)
+            self.label_items.append(label_item)
 
         self.pic = QPicture()
         self._generate_picture()
+
+    def edit_label(self, label: AnnotationLabelState) -> bool:
+        """Start editing the text of `label`. Returns False if it is not shown"""
+        for item in self.label_items:
+            if item.label is label or (
+                item.label.id is not None and item.label.id == label.id
+            ):
+                item.setEditable(True)
+                return True
+        return False
 
     def _generate_picture(self):
         painter = QPainter(self.pic)
