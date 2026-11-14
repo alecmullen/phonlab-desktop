@@ -165,3 +165,29 @@ def test_close_thread_for_missing_key_is_a_noop(qtbot: QtBot):
     view_model.close_thread("missing")
 
     assert view_model.job_managers == {}
+
+
+def test_launch_task_connects_on_finished_to_the_end_of_the_new_manager(
+    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
+):
+    view_model = ViewModel()
+    finished = []
+
+    view_model.launch_task(
+        "key1", dummy_task(), noop, noop, on_finished=lambda: finished.append(True)
+    )
+    view_model.job_managers["key1"].signals.finished.emit()
+
+    assert finished == [True]
+    assert "key1" not in view_model.job_managers  # and the manager is dropped
+
+
+def test_launch_task_does_not_need_an_on_finished(
+    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
+):
+    view_model = ViewModel()
+    view_model.launch_task("key1", dummy_task(), noop, noop)
+
+    view_model.job_managers["key1"].signals.finished.emit()
+
+    assert "key1" not in view_model.job_managers
