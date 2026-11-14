@@ -6,6 +6,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
 from core.play_audio.audio_task import AudioTask
 from core.play_audio.entity.latency_info import LatencyInfo
+from core.play_audio.playback_gate import PLAYBACK_GATE
 
 
 class AudioWorker(QObject):
@@ -27,7 +28,8 @@ class AudioWorker(QObject):
                 del self._task
             self._task = AudioTask(audio_data, fs)
             self._task.latency.connect(self._latency_slot)
-            self._task()
+            with PLAYBACK_GATE.playing():
+                self._task()
         except sd.PortAudioError as e:
             self.error.emit(str(e))
         except Exception as e:
