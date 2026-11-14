@@ -5,7 +5,9 @@ import numpy as np
 import pytest
 
 import core.spectrogram.compute_sgram_mmap as compute_sgram_mmap_module
+import core.spectrogram.typed_sgram as typed_sgram_module
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
+from core.spectrogram.entity.spectrogram_type import SpectrogramType
 
 
 @pytest.fixture(autouse=True)
@@ -40,9 +42,7 @@ def make_fake_compute_sgram(
         sxx = np.full((n_freqs, n_frames), float(len(calls)), dtype=np.float32)
         return t, f, sxx
 
-    monkeypatch.setattr(
-        compute_sgram_mmap_module.phon, "compute_sgram", fake_compute_sgram
-    )
+    monkeypatch.setattr(typed_sgram_module.phon, "compute_sgram", fake_compute_sgram)
     return calls
 
 
@@ -158,16 +158,14 @@ def test_call_raises_runtime_error_and_cleans_up_on_chunk_failure(
     monkeypatch: pytest.MonkeyPatch, mmap_dir: Path
 ):
     probe = make_fake_compute_sgram(monkeypatch)
-    real_fake = compute_sgram_mmap_module.phon.compute_sgram
+    real_fake = typed_sgram_module.phon.compute_sgram
 
     def fail_after_probe(*args: object, **kwargs: object) -> tuple:
         if probe:  # the resolution probe already ran: this is a chunk
             raise ValueError("boom")
         return real_fake(*args, **kwargs)
 
-    monkeypatch.setattr(
-        compute_sgram_mmap_module.phon, "compute_sgram", fail_after_probe
-    )
+    monkeypatch.setattr(typed_sgram_module.phon, "compute_sgram", fail_after_probe)
 
     with pytest.raises(RuntimeError, match="Error during spectrogram computation"):
         run_in_chunks()
@@ -276,3 +274,36 @@ def test_failure_before_the_files_exist_is_reported_as_a_computation_error(
 
     with pytest.raises(RuntimeError, match="Error during spectrogram computation"):
         run_in_chunks()
+
+
+# --------------------------- spectrogram type ---------------------------
+
+
+def test_chunks_and_resolution_probe_use_the_requested_type(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = []
+
+    def fake_compute_typed_sgram(
+        x: np.ndarray,
+        fs: int,
+        sgram_type: SpectrogramType,
+        window_size: float,
+        step_size: float,
+        order: int,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        calls.append(sgram_type)
+        return np.arange(3.0), np.arange(4.0), np.zeros((4, 3), dtype=np.float32)
+
+    monkeypatch.setattr(
+        compute_sgram_mmap_module, "compute_typed_sgram", fake_compute_typed_sgram
+    )
+
+    list(
+        ComputeSpectrogramMmap()(
+            np.zeros(12), 100, 0.008, 0.004, 9, SpectrogramType.LPC, chunk_duration=1
+        )
+    )
+
+    assert len(calls) > 1  # the probe, then every chunk
+    assert set(calls) == {SpectrogramType.LPC}
