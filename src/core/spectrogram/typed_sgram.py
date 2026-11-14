@@ -15,14 +15,15 @@ def compute_typed_sgram(
     step_size: float,
     order: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """A spectrogram of `x`, as (times, frequency of each row in Hz, sxx), in
-    decibels (the mel type is on a log scale of its own).
+    """A spectrogram of `x`, as (times, frequency of each row, sxx), in decibels
+    (the mel type is on a log scale of its own). The frequencies are in Hz, except
+    for the mel type's, which are in mels, as phonlab gives them.
 
     `x` must already be resampled and preemphasized (as `sgram()` would do it).
     `order` sets the FFT size, 2**order, so the number of frequency rows is the
     same for all the types but the mel one: it has 80 rows, evenly spaced on the
-    mel scale from 80 to 7600 Hz (so, not evenly spaced in Hz), and a fixed
-    64 ms window, so `window_size` does not apply to it."""
+    mel scale from 80 to 7600 Hz, and a fixed 64 ms window, so `window_size`
+    does not apply to it."""
     if sgram_type == SpectrogramType.FFT:
         return phon.compute_sgram(x, fs, window_size, step_size, order)
     if sgram_type == SpectrogramType.MULTITAPER:
@@ -37,9 +38,8 @@ def compute_typed_sgram(
         )
         return t, f, _restore_level(sxx, x)
     if sgram_type == SpectrogramType.MEL:
-        # phonlab gives the rows' frequencies in mels
-        t, mel_f, sxx, _, _ = _typed_sgram(x, fs, sgram_type, None, step_size)
-        return t, phon.mel_to_Hz(mel_f), sxx
+        t, f, sxx, _, _ = _typed_sgram(x, fs, sgram_type, None, step_size)
+        return t, f, sxx
     return _cepstral_sgram(x, fs, window_size, step_size, order)
 
 
