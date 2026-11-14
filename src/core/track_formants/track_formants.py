@@ -5,7 +5,7 @@ import phonlab as phon
 
 from core.base.use_case import UseCase
 from core.track_formants.entity.formant_track import FormantTrack
-from core.track_formants.ifc_lock import IFC_LOCK
+from core.track_formants.formant_lock import FORMANT_LOCK
 from res.constants import (
     FORMANT_CHUNK_OVERLAP_SEC,
     FORMANT_CHUNK_SEC,
@@ -59,7 +59,7 @@ class TrackFormants(UseCase[FormantTrack]):
         analysis_end = chunk_end + FORMANT_CHUNK_OVERLAP_SEC
         segment = x[analysis_start * fs : analysis_end * fs]
 
-        with IFC_LOCK:
+        with FORMANT_LOCK:
             df = phon.IFC_formants(segment, fs, preemph=preemph, speaker=speaker)
 
         frame = np.round(
