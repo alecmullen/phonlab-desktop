@@ -91,6 +91,17 @@ def test_delete_label_removes_only_the_label_in_its_own_tier():
     assert label_texts(updated, "word") == ["a", "b"]
 
 
+def test_create_annotations_if_missing_adds_only_missing_stems():
+    repository, id = two_tier_repository()
+
+    repository.create_annotations_if_missing(["sample", "other"])
+
+    assert len(repository.get_annotation_by_id(id).types) == 2
+    other = repository.find_annotation_by_file_stem("other")
+    assert other is not None
+    assert other.nodes == {} and other.types == []
+
+
 def test_clear_annotation_empties_nodes_and_types():
     repository, id = two_tier_repository()
 
@@ -99,3 +110,13 @@ def test_clear_annotation_empties_nodes_and_types():
     cleared = repository.get_annotation_by_id(id)
     assert cleared.nodes == {} and cleared.types == []
     assert repository.find_annotation_by_file_stem("sample") is not None
+
+
+def test_reset_removes_every_annotation():
+    repository, _ = two_tier_repository()
+
+    backup = repository.reset()
+
+    assert backup is None
+    assert repository.find_annotation_by_file_stem("sample") is None
+    assert repository.create_annotation("sample") == 0

@@ -30,6 +30,12 @@ class DataAnnotationRepository(AnnotationRepository):
             AnnotationEntity(file_stem=file_stem)
         )
 
+    def create_annotations_if_missing(self, file_stems: list[str]) -> None:
+        self.local_datasource.add_annotations_if_missing(file_stems)
+
+    def reset(self) -> str | None:
+        return self.local_datasource.reset()
+
     def clear_annotation(self, annotation_id: int) -> None:
         self.local_datasource.clear_annotation(annotation_id)
 

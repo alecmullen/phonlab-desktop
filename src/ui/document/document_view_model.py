@@ -1398,6 +1398,9 @@ class DocumentViewModel(ViewModel):
             return
         self.undo_stack.append(cmd)
 
+    def reload_annotation(self):
+        self.annotation_view_model.reload_annotation()
+
     def has_annotation(self) -> bool:
         return self.annotation_view_model.has_annotation()
 

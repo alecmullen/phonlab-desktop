@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pytest
@@ -198,7 +199,49 @@ def test_delete_label_removes_label(repository: DataAnnotationRepository):
     assert len(labels) == 1
 
 
-# --------------------------- clear ---------------------------
+# --------------------------- file stems ---------------------------
+
+
+def test_create_annotations_if_missing_adds_empty_annotation_per_stem(
+    repository: DataAnnotationRepository,
+):
+    repository.create_annotations_if_missing(["a", "b"])
+
+    for stem in ("a", "b"):
+        annotation = repository.find_annotation_by_file_stem(stem)
+        assert annotation is not None
+        assert annotation.nodes == {}
+        assert annotation.types == []
+
+
+def test_create_annotations_if_missing_keeps_existing_annotation(
+    repository: DataAnnotationRepository,
+):
+    id = seeded_annotation(repository)
+
+    repository.create_annotations_if_missing(["sample", "other"])
+
+    kept = repository.get_annotation_by_id(id)
+    assert len(kept.nodes) == 3
+    assert [type.type for type in kept.types] == ["word"]
+    assert repository.find_annotation_by_file_stem("other") is not None
+
+
+def test_create_annotations_if_missing_is_idempotent_and_ignores_duplicates(
+    repository: DataAnnotationRepository,
+):
+    repository.create_annotations_if_missing(["a", "a"])
+    first = repository.find_annotation_by_file_stem("a")
+
+    repository.create_annotations_if_missing(["a"])
+
+    assert repository.find_annotation_by_file_stem("a") == first
+
+
+def test_create_annotations_if_missing_accepts_no_stems(
+    repository: DataAnnotationRepository,
+):
+    repository.create_annotations_if_missing([])
 
 
 def test_clear_annotation_removes_nodes_and_types_but_keeps_stem(
@@ -229,3 +272,58 @@ def test_clear_annotation_leaves_other_annotations_alone(
 def test_clear_annotation_raises_for_unknown_id(repository: DataAnnotationRepository):
     with pytest.raises(ValueError):
         repository.clear_annotation(999)
+
+
+# --------------------------- reset ---------------------------
+
+
+def test_reset_backs_up_the_database_and_starts_an_empty_one(
+    repository: DataAnnotationRepository, tmp_path: Path
+):
+    seeded_annotation(repository)
+
+    backup = repository.reset()
+
+    assert backup is not None
+    assert Path(backup).is_file()
+    assert Path(backup).parent == tmp_path
+    assert (tmp_path / "phonlab.db").is_file()
+    assert repository.find_annotation_by_file_stem("sample") is None
+
+
+def test_repository_keeps_working_after_reset(repository: DataAnnotationRepository):
+    seeded_annotation(repository)
+    repository.reset()
+
+    id = seeded_annotation(repository)
+
+    assert len(repository.get_annotation_by_id(id).nodes) == 3
+
+
+def test_backup_still_holds_the_old_annotations(
+    repository: DataAnnotationRepository, tmp_path: Path
+):
+    seeded_annotation(repository)
+    backup = repository.reset()
+    assert backup is not None
+    restored_dir = tmp_path / "restored"
+    restored_dir.mkdir()
+    shutil.copy(backup, restored_dir / "phonlab.db")
+
+    restored = SQLiteDatabase()
+    restored.connect(str(restored_dir))
+    try:
+        old = DataAnnotationRepository(AnnotationDataSource(restored))
+        assert old.find_annotation_by_file_stem("sample") is not None
+    finally:
+        restored.engine.dispose()
+
+
+def test_two_resets_make_two_backups(
+    repository: DataAnnotationRepository, tmp_path: Path
+):
+    first = repository.reset()
+    second = repository.reset()
+
+    assert first != second
+    assert len(list(tmp_path.glob("*.bak"))) == 2

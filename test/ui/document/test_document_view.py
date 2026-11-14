@@ -353,11 +353,9 @@ def test_drag_enter_event_ignores_non_url_mime_data(view: DocumentView):
     assert event.isAccepted() is False
 
 
-def test_drop_event_loads_textgrid_from_first_url(view: DocumentView):
-    calls = []
-    view.load_textgrid = lambda path: calls.append(path)
+def drop_event(path: str) -> QDropEvent:
     mime = QMimeData()
-    mime.setUrls([QUrl.fromLocalFile("/tmp/example.TextGrid")])
+    mime.setUrls([QUrl.fromLocalFile(path)])
     event = QDropEvent(
         QPointF(0, 0),
         Qt.DropAction.CopyAction,
@@ -365,10 +363,72 @@ def test_drop_event_loads_textgrid_from_first_url(view: DocumentView):
         Qt.MouseButton.NoButton,
         Qt.KeyboardModifier.NoModifier,
     )
+    # The event does not own its mime data; keep it alive as long as the event
+    event.mime_data = mime  # ty: ignore[unresolved-attribute]
+    return event
 
-    view.dropEvent(event)
 
-    assert calls == ["/tmp/example.TextGrid"]
+def stub_drop(
+    view: DocumentView,
+    monkeypatch: pytest.MonkeyPatch,
+    has_annotation: bool,
+    *answers: QMessageBox.StandardButton,
+) -> tuple[list, list]:
+    """Returns the (path, overwrite) load_textgrid calls and the questions asked"""
+    calls: list = []
+    asked: list = []
+    remaining = list(answers)
+    view.load_textgrid = lambda path, overwrite=False: calls.append((path, overwrite))
+    monkeypatch.setattr(view.view_model, "has_annotation", lambda: has_annotation)
+
+    def question(
+        parent: object,
+        title: str,
+        text: str,
+        buttons: QMessageBox.StandardButton,
+        *args: object,
+    ) -> QMessageBox.StandardButton:
+        asked.append((text, buttons))
+        return remaining.pop(0)
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return calls, asked
+
+
+def test_drop_event_loads_textgrid_from_first_url(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, asked = stub_drop(view, monkeypatch, False)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == [("/tmp/example.TextGrid", False)]
+    assert asked == []
+
+
+def test_drop_event_overwrites_existing_annotation_when_user_says_yes(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, asked = stub_drop(view, monkeypatch, True, QMessageBox.StandardButton.Yes)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == [("/tmp/example.TextGrid", True)]
+    [(text, buttons)] = asked
+    assert (
+        text == "Overwrite the existing database with annotation from example.TextGrid?"
+    )
+    assert buttons == QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+
+
+def test_drop_event_keeps_existing_annotation_when_user_says_no(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, _ = stub_drop(view, monkeypatch, True, QMessageBox.StandardButton.No)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == []
 
 
 # --------------------------- resample dialog integration ---------------------------
