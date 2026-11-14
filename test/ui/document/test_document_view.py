@@ -1246,3 +1246,47 @@ def test_open_save_textgrid_reports_runtime_error(
 
     assert len(errors) == 1
     assert "overlapping intervals" in errors[0][2]
+
+
+# --------------------------- annotation shortcut follows visibility ---------------------------
+
+
+def test_annotation_shortcut_is_active_while_the_document_is_shown(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+
+    assert all_plots_view.isVisible()
+    assert plot.create_label_action.isEnabled()
+
+
+def test_annotation_shortcut_is_switched_off_when_the_document_is_hidden(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+
+    all_plots_view.hide()
+
+    assert not plot.create_label_action.isEnabled()
+
+
+def test_annotation_shortcut_comes_back_when_the_document_is_shown_again(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    all_plots_view.hide()
+
+    all_plots_view.show()
+
+    assert plot.create_label_action.isEnabled()
+
+
+def test_annotation_plot_added_to_a_hidden_document_starts_with_its_shortcut_off(
+    loaded_view: DocumentView,
+):
+    loaded_view.hide()
+
+    loaded_view.view_model.toggle_annotations()
+    QApplication.processEvents()
+
+    assert not plot_of(loaded_view, AnnotationPlot).create_label_action.isEnabled()

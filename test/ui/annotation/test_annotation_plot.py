@@ -739,3 +739,15 @@ def test_create_label_from_selection_snaps_to_node_within_pixel_threshold(
     assert label.s_node == 1
     assert label.e_node not in (2, 3)
     assert nodes[label.e_node].x == pytest.approx(end)
+
+
+def test_create_label_shortcut_can_be_switched_off_and_on(qtbot: QtBot):
+    plot = AnnotationPlot(make_annotation_view_model())
+    assert plot.create_label_action.isEnabled()
+    assert plot.create_label_action.shortcut() == QKeySequence("Ctrl+L")
+
+    plot.set_shortcuts_active(False)
+    assert not plot.create_label_action.isEnabled()
+
+    plot.set_shortcuts_active(True)
+    assert plot.create_label_action.isEnabled()
