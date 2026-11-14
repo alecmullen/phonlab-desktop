@@ -163,7 +163,7 @@ def test_voiced_only_blanks_the_formants_of_voiceless_frames(
 
     df = measure_formants(X, FS, FormantOptions(FormantMethod.LPC, voiced_only=True))
 
-    assert vad_calls == [0.8]  # the default threshold
+    assert vad_calls == [0.5]  # the default threshold
     assert df["F1"].iloc[0] == 1.0
     assert df.loc[1, ["F1", "F2", "F3", "F4"]].isna().all()
     assert list(df.columns) == ["sec", "F1", "F2", "F3", "F4"]
@@ -190,3 +190,38 @@ def test_voiced_only_uses_the_voicing_threshold(
     measure_formants(X, FS, options)
 
     assert thresholds == [0.6]
+
+
+def test_formants_a_method_did_not_find_are_nan_columns(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A low LPC order makes LPC_formants return only F1 and F2"""
+    few = pd.DataFrame({"sec": [0.01, 0.02], "F1": [1.0, 2.0], "F2": [3.0, 4.0]})
+    monkeypatch.setattr(
+        measure_formants_module.phon, "LPC_formants", lambda x, fs, **kwargs: few
+    )
+
+    df = measure_formants(X, FS, FormantOptions(FormantMethod.LPC, order=4))
+
+    assert list(df.columns) == ["sec", "F1", "F2", "F3", "F4"]
+    assert df["F2"].tolist() == [3.0, 4.0]
+    assert df[["F3", "F4"]].isna().all().all()
+
+
+def test_missing_formants_do_not_stop_voiced_only(monkeypatch: pytest.MonkeyPatch):
+    few = pd.DataFrame({"sec": [0.01, 0.02], "F1": [1.0, 2.0]})
+    monkeypatch.setattr(
+        measure_formants_module.phon, "LPC_formants", lambda x, fs, **kwargs: few
+    )
+    monkeypatch.setattr(
+        measure_formants_module.phon,
+        "VAD",
+        lambda x, fs, threshold: pd.DataFrame(
+            {"sec": [0.01, 0.02], "voiced": [False, True]}
+        ),
+    )
+
+    df = measure_formants(X, FS, FormantOptions(FormantMethod.LPC, voiced_only=True))
+
+    assert np.isnan(df.loc[0, "F1"])
+    assert df.loc[1, "F1"] == 2.0

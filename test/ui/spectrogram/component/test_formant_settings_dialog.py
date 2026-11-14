@@ -260,13 +260,13 @@ def test_order_spin_has_room_for_the_word_automatic(qtbot: QtBot):
     )
 
 
-def test_voicing_threshold_starts_at_phonlabs_default_and_needs_voiced_only(
+def test_voicing_threshold_starts_at_0_5_and_needs_voiced_only(
     qtbot: QtBot,
 ):
     dialog = FormantSettingsDialog(FormantSettingsState())
     qtbot.addWidget(dialog)
 
-    assert dialog.threshold_spin.value() == pytest.approx(0.8)
+    assert dialog.threshold_spin.value() == pytest.approx(0.5)
     assert not dialog.threshold_spin.isEnabled()
 
     dialog.voiced_check.setChecked(True)
