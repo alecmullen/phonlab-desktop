@@ -24,6 +24,9 @@ from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
+from core.parse_textgrid.write_textgrid import WriteTextGrid
+from core.project.add_project_files import AddProjectFiles
+from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
 from core.settings.load_display_plan import LoadDisplayPlan
 from core.settings.save_display_plan import SaveDisplayPlan
@@ -100,6 +103,7 @@ def make_annotation_view_model(
     update_node: UpdateNode | None = None,
     delete_node: DeleteNode | None = None,
     parse_text_grid: ParseTextGrid | None = None,
+    write_text_grid: WriteTextGrid | None = None,
     load_annotation: LoadAnnotation | None = None,
     filestem: str | None = None,
     repository: SeedableAnnotationRepository | None = None,
@@ -111,20 +115,27 @@ def make_annotation_view_model(
         update_node or UpdateNode(repository),
         delete_node or DeleteNode(repository),
         parse_text_grid or ParseTextGrid(repository),
+        write_text_grid or WriteTextGrid(),
         load_annotation or LoadAnnotation(repository),
         filestem,
     )
 
 
 def make_main_view_model(
+    repository: SeedableAnnotationRepository | None = None,
     load_display_plan: LoadDisplayPlan | None = None,
     save_display_plan: SaveDisplayPlan | None = None,
 ) -> MainViewModel:
     if load_display_plan is None:
         load_display_plan = mock_use_case(LoadDisplayPlan)
         load_display_plan.return_value = None
+    repository = repository or SeedableAnnotationRepository()
+    add_project_files = AddProjectFiles(repository, ParseTextGrid(repository))
     return MainViewModel(
-        load_display_plan, save_display_plan or mock_use_case(SaveDisplayPlan)
+        load_display_plan,
+        save_display_plan or mock_use_case(SaveDisplayPlan),
+        lambda _dir_path: add_project_files,
+        lambda _dir_path: RebuildProject(repository, add_project_files),
     )
 
 
