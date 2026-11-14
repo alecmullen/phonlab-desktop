@@ -1052,6 +1052,20 @@ def test_update_load_progress_says_what_is_loading(view: DocumentView):
     assert view.progress_bar.format() == "Tracking formants…"
 
 
+def test_update_load_progress_shows_what_is_loading_beside_the_bar(view: DocumentView):
+    view.show()
+    view.update_load_progress(LoadProgressState(True, "Tracking formants…"))
+
+    assert view.progress_label.isVisible()
+    assert view.progress_label.text() == "Tracking formants…"
+
+    view.update_load_progress(LoadProgressState(True))
+    assert view.progress_label.text() == "Loading full file…"
+
+    view.update_load_progress(LoadProgressState(False))
+    assert not view.progress_label.isVisible()
+
+
 def test_update_load_progress_toggles_progress_bar(view: DocumentView):
     view.update_load_progress(LoadProgressState(True))
     assert view.progress_bar.isVisible()
