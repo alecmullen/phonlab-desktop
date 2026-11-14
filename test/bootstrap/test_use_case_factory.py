@@ -1,9 +1,11 @@
 import pytest
 
 from bootstrap.use_case_factory_impl import UseCaseFactory
+from core.annotation.add_tiers import AddTiers
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
@@ -13,6 +15,8 @@ from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
+from core.project.add_project_files import AddProjectFiles
+from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
@@ -36,6 +40,10 @@ USE_CASE_TYPES = [
     DeleteNode,
     LoadAnnotation,
     ParseTextGrid,
+    AddTiers,
+    ListTierNames,
+    AddProjectFiles,
+    RebuildProject,
 ]
 
 

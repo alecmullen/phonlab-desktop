@@ -56,6 +56,7 @@ class AnnotationPlot(DocumentPlot):
 
         self.visible_nodes: list[AnnotationNodeState] = []
         self.visible_labels: list[AnnotationLabelState] = []
+        self.label_view: LabelView | None = None
 
         self.dragging_node: AnnotationNodeState | None = None
         self.selected_node: int | None = None
@@ -70,29 +71,45 @@ class AnnotationPlot(DocumentPlot):
 
     def set_up_menu(self):
         shortcut = QKeySequence("Ctrl+L")
-        create_label_action = ContextMenuHintAction(
+        self.create_label_action = ContextMenuHintAction(
             self.tr("Create Label"),
             shortcut.toString(QKeySequence.SequenceFormat.NativeText),
             parent=self,
         )
-        create_label_action.setShortcut(shortcut)
-        create_label_action.triggered.connect(self.create_label_from_selection)
+        self.create_label_action.setShortcut(shortcut)
+        self.create_label_action.triggered.connect(self.create_label_from_selection)
 
-        self.addAction(create_label_action)
-        self.getViewBox().menu.addAction(create_label_action)
+        self.addAction(self.create_label_action)
+        self.getViewBox().menu.addAction(self.create_label_action)
 
-        save_to_textgrid_action = ContextMenuHintAction(
-            self.tr("Save to TextGrid..."),
+        add_tiers_action = ContextMenuHintAction(
+            self.tr("Add Tiers..."),
             parent=self,
         )
-        save_to_textgrid_action.triggered.connect(
+        add_tiers_action.triggered.connect(self.view_model.trigger_add_tiers_dialog)
+
+        self.addAction(add_tiers_action)
+        self.getViewBox().menu.addAction(add_tiers_action)
+
+        export_annotation_action = ContextMenuHintAction(
+            self.tr("Export Annotation..."),
+            parent=self,
+        )
+        export_annotation_action.triggered.connect(
             self.view_model.trigger_write_textgrid_dialog
         )
 
-        self.addAction(save_to_textgrid_action)
-        self.getViewBox().menu.addAction(save_to_textgrid_action)
+        self.addAction(export_annotation_action)
+        self.getViewBox().menu.addAction(export_annotation_action)
 
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
+
+    def set_shortcuts_active(self, active: bool):
+        """Every document has an annotation plot with the same shortcut, and Qt counts
+        the plots of tabs that are not on screen too, so the shortcut is ambiguous
+        (and does nothing) as soon as a second document is open. Only the plot of the
+        document on screen should have its shortcut active"""
+        self.create_label_action.setEnabled(active)
 
     @pyqtSlot()
     def on_context_menu_about_to_close(self):
@@ -131,6 +148,7 @@ class AnnotationPlot(DocumentPlot):
 
     def populate(self, annotation_state: AnnotationState):
         self.clear_annotations()
+        self.label_view = None
 
         nodes = annotation_state.nodes
         types = annotation_state.types
@@ -158,9 +176,9 @@ class AnnotationPlot(DocumentPlot):
         for type in types:
             self.visible_labels += [label for label in type.labels if label.is_visible]
 
-        label_view = LabelView(self, self.visible_labels, self.on_label_edit)
-        label_view.setPos(0, 0)
-        self.addItem(label_view)
+        self.label_view = LabelView(self, self.visible_labels, self.on_label_edit)
+        self.label_view.setPos(0, 0)
+        self.addItem(self.label_view)
 
         self.visible_nodes = [node for node in nodes.values() if node.is_visible]
 
@@ -182,6 +200,9 @@ class AnnotationPlot(DocumentPlot):
         pos = self.getViewBox().mapSceneToView(a0.scenePos())
 
         if a0.button() == Qt.MouseButton.RightButton:
+            # The context menu, which the view box raises on this click as it does
+            # in the other plots (a one-button mouse makes a right click with
+            # Control+click)
             self.context_pos = pos
             a0.ignore()
             return
@@ -217,7 +238,7 @@ class AnnotationPlot(DocumentPlot):
                 self.unselect_node()
             a0.ignore()
 
-    def handle_single_click(self, scene_pos: QPointF) -> bool:
+    def label_at(self, scene_pos: QPointF) -> AnnotationLabelState | None:
         pos = self.getViewBox().mapSceneToView(scene_pos)
         for label_view_state in self.visible_labels:
             label_pos, label_size = label_view_state.pos, label_view_state.size
@@ -225,9 +246,28 @@ class AnnotationPlot(DocumentPlot):
                 abs(pos.x() - label_pos[0]) < label_size[0] / 2
                 and abs(pos.y() - label_pos[1]) < label_size[1] / 2
             ):
-                self.view_model.select_label(label_view_state)
-                return True
-        return False
+                return label_view_state
+        return None
+
+    def handle_single_click(self, scene_pos: QPointF) -> bool:
+        """A click on a label edits its text. Returns whether it was on a label"""
+        label = self.label_at(scene_pos)
+        if label is None:
+            return False
+
+        if self.label_view is not None:
+            self.label_view.edit_label(label)
+        return True
+
+    def handle_shift_click(self, scene_pos: QPointF) -> bool:
+        """A Shift+click on a label plays the audio between its nodes. Returns
+        whether it was on a label"""
+        label = self.label_at(scene_pos)
+        if label is None:
+            return False
+
+        self.view_model.select_label(label)
+        return True
 
     def keyPressEvent(self, a0: QKeyEvent | None):
         if a0 is None:

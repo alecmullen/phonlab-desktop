@@ -2,7 +2,7 @@ from itertools import pairwise
 
 import numpy as np
 import pytest
-from PyQt6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, QUrl
+from PyQt6.QtCore import QEvent, QMimeData, QPoint, QPointF, QRectF, Qt, QUrl
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QMouseEvent, QWheelEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -11,7 +11,10 @@ from pytestqt.qtbot import QtBot
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
+from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.annotation.annotation_plot import AnnotationPlot
+from ui.annotation.component.add_tiers_dialog import AddTiersDialog
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
@@ -188,8 +191,9 @@ def test_update_slider_page_step_clamps_value_to_new_maximum(view: DocumentView)
 
 
 def test_mouse_drag_creates_selection_and_plays_it_on_release(
-    loaded_view: DocumentView,
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
     document_view_model = loaded_view.view_model
     press = mouse_event(loaded_view, 2.0, QEvent.Type.MouseButtonPress)
     loaded_view.mousePressEvent(press)
@@ -241,6 +245,41 @@ def test_double_click_zooms_to_selection(loaded_view: DocumentView):
 
     assert document_view_model.document_window_state.start == 1000
     assert document_view_model.document_window_state.end == 5000
+
+
+def test_shift_double_click_plays_the_selection_again_instead_of_zooming(
+    loaded_view: DocumentView,
+):
+    document_view_model = loaded_view.view_model
+    document_view_model.start_selection(1.0)
+    document_view_model.continue_selection(5.0)
+    window_before = document_view_model.document_window_state
+
+    dbl_click = mouse_event(
+        loaded_view,
+        2.0,
+        QEvent.Type.MouseButtonDblClick,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    loaded_view.mouseDoubleClickEvent(dbl_click)
+
+    assert document_view_model.document_window_state == window_before
+    assert document_view_model.select_state.is_selected
+    assert len(document_view_model.audio_player.played) == 1
+
+
+def test_a_single_click_waits_as_long_as_the_double_click_interval(
+    loaded_view: DocumentView,
+):
+    loaded_view.mousePressEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
+    )
+    loaded_view.mouseReleaseEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonRelease)
+    )
+
+    assert loaded_view.click_timer is not None
+    assert loaded_view.click_timer.interval() == DOUBLE_CLICK_INTERVAL_MS
 
 
 def test_click_after_release_sets_mark_at_click_position(
@@ -774,8 +813,9 @@ def test_on_mouse_moved_outside_plots_keeps_message(loaded_view: DocumentView):
 
 
 def test_on_mouse_moved_while_pressed_starts_then_continues_selection(
-    loaded_view: DocumentView,
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
     loaded_view.mouse_pressed = True
     plot = loaded_view.document_plots[0]
 
@@ -811,6 +851,77 @@ def test_mouse_press_outside_plots_does_not_start_drag(loaded_view: DocumentView
     loaded_view.mousePressEvent(event)
 
     assert loaded_view.mouse_pressed is False
+
+
+def test_shift_click_on_an_annotation_label_plays_that_label_not_the_window(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    shift_clicked = []
+    monkeypatch.setattr(
+        plot, "handle_shift_click", lambda pos: shift_clicked.append(pos) or True
+    )
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(shift_clicked) == 1
+    assert window_plays == []
+
+
+def test_shift_click_in_the_annotation_plot_away_from_labels_plays_the_window(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    monkeypatch.setattr(plot, "handle_shift_click", lambda pos: False)
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(window_plays) == 1
+
+
+def test_shift_click_in_another_plot_plays_the_window_or_selection(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, SpectrogramPlot)
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(window_plays) == 1
+
+
+def test_releasing_a_shift_click_plays_without_setting_a_mark(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plays = []
+    monkeypatch.setattr(loaded_view, "play_for_shift_click", plays.append)
+    loaded_view.mousePressEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
+    )
+
+    loaded_view.mouseReleaseEvent(
+        mouse_event(
+            loaded_view,
+            4.0,
+            QEvent.Type.MouseButtonRelease,
+            Qt.KeyboardModifier.ShiftModifier,
+        )
+    )
+
+    assert len(plays) == 1
+    assert loaded_view.click_timer is None
+    assert loaded_view.view_model.mark_state.is_set is False
 
 
 def test_single_click_on_label_selects_label_and_sets_no_mark(
@@ -1240,6 +1351,54 @@ def test_save_textgrid_action_opens_save_textgrid_dialog(
     assert calls == [True]
 
 
+def test_add_tiers_action_asks_which_tiers_and_adds_them(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    asked: list = []
+    added: list = []
+
+    def get_names(
+        available: list[str], existing: list[str], parent: object
+    ) -> list[str]:
+        asked.append((available, existing))
+        return ["word", "tone"]
+
+    monkeypatch.setattr(AddTiersDialog, "get_names", staticmethod(get_names))
+    monkeypatch.setattr(view.view_model, "add_tiers", added.append)
+
+    view.on_state_change(AddTiersAction(["word", "break"], ["break"]))
+
+    assert asked == [(["word", "break"], ["break"])]
+    assert added == [["word", "tone"]]
+
+
+def test_add_tiers_adds_nothing_when_the_dialog_is_cancelled(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    added: list = []
+    monkeypatch.setattr(
+        AddTiersDialog, "get_names", staticmethod(lambda *args, **kwargs: None)
+    )
+    monkeypatch.setattr(view.view_model, "add_tiers", added.append)
+
+    view.on_state_change(AddTiersAction(["word"], []))
+
+    assert added == []
+
+
+def test_open_add_tiers_asks_the_view_model_to_start_adding_tiers(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls: list = []
+    monkeypatch.setattr(
+        view.view_model, "trigger_add_tiers", lambda: calls.append(True)
+    )
+
+    view.open_add_tiers()
+
+    assert calls == [True]
+
+
 def test_open_save_textgrid_defaults_to_origin_path_and_file_stem(
     view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
@@ -1306,3 +1465,327 @@ def test_open_save_textgrid_reports_runtime_error(
 
     assert len(errors) == 1
     assert "overlapping intervals" in errors[0][2]
+
+
+# --------------------------- annotation shortcut follows visibility ---------------------------
+
+
+def test_annotation_shortcut_is_active_while_the_document_is_shown(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+
+    assert all_plots_view.isVisible()
+    assert plot.create_label_action.isEnabled()
+
+
+def test_annotation_shortcut_is_switched_off_when_the_document_is_hidden(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+
+    all_plots_view.hide()
+
+    assert not plot.create_label_action.isEnabled()
+
+
+def test_annotation_shortcut_comes_back_when_the_document_is_shown_again(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    all_plots_view.hide()
+
+    all_plots_view.show()
+
+    assert plot.create_label_action.isEnabled()
+
+
+def test_annotation_plot_added_to_a_hidden_document_starts_with_its_shortcut_off(
+    loaded_view: DocumentView,
+):
+    loaded_view.hide()
+
+    loaded_view.view_model.toggle_annotations()
+    QApplication.processEvents()
+
+    assert not plot_of(loaded_view, AnnotationPlot).create_label_action.isEnabled()
+
+
+# --------------------------- row heights follow the graphics widget ---------------------------
+
+
+def test_resizing_the_graphics_widget_resizes_the_plot_rows(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(loaded_view, "apply_row_heights", lambda: calls.append(True))
+    loaded_view.graphics_widget.resized.disconnect()
+    loaded_view.graphics_widget.resized.connect(loaded_view.apply_row_heights)
+
+    loaded_view.graphics_widget.resized.emit()
+
+    assert calls == [True]
+
+
+def plots_bottom(view: DocumentView) -> float:
+    return max(plot.sceneBoundingRect().bottom() for plot in view.document_plots)
+
+
+def test_a_document_built_while_hidden_fills_the_space_it_is_later_shown_in(
+    qtbot: QtBot, document_view_model: DocumentViewModel
+):
+    """A tab opened in the background has its plots laid out while its page is still
+    at the default size, and is only resized when first shown, after the window
+    may have been made bigger"""
+    view = DocumentView(document_view_model)
+    qtbot.addWidget(view)
+    view.resize(640, 480)
+    document_view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
+    )
+    document_view_model.toggle_annotations()
+    QApplication.processEvents()
+    assert not view.isVisible()
+
+    view.resize(1000, 900)
+    view.show()
+    qtbot.waitExposed(view)
+    QApplication.processEvents()
+
+    space = view.graphics_widget.viewport().height()
+    assert plots_bottom(view) > space - 40
+
+
+# --------------------------- selections that start or end off the plots ---------------------------
+
+
+def press_at(
+    view: DocumentView,
+    scene_pos: QPointF,
+    button: Qt.MouseButton = Qt.MouseButton.LeftButton,
+) -> None:
+    """Press the mouse at a scene position. The event position is in the document
+    view's own coordinates, which are offset from the graphics area's by its layout
+    margin"""
+    in_graphics_widget = view.graphics_widget.mapFromScene(scene_pos)
+    pos = QPointF(view.graphics_widget.mapToParent(in_graphics_widget))
+    view.mousePressEvent(
+        QMouseEvent(
+            QEvent.Type.MouseButtonPress,
+            pos,
+            button,
+            button,
+            Qt.KeyboardModifier.NoModifier,
+        )
+    )
+
+
+def wave_rect(view: DocumentView) -> QRectF:
+    return view.document_plots[0].sceneBoundingRect()
+
+
+def test_press_in_the_margin_beside_a_plot_starts_a_selection(
+    loaded_view: DocumentView,
+):
+    rect = wave_rect(loaded_view)
+
+    press_at(loaded_view, QPointF(rect.right() + 4, rect.center().y()))
+
+    assert loaded_view.mouse_pressed is True
+
+
+def test_press_in_the_gap_between_plots_starts_a_selection(
+    all_plots_view: DocumentView,
+):
+    wave, sgram = all_plots_view.document_plots[0], all_plots_view.document_plots[1]
+    gap_y = (wave.sceneBoundingRect().bottom() + sgram.sceneBoundingRect().top()) / 2
+    assert all_plots_view._get_document_plot_at(QPointF(300, gap_y)) is None
+
+    press_at(all_plots_view, QPointF(300, gap_y))
+
+    assert all_plots_view.mouse_pressed is True
+
+
+def test_press_in_the_top_margin_starts_a_selection(loaded_view: DocumentView):
+    rect = wave_rect(loaded_view)
+
+    press_at(loaded_view, QPointF(rect.center().x(), rect.top() - 4))
+
+    assert loaded_view.mouse_pressed is True
+
+
+def test_press_outside_the_graphics_area_does_not_start_a_selection(
+    loaded_view: DocumentView,
+):
+    press_at(loaded_view, QPointF(-500, -500))
+
+    assert loaded_view.mouse_pressed is False
+
+
+@pytest.mark.parametrize(
+    "button",
+    [
+        Qt.MouseButton.MiddleButton,
+        Qt.MouseButton.BackButton,
+        Qt.MouseButton.RightButton,
+    ],
+)
+def test_only_the_left_button_starts_a_selection(
+    loaded_view: DocumentView, button: Qt.MouseButton
+):
+    """A selection is ended by the release of the left button, so a press by any
+    other button would leave it running for ever"""
+    press_at(loaded_view, scene_center(loaded_view.document_plots[0]), button)
+
+    assert loaded_view.mouse_pressed is False
+
+
+def test_a_drag_keeps_selecting_when_the_pointer_leaves_the_plots(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
+    plot = loaded_view.document_plots[0]
+    rect = plot.sceneBoundingRect()
+    press_at(loaded_view, scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot))
+    inside_end = loaded_view.view_model.select_state.sel_end
+
+    # Dragged out past the right edge of the plot, over the margin
+    loaded_view.on_mouse_moved(QPointF(rect.right() + 6, rect.center().y()))
+
+    state = loaded_view.view_model.select_state
+    assert state.sel_end > inside_end
+    assert state.sel_start == pytest.approx(state.sel_anchor)
+
+
+def test_a_drag_out_of_the_window_ends_at_the_end_of_the_audio(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
+    plot = loaded_view.document_plots[0]
+    press_at(loaded_view, scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot))
+
+    loaded_view.on_mouse_moved(QPointF(5000, plot.sceneBoundingRect().center().y()))
+
+    channel = loaded_view.view_model.primary_channel()
+    assert channel is not None
+    assert loaded_view.view_model.select_state.sel_end == pytest.approx(channel.t[-1])
+
+
+def test_moving_with_no_button_down_shows_status_and_does_not_select(
+    loaded_view: DocumentView,
+):
+    loaded_view.message_label.setText("")
+    rect = wave_rect(loaded_view)
+
+    loaded_view.on_mouse_moved(QPointF(rect.right() + 4, rect.center().y()))
+
+    assert loaded_view.view_model.select_state.is_selected is False
+    assert loaded_view.message_label.text() == ""  # off the plots: no cursor time
+
+
+# --------------------------- a release that never arrives ---------------------------
+
+
+def test_a_missing_release_is_made_up_when_the_pointer_moves_without_the_button(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = loaded_view.document_plots[0]
+    held = {"down": True}
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: held["down"])
+    press_at(loaded_view, scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(30, 0))
+    assert loaded_view.is_dragging is True
+    selection = loaded_view.view_model.select_state
+
+    held["down"] = False  # the release was lost
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(80, 0))
+
+    assert loaded_view.mouse_pressed is False
+    assert loaded_view.is_dragging is False
+    assert loaded_view.view_model.select_state == selection  # no longer following
+    assert len(loaded_view.view_model.audio_player.played) == 1
+
+
+def test_the_selection_keeps_following_the_pointer_while_the_button_is_down(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: True)
+    plot = loaded_view.document_plots[0]
+    press_at(loaded_view, scene_center(plot))
+    loaded_view.on_mouse_moved(scene_center(plot))
+
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(40, 0))
+    first_end = loaded_view.view_model.select_state.sel_end
+    loaded_view.on_mouse_moved(scene_center(plot) + QPointF(90, 0))
+
+    assert loaded_view.mouse_pressed is True
+    assert loaded_view.view_model.select_state.sel_end > first_end
+    assert loaded_view.view_model.audio_player.played == []
+
+
+def test_a_lost_release_after_a_click_without_drag_is_treated_as_a_click(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(loaded_view, "left_button_is_down", lambda: False)
+    plot = loaded_view.document_plots[0]
+    press_scene = scene_center(plot)
+    press_at(loaded_view, press_scene)
+
+    loaded_view.on_mouse_moved(press_scene + QPointF(5, 0))
+
+    assert loaded_view.mouse_pressed is False
+    assert loaded_view.pending_single_click == loaded_view.press_scene_pos
+    assert loaded_view.view_model.select_state.is_selected is False
+
+
+def test_left_button_is_down_reads_the_application_state(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        QApplication, "mouseButtons", staticmethod(lambda: Qt.MouseButton.LeftButton)
+    )
+    assert loaded_view.left_button_is_down() is True
+
+    monkeypatch.setattr(
+        QApplication, "mouseButtons", staticmethod(lambda: Qt.MouseButton.RightButton)
+    )
+    assert loaded_view.left_button_is_down() is False
+
+
+# --------------------------- mouse-move connections ---------------------------
+
+
+def move_receivers(view: DocumentView) -> int:
+    scene = view.graphics_widget.scene()
+    return scene.receivers(scene.sigMouseMoved)
+
+
+def test_rebuilding_the_layout_does_not_add_mouse_move_connections(
+    loaded_view: DocumentView,
+):
+    before = move_receivers(loaded_view)
+
+    for _ in range(3):
+        loaded_view.view_model.toggle_spectrogram()
+        QApplication.processEvents()
+        loaded_view.view_model.toggle_spectrogram()
+        QApplication.processEvents()
+
+    assert move_receivers(loaded_view) == before == 1
+
+
+def test_a_mouse_move_reaches_each_plot_once(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls: list[int] = []
+    for index, plot in enumerate(all_plots_view.document_plots):
+        monkeypatch.setattr(
+            plot, "on_mouse_moved", lambda pos, index=index: calls.append(index)
+        )
+
+    all_plots_view.on_mouse_moved(QPointF(300, 100))
+
+    assert sorted(calls) == [0, 1, 2]

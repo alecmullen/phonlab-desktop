@@ -14,6 +14,7 @@ from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
 from core.transform_audio.prep_audio import PrepAudio
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
@@ -464,6 +465,88 @@ def test_spectrogram_requested_before_prep_is_shown_once_audio_is_prepped(
     view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
 
     assert calls == [True]
+
+
+# --------------------------- spectrogram only for the shown document ---------------------------
+
+
+def test_a_document_is_shown_by_default(view_model: DocumentViewModel):
+    assert view_model.is_shown
+
+
+def test_hidden_document_does_not_compute_its_spectrogram(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_shown_document_computes_its_spectrogram_when_audio_is_prepped(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    spectrogram_view_model.set_window_state.reset_mock()
+
+    view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
+
+    spectrogram_view_model.set_window_state.assert_called_once()
+
+
+def test_hidden_document_computes_its_spectrogram_once_it_is_shown(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_called_once()
+
+
+def test_showing_a_document_without_a_spectrogram_plot_computes_nothing(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_showing_a_document_before_its_audio_loads_computes_nothing(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_showing_a_document_whose_spectrogram_is_already_up_does_not_recompute(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    view_model.set_shown(False)
+    spectrogram_view_model.set_window_state.reset_mock()
+    spectrogram_view_model.sgram_state = replace(
+        spectrogram_view_model.sgram_state, is_showing=True
+    )
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
 
 
 # --------------------------- primary_channel ---------------------------
@@ -1073,6 +1156,33 @@ def test_on_annot_state_changed_forwards_save_textgrid_action(
         view_model.on_annot_state_changed(action)
 
     assert blocker.args[0] is action
+
+
+def test_on_annot_state_changed_forwards_add_tiers_action(
+    view_model: DocumentViewModel, qtbot: QtBot
+):
+    action = AddTiersAction(["word"], [])
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.on_annot_state_changed(action)
+
+    assert blocker.args[0] is action
+
+
+def test_trigger_add_tiers_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.trigger_add_tiers()
+
+    annotation_view_model.trigger_add_tiers_dialog.assert_called_once_with()
+
+
+def test_add_tiers_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.add_tiers(["word", "phone"])
+
+    annotation_view_model.add_tiers.assert_called_once_with(["word", "phone"])
 
 
 def test_save_textgrid_delegates_to_annotation_view_model(

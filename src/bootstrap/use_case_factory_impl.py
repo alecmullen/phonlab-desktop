@@ -1,8 +1,10 @@
 from typing import cast
 
+from core.annotation.add_tiers import AddTiers
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.annotation.update_label import UpdateLabel
@@ -42,6 +44,8 @@ class UseCaseFactory:
         self.delete_node = DeleteNode(self.annotation_repository)
         self.load_annotation = LoadAnnotation(self.annotation_repository)
         self.parse_textgrid = ParseTextGrid(self.annotation_repository)
+        self.add_tiers = AddTiers(self.annotation_repository)
+        self.list_tier_names = ListTierNames(self.annotation_repository)
         self.write_textgrid = WriteTextGrid()
         self.load_display_plan = LoadDisplayPlan()
         self.save_display_plan = SaveDisplayPlan()
@@ -89,6 +93,10 @@ class UseCaseFactory:
             use_case = self.add_project_files
         if use_case_type is RebuildProject:
             use_case = self.rebuild_project
+        if use_case_type is AddTiers:
+            use_case = self.add_tiers
+        if use_case_type is ListTierNames:
+            use_case = self.list_tier_names
         if use_case_type is ParseTextGrid:
             use_case = self.parse_textgrid
         if use_case_type is WriteTextGrid:

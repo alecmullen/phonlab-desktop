@@ -15,9 +15,11 @@ from typing import Any, cast
 from support.annotation_repository import SeedableAnnotationRepository
 from support.mocks import mock_use_case
 
+from core.annotation.add_tiers import AddTiers
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
@@ -107,6 +109,8 @@ def make_annotation_view_model(
     load_annotation: LoadAnnotation | None = None,
     filestem: str | None = None,
     repository: SeedableAnnotationRepository | None = None,
+    add_tiers: AddTiers | None = None,
+    list_tier_names: ListTierNames | None = None,
 ) -> AnnotationViewModel:
     repository = repository or SeedableAnnotationRepository()
     return AnnotationViewModel(
@@ -117,6 +121,8 @@ def make_annotation_view_model(
         parse_text_grid or ParseTextGrid(repository),
         write_text_grid or WriteTextGrid(),
         load_annotation or LoadAnnotation(repository),
+        add_tiers or AddTiers(repository),
+        list_tier_names or ListTierNames(repository),
         filestem,
     )
 

@@ -20,6 +20,7 @@ from res.constants import (
     MAX_UNDO_HISTORY,
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.dependency_factory import ViewModelFactory
@@ -83,6 +84,9 @@ class DocumentViewModel(ViewModel):
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
+
+        # Whether this document's tab is on screen (see set_shown)
+        self.is_shown = True
         self.playback_state = PlaybackState()
         self.mark_state: MarkState = MarkState()
         self.audio_loaded_state: AudioLoaded = AudioLoaded()
@@ -133,7 +137,9 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
-        if isinstance(model, (StatusMessageState, SaveToTextGridAction)):
+        if isinstance(
+            model, (StatusMessageState, SaveToTextGridAction, AddTiersAction)
+        ):
             self.state_changed.emit(model)
         elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
@@ -383,7 +389,27 @@ class DocumentViewModel(ViewModel):
 
         self.spectrogram_view_model.prep_audio(x, fs)
 
+    def set_shown(self, shown: bool):
+        """Tell the document whether its tab is the one on screen. The spectrogram
+        is only computed for a shown document, so opening many files at once
+        computes one spectrogram, and each of the others when its tab is first
+        looked at"""
+        if shown == self.is_shown:
+            return
+        self.is_shown = shown
+
+        if (
+            shown
+            and self.plot_layout_state.has_spectrogram()
+            and self.primary_channel() is not None
+            and not self.spectrogram_view_model.sgram_state.is_showing
+        ):
+            self.update_spectrogram()
+
     def update_spectrogram(self):
+        if not self.is_shown:
+            return  # set_shown() catches up when the document is shown
+
         primary_channel = self.primary_channel()
         if primary_channel is None:
             raise RuntimeError("Missing primary audio channel")
@@ -771,6 +797,12 @@ class DocumentViewModel(ViewModel):
         if not channels:
             raise RuntimeError("Cannot save audio that is not loaded")
         self.save_audio_use_case(path, channels, target_fs, scale)
+
+    def trigger_add_tiers(self):
+        self.annotation_view_model.trigger_add_tiers_dialog()
+
+    def add_tiers(self, names: list[str]):
+        self.annotation_view_model.add_tiers(names)
 
     def save_textgrid(self, file_path: str, tg_type: str):
         self.annotation_view_model.write_textgrid(file_path, tg_type)

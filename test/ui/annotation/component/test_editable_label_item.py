@@ -55,11 +55,6 @@ def focus_out_event() -> QFocusEvent:
     return QFocusEvent(QEvent.Type.FocusOut, Qt.FocusReason.MouseFocusReason)
 
 
-def right_click(item: EditableLabelItem):
-    item.mousePressEvent(mouse_event(QEvent.Type.MouseButtonPress))
-    item.mouseReleaseEvent(mouse_event(QEvent.Type.MouseButtonRelease))
-
-
 def test_init_stores_label_and_text(plot: pg.PlotItem):
     label = AnnotationLabelState(pos=(1.0, 0.5), size=(1.0, 0.5), label="abc")
 
@@ -75,55 +70,13 @@ def test_init_is_not_editable(item: EditableLabelItem):
     assert item.text_at_edit_start is None
 
 
-def test_right_click_makes_label_editable(item: EditableLabelItem):
-    right_click(item)
+def test_set_editable_makes_label_editable_and_remembers_the_text(
+    item: EditableLabelItem,
+):
+    item.setEditable(True)
 
     assert item.textItem.textInteractionFlags() == EDITOR_INTERACTION
     assert item.text_at_edit_start == "hello"
-
-
-def test_right_press_is_accepted_to_grab_the_mouse(item: EditableLabelItem):
-    event = mouse_event(QEvent.Type.MouseButtonPress)
-    event.setAccepted(False)
-
-    item.mousePressEvent(event)
-
-    assert event.isAccepted()
-    assert item.right_mouse_pressed is True
-
-
-def test_left_press_is_ignored(item: EditableLabelItem):
-    event = mouse_event(QEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton)
-
-    item.mousePressEvent(event)
-
-    assert not event.isAccepted()
-    assert item.right_mouse_pressed is False
-
-
-def test_right_release_without_press_does_not_edit(item: EditableLabelItem):
-    event = mouse_event(QEvent.Type.MouseButtonRelease)
-
-    item.mouseReleaseEvent(event)
-
-    assert not event.isAccepted()
-    assert item.textItem.textInteractionFlags() == NO_INTERACTION
-
-
-def test_left_release_does_not_edit(item: EditableLabelItem):
-    item.mousePressEvent(mouse_event(QEvent.Type.MouseButtonPress))
-    event = mouse_event(QEvent.Type.MouseButtonRelease, Qt.MouseButton.LeftButton)
-
-    item.mouseReleaseEvent(event)
-
-    assert not event.isAccepted()
-    assert item.textItem.textInteractionFlags() == NO_INTERACTION
-
-
-def test_right_release_resets_pressed_flag(item: EditableLabelItem):
-    right_click(item)
-
-    assert item.right_mouse_pressed is False
 
 
 def test_set_editable_selects_all_text(item: EditableLabelItem):

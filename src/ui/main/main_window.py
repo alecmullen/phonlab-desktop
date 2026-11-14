@@ -84,18 +84,18 @@ class MainWindow(QMainWindow):
         self.close_action.setShortcut("Ctrl+W")
         self.close_action.triggered.connect(self.close_current_tab)
 
-        self.save_action = QAction(self.tr("&Save…"), self)
-        self.save_action.setStatusTip(
+        self.save_audio_action = QAction(self.tr("Save &Audio…"), self)
+        self.save_audio_action.setStatusTip(
             self.tr("Save the current document's audio to a file")
         )
-        self.save_action.setShortcut(QKeySequence.StandardKey.Save)
-        self.save_action.triggered.connect(self.save_audio)
+        self.save_audio_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_audio_action.triggered.connect(self.save_audio)
 
-        self.save_action = QAction(self.tr("Save to TextGrid…"), self)
-        self.save_action.setStatusTip(
-            self.tr("Save the current document's annotations to a TextGrid")
+        self.export_annotation_action = QAction(self.tr("&Export Annotation…"), self)
+        self.export_annotation_action.setStatusTip(
+            self.tr("Export the current document's annotations to a file")
         )
-        self.save_action.triggered.connect(self.save_textgrid)
+        self.export_annotation_action.triggered.connect(self.save_textgrid)
 
         self.save_layout_action = QAction(self.tr("Save Window &Layout"), self)
         self.save_layout_action.setStatusTip(
@@ -124,7 +124,9 @@ class MainWindow(QMainWindow):
             fileMenu.addAction(self.open_action)
             fileMenu.addAction(self.close_action)
             fileMenu.addSeparator()
-            fileMenu.addAction(self.save_action)
+            fileMenu.addAction(self.save_audio_action)
+            fileMenu.addAction(self.export_annotation_action)
+            fileMenu.addSeparator()
             fileMenu.addAction(self.save_layout_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.audio_info_action)
@@ -239,6 +241,19 @@ class MainWindow(QMainWindow):
             projectMenu.addAction(self.add_files_action)
             projectMenu.addAction(self.rebuild_action)
         self.update_project_actions()
+
+        self.add_tiers_action = QAction(self.tr("&Add Tiers…"), self)
+        self.add_tiers_action.setStatusTip(
+            self.tr("Add annotation tiers to the current file")
+        )
+        self.add_tiers_action.setEnabled(False)
+        self.add_tiers_action.triggered.connect(self.add_tiers)
+
+        # Annotation Menu
+        if settings.enable_annotation and mainMenu is not None:
+            annotationMenu = mainMenu.addMenu(self.tr("&Annotation"))
+            if annotationMenu is not None:
+                annotationMenu.addAction(self.add_tiers_action)
 
         # View Menu
         if mainMenu is not None:
@@ -584,6 +599,7 @@ class MainWindow(QMainWindow):
         doc_view_model = self.view_model_factory.create(DocumentViewModel)
         doc_view_model.subscribe(self.on_doc_state_change)
         doc_view_model.set_plots(self.view_model.display_plan)
+        doc_view_model.set_shown(False)  # opened behind the source document
         doc = DocumentView(doc_view_model)
 
         # Always name after the ORIGINAL source file
@@ -605,6 +621,14 @@ class MainWindow(QMainWindow):
 
     def on_tab_changed(self, index: int):
         doc = self.get_current_document()
+
+        self.add_tiers_action.setEnabled(doc is not None)
+
+        # Only the tab on screen computes its spectrogram, a hidden one waits
+        for tab_index in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(tab_index)
+            if isinstance(tab, DocumentView):
+                tab.view_model.set_shown(tab is doc)
 
         if doc is not None:
             # Every document shows the plots the user last chose
@@ -631,6 +655,17 @@ class MainWindow(QMainWindow):
                 self.tr("Save Audio"),
                 self.tr("Could not save the file:\n{}").format(err),
             )
+
+    @pyqtSlot()
+    def add_tiers(self):
+        doc = self.get_current_document()
+        if doc is None:
+            return
+
+        # So the new tiers can be seen
+        if not doc.view_model.plot_layout_state.has_annotation():
+            self.plot_annotations()
+        doc.open_add_tiers()
 
     def save_textgrid(self):
         doc = self.get_current_document()
