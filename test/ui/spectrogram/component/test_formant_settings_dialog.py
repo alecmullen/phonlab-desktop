@@ -14,6 +14,19 @@ def test_fields_are_initialized_from_defaults(qtbot: QtBot):
     assert dialog.speaker_combo.currentData() == 1
 
 
+def test_speaker_choices_map_to_ifc_speaker_values(qtbot: QtBot):
+    dialog = FormantSettingsDialog(FormantSettingsState())
+    qtbot.addWidget(dialog)
+
+    combo = dialog.speaker_combo
+    choices = [(combo.itemText(i), combo.itemData(i)) for i in range(combo.count())]
+    assert choices == [
+        ("Long vocal tract", 0),
+        ("Medium", 1),
+        ("Short vocal tract", 2),
+    ]
+
+
 def test_open_formant_settings_returns_updated_settings_when_accepted(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
