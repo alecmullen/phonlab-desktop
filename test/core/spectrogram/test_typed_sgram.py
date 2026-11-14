@@ -128,3 +128,49 @@ def test_mel_ignores_the_window_size(speech: np.ndarray):
     long = compute_typed_sgram(x, 16000, SpectrogramType.MEL, 0.05, 0.004, ORDER)
 
     np.testing.assert_array_equal(short[2], long[2])
+
+
+def test_multitaper_takes_the_time_bandwidth_product(speech: np.ndarray):
+    x = speech[:FS]
+    narrow = compute_typed_sgram(
+        x, FS, SpectrogramType.MULTITAPER, 0.02, 0.004, ORDER, nw=2
+    )
+    wide = compute_typed_sgram(
+        x, FS, SpectrogramType.MULTITAPER, 0.02, 0.004, ORDER, nw=6
+    )
+    expected = _typed_sgram(x, FS, "multitaper", 0.02, 0.004, order=ORDER, NW=6)
+
+    assert not np.allclose(narrow[2], wide[2])
+    np.testing.assert_array_equal(wide[2], expected[2])
+
+
+def test_cepstral_smoothing_follows_the_lift(speech: np.ndarray):
+    x = speech[:FS]
+    smooth = compute_typed_sgram(
+        x, FS, SpectrogramType.CEPSTRAL, 0.04, 0.004, ORDER, lift=0.001
+    )
+    detailed = compute_typed_sgram(
+        x, FS, SpectrogramType.CEPSTRAL, 0.04, 0.004, ORDER, lift=0.006
+    )
+
+    assert not np.allclose(smooth[2], detailed[2])
+    # a longer lift keeps more detail, so the spectrum has more bumps
+    assert (
+        np.abs(np.diff(detailed[2], axis=0)).mean()
+        > np.abs(np.diff(smooth[2], axis=0)).mean()
+    )
+
+
+def test_every_cepstral_piece_uses_the_lift(speech: np.ndarray):
+    # speech is longer than two pieces
+    smooth = compute_typed_sgram(
+        speech, FS, SpectrogramType.CEPSTRAL, 0.04, 0.004, ORDER, lift=0.001
+    )
+    detailed = compute_typed_sgram(
+        speech, FS, SpectrogramType.CEPSTRAL, 0.04, 0.004, ORDER, lift=0.006
+    )
+
+    assert smooth[2].shape == detailed[2].shape
+    for start in (0, CEPSTRAL_SEGMENT_SEC * 250, 2 * CEPSTRAL_SEGMENT_SEC * 250):
+        columns = slice(start, start + 200)  # 250 frames a second at a 4 ms step
+        assert not np.allclose(smooth[2][:, columns], detailed[2][:, columns])

@@ -8,6 +8,7 @@ from core.base.use_case import UseCase
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
 from core.spectrogram.entity.spectrogram_type import SpectrogramType
 from core.spectrogram.typed_sgram import compute_typed_sgram
+from res.constants import SPECTROGRAM_CEPSTRAL_LIFT_SEC, SPECTROGRAM_MULTITAPER_NW
 
 
 class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
@@ -20,12 +21,14 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         order: int = 9,
         sgram_type: SpectrogramType = SpectrogramType.FFT,
         chunk_duration: int = 300,
+        nw: float = SPECTROGRAM_MULTITAPER_NW,
+        lift: float = SPECTROGRAM_CEPSTRAL_LIFT_SEC,
     ):
         sxx_mmap = t_mmap = None
         mmap_file = ts_file = ""
         try:
             n_freqs, frames_per_sec = self.estimate_resolution(
-                x, fs, window_size, step_size, order, sgram_type
+                x, fs, window_size, step_size, order, sgram_type, nw, lift
             )
 
             # Estimate total frames needed (with buffer)
@@ -57,7 +60,7 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
 
                 chunk = x[start:end]
                 ts, _, sxx = compute_typed_sgram(
-                    chunk, fs, sgram_type, window_size, step_size, order
+                    chunk, fs, sgram_type, window_size, step_size, order, nw, lift
                 )
                 ts = ts + (start / fs)
 
@@ -97,13 +100,15 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         step_size: float = 0.001,
         order: int = 9,
         sgram_type: SpectrogramType = SpectrogramType.FFT,
+        nw: float = SPECTROGRAM_MULTITAPER_NW,
+        lift: float = SPECTROGRAM_CEPSTRAL_LIFT_SEC,
     ) -> tuple[int, float]:
         test_samples = min(len(x), fs)
 
         test_ts: np.ndarray
         test_sxx: np.ndarray
         test_ts, _, test_sxx = compute_typed_sgram(
-            x[:test_samples], fs, sgram_type, window_size, step_size, order
+            x[:test_samples], fs, sgram_type, window_size, step_size, order, nw, lift
         )
 
         n_freqs = test_sxx.shape[0]

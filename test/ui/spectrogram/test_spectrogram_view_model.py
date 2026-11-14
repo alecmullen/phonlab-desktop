@@ -464,6 +464,28 @@ def test_the_chosen_type_is_computed(
         assert args[5] == core_type
 
 
+def test_nw_and_lift_are_passed_on_to_both_computations(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    compute_spectrogram = mock_use_case(ComputeSpectrogram)
+    compute_spectrogram_mmap = mock_use_case(ComputeSpectrogramMmap)
+    view_model = make_spectrogram_view_model(
+        compute_spectrogram=compute_spectrogram,
+        compute_spectrogram_mmap=compute_spectrogram_mmap,
+    )
+    view_model.spectrogram_settings = replace(
+        view_model.spectrogram_settings, multitaper_nw=4.5, cepstral_lift=0.005
+    )
+    x = np.arange(1000, dtype=np.float64)
+
+    view_model.compute_sgram_window(x, 1000, 100, 500)
+    view_model.compute_spectrogram_mmap(x, 1000)
+
+    assert compute_spectrogram.call_args.args[6:8] == (4.5, 0.005)
+    assert compute_spectrogram_mmap.call_args.kwargs == {"nw": 4.5, "lift": 0.005}
+
+
 @pytest.mark.parametrize(
     ("state_type", "scale"),
     [
