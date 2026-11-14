@@ -32,6 +32,10 @@ class InMemAnnotationRepository(AnnotationRepository):
         self.types[id] = []
         return id
 
+    def clear_annotation(self, annotation_id: int) -> None:
+        self.nodes[annotation_id] = {}
+        self.types[annotation_id] = []
+
     def create_node(
         self, annotation_id: int, time: float, same_threshold: float
     ) -> tuple[int, float]:

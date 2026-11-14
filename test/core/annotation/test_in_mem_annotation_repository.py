@@ -89,3 +89,13 @@ def test_delete_label_removes_only_the_label_in_its_own_tier():
     updated = repository.get_annotation_by_id(id)
     assert label_texts(updated, "phone") == ["q"]
     assert label_texts(updated, "word") == ["a", "b"]
+
+
+def test_clear_annotation_empties_nodes_and_types():
+    repository, id = two_tier_repository()
+
+    repository.clear_annotation(id)
+
+    cleared = repository.get_annotation_by_id(id)
+    assert cleared.nodes == {} and cleared.types == []
+    assert repository.find_annotation_by_file_stem("sample") is not None

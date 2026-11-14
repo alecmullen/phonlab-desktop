@@ -3,6 +3,7 @@ from pathlib import Path
 
 import tomli_w
 
+from core.project.scan_project_files import scan_project_files
 from core.settings.app_settings import settings
 from core.settings.load_display_plan import LoadDisplayPlan
 from core.settings.save_display_plan import SaveDisplayPlan
@@ -62,3 +63,14 @@ class MainViewModel(ViewModel):
 
         with open(Path(self.dir_path) / "phonlab.toml", "wb") as f:
             tomli_w.dump({}, f)
+
+    def project_files(self) -> list[tuple[str, str, str | None]]:
+        """(file_stem, audio_file, annotation_file) for each audio file in the project
+        directory, where annotation_file is None if it has no TextGrid"""
+        if self.dir_path is None:
+            raise ValueError("Cannot list project files because no project is open")
+
+        return [
+            (file.file_stem, file.audio_path, file.textgrid_path)
+            for file in scan_project_files(self.dir_path)
+        ]
