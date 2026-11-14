@@ -52,6 +52,7 @@ class SpectrogramViewModel(ViewModel):
         self.sgram_state = SpectrogramState()
         self.window_state = SpectrogramWindowState()
         self.formant_settings = FormantSettingsState()
+        self.formant_track = FormantTrack()
 
         self._buffer_generation = 0
         self._formant_generation = 0
@@ -230,36 +231,40 @@ class SpectrogramViewModel(ViewModel):
         self.launch_task("sgram_mmap", task, on_success, self.on_error, only_once=True)
 
     def track_formants(self, settings: FormantSettingsState):
-        """Track formants in the audio under the current window, and emit them
-        as a FormantTrackState. They are dropped when the audio is re-prepped."""
+        """Track formants in the whole file, nearest the current window first.
+        Dots for the window are emitted as FormantTrackState as each chunk is
+        measured and as the window moves. They are dropped when the audio is
+        re-prepped."""
         self.formant_settings = settings
 
         if self.raw_audio_state is None or self.prepped_audio_state is None:
             return
 
-        raw = self.raw_audio_state
-        offset = self.window_state.start / self.prepped_audio_state.fs
-        start = int(offset * raw.fs)
-        end = int(self.window_state.end / self.prepped_audio_state.fs * raw.fs)
+        self.clear_formants()
 
         # IFC_formants does its own resampling and preemphasis, so it takes
         # the raw audio rather than the spectrogram's prepped audio.
+        raw = self.raw_audio_state
+        window_start, _ = self._window_seconds()
         task = self.track_formants_use_case(
-            raw.x[start:end],
-            raw.fs,
-            settings.preemphasis,
-            settings.speaker,
+            raw.x, raw.fs, settings.preemphasis, settings.speaker, window_start
         )
 
         generation = self._formant_generation
         self.state_changed.emit(LoadProgressState(True))
+        is_first_chunk = True
 
         @pyqtSlot(object)
-        def on_success(track: FormantTrack):
+        def on_success(chunk: FormantTrack):
+            nonlocal is_first_chunk
             if generation != self._formant_generation:
                 return
-            self.state_changed.emit(LoadProgressState(False))
-            self.state_changed.emit(to_formant_track_state(track, offset))
+            self.formant_track = self.formant_track.merged_with(chunk)
+            if is_first_chunk:
+                # The rest of the file is tracked in the background
+                is_first_chunk = False
+                self.state_changed.emit(LoadProgressState(False))
+            self.emit_formants()
 
         @pyqtSlot(object)
         def on_error(err: Exception):
@@ -270,11 +275,28 @@ class SpectrogramViewModel(ViewModel):
         self.launch_task("formants", task, on_success, on_error)
 
     def clear_formants(self):
-        """Drop any formant dots and ignore a track still being computed."""
+        """Drop all formant dots and stop tracking in the background"""
         self._formant_generation += 1
         if "formants" in self.job_managers:
             self.state_changed.emit(LoadProgressState(False))
+        self.close_thread("formants")
+        self.formant_track = FormantTrack()
         self.state_changed.emit(FormantTrackState())
+
+    def emit_formants(self):
+        """Emit the formants in the current window. Like the spectrogram, they
+        show only for a window short enough to read."""
+        start, end = self._window_seconds()
+        visible = FormantTrack()
+        if end - start <= MAX_SGRAM_LENGTH:
+            visible = self.formant_track.between(start, end)
+        self.state_changed.emit(to_formant_track_state(visible))
+
+    def _window_seconds(self) -> tuple[float, float]:
+        if self.prepped_audio_state is None:
+            return 0.0, 0.0
+        fs = self.prepped_audio_state.fs
+        return self.window_state.start / fs, self.window_state.end / fs
 
     def adjust_gray_scale(self, adjustment: float):
         gray_cutoff = self.sgram_state.gray_cutoff + adjustment
@@ -328,6 +350,8 @@ class SpectrogramViewModel(ViewModel):
 
         self.window_state = SpectrogramWindowState(start_idx, end_idx)
         self.load_spectrogram()
+        if len(self.formant_track.sec) > 0:
+            self.emit_formants()
 
     def update_settings(self, settings: SpectrogramSettingsState):
         is_resample = settings.fs != self.spectrogram_settings.fs

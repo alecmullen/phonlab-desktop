@@ -738,7 +738,12 @@ def make_formant_view_model(
     return view_model
 
 
-def test_track_formants_uses_raw_audio_under_window(
+def piece(*secs: float) -> FormantTrack:
+    sec = np.array(secs)
+    return FormantTrack(sec, np.repeat(sec[:, None], 4, axis=1) * 1000)
+
+
+def test_track_formants_tracks_raw_audio_nearest_the_window_first(
     qtbot: QtBot,
     fake_job_manager: type[FakeJobManager],
 ):
@@ -749,30 +754,76 @@ def test_track_formants_uses_raw_audio_under_window(
     view_model.track_formants(settings)
 
     assert view_model.formant_settings == settings
-    x, fs, *params = track_formants.call_args.args
-    assert len(x) == 2000
+    x, fs, preemph, speaker, priority_sec = track_formants.call_args.args
+    assert len(x) == 4000  # the whole file
     assert fs == 1000
-    assert params == [0.9, 2]
+    assert (preemph, speaker) == (0.9, 2)
+    assert priority_sec == 1.0  # the window starts at 1 s
 
 
-def test_track_formants_emits_track_at_absolute_times(
+def test_track_formants_emits_dots_in_the_window_as_chunks_arrive(
     qtbot: QtBot,
     fake_job_manager: type[FakeJobManager],
 ):
+    view_model = make_formant_view_model()  # window 1 s to 3 s
+    received = []
+    view_model.subscribe(received.append)
+    view_model.track_formants(FormantSettingsState())
+    assert any(isinstance(s, LoadProgressState) and s.is_loading for s in received)
+    job = view_model.job_managers["formants"].jobs[0]
+    received.clear()
+
+    job.on_success(piece(0.5, 1.5, 2.5))
+
+    assert received[0] == LoadProgressState(False)
+    dots = received[1]
+    assert isinstance(dots, FormantTrackState)
+    np.testing.assert_allclose(dots.sec, [1.5, 2.5])  # 0.5 s is out of view
+
+    received.clear()
+    job.on_success(piece(3.5, 2.0))
+
+    assert LoadProgressState(False) not in received  # only the first chunk
+    np.testing.assert_allclose(received[-1].sec, [1.5, 2.0, 2.5])
+
+
+def test_set_window_state_emits_the_dots_for_the_new_window(qtbot: QtBot):
     view_model = make_formant_view_model()
+    view_model.load_spectrogram = lambda: None
+    view_model.formant_track = piece(0.5, 1.5, 2.5, 3.5)
     received = []
     view_model.subscribe(received.append)
 
-    view_model.track_formants(FormantSettingsState())
-    assert any(isinstance(s, LoadProgressState) and s.is_loading for s in received)
+    view_model.set_window_state(start=1000, end=2000, raw_fs=1000, target_fs=2000)
 
-    job = view_model.job_managers["formants"].jobs[0]
-    job.on_success(FormantTrack(np.array([0.01, 0.02]), np.ones((2, 4))))
+    dots = received[-1]
+    assert isinstance(dots, FormantTrackState)
+    np.testing.assert_allclose(dots.sec, [1.5])  # window is now 1 s to 2 s
 
-    track = received[-1]
-    assert isinstance(track, FormantTrackState)
-    np.testing.assert_allclose(track.sec, [1.01, 1.02])
-    assert received[-2] == LoadProgressState(False)
+
+def test_set_window_state_without_formants_emits_no_formant_state(qtbot: QtBot):
+    view_model = make_formant_view_model()
+    view_model.load_spectrogram = lambda: None
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.set_window_state(start=2000, end=4000, raw_fs=1000, target_fs=2000)
+
+    assert not any(isinstance(s, FormantTrackState) for s in received)
+
+
+def test_dots_are_hidden_when_the_window_is_too_long_to_show_a_spectrogram(
+    qtbot: QtBot,
+):
+    view_model = make_formant_view_model()
+    view_model.formant_track = piece(1.0, 2.0)
+    view_model.window_state = SpectrogramWindowState(0, 2000 * 11)  # 11 s
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.emit_formants()
+
+    assert len(received[-1].sec) == 0
 
 
 def test_track_formants_does_nothing_without_audio(qtbot: QtBot):
@@ -784,23 +835,51 @@ def test_track_formants_does_nothing_without_audio(qtbot: QtBot):
     track_formants.assert_not_called()
 
 
-def test_clear_formants_discards_pending_track(
+def test_track_formants_again_stops_the_previous_run_and_discards_its_dots(
     qtbot: QtBot,
     fake_job_manager: type[FakeJobManager],
 ):
     view_model = make_formant_view_model()
     view_model.track_formants(FormantSettingsState())
-    job = view_model.job_managers["formants"].jobs[0]
+    first_manager = view_model.job_managers["formants"]
+    first_job = first_manager.jobs[0]
+
+    view_model.track_formants(FormantSettingsState())
+    first_job.on_success(piece(1.5))
+
+    assert first_manager.quit_called
+    assert view_model.job_managers["formants"] is not first_manager
+    assert len(view_model.formant_track.sec) == 0
+
+
+def test_clear_formants_discards_pending_chunks_and_stops_the_task(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    view_model.track_formants(FormantSettingsState())
+    manager = view_model.job_managers["formants"]
+    job = manager.jobs[0]
     received = []
     view_model.subscribe(received.append)
 
     view_model.clear_formants()
-    job.on_success(FormantTrack(np.array([0.01]), np.ones((1, 4))))
+    job.on_success(piece(1.5))
 
+    assert manager.quit_called
     assert received[0] == LoadProgressState(False)
     assert isinstance(received[1], FormantTrackState)
     assert len(received[1].sec) == 0
     assert len(received) == 2
+
+
+def test_clear_formants_forgets_the_measured_formants(qtbot: QtBot):
+    view_model = make_formant_view_model()
+    view_model.formant_track = piece(1.5)
+
+    view_model.clear_formants()
+
+    assert len(view_model.formant_track.sec) == 0
 
 
 def test_track_formants_error_stops_progress(
