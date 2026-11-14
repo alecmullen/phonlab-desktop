@@ -37,9 +37,23 @@ def test_method_states_mirror_core_methods():
 
 def test_to_formant_options_maps_every_field():
     settings = FormantSettingsState(
-        FormantMethodState.RLPC, 0.9, 2, 12, 7000, 150, 1000
+        FormantMethodState.RLPC, 0.9, 2, 12, 7000, 150, 1000, 0.005, 0.04, True
     )
 
     assert to_formant_options(settings) == FormantOptions(
-        FormantMethod.RLPC, 0.9, 2, 12, 7000, 150, 1000
+        FormantMethod.RLPC, 0.9, 2, 12, 7000, 150, 1000, 0.005, 0.04, True
     )
+
+
+@pytest.mark.parametrize(
+    "method, length",
+    [("ifc", 0.03), ("lpc", 0.03), ("rlpc", 0.03), ("tvlp", 0.1), ("dppt", 0.03)],
+)
+def test_with_method_uses_that_methods_window_length(method: str, length: float):
+    settings = FormantSettingsState(step=0.005, length=0.05, voiced_only=True)
+
+    changed = settings.with_method(FormantMethodState(method))
+
+    assert changed.length == length
+    assert changed.step == 0.005  # the rest is kept
+    assert changed.voiced_only

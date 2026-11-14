@@ -56,6 +56,26 @@ FORMANT_PREEMPHASIS = {
     "tvlp": 0.95,
     "dppt": 0.0,
 }
+FORMANT_STEP_SEC = 0.01
+# Analysis window length each formant method works best with. IFC has no
+# window length setting, so its entry only fills the dialog's field.
+FORMANT_LENGTH_SEC = {
+    "ifc": 0.03,
+    "lpc": 0.03,
+    "rlpc": 0.03,
+    "tvlp": 0.1,
+    "dppt": 0.03,
+}
+FORMANT_VOICING_THRESHOLD = 0.8  # phon.VAD() probability to count a frame as voiced
+PHONLAB_DOCS_URL = "https://phonlab.readthedocs.io/en/latest/"
+# Documentation page of each formant method, by FormantMethod value
+FORMANT_DOCS = {
+    "ifc": "acoustphon.html#phonlab.IFC_formants",
+    "lpc": "acoustphon.html#phonlab.LPC_formants",
+    "rlpc": "acoustphon.html#phonlab.RLPC_formants",
+    "tvlp": "acoustphon.html#phonlab.TVLP_formants",
+    "dppt": "acoustphon.html#phonlab.DPPT_formants",
+}
 FORMANT_SPEAKER = 1  # 0 = long vocal tract, 1 = medium, 2 = short
 FORMANT_AUTO_ORDER = -1  # let phonlab choose the LPC order
 FORMANT_MIN_ORDER = 6

@@ -7,6 +7,7 @@ from core.track_formants.entity.formant_options import FormantOptions
 from core.track_formants.entity.formant_track import FormantTrack
 from core.track_formants.measure_formants import (
     FORMANT_COLUMNS,
+    ORDER_METHODS,
     measure_formants,
     with_chosen_order,
 )
@@ -74,4 +75,8 @@ class TrackFormants(UseCase[FormantTrack]):
         sec = np.round(df["sec"].to_numpy(dtype=float) + analysis_start, 6)
         # the last chunk keeps everything to the end of the file
         keep = (sec >= chunk_start) & (is_last | (sec < chunk_end))
-        return FormantTrack(sec[keep], df[FORMANT_COLUMNS].to_numpy(dtype=float)[keep])
+        return FormantTrack(
+            sec[keep],
+            df[FORMANT_COLUMNS].to_numpy(dtype=float)[keep],
+            max(options.order, 0) if options.method in ORDER_METHODS else 0,
+        )
