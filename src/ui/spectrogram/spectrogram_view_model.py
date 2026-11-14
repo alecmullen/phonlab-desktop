@@ -28,7 +28,10 @@ from ui.document.state.audio_channel_state import (
 )
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.spectrogram.state.audio_prepped import AudioPrepped
-from ui.spectrogram.state.formant_settings import FormantSettingsState
+from ui.spectrogram.state.formant_settings import (
+    FormantSettingsState,
+    to_formant_options,
+)
 from ui.spectrogram.state.formant_track_state import (
     FormantTrackState,
     to_formant_track_state,
@@ -294,12 +297,12 @@ class SpectrogramViewModel(ViewModel):
 
         self.clear_formants()
 
-        # IFC_formants does its own resampling and preemphasis, so it takes
-        # the raw audio rather than the spectrogram's prepped audio.
+        # Every formant method does its own resampling and preemphasis, so
+        # they take the raw audio rather than the spectrogram's prepped audio.
         raw = self.raw_audio_state
         window_start, _ = self._window_seconds()
         task = self.track_formants_use_case(
-            raw.x, raw.fs, settings.preemphasis, settings.speaker, window_start
+            raw.x, raw.fs, to_formant_options(settings), window_start
         )
 
         generation = self._formant_generation

@@ -1,20 +1,16 @@
 import math
 
 import numpy as np
-import phonlab as phon
 
 from core.base.use_case import UseCase
+from core.track_formants.entity.formant_options import FormantOptions
 from core.track_formants.entity.formant_track import FormantTrack
-from core.track_formants.ifc_lock import IFC_LOCK
-from res.constants import (
-    FORMANT_CHUNK_OVERLAP_SEC,
-    FORMANT_CHUNK_SEC,
-    FORMANT_PREEMPHASIS,
-    FORMANT_SPEAKER,
+from core.track_formants.measure_formants import (
+    FORMANT_COLUMNS,
+    measure_formants,
+    with_chosen_order,
 )
-
-FORMANT_COLUMNS = ["F1", "F2", "F3", "F4"]
-FRAMES_PER_SEC = 100  # IFC_formants measures every 10 ms, on a 10 ms grid
+from res.constants import FORMANT_CHUNK_OVERLAP_SEC, FORMANT_CHUNK_SEC
 
 
 class TrackFormants(UseCase[FormantTrack]):
@@ -27,49 +23,55 @@ class TrackFormants(UseCase[FormantTrack]):
         self,
         x: np.ndarray,
         fs: int,
-        preemph: float = FORMANT_PREEMPHASIS,
-        speaker: int = FORMANT_SPEAKER,
+        options: FormantOptions | None = None,
         priority_sec: float = 0.0,
     ):
+        options = options or FormantOptions()
         duration = len(x) / fs
         n_chunks = max(1, math.ceil(duration / FORMANT_CHUNK_SEC))
         first = min(int(priority_sec // FORMANT_CHUNK_SEC), n_chunks - 1)
         # nearest chunks first; the later chunk when two are equally near
         order = sorted(range(n_chunks), key=lambda k: (abs(k - first), k < first))
 
+        # An automatic LPC order is chosen from the first chunk, the part of
+        # the file being looked at, and used for every chunk
+        first_segment, _ = self._segment(x, fs, order[0])
+        options = with_chosen_order(first_segment, fs, options)
+
         for k in order:
-            yield self._track_chunk(x, fs, preemph, speaker, k, k == n_chunks - 1)
+            yield self._track_chunk(x, fs, options, k, k == n_chunks - 1)
+
+    @staticmethod
+    def _segment(x: np.ndarray, fs: int, k: int) -> tuple[np.ndarray, int]:
+        """The audio to analyze for chunk `k`, and where it starts in seconds.
+        It extends a little before and after the chunk so the chunk's edge
+        frames are measured with their full context. Chunk and overlap are
+        whole seconds, so analysis starts on a sample and on the 10 ms frame
+        grid."""
+        chunk_start = k * FORMANT_CHUNK_SEC
+        analysis_start = max(0, chunk_start - FORMANT_CHUNK_OVERLAP_SEC)
+        analysis_end = chunk_start + FORMANT_CHUNK_SEC + FORMANT_CHUNK_OVERLAP_SEC
+        return x[analysis_start * fs : analysis_end * fs], analysis_start
 
     def _track_chunk(
         self,
         x: np.ndarray,
         fs: int,
-        preemph: float,
-        speaker: int,
+        options: FormantOptions,
         k: int,
         is_last: bool,
     ) -> FormantTrack:
         chunk_start = k * FORMANT_CHUNK_SEC
         chunk_end = chunk_start + FORMANT_CHUNK_SEC
+        segment, analysis_start = self._segment(x, fs, k)
 
-        # Analyze a little before and after the chunk so its edge frames are
-        # measured with their full context. Chunk and overlap are whole
-        # seconds, so analysis starts on a sample and on the 10 ms frame grid.
-        analysis_start = max(0, chunk_start - FORMANT_CHUNK_OVERLAP_SEC)
-        analysis_end = chunk_end + FORMANT_CHUNK_OVERLAP_SEC
-        segment = x[analysis_start * fs : analysis_end * fs]
+        df = measure_formants(segment, fs, options)
 
-        with IFC_LOCK:
-            df = phon.IFC_formants(segment, fs, preemph=preemph, speaker=speaker)
-
-        frame = np.round(
-            (df["sec"].to_numpy(dtype=float) + analysis_start) * FRAMES_PER_SEC
-        )
+        # Methods put their frames at different offsets on the 10 ms grid
+        # (IFC on it, the others half a frame after it), but all on the same
+        # grid whichever chunk measures them. Rounding off floating point
+        # noise lets a frame exactly on a chunk boundary go to the right chunk.
+        sec = np.round(df["sec"].to_numpy(dtype=float) + analysis_start, 6)
         # the last chunk keeps everything to the end of the file
-        keep = (frame >= chunk_start * FRAMES_PER_SEC) & (
-            is_last | (frame < chunk_end * FRAMES_PER_SEC)
-        )
-        return FormantTrack(
-            frame[keep] / FRAMES_PER_SEC,
-            df[FORMANT_COLUMNS].to_numpy(dtype=float)[keep],
-        )
+        keep = (sec >= chunk_start) & (is_last | (sec < chunk_end))
+        return FormantTrack(sec[keep], df[FORMANT_COLUMNS].to_numpy(dtype=float)[keep])
