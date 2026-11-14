@@ -148,8 +148,8 @@ class SpectrogramSettingsDialog(QDialog):
         self.adjustSize()
 
     def update_bandwidth(self):
-        """The multitaper's effective filter bandwidth is NW / window length"""
-        bandwidth = self.nw_spin.value() / (self.window_spin.value() / 1000)
+        """The multitaper's effective filter bandwidth is 2 * NW / window length"""
+        bandwidth = 2 * self.nw_spin.value() / (self.window_spin.value() / 1000)
         self.bandwidth_label.setText(
             self.tr("Effective filter bandwidth: {} Hz").format(round(bandwidth))
         )
