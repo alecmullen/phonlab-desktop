@@ -99,3 +99,10 @@ def test_other_types_keep_a_low_sample_rate():
     state = SpectrogramSettingsState(fs=8000, type=SpectrogramTypeState.LPC)
 
     assert state.fs == 8000
+
+
+def test_nw_and_lift_default_to_phonlabs_usual_values():
+    settings = SpectrogramSettingsState()
+
+    assert settings.multitaper_nw == 3.0
+    assert settings.cepstral_lift == 0.003

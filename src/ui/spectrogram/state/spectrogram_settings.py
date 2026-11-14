@@ -5,6 +5,8 @@ import numpy as np
 
 from res.constants import (
     MEL_MIN_TOP_FREQUENCY,
+    SPECTROGRAM_CEPSTRAL_LIFT_SEC,
+    SPECTROGRAM_MULTITAPER_NW,
     SPECTROGRAM_STEP_SEC,
     SPECTROGRAM_WINDOW_SEC,
 )
@@ -28,6 +30,8 @@ class SpectrogramSettingsState(State):
     step_size: float = 0.001
     order: int = 9
     type: SpectrogramTypeState = SpectrogramTypeState.FFT
+    multitaper_nw: float = SPECTROGRAM_MULTITAPER_NW
+    cepstral_lift: float = SPECTROGRAM_CEPSTRAL_LIFT_SEC  # seconds
 
     def __post_init__(self):
         if self.type == SpectrogramTypeState.MEL:
@@ -46,4 +50,6 @@ class SpectrogramSettingsState(State):
             window_size=SPECTROGRAM_WINDOW_SEC[type],
             step_size=SPECTROGRAM_STEP_SEC[type],
             type=type,
+            multitaper_nw=self.multitaper_nw,
+            cepstral_lift=self.cepstral_lift,
         )
