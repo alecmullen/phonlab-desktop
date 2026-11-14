@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 import core.track_formants.track_formants as track_formants_module
-from core.track_formants.ifc_lock import IFC_LOCK
+from core.track_formants.formant_lock import FORMANT_LOCK
 from core.track_formants.track_formants import TrackFormants
 
 FS = 1000
@@ -28,7 +28,7 @@ def ifc_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     ) -> pd.DataFrame:
         calls.append(
             {"start": x[0] if len(x) else None, "fs": fs, "preemph": preemph,
-             "speaker": speaker, "locked": IFC_LOCK.locked()}
+             "speaker": speaker, "locked": FORMANT_LOCK.locked()}
         )  # fmt: skip
         sec = np.arange(0.01, len(x) / fs - 0.02, 0.01)
         start = x[0] if len(x) else 0.0
