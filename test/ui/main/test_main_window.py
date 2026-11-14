@@ -1173,8 +1173,8 @@ def test_clip_tab_opens_hidden_behind_its_source(main_window: MainWindow):
     assert isinstance(clip, DocumentView)
     assert not clip.view_model.is_shown
     assert source.view_model.is_shown
-    
-    
+
+
 # --------------------------- project menu ---------------------------
 
 
