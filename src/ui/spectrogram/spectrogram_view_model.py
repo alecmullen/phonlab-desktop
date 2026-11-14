@@ -76,9 +76,13 @@ class SpectrogramViewModel(ViewModel):
         self.spectrogram_settings = replace(self.spectrogram_settings, fs=target_fs)
 
     @pyqtSlot(object, object)
-    def prep_audio(self, x: np.ndarray, fs: int):
+    def prep_audio(self, x: np.ndarray, fs: int, keep_formants: bool = False):
         """Prepare the raw audio at the spectrogram settings' sample rate,
-        which is independent of (and may exceed) the raw rate."""
+        which is independent of (and may exceed) the raw rate.
+
+        Formants are measured on the raw audio, so they are dropped with a change
+        of that audio, but kept (`keep_formants`) when only the sample rate of the
+        spectrogram changes."""
         target_fs = self.spectrogram_settings.fs
 
         self.raw_audio_state = AudioChannelState(x, fs)
@@ -92,7 +96,11 @@ class SpectrogramViewModel(ViewModel):
             new_state = to_audio_channel_state(prepped[0])
             self._rescale_window(self.prepped_audio_state, new_state)
             self.prepped_audio_state = new_state
-            self.clear_formants()
+            if keep_formants:
+                # The window is the same stretch of time at the new rate
+                self.emit_formants()
+            else:
+                self.clear_formants()
             self.invalidate_spectrogram()
             self.state_changed.emit(LoadProgressState(False))
             self.state_changed.emit(AudioPrepped())
@@ -361,7 +369,9 @@ class SpectrogramViewModel(ViewModel):
             return
 
         if is_resample:
-            self.prep_audio(self.raw_audio_state.x, self.raw_audio_state.fs)
+            self.prep_audio(
+                self.raw_audio_state.x, self.raw_audio_state.fs, keep_formants=True
+            )
         else:
             self.invalidate_spectrogram()
             self.load_spectrogram()

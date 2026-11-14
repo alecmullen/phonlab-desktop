@@ -671,12 +671,15 @@ def test_update_settings_resamples_when_fs_changes(
         np.arange(1000, dtype=np.float64), 1000
     )
     prep_calls = []
-    view_model.prep_audio = lambda x, fs: prep_calls.append((len(x), fs))
+    view_model.prep_audio = lambda x, fs, keep_formants: prep_calls.append(
+        (len(x), fs, keep_formants)
+    )
 
     new_settings = replace(view_model.spectrogram_settings, fs=8000)
     view_model.update_settings(new_settings)
 
-    assert prep_calls == [(1000, 1000)]
+    # The formants were measured on the raw audio, which has not changed
+    assert prep_calls == [(1000, 1000, True)]
 
 
 def test_update_settings_reloads_without_resample_when_fs_unchanged(
@@ -726,6 +729,44 @@ def test_prep_audio_on_success_rescales_window_when_prepped_fs_changes(
 
 
 # --------------------------- formants ---------------------------
+
+
+def test_prep_audio_drops_the_formants_of_the_audio_it_replaces(
+    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
+):
+    view_model = make_spectrogram_view_model()
+    view_model.formant_track = FormantTrack(np.array([1.0]), np.ones((1, 4)))
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.prep_audio(np.zeros(1000), 1000)
+    view_model.job_managers["prep_audio"].jobs[0].on_success(
+        {0: AudioSignal(np.zeros(2000), 2000)}
+    )
+
+    assert len(view_model.formant_track.sec) == 0
+    assert any(isinstance(s, FormantTrackState) and len(s.sec) == 0 for s in received)
+
+
+def test_a_new_sample_rate_for_the_spectrogram_keeps_the_formants(
+    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
+):
+    # Changing the top frequency prepares the same audio again at another rate
+    view_model = make_formant_view_model()
+    view_model.formant_track = piece(0.5, 1.5, 2.5)
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.prep_audio(np.zeros(4000), 1000, keep_formants=True)
+    view_model.job_managers["prep_audio"].jobs[0].on_success(
+        {0: AudioSignal(np.zeros(16000), 4000)}
+    )
+
+    np.testing.assert_allclose(view_model.formant_track.sec, [0.5, 1.5, 2.5])
+    dots = [s for s in received if isinstance(s, FormantTrackState)]
+    # The window kept its place in time (1 s to 3 s) while its samples were
+    # renumbered for the new rate, so the dots in it are shown again
+    np.testing.assert_allclose(dots[-1].sec, [1.5, 2.5])
 
 
 def make_formant_view_model(
