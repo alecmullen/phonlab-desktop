@@ -3,6 +3,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
+from res.constants import MEL_AXIS_TICKS_HZ
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
@@ -13,6 +14,7 @@ from ui.spectrogram.component.spectrogram_settings_dialog import (
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_state import (
+    FrequencyScale,
     SpectrogramState,
     SpectrogramUnavailable,
 )
@@ -40,6 +42,13 @@ class SpectrogramPlot(DocumentPlot):
         self.addItem(self.spec_img)
         lut = pg.colormap.get("CET-L1").getLookupTable(nPts=256)[::-1]
         self.spec_img.setLookupTable(lut)
+
+        # The frequency (Hz) of each row of the spectrogram, and whether the rows
+        # are evenly spaced in Hz. If not, the plot's vertical axis counts rows
+        # (so they stay evenly spaced) and a frequency is found among them
+        self.row_frequencies = np.zeros(0)
+        self.is_mel = False
+        self.formant_track = FormantTrackState()
 
         self.formant_dots = pg.ScatterPlotItem(
             pen=None, brush=pg.mkBrush("r"), size=4, pxMode=True
@@ -89,12 +98,22 @@ class SpectrogramPlot(DocumentPlot):
         elif isinstance(model, FormantTrackState):
             self.plot_formants(model)
 
+    def to_axis(self, hz: np.ndarray) -> np.ndarray:
+        """Where frequencies (Hz) are on the vertical axis"""
+        if not self.is_mel:
+            return hz
+        return np.interp(hz, self.row_frequencies, np.arange(len(self.row_frequencies)))
+
     def plot_formants(self, track: FormantTrackState):
         """Draw F1-F4 as red dots; frames without a measurement are skipped."""
+        self.formant_track = track
         t = np.repeat(track.sec, track.formants.shape[1])
         f = track.formants.reshape(-1)
         valid = np.isfinite(f)
-        self.formant_dots.setData(x=t[valid], y=f[valid])
+        if self.is_mel:
+            # The rows only reach so far: don't pile the dots up against the edge
+            valid &= (f >= self.row_frequencies[0]) & (f <= self.row_frequencies[-1])
+        self.formant_dots.setData(x=t[valid], y=self.to_axis(f[valid]))
 
     def plot_spectrogram(self, sgram: SpectrogramState):
         self.track_formants_action.setEnabled(sgram.is_showing)
@@ -108,8 +127,24 @@ class SpectrogramPlot(DocumentPlot):
 
         self.center_label.setVisible(False)
 
-        self.getViewBox().setLimits(yMin=0, yMax=sgram.f[-1])
-        self.getViewBox().setYRange(sgram.f[0], sgram.f[-1])
+        self.row_frequencies = sgram.f
+        self.is_mel = sgram.frequency_scale == FrequencyScale.MEL
+        axis = self.getAxis("left")
+        if self.is_mel:
+            # Row k is centered on k. The labels are in Hz, at the rows' places
+            bottom, top = -0.5, len(sgram.f) - 0.5
+            labeled = [
+                hz for hz in MEL_AXIS_TICKS_HZ if sgram.f[0] <= hz <= sgram.f[-1]
+            ]
+            places = self.to_axis(np.array(labeled, dtype=float))
+            ticks = list(zip(places.tolist(), map(str, labeled)))
+            axis.setTicks([ticks])
+        else:
+            bottom, top = sgram.f[0], sgram.f[-1]
+            axis.setTicks(None)
+
+        self.getViewBox().setLimits(yMin=0 if not self.is_mel else bottom, yMax=top)
+        self.getViewBox().setYRange(bottom, top)
 
         vmin = sgram.low_sxx + (sgram.high_sxx - sgram.low_sxx) * sgram.gray_cutoff
 
@@ -121,13 +156,12 @@ class SpectrogramPlot(DocumentPlot):
 
         time_start = sgram.t_window[0]
         time_end = sgram.t_window[-1]
-        freq_start = sgram.f[0]
-        freq_end = sgram.f[-1]
 
-        rect = pg.QtCore.QRectF(
-            time_start, freq_start, time_end - time_start, freq_end - freq_start
-        )
+        rect = pg.QtCore.QRectF(time_start, bottom, time_end - time_start, top - bottom)
         self.spec_img.setRect(rect)
+
+        # The dots may have been placed for another kind of axis
+        self.plot_formants(self.formant_track)
 
         return True
 

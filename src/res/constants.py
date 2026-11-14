@@ -54,13 +54,33 @@ SPECTROGRAM_WINDOW_SEC = {
     "multitaper": 0.02,
     "cepstral": 0.04,
     "lpc": 0.03,
+    "mel": 0.064,  # fixed by phonlab
 }
 SPECTROGRAM_STEP_SEC = {
     "fft": 0.001,
     "multitaper": 0.004,
     "cepstral": 0.004,
     "lpc": 0.004,
+    "mel": 0.001,
 }
+# The mel spectrogram's filters reach 7600 Hz, so it needs a top frequency of at least 8000
+MEL_MIN_TOP_FREQUENCY = 8000
+# Where the mel spectrogram's frequency axis is labeled (Hz)
+MEL_AXIS_TICKS_HZ = (
+    100,
+    200,
+    300,
+    500,
+    700,
+    1000,
+    1500,
+    2000,
+    3000,
+    4000,
+    5000,
+    6000,
+    7000,
+)
 # The cepstral spectrogram is analyzed this many seconds at a time to bound memory
 CEPSTRAL_SEGMENT_SEC = 5
 

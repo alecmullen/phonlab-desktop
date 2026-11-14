@@ -102,3 +102,31 @@ def test_cepstral_of_no_audio_is_an_error():
         compute_typed_sgram(
             np.zeros(0), FS, SpectrogramType.CEPSTRAL, 0.04, 0.004, ORDER
         )
+
+
+def test_mel_rows_are_given_in_hz_and_are_evenly_spaced_on_the_mel_scale(
+    speech: np.ndarray,
+):
+    x = speech[: 2 * FS]
+    fs = 16000
+    x = phon.prep_audio(x, FS, target_fs=fs, preemph=0.94)[0]
+
+    t, f, sxx = compute_typed_sgram(x, fs, SpectrogramType.MEL, 0.064, 0.004, ORDER)
+
+    assert len(f) == 80
+    assert f[0] == pytest.approx(80)
+    assert f[-1] == pytest.approx(7600)
+    mels = phon.Hz_to_mel(f)
+    np.testing.assert_allclose(np.diff(mels), np.diff(mels)[0])
+    assert np.diff(f)[-1] > 5 * np.diff(f)[0]  # so, not evenly spaced in Hz
+    assert sxx.shape == (80, len(t))
+    assert t[1] - t[0] == pytest.approx(0.004)
+
+
+def test_mel_ignores_the_window_size(speech: np.ndarray):
+    x = phon.prep_audio(speech[:FS], FS, target_fs=16000, preemph=0.94)[0]
+
+    short = compute_typed_sgram(x, 16000, SpectrogramType.MEL, 0.008, 0.004, ORDER)
+    long = compute_typed_sgram(x, 16000, SpectrogramType.MEL, 0.05, 0.004, ORDER)
+
+    np.testing.assert_array_equal(short[2], long[2])

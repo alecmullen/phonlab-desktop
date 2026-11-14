@@ -136,3 +136,47 @@ def test_the_returned_order_follows_the_new_window(
     result = SpectrogramSettingsDialog.open_spectrogram_settings(original)
 
     assert result.order == 9  # the default again
+
+
+def test_choosing_mel_fixes_the_window_and_rules_out_low_top_frequencies(
+    qtbot: QtBot,
+):
+    dialog = SpectrogramSettingsDialog(
+        SpectrogramSettingsState(fs=8000)  # a top frequency of 4000
+    )
+    qtbot.addWidget(dialog)
+    dropdown = dialog.top_frequency_dropdown
+    assert dropdown.currentData() == 4000
+    assert dialog.window_spin.isEnabled()
+
+    dialog.type_dropdown.setCurrentIndex(
+        dialog.type_dropdown.findData(SpectrogramTypeState.MEL)
+    )
+
+    assert dialog.window_spin.value() == 64
+    assert not dialog.window_spin.isEnabled()
+    assert dropdown.currentData() == 8000
+    enabled = [
+        dropdown.itemData(i)
+        for i in range(dropdown.count())
+        if dropdown.model().item(i).isEnabled()
+    ]
+    assert enabled == [8000, 12000, 16000]
+
+    dialog.type_dropdown.setCurrentIndex(
+        dialog.type_dropdown.findData(SpectrogramTypeState.FFT)
+    )
+
+    assert dialog.window_spin.isEnabled()
+    assert all(dropdown.model().item(i).isEnabled() for i in range(dropdown.count()))
+
+
+def test_a_dialog_opened_on_mel_starts_with_the_limits_in_place(qtbot: QtBot):
+    dialog = SpectrogramSettingsDialog(
+        SpectrogramSettingsState().with_type(SpectrogramTypeState.MEL)
+    )
+    qtbot.addWidget(dialog)
+
+    assert not dialog.window_spin.isEnabled()
+    assert dialog.window_spin.value() == 64
+    assert not dialog.top_frequency_dropdown.model().item(0).isEnabled()
