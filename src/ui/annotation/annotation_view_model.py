@@ -45,6 +45,9 @@ class AnnotationViewModel(ViewModel):
         self.annotation_state = AnnotationState()
         self.loading_state = LoadProgressState()
 
+        self.filestem = filestem
+        self.load_annotation_use_case = load_annotation
+
         if filestem is not None:
             annotation = load_annotation(filestem)
             if annotation is not None:
@@ -115,6 +118,18 @@ class AnnotationViewModel(ViewModel):
             self.state_changed.emit(AnnotationSelectedState(sel_start, sel_end))
         except (KeyError, AttributeError):
             raise ValueError("Missing node in annotation")
+
+    def reload_annotation(self):
+        """Show the annotation currently in the database, e.g. after files were added
+        to the project"""
+        if self.filestem is None:
+            return
+        annotation = self.load_annotation_use_case(self.filestem)
+        if annotation is None:
+            self.annotation_state = AnnotationState()
+            self.update_annotation_change()
+        else:
+            self.set_annotation_state(annotation)
 
     def has_annotation(self) -> bool:
         """True if there are any nodes or tiers, e.g. loaded from the project database"""

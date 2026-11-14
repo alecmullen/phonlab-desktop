@@ -204,10 +204,10 @@ def test_invoke_reads_utf_16_file(tmp_path: Path):
     assert label_times(result, 1) == [(0.0, 0.4, "h"), (0.4, 1.0, "ay")]
 
 
-def test_invoke_fills_annotation_that_exists_without_content(tmp_path: Path):
+def test_invoke_fills_annotation_already_registered_for_the_stem(tmp_path: Path):
     path = write_textgrid(tmp_path, SIMPLE_TEXTGRID)
     repository = InMemAnnotationRepository()
-    repository.create_annotation("sample")
+    repository.create_annotations_if_missing(["sample"])
     registered = repository.find_annotation_by_file_stem("sample")
 
     result = next(ParseTextGrid(repository)(path, "sample"))

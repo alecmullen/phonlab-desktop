@@ -482,9 +482,9 @@ def test_trigger_write_textgrid_dialog_emits_save_action(qtbot: QtBot):
     assert isinstance(blocker.args[0], SaveToTextGridAction)
 
 
-def test_opens_empty_for_a_stem_without_annotation():
+def test_opens_empty_for_a_registered_stem_without_annotation():
     repository = SeedableAnnotationRepository()
-    repository.create_annotation("sample")
+    repository.create_annotations_if_missing(["sample"])
 
     view_model = make_annotation_view_model(filestem="sample", repository=repository)
 
@@ -522,3 +522,36 @@ def test_parse_textgrid_overwrites_loaded_annotation_when_requested(
     run_parse_job(view_model)
 
     assert [t.type for t in view_model.annotation_state.types] == ["word"]
+
+
+def test_reload_annotation_shows_what_is_now_in_the_database():
+    repository = SeedableAnnotationRepository()
+    repository.create_annotations_if_missing(["sample"])
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+    assert view_model.has_annotation() is False
+    id = repository.find_annotation_by_file_stem("sample").get_id()
+    repository.create_types(id, [AnnotationType("word", [])])
+
+    view_model.reload_annotation()
+
+    assert [t.type for t in view_model.annotation_state.types] == ["word"]
+
+
+def test_reload_annotation_clears_state_when_stem_left_the_database():
+    repository = SeedableAnnotationRepository()
+    id = repository.create_annotation("sample")
+    repository.create_types(id, [AnnotationType("word", [])])
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+
+    repository.reset()
+    view_model.reload_annotation()
+
+    assert view_model.annotation_state == AnnotationState()
+
+
+def test_reload_annotation_does_nothing_without_a_file_stem():
+    view_model = make_annotation_view_model()
+
+    view_model.reload_annotation()
+
+    assert view_model.annotation_state == AnnotationState()

@@ -1145,6 +1145,14 @@ def test_parse_textgrid_passes_overwrite_to_annotation_view_model(
     )
 
 
+def test_reload_annotation_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.reload_annotation()
+
+    annotation_view_model.reload_annotation.assert_called_once_with()
+
+
 def test_has_annotation_delegates_to_annotation_view_model(
     view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
 ):

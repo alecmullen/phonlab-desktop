@@ -9,6 +9,16 @@ from core.annotation.entity.annotation import (
 
 class AnnotationRepository(Protocol):
     def create_annotation(self, file_stem: str) -> int: ...
+    def create_annotations_if_missing(self, file_stems: list[str]) -> None:
+        """Add an empty annotation for each stem that has none yet; stems that
+        already have an annotation are left untouched"""
+        ...
+
+    def reset(self) -> str | None:
+        """Replace the whole database with a new empty one. Returns where the old
+        one was backed up, if it was"""
+        ...
+
     def clear_annotation(self, annotation_id: int) -> None:
         """Delete all nodes, types and labels, keeping the annotation (file stem)"""
         ...
