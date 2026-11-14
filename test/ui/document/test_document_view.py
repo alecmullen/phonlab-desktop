@@ -933,6 +933,14 @@ def test_update_mark_sets_mark_line_on_all_plots(all_plots_view: DocumentView):
     assert all(p.mark_line.value() == 2.0 for p in all_plots_view.document_plots)
 
 
+def test_update_load_progress_says_what_is_loading(view: DocumentView):
+    view.update_load_progress(LoadProgressState(True))
+    assert view.progress_bar.format() == "Loading full file…"
+
+    view.update_load_progress(LoadProgressState(True, "Tracking formants…"))
+    assert view.progress_bar.format() == "Tracking formants…"
+
+
 def test_update_load_progress_toggles_progress_bar(view: DocumentView):
     view.update_load_progress(LoadProgressState(True))
     assert view.progress_bar.isVisible()

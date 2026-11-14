@@ -107,7 +107,12 @@ class SpectrogramViewModel(ViewModel):
             else:
                 self.clear_formants()
             self.invalidate_spectrogram()
-            self.state_changed.emit(LoadProgressState(False))
+            # Formants may still be tracking in the background
+            self.state_changed.emit(
+                self._formant_progress()
+                if "formants" in self.job_managers
+                else LoadProgressState(False)
+            )
             self.state_changed.emit(AudioPrepped())
 
         self.launch_task("prep_audio", task, on_success, self.on_error)
@@ -264,7 +269,9 @@ class SpectrogramViewModel(ViewModel):
         )
 
         generation = self._formant_generation
-        self.state_changed.emit(LoadProgressState(True))
+        # The busy bar stays on until every chunk is done: tracking a long file
+        # with a slow method takes a while, and it can slow down other work
+        self.state_changed.emit(self._formant_progress())
         is_first_chunk = True
 
         @pyqtSlot(object)
@@ -274,9 +281,7 @@ class SpectrogramViewModel(ViewModel):
                 return
             self.formant_track = self.formant_track.merged_with(chunk)
             if is_first_chunk:
-                # The rest of the file is tracked in the background
                 is_first_chunk = False
-                self.state_changed.emit(LoadProgressState(False))
                 if chunk.order > 0 and settings.order < FORMANT_MIN_ORDER:
                     self.state_changed.emit(
                         StatusMessageState(
@@ -293,7 +298,17 @@ class SpectrogramViewModel(ViewModel):
                 self.state_changed.emit(LoadProgressState(False))
             self.on_error(err)
 
-        self.launch_task("formants", task, on_success, on_error)
+        @pyqtSlot()
+        def on_finished():
+            if generation == self._formant_generation:
+                self.state_changed.emit(LoadProgressState(False))
+
+        self.launch_task(
+            "formants", task, on_success, on_error, on_finished=on_finished
+        )
+
+    def _formant_progress(self) -> LoadProgressState:
+        return LoadProgressState(True, self.tr("Tracking formants…"))
 
     def clear_formants(self):
         """Drop all formant dots and stop tracking in the background"""

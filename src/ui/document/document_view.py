@@ -485,7 +485,9 @@ class DocumentView(QWidget):
         self.progress_bar.setVisible(progress.is_loading)
         if progress.is_loading:
             self.progress_bar.setRange(0, 0)  # no known percentage, just "busy"
-            self.progress_bar.setFormat(self.tr("Loading full file…"))
+            self.progress_bar.setFormat(
+                progress.message or self.tr("Loading full file…")
+            )
         else:
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setFormat(self.tr("Computing %p%"))
