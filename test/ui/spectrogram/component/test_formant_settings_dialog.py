@@ -258,3 +258,48 @@ def test_order_spin_has_room_for_the_word_automatic(qtbot: QtBot):
         dialog.order_spin.minimumWidth()
         >= text_width + dialog.order_spin.fontMetrics().horizontalAdvance("  ")
     )
+
+
+def test_voicing_threshold_starts_at_phonlabs_default_and_needs_voiced_only(
+    qtbot: QtBot,
+):
+    dialog = FormantSettingsDialog(FormantSettingsState())
+    qtbot.addWidget(dialog)
+
+    assert dialog.threshold_spin.value() == pytest.approx(0.8)
+    assert not dialog.threshold_spin.isEnabled()
+
+    dialog.voiced_check.setChecked(True)
+
+    assert dialog.threshold_spin.isEnabled()
+
+    dialog.voiced_check.setChecked(False)
+
+    assert not dialog.threshold_spin.isEnabled()
+
+
+def test_a_dialog_opened_with_voiced_only_enables_the_threshold(qtbot: QtBot):
+    dialog = FormantSettingsDialog(
+        FormantSettingsState(voiced_only=True, voicing_threshold=0.6)
+    )
+    qtbot.addWidget(dialog)
+
+    assert dialog.threshold_spin.isEnabled()
+    assert dialog.threshold_spin.value() == pytest.approx(0.6)
+
+
+def test_open_formant_settings_returns_the_voicing_threshold(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    def fake_exec(self: FormantSettingsDialog) -> QDialog.DialogCode:
+        self.voiced_check.setChecked(True)
+        self.threshold_spin.setValue(0.65)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(FormantSettingsDialog, "exec", fake_exec)
+
+    result = FormantSettingsDialog.open_formant_settings(FormantSettingsState())
+
+    assert result is not None
+    assert result.voiced_only
+    assert result.voicing_threshold == pytest.approx(0.65)
