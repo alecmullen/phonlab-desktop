@@ -25,6 +25,8 @@ from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.save_audio.save_audio import SaveAudio
+from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.save_display_plan import SaveDisplayPlan
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
@@ -114,8 +116,16 @@ def make_annotation_view_model(
     )
 
 
-def make_main_view_model() -> MainViewModel:
-    return MainViewModel()
+def make_main_view_model(
+    load_display_plan: LoadDisplayPlan | None = None,
+    save_display_plan: SaveDisplayPlan | None = None,
+) -> MainViewModel:
+    if load_display_plan is None:
+        load_display_plan = mock_use_case(LoadDisplayPlan)
+        load_display_plan.return_value = None
+    return MainViewModel(
+        load_display_plan, save_display_plan or mock_use_case(SaveDisplayPlan)
+    )
 
 
 def make_spectrogram_view_model(

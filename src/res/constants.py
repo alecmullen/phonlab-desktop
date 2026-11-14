@@ -1,5 +1,10 @@
 from ui.document.state.plot_layout_state import PlotType
 
+# -- Settings files --
+PROJECT_FILE_NAME = "phonlab.toml"
+DISPLAY_SECTION = "display"
+PLAN_KEY = "plan"
+
 # -- Document Window --
 DEFAULT_WINDOW_LENGTH = 10
 PLOT_ROW_SPACING = 8

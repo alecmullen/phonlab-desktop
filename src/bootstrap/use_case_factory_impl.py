@@ -12,6 +12,8 @@ from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.save_audio.save_audio import SaveAudio
+from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.save_display_plan import SaveDisplayPlan
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
@@ -39,6 +41,8 @@ class UseCaseFactory:
         self.load_annotation = LoadAnnotation(self.annotation_repository)
         self.parse_textgrid = ParseTextGrid(self.annotation_repository)
         self.write_textgrid = WriteTextGrid()
+        self.load_display_plan = LoadDisplayPlan()
+        self.save_display_plan = SaveDisplayPlan()
 
     def provide[T](
         self,
@@ -77,6 +81,10 @@ class UseCaseFactory:
             use_case = self.parse_textgrid
         if use_case_type is WriteTextGrid:
             use_case = self.write_textgrid
+        if use_case_type is LoadDisplayPlan:
+            use_case = self.load_display_plan
+        if use_case_type is SaveDisplayPlan:
+            use_case = self.save_display_plan
 
         if use_case is None:
             raise TypeError(f"No provider method for {use_case_type!s} found")

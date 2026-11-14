@@ -20,6 +20,7 @@ from core.settings.app_settings import settings
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
+from ui.document.state.plot_layout_state import PlotType
 from ui.main.component.open_audio_dialog import OpenAudioDialog
 from ui.main.component.save_audio_dialog import SaveOptions
 from ui.main.main_window import MainWindow
@@ -505,6 +506,96 @@ def test_on_tab_changed_disables_spectrogram_action_when_not_prepped(
     main_window.on_tab_changed(0)
 
     assert main_window.sgramview_action.isEnabled() is False
+
+
+# --------------------------- display plan ---------------------------
+
+
+def test_switching_tabs_applies_the_current_display_plan(main_window: MainWindow):
+    first = add_document(main_window, "first.wav")
+    add_document(main_window, "second.wav")  # the current tab
+    main_window.view_model.set_display_plan({PlotType.WAVEFORM, PlotType.SPECTROGRAM})
+
+    main_window.tab_widget.setCurrentWidget(first)
+
+    assert PlotType.SPECTROGRAM in first.view_model.plot_layout_state.plots
+
+
+def test_toggling_a_plot_updates_the_display_plan(main_window: MainWindow):
+    doc = add_document(main_window)
+    doc.view_model.set_audio(
+        AudioState({0: AudioChannelState(np.zeros(2000), 1000)}),
+        primary_channel_idx=0,
+        reset_window=True,
+    )
+    doc.view_model.update_spectrogram = lambda: None
+
+    main_window.plot_wave_sgram()
+
+    assert settings.display_plan == ["waveform", "spectrogram"]
+
+
+def test_save_layout_action_needs_a_project(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    assert main_window.save_layout_action.isEnabled() is False
+    wav_path = tmp_path / "sound.wav"
+    wav_path.write_bytes(b"")
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
+    )
+
+    main_window.open_files([("sound", str(wav_path), None)], str(tmp_path))
+
+    assert main_window.save_layout_action.isEnabled() is True
+
+
+def test_save_window_layout_saves_the_plan_to_the_project(main_window: MainWindow):
+    save = main_window.view_model.save_display_plan_use_case
+    main_window.view_model.set_dir_path("/some/dir")
+    main_window.view_model.set_display_plan({PlotType.WAVEFORM, PlotType.SPECTROGRAM})
+
+    main_window.save_window_layout()
+
+    assert save.call_args.args == (["waveform", "spectrogram"], "/some/dir")
+
+
+def test_save_window_layout_reports_a_failed_save(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    main_window.view_model.set_dir_path("/some/dir")
+    main_window.view_model.save_display_plan_use_case.side_effect = OSError("denied")
+    errors = []
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda *args: errors.append(args))
+    )
+
+    main_window.save_window_layout()
+
+    assert len(errors) == 1
+
+
+def test_a_new_document_starts_with_the_display_plan(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    wav_path = tmp_path / "sound.wav"
+    wav_path.write_bytes(b"")
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
+    )
+    main_window.view_model.set_display_plan({PlotType.WAVEFORM, PlotType.ANNOTATION})
+
+    main_window.open_files([("sound", str(wav_path), None)], None)
+
+    doc = main_window.get_current_document()
+    assert doc.view_model.plot_layout_state.plots == {
+        PlotType.WAVEFORM,
+        PlotType.ANNOTATION,
+    }
 
 
 # --------------------------- delegation to current document ---------------------------
