@@ -3,6 +3,7 @@ import math
 import numpy as np
 
 from core.base.use_case import UseCase
+from core.play_audio.playback_gate import PLAYBACK_GATE
 from core.track_formants.entity.formant_options import FormantOptions
 from core.track_formants.entity.formant_track import FormantTrack
 from core.track_formants.measure_formants import (
@@ -18,7 +19,9 @@ class TrackFormants(UseCase[FormantTrack]):
     """Track the formants of a whole file, a chunk at a time. Each yielded
     FormantTrack holds the frames of one chunk, timed from the start of `x`.
     Chunks are yielded outward from the one containing `priority_sec`, so the
-    part of the file being looked at is measured first."""
+    part of the file being looked at is measured first. Tracking waits for audio
+    playback to end before starting each chunk (a chunk already under way
+    finishes), because some methods make playback glitchy."""
 
     def __call__(
         self,
@@ -37,9 +40,11 @@ class TrackFormants(UseCase[FormantTrack]):
         # An automatic LPC order is chosen from the first chunk, the part of
         # the file being looked at, and used for every chunk
         first_segment, _ = self._segment(x, fs, order[0])
+        PLAYBACK_GATE.wait_until_idle()
         options = with_chosen_order(first_segment, fs, options)
 
         for k in order:
+            PLAYBACK_GATE.wait_until_idle()
             yield self._track_chunk(x, fs, options, k, k == n_chunks - 1)
 
     @staticmethod
