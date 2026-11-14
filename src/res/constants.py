@@ -1,5 +1,10 @@
 from ui.document.state.plot_layout_state import PlotType
 
+# -- Files --
+# Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
+AUDIO_FILE_SUFFIXES = (".wav",)
+TEXTGRID_FILE_SUFFIXES = (".textgrid",)
+
 # -- Settings files --
 PROJECT_FILE_NAME = "phonlab.toml"
 DISPLAY_SECTION = "display"

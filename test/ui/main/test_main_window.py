@@ -150,6 +150,110 @@ def test_open_files_also_loads_a_paired_textgrid(
     } == {0.0, 1.0}
 
 
+def stub_overwrite_scenario(
+    monkeypatch: pytest.MonkeyPatch,
+    has_annotation: bool,
+    *answers: QMessageBox.StandardButton,
+) -> tuple[list, list]:
+    """Every document reports `has_annotation`; returns the (path, overwrite) calls to
+    `load_textgrid` and the TextGrid names the user was asked about"""
+    loaded: list = []
+    asked: list = []
+    remaining = list(answers)
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
+    )
+    monkeypatch.setattr(
+        DocumentViewModel, "has_annotation", lambda self: has_annotation
+    )
+    monkeypatch.setattr(
+        DocumentView,
+        "load_textgrid",
+        lambda self, path, overwrite=False: loaded.append((Path(path).name, overwrite)),
+    )
+
+    def question(
+        parent: object, title: str, text: str, *args: object, **kwargs: object
+    ) -> QMessageBox.StandardButton:
+        asked.append(text)
+        return remaining.pop(0)
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return loaded, asked
+
+
+def paired_files(tmp_path: Path, *stems: str) -> list[tuple[str, str, str]]:
+    return [
+        (stem, str(tmp_path / f"{stem}.wav"), str(tmp_path / f"{stem}.TextGrid"))
+        for stem in stems
+    ]
+
+
+def test_open_files_loads_textgrid_without_asking_when_database_is_empty(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(monkeypatch, False)
+
+    main_window.open_files(paired_files(tmp_path, "a"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", False)]
+    assert asked == []
+
+
+def test_open_files_overwrites_existing_annotation_when_user_says_yes(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.Yes
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", True)]
+    assert asked == ["Overwrite the existing database with annotation from a.TextGrid?"]
+
+
+def test_open_files_skips_textgrid_when_user_says_no(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == [("b.TextGrid", True)]
+    assert len(asked) == 2
+
+
+def test_open_files_asks_once_and_overwrites_all_on_yes_to_all(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.YesToAll
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", True), ("b.TextGrid", True)]
+    assert len(asked) == 1
+
+
+def test_open_files_asks_once_and_skips_all_on_no_to_all(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.NoToAll
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == []
+    assert len(asked) == 1
+
+
 def test_open_files_does_nothing_when_dialog_is_cancelled(
     main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
@@ -297,6 +401,71 @@ def test_select_project_initializes_toml_when_user_agrees(
 
     assert (tmp_path / "phonlab.toml").is_file()
     assert opened == [([], str(tmp_path))]
+
+
+def test_select_project_treats_extensions_case_insensitively(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    (tmp_path / "phonlab.toml").write_text("")
+    for name in (
+        "lower.wav",
+        "upper.WAV",
+        "mixed.Wav",
+        "mixed.textgrid",
+        "upper.TEXTGRID",
+        "notes.wav.txt",
+    ):
+        (tmp_path / name).write_bytes(b"")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    [(files, _)] = opened
+    assert sorted(files) == [
+        ("lower", str(tmp_path / "lower.wav"), None),
+        ("mixed", str(tmp_path / "mixed.Wav"), str(tmp_path / "mixed.textgrid")),
+        ("upper", str(tmp_path / "upper.WAV"), str(tmp_path / "upper.TEXTGRID")),
+    ]
+
+
+def test_select_project_does_not_pair_textgrid_whose_name_only_ends_like_the_stem(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    (tmp_path / "phonlab.toml").write_text("")
+    (tmp_path / "a.wav").write_bytes(b"")
+    (tmp_path / "xa.TextGrid").write_bytes(b"")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    [(files, _)] = opened
+    assert files == [("a", str(tmp_path / "a.wav"), None)]
+
+
+def test_open_single_document_accepts_uppercase_wav(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav = str(tmp_path / "sound.WAV")
+
+    main_window.open_single_document([wav], str(tmp_path))
+
+    assert opened == [([("sound", wav, None)], str(tmp_path))]
+
+
+def test_open_single_document_accepts_textgrid_with_any_case_suffix(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav, textgrid = str(tmp_path / "a.wav"), str(tmp_path / "a.textgrid")
+
+    main_window.open_single_document([wav, textgrid], str(tmp_path))
+
+    assert opened == [([("a", wav, textgrid)], str(tmp_path))]
 
 
 def test_select_project_asks_again_when_user_declines_initializing(

@@ -196,3 +196,36 @@ def test_delete_label_removes_label(repository: DataAnnotationRepository):
     labels = repository.get_annotation_by_id(id).types[0].labels
     assert label.id not in [stored.id for stored in labels]
     assert len(labels) == 1
+
+
+# --------------------------- clear ---------------------------
+
+
+def test_clear_annotation_removes_nodes_and_types_but_keeps_stem(
+    repository: DataAnnotationRepository,
+):
+    id = seeded_annotation(repository)
+
+    repository.clear_annotation(id)
+
+    cleared = repository.get_annotation_by_id(id)
+    assert cleared.nodes == {}
+    assert cleared.types == []
+    assert repository.find_annotation_by_file_stem("sample") is not None
+
+
+def test_clear_annotation_leaves_other_annotations_alone(
+    repository: DataAnnotationRepository,
+):
+    id = seeded_annotation(repository)
+    other = repository.create_annotation("other")
+    repository.create_nodes(other, [0.0, 1.0])
+
+    repository.clear_annotation(id)
+
+    assert len(repository.get_annotation_by_id(other).nodes) == 2
+
+
+def test_clear_annotation_raises_for_unknown_id(repository: DataAnnotationRepository):
+    with pytest.raises(ValueError):
+        repository.clear_annotation(999)
