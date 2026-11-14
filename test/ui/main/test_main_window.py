@@ -1122,6 +1122,59 @@ def test_close_event_cleans_up_all_documents_and_accepts(main_window: MainWindow
     assert event.isAccepted() is True
 
 
+# --------------------------- spectrogram only for the shown tab ---------------------------
+
+
+def test_only_the_current_tab_is_shown(main_window: MainWindow):
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+    third = add_document(main_window, "three.wav")
+
+    assert [d.view_model.is_shown for d in (first, second, third)] == [
+        False,
+        False,
+        True,
+    ]
+
+
+def test_switching_tabs_changes_which_document_is_shown(main_window: MainWindow):
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+
+    main_window.tab_widget.setCurrentIndex(0)
+
+    assert first.view_model.is_shown
+    assert not second.view_model.is_shown
+
+
+def test_closing_the_current_tab_shows_the_one_that_becomes_current(
+    main_window: MainWindow,
+):
+    first = add_document(main_window, "one.wav")
+    add_document(main_window, "two.wav")
+    assert not first.view_model.is_shown
+
+    main_window.close_current_tab()
+
+    assert main_window.tab_widget.count() == 1
+    assert first.view_model.is_shown
+
+
+def test_clip_tab_opens_hidden_behind_its_source(main_window: MainWindow):
+    source = add_document(main_window, "source.wav")
+    load_signal(source, np.arange(10000), fs=1000)
+    source.view_model.start_selection(2.0)
+    source.view_model.continue_selection(3.0)
+
+    main_window.copy_selection()
+
+    assert main_window.tab_widget.count() == 2
+    clip = main_window.tab_widget.widget(1)
+    assert isinstance(clip, DocumentView)
+    assert not clip.view_model.is_shown
+    assert source.view_model.is_shown
+
+
 # --------------------------- project menu ---------------------------
 
 
