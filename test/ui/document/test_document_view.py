@@ -753,6 +753,77 @@ def test_mouse_press_outside_plots_does_not_start_drag(loaded_view: DocumentView
     assert loaded_view.mouse_pressed is False
 
 
+def test_shift_click_on_an_annotation_label_plays_that_label_not_the_window(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    shift_clicked = []
+    monkeypatch.setattr(
+        plot, "handle_shift_click", lambda pos: shift_clicked.append(pos) or True
+    )
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(shift_clicked) == 1
+    assert window_plays == []
+
+
+def test_shift_click_in_the_annotation_plot_away_from_labels_plays_the_window(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    monkeypatch.setattr(plot, "handle_shift_click", lambda pos: False)
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(window_plays) == 1
+
+
+def test_shift_click_in_another_plot_plays_the_window_or_selection(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, SpectrogramPlot)
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(window_plays) == 1
+
+
+def test_releasing_a_shift_click_plays_without_setting_a_mark(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plays = []
+    monkeypatch.setattr(loaded_view, "play_for_shift_click", plays.append)
+    loaded_view.mousePressEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
+    )
+
+    loaded_view.mouseReleaseEvent(
+        mouse_event(
+            loaded_view,
+            4.0,
+            QEvent.Type.MouseButtonRelease,
+            Qt.KeyboardModifier.ShiftModifier,
+        )
+    )
+
+    assert len(plays) == 1
+    assert loaded_view.click_timer is None
+    assert loaded_view.view_model.mark_state.is_set is False
+
+
 def test_single_click_on_label_selects_label_and_sets_no_mark(
     all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
