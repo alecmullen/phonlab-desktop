@@ -66,6 +66,9 @@ if __name__ == "__main__":
         mainWin.show()
         splash.show()
 
+        # Load phonlab's formant tracking code in the background
+        mainWin.view_model.warm_up_formant_tracking()
+
         # Optionally open a file if provided as command line argument
         if len(sys.argv) > 1:
             mainWin.open_single_document(sys.argv[1:])
