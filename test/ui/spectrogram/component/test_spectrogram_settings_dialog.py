@@ -247,15 +247,17 @@ def test_multitaper_reports_its_effective_filter_bandwidth(qtbot: QtBot):
     qtbot.addWidget(dialog)
     assert dialog.nw_spin.value() == 3.0
     assert dialog.window_spin.value() == 20
-    assert dialog.bandwidth_label.text() == "Effective filter bandwidth: 150 Hz"
+    assert (
+        dialog.bandwidth_label.text() == "Effective filter bandwidth: 300 Hz"
+    )  # 2 * 3 / 0.02 s
 
-    dialog.nw_spin.setValue(4.0)  # NW / length: 4 / 0.02 s
+    dialog.nw_spin.setValue(4.0)
 
-    assert dialog.bandwidth_label.text() == "Effective filter bandwidth: 200 Hz"
+    assert dialog.bandwidth_label.text() == "Effective filter bandwidth: 400 Hz"
 
     dialog.window_spin.setValue(40)
 
-    assert dialog.bandwidth_label.text() == "Effective filter bandwidth: 100 Hz"
+    assert dialog.bandwidth_label.text() == "Effective filter bandwidth: 200 Hz"
 
 
 def test_the_settings_keep_nw_and_lift_across_types(qtbot: QtBot):
@@ -293,7 +295,7 @@ def test_open_spectrogram_settings_returns_nw_and_lift(
         (SpectrogramTypeState.FFT, "acoustphon.html#phonlab.compute_sgram"),
         (SpectrogramTypeState.MULTITAPER, "acoustphon.html#phonlab.compute_mt_sgram"),
         (SpectrogramTypeState.CEPSTRAL, "acoustphon.html#phonlab.cepstral_smooth"),
-        (SpectrogramTypeState.LPC, "acoustphon.html#phonlab.sgram"),
+        (SpectrogramTypeState.LPC, "acoustphon.html#phonlab.RLPC_formants"),
         (SpectrogramTypeState.MEL, "audphon.html#phonlab.compute_mel_sgram"),
     ],
 )
