@@ -116,7 +116,6 @@ FORMANT_LENGTH_SEC = {
     "dppt": 0.03,
 }
 FORMANT_VOICING_THRESHOLD = 0.8  # phon.VAD() probability to count a frame as voiced
-PHONLAB_DOCS_URL = "https://phonlab.readthedocs.io/en/latest/"
 # Documentation page of each formant method, by FormantMethod value
 FORMANT_DOCS = {
     "ifc": "acoustphon.html#phonlab.IFC_formants",
