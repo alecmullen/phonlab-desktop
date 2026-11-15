@@ -992,13 +992,13 @@ def file_menu_actions(main_window: MainWindow) -> dict[str, QAction]:
     return {a.text(): a for a in file_menu.actions() if not a.isSeparator()}
 
 
-def test_file_menu_offers_both_save_audio_and_export_annotation(
+def test_file_menu_offers_save_audio_and_the_annotation_menu_exports_annotation(
     main_window: MainWindow,
 ):
     actions = file_menu_actions(main_window)
 
     assert actions["Save &Audio…"] is main_window.save_audio_action
-    assert actions["&Export Annotation…"] is main_window.export_annotation_action
+    assert "&Export Annotation…" not in actions
     assert main_window.save_audio_action is not main_window.export_annotation_action
 
 
@@ -1401,16 +1401,17 @@ def test_clip_tab_opens_hidden_behind_its_source(main_window: MainWindow):
 # --------------------------- annotation menu ---------------------------
 
 
-def test_annotation_menu_offers_add_tiers(main_window: MainWindow):
+def test_annotation_menu_offers_tier_and_export_actions(main_window: MainWindow):
     menu = next(
         action.menu()
         for action in main_window.menuBar().actions()
         if action.text().replace("&", "") == "Annotation"
     )
 
-    assert menu.actions() == [
+    assert [a for a in menu.actions() if not a.isSeparator()] == [
         main_window.add_tiers_action,
         main_window.arrange_tiers_action,
+        main_window.export_annotation_action,
     ]
 
 

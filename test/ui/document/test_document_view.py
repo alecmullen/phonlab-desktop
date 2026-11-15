@@ -14,7 +14,6 @@ from core.transform_audio.filter_audio import FilterSpec
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_special_dialog import (
@@ -1229,17 +1228,6 @@ def stub_dialog(monkeypatch: pytest.MonkeyPatch, result: object, args: list):
         return result
 
     monkeypatch.setattr(SaveTextGridDialog, "get_options", staticmethod(get_options))
-
-
-def test_save_textgrid_action_opens_save_textgrid_dialog(
-    view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    calls = []
-    monkeypatch.setattr(view, "open_save_textgrid", lambda: calls.append(True))
-
-    view.on_state_change(SaveToTextGridAction())
-
-    assert calls == [True]
 
 
 def test_add_tiers_action_asks_which_tiers_and_adds_them(

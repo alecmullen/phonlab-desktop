@@ -16,7 +16,6 @@ from core.transform_audio.prep_audio import PrepAudio
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
@@ -1146,17 +1145,6 @@ def test_on_annot_state_changed_forwards_status_message(
         view_model.on_annot_state_changed(message)
 
     assert blocker.args[0] is message
-
-
-def test_on_annot_state_changed_forwards_save_textgrid_action(
-    view_model: DocumentViewModel, qtbot: QtBot
-):
-    action = SaveToTextGridAction()
-
-    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
-        view_model.on_annot_state_changed(action)
-
-    assert blocker.args[0] is action
 
 
 def test_on_annot_state_changed_forwards_add_tiers_action(
