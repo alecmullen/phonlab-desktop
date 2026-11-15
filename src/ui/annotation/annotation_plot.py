@@ -82,26 +82,6 @@ class AnnotationPlot(DocumentPlot):
         self.addAction(self.create_label_action)
         self.getViewBox().menu.addAction(self.create_label_action)
 
-        add_tiers_action = ContextMenuHintAction(
-            self.tr("Add Tiers..."),
-            parent=self,
-        )
-        add_tiers_action.triggered.connect(self.view_model.trigger_add_tiers_dialog)
-
-        self.addAction(add_tiers_action)
-        self.getViewBox().menu.addAction(add_tiers_action)
-
-        export_annotation_action = ContextMenuHintAction(
-            self.tr("Export Annotation..."),
-            parent=self,
-        )
-        export_annotation_action.triggered.connect(
-            self.view_model.trigger_write_textgrid_dialog
-        )
-
-        self.addAction(export_annotation_action)
-        self.getViewBox().menu.addAction(export_annotation_action)
-
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
 
     def set_shortcuts_active(self, active: bool):
@@ -157,9 +137,11 @@ class AnnotationPlot(DocumentPlot):
 
         font = self.getAxis("left").style.get("tickFont") or QFont()
         metrics = QFontMetrics(font)
+        # A tier occupies y in [i, i + 1], so its name goes at the middle of that band,
+        # level with the labels
         ticks = [
             (
-                i,
+                i + 0.5,
                 metrics.elidedText(
                     type.type, Qt.TextElideMode.ElideRight, LEFT_AXIS_WIDTH
                 ),

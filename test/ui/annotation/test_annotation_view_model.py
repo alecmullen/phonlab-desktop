@@ -23,7 +23,6 @@ from ui.annotation.state.annotation_node_state import (
 )
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import AnnotationState
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.document.state.status_message_state import StatusMessageState
 
@@ -475,15 +474,6 @@ def test_parse_textgrid_sets_loading_state_until_job_finishes(
     assert view_model.loading_state.is_loading is False
 
 
-def test_trigger_write_textgrid_dialog_emits_save_action(qtbot: QtBot):
-    view_model = make_view_model({}, 0.0, 1.0)
-
-    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
-        view_model.trigger_write_textgrid_dialog()
-
-    assert isinstance(blocker.args[0], SaveToTextGridAction)
-
-
 def test_opens_empty_for_a_registered_stem_without_annotation():
     repository = SeedableAnnotationRepository()
     repository.create_annotations_if_missing(["sample"])
@@ -776,3 +766,13 @@ def test_create_label_from_selection_uses_row_of_the_displayed_tiers():
     assert len(label_spans(view_model, 0)) == 1
     assert label_spans(view_model, 1) == []
     assert label_spans(view_model, 2) == []
+
+
+def test_set_tier_fonts_announces_the_annotation_state(qtbot: QtBot):
+    view_model = make_view_model({}, 0.0, 1.0)
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.set_tier_fonts({"word": "Charis SIL"})
+
+    assert view_model.tier_fonts == {"word": "Charis SIL"}
+    assert isinstance(blocker.args[0], AnnotationState)

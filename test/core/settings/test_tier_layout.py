@@ -86,3 +86,37 @@ def test_load_ignores_only_the_malformed_key(tmp_path: Path):
     )
 
     assert LoadTierLayout()(str(tmp_path)) == TierLayout([], ["word"])
+
+
+def test_save_and_load_round_trip_tier_fonts(tmp_path: Path):
+    layout = TierLayout([], ["word"], {"word": "Charis SIL", "phone": "Doulos SIL"})
+
+    SaveTierLayout()(layout, str(tmp_path))
+
+    assert read(tmp_path / "phonlab.toml")["display"]["tier_fonts"] == {
+        "word": "Charis SIL",
+        "phone": "Doulos SIL",
+    }
+    assert LoadTierLayout()(str(tmp_path)) == layout
+
+
+def test_save_removes_earlier_tier_fonts_when_there_are_none(tmp_path: Path):
+    SaveTierLayout()(TierLayout(tier_fonts={"word": "Charis SIL"}), str(tmp_path))
+
+    SaveTierLayout()(TierLayout(), str(tmp_path))
+
+    assert read(tmp_path / "phonlab.toml") == {"display": {}}
+
+
+def test_load_ignores_malformed_tier_fonts(tmp_path: Path):
+    (tmp_path / "phonlab.toml").write_text(
+        "[display]\ntier_fonts = 'Arial'\ntier_order = ['word']\n"
+    )
+    assert LoadTierLayout()(str(tmp_path)) == TierLayout([], ["word"])
+
+    (tmp_path / "phonlab.toml").write_text(
+        "[display.tier_fonts]\nword = 'Charis SIL'\nphone = 3\ntone = ''\n"
+    )
+    assert LoadTierLayout()(str(tmp_path)) == TierLayout(
+        tier_fonts={"word": "Charis SIL"}
+    )

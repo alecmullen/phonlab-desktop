@@ -1,4 +1,4 @@
-from collections.abc import Callable, Collection, Iterable
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import replace
 
 import numpy as np
@@ -22,7 +22,6 @@ from res.constants import (
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
@@ -138,9 +137,7 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
-        if isinstance(
-            model, (StatusMessageState, SaveToTextGridAction, AddTiersAction)
-        ):
+        if isinstance(model, (StatusMessageState, AddTiersAction)):
             self.state_changed.emit(model)
         elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
@@ -815,6 +812,9 @@ class DocumentViewModel(ViewModel):
         self, hidden_tiers: Collection[str], tier_order: Collection[str]
     ):
         self.annotation_view_model.set_tier_display(hidden_tiers, tier_order)
+
+    def set_tier_fonts(self, tier_fonts: Mapping[str, str]):
+        self.annotation_view_model.set_tier_fonts(tier_fonts)
 
     def save_textgrid(self, file_path: str, tg_type: str):
         self.annotation_view_model.write_textgrid(file_path, tg_type)

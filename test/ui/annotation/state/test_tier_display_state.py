@@ -1,6 +1,7 @@
 from ui.annotation.state.tier_display_state import (
     TierDisplayState,
     hidden_and_order_from,
+    listed_as_plotted,
     tier_display_from,
 )
 
@@ -78,3 +79,13 @@ def test_what_tier_display_shows_round_trips_through_hidden_and_order():
     tiers = tier_display_from(["a", "b", "c"], ["b"], ["c", "a"])
 
     assert hidden_and_order_from(tiers) == (["b"], ["c", "a"])
+
+
+def test_listed_as_plotted_runs_from_the_top_of_the_plot_then_the_hidden_tiers():
+    tiers = [
+        TierDisplayState("phone", 1),
+        TierDisplayState("word", 2),
+        TierDisplayState("tone"),
+    ]
+
+    assert listed_as_plotted(tiers) == [tiers[1], tiers[0], tiers[2]]

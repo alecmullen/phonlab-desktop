@@ -1,7 +1,6 @@
 import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
-    QAction,
     QDragEnterEvent,
     QDropEvent,
     QHideEvent,
@@ -26,7 +25,6 @@ from res.constants import DOUBLE_CLICK_INTERVAL_MS, PLOT_ROW_SPACING, PLOT_ROW_W
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
@@ -182,23 +180,22 @@ class DocumentView(QWidget):
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
         """Add the navigation actions (Zoom to Selection, Deselect, Set Mark,
-        Remove Mark) to a plot's ViewBox menu.
+        Remove Mark) to a plot's ViewBox menu, after the plot's own actions and a
+        separator.
 
         Added directly to each plot's own menu (rather than via the
         scene-wide contextMenu list) so they're present before the menu
         is ever shown.
         """
         menu = view_box.menu
-        first_action = menu.actions()[0] if len(menu.actions()) > 0 else None
-        menu.aboutToShow.connect(
-            lambda first=first_action: self.sync_actions_with_ui_state(menu, first)
-        )
+        menu.addSeparator()
+        menu.aboutToShow.connect(lambda: self.sync_actions_with_ui_state(menu))
 
-    def sync_actions_with_ui_state(self, menu: QMenu, first_action: QAction | None):
-        """Put Zoom to Selection at the top of `menu` only while a selection
-        exists. Adding/removing it as the menu opens (rather than toggling the
-        action's visibility) makes Qt lay the rows out afresh, so it can't be
-        drawn over its neighbour."""
+    def sync_actions_with_ui_state(self, menu: QMenu):
+        """Show the navigation actions that apply at the end of `menu`. Adding and
+        removing them as the menu opens (rather than toggling the action's
+        visibility) makes Qt lay the rows out afresh, so one can't be drawn over its
+        neighbour."""
         is_selected = self.view_model.select_state.is_selected
         is_marked = self.view_model.mark_state.is_set
 
@@ -211,16 +208,11 @@ class DocumentView(QWidget):
         ]
         wanted = [is_selected, is_selected, is_selected or is_marked, True, is_marked]
 
-        next_action = first_action
-        for idx in reversed(range(len(actions))):
-            if actions[idx] in menu.actions():
-                menu.removeAction(actions[idx])
-            if wanted[idx]:
-                menu.insertAction(next_action, actions[idx])
-                next_action = actions[idx]
-
-        if first_action is not None:
-            menu.insertSeparator(first_action)
+        for action, is_wanted in zip(actions, wanted):
+            if action in menu.actions():
+                menu.removeAction(action)
+            if is_wanted:
+                menu.addAction(action)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -249,8 +241,6 @@ class DocumentView(QWidget):
             self.open_filter_dialog()
         elif isinstance(model, AudioInfoAction):
             self.open_audio_info()
-        elif isinstance(model, SaveToTextGridAction):
-            self.open_save_textgrid()
         elif isinstance(model, AddTiersAction):
             self.open_add_tiers_dialog(model)
 

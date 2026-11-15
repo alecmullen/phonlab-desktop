@@ -15,7 +15,6 @@ from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_special_dialog import (
@@ -1146,20 +1145,40 @@ def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
     actions = menu.actions()
 
     ordered = [
-        loaded_view.zoom_to_selection_action,
-        loaded_view.deselect_action,
-        loaded_view.recenter_action,
-        loaded_view.set_mark_action,
-        loaded_view.remove_mark_action,
         loaded_view.wave_plots[0].audio_info_action,
         loaded_view.wave_plots[0].resample_action,
         loaded_view.wave_plots[0].scale_action,
         loaded_view.wave_plots[0].reverse_action,
         loaded_view.wave_plots[0].filter_action,
         loaded_view.wave_plots[0].revert_action,
+        loaded_view.zoom_to_selection_action,
+        loaded_view.deselect_action,
+        loaded_view.recenter_action,
+        loaded_view.set_mark_action,
+        loaded_view.remove_mark_action,
     ]
     positions = [actions.index(a) for a in ordered]
     assert positions == sorted(positions)
+
+
+def test_annotation_menu_has_create_label_first_then_a_separator_then_navigation(
+    all_plots_view: DocumentView,
+):
+    all_plots_view.view_model.set_mark(4.0)
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    assert isinstance(plot, AnnotationPlot)
+    menu = plot.getViewBox().menu
+    menu.aboutToShow.emit()
+    menu.aboutToShow.emit()  # opening it again changes nothing
+    actions = menu.actions()
+
+    assert actions[0] is plot.create_label_action
+    assert actions[1].isSeparator()
+    assert actions[2:] == [
+        all_plots_view.recenter_action,
+        all_plots_view.set_mark_action,
+        all_plots_view.remove_mark_action,
+    ]
 
 
 def test_deselect_action_clears_selection(loaded_view: DocumentView):
@@ -1360,17 +1379,6 @@ def stub_dialog(monkeypatch: pytest.MonkeyPatch, result: object, args: list):
         return result
 
     monkeypatch.setattr(SaveTextGridDialog, "get_options", staticmethod(get_options))
-
-
-def test_save_textgrid_action_opens_save_textgrid_dialog(
-    view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    calls = []
-    monkeypatch.setattr(view, "open_save_textgrid", lambda: calls.append(True))
-
-    view.on_state_change(SaveToTextGridAction())
-
-    assert calls == [True]
 
 
 def test_add_tiers_action_asks_which_tiers_and_adds_them(

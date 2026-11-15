@@ -6,6 +6,7 @@ DISPLAY_SECTION = "display"
 PLAN_KEY = "plan"
 HIDDEN_TIERS_KEY = "hidden_tiers"
 TIER_ORDER_KEY = "tier_order"
+TIER_FONTS_KEY = "tier_fonts"
 
 # -- Files --
 # Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
@@ -149,5 +150,8 @@ NODE_V_MARGIN = 7
 NODE_H_MARGIN = 5
 POINT_LABEL_WIDTH = 100
 LABEL_HEIGHT_RATIO = 0.8
+# The font of annotation labels, unless the user chose another for their tier
+LABEL_FONT_FAMILY = "Arial"
+LABEL_FONT_SIZE = 16
 SAME_NODE_THRESHOLD = 0.005
 SAME_NODE_PIXEL_THRESH = 7
