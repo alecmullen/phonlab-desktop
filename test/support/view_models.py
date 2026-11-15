@@ -30,8 +30,11 @@ from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.project.add_project_files import AddProjectFiles
 from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
+from core.settings.entity.tier_layout import TierLayout
 from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.load_tier_layout import LoadTierLayout
 from core.settings.save_display_plan import SaveDisplayPlan
+from core.settings.save_tier_layout import SaveTierLayout
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
@@ -131,15 +134,22 @@ def make_main_view_model(
     repository: SeedableAnnotationRepository | None = None,
     load_display_plan: LoadDisplayPlan | None = None,
     save_display_plan: SaveDisplayPlan | None = None,
+    load_tier_layout: LoadTierLayout | None = None,
+    save_tier_layout: SaveTierLayout | None = None,
 ) -> MainViewModel:
     if load_display_plan is None:
         load_display_plan = mock_use_case(LoadDisplayPlan)
         load_display_plan.return_value = None
+    if load_tier_layout is None:
+        load_tier_layout = mock_use_case(LoadTierLayout)
+        load_tier_layout.return_value = TierLayout()
     repository = repository or SeedableAnnotationRepository()
     add_project_files = AddProjectFiles(repository, ParseTextGrid(repository))
     return MainViewModel(
         load_display_plan,
         save_display_plan or mock_use_case(SaveDisplayPlan),
+        load_tier_layout,
+        save_tier_layout or mock_use_case(SaveTierLayout),
         lambda _dir_path: add_project_files,
         lambda _dir_path: RebuildProject(repository, add_project_files),
     )

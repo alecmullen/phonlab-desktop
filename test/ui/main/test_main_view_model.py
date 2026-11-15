@@ -8,8 +8,11 @@ from support.textgrid import write_simple_textgrid
 from support.view_models import make_main_view_model
 
 from core.settings.app_settings import settings
+from core.settings.entity.tier_layout import TierLayout
 from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.load_tier_layout import LoadTierLayout
 from core.settings.save_display_plan import SaveDisplayPlan
+from core.settings.save_tier_layout import SaveTierLayout
 from ui.document.state.plot_layout_state import PlotType
 from ui.main.main_view_model import MainViewModel
 from ui.main.state.project_import_state import ProjectImportState
@@ -103,6 +106,60 @@ def test_save_window_layout_saves_current_plan_to_project():
     view_model.save_window_layout()
 
     assert save.call_args.args == (["waveform", "spectrogram"], "/some/dir")
+
+
+def test_opening_project_uses_its_saved_tier_layout():
+    load = mock_use_case(LoadTierLayout)
+    load.return_value = TierLayout(["phone"], ["word", "tone"])
+    view_model = make_main_view_model(load_tier_layout=load)
+
+    view_model.set_dir_path("/some/dir")
+
+    assert load.call_args.args == ("/some/dir",)
+    assert view_model.hidden_tiers == ["phone"]
+    assert view_model.tier_order == ["word", "tone"]
+
+
+def test_opening_project_without_a_tier_layout_shows_every_tier():
+    view_model = make_main_view_model()  # its load returns an empty layout
+    view_model.set_tier_display(["tier from another project"], ["another"])
+
+    view_model.set_dir_path("/some/dir")
+
+    assert view_model.hidden_tiers == []
+    assert view_model.tier_order == []
+
+
+def test_closing_project_keeps_current_tier_layout():
+    load = mock_use_case(LoadTierLayout)
+    load.return_value = TierLayout(["phone"], ["word"])
+    view_model = make_main_view_model(load_tier_layout=load)
+    view_model.set_dir_path("/some/dir")
+
+    view_model.set_dir_path(None)
+
+    assert view_model.hidden_tiers == ["phone"]
+    assert view_model.tier_order == ["word"]
+
+
+def test_set_tier_display_is_not_written_anywhere():
+    save = mock_use_case(SaveTierLayout)
+    view_model = make_main_view_model(save_tier_layout=save)
+
+    view_model.set_tier_display(["phone"], ["word"])
+
+    save.assert_not_called()
+
+
+def test_save_window_layout_saves_tier_layout_to_project():
+    save = mock_use_case(SaveTierLayout)
+    view_model = make_main_view_model(save_tier_layout=save)
+    view_model.set_dir_path("/some/dir")
+    view_model.set_tier_display(["phone"], ["word"])
+
+    view_model.save_window_layout()
+
+    assert save.call_args.args == (TierLayout(["phone"], ["word"]), "/some/dir")
 
 
 def test_save_window_layout_raises_without_a_project():

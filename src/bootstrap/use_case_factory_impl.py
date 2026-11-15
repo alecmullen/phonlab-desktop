@@ -17,7 +17,9 @@ from core.project.add_project_files import AddProjectFiles
 from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
 from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.load_tier_layout import LoadTierLayout
 from core.settings.save_display_plan import SaveDisplayPlan
+from core.settings.save_tier_layout import SaveTierLayout
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
@@ -49,6 +51,8 @@ class UseCaseFactory:
         self.write_textgrid = WriteTextGrid()
         self.load_display_plan = LoadDisplayPlan()
         self.save_display_plan = SaveDisplayPlan()
+        self.load_tier_layout = LoadTierLayout()
+        self.save_tier_layout = SaveTierLayout()
         self.add_project_files = AddProjectFiles(
             self.annotation_repository, self.parse_textgrid
         )
@@ -106,6 +110,10 @@ class UseCaseFactory:
             use_case = self.load_display_plan
         if use_case_type is SaveDisplayPlan:
             use_case = self.save_display_plan
+        if use_case_type is LoadTierLayout:
+            use_case = self.load_tier_layout
+        if use_case_type is SaveTierLayout:
+            use_case = self.save_tier_layout
 
         if use_case is None:
             raise TypeError(f"No provider method for {use_case_type!s} found")

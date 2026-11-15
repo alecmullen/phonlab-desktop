@@ -9,8 +9,11 @@ from core.project.entity.project_import_result import ProjectImportResult
 from core.project.rebuild_project import RebuildProject
 from core.project.scan_project_files import scan_project_files
 from core.settings.app_settings import settings
+from core.settings.entity.tier_layout import TierLayout
 from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.load_tier_layout import LoadTierLayout
 from core.settings.save_display_plan import SaveDisplayPlan
+from core.settings.save_tier_layout import SaveTierLayout
 from res.constants import PROJECT_DATABASE_FILENAME
 from ui.base.view_model import ViewModel
 from ui.document.state.plot_layout_state import (
@@ -29,12 +32,16 @@ class MainViewModel(ViewModel):
         self,
         load_display_plan: LoadDisplayPlan,
         save_display_plan: SaveDisplayPlan,
+        load_tier_layout: LoadTierLayout,
+        save_tier_layout: SaveTierLayout,
         provide_add_project_files: Callable[[str], AddProjectFiles],
         provide_rebuild_project: Callable[[str], RebuildProject],
     ):
         super().__init__()
         self.load_display_plan_use_case = load_display_plan
         self.save_display_plan_use_case = save_display_plan
+        self.load_tier_layout_use_case = load_tier_layout
+        self.save_tier_layout_use_case = save_tier_layout
 
         self.dir_path: str | None = None
         self.provide_add_project_files = provide_add_project_files
@@ -73,17 +80,25 @@ class MainViewModel(ViewModel):
             if names is not None:
                 settings.display_plan = plot_names(plots_from_names(names))
 
+            # Tier names belong to a project, so never carry them over from another
+            layout = self.load_tier_layout_use_case(dir_path)
+            settings.hidden_tiers = layout.hidden_tiers
+            settings.tier_order = layout.tier_order
+
     def set_display_plan(self, plots: Iterable[PlotType]):
         """Make `plots` the display plan for the rest of the session"""
         settings.display_plan = plot_names(plots_from_names(plot_names(plots)))
 
     def save_window_layout(self):
-        """Save the display plan in the project file, so the project opens
-        with it next time"""
+        """Save the display plan and the hidden tiers in the project file, so the
+        project opens with them next time"""
         if self.dir_path is None:
             raise ValueError("Cannot save window layout because no project is open")
 
         self.save_display_plan_use_case(settings.display_plan, self.dir_path)
+        self.save_tier_layout_use_case(
+            TierLayout(settings.hidden_tiers, settings.tier_order), self.dir_path
+        )
 
     def init_toml(self):
         if self.dir_path is None:
