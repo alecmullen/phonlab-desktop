@@ -12,7 +12,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.annotation.state.tier_display_state import HIDDEN_POSITION, TierDisplayState
+from ui.annotation.state.tier_display_state import (
+    HIDDEN_POSITION,
+    TierDisplayState,
+    listed_as_plotted,
+)
 
 
 class TierDisplayDialog(QDialog):
@@ -29,9 +33,7 @@ class TierDisplayDialog(QDialog):
         self.setMinimumWidth(340)
 
         self.listed_names = [tier.name for tier in tiers]
-        shown = [tier for tier in tiers if tier.position != HIDDEN_POSITION]
-        hidden = [tier for tier in tiers if tier.position == HIDDEN_POSITION]
-        rows = [*reversed(shown), *hidden]
+        rows = listed_as_plotted(tiers)
 
         self.table = QTableWidget(len(rows), 2)
         self.table.setHorizontalHeaderLabels([self.tr("Tier"), self.tr("Position")])

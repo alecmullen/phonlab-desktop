@@ -18,7 +18,11 @@ from PyQt6.QtWidgets import (
 from core.project.scan_project_files import is_audio_file, is_textgrid_file
 from core.settings.app_settings import settings
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
-from ui.annotation.state.tier_display_state import hidden_and_order_from
+from ui.annotation.component.tier_font_dialog import TierFontDialog
+from ui.annotation.state.tier_display_state import (
+    hidden_and_order_from,
+    listed_as_plotted,
+)
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
@@ -257,12 +261,20 @@ class MainWindow(QMainWindow):
         self.arrange_tiers_action.setEnabled(False)
         self.arrange_tiers_action.triggered.connect(self.arrange_tiers)
 
+        self.choose_fonts_action = QAction(self.tr("Choose &Fonts…"), self)
+        self.choose_fonts_action.setStatusTip(
+            self.tr("Choose the font of the labels of each annotation tier")
+        )
+        self.choose_fonts_action.setEnabled(False)
+        self.choose_fonts_action.triggered.connect(self.choose_fonts)
+
         # Annotation Menu
         if settings.enable_annotation and mainMenu is not None:
             annotationMenu = mainMenu.addMenu(self.tr("&Annotation"))
             if annotationMenu is not None:
                 annotationMenu.addAction(self.add_tiers_action)
                 annotationMenu.addAction(self.arrange_tiers_action)
+                annotationMenu.addAction(self.choose_fonts_action)
                 annotationMenu.addSeparator()
                 annotationMenu.addAction(self.export_annotation_action)
 
@@ -637,6 +649,7 @@ class MainWindow(QMainWindow):
 
         self.add_tiers_action.setEnabled(doc is not None)
         self.arrange_tiers_action.setEnabled(doc is not None)
+        self.choose_fonts_action.setEnabled(doc is not None)
 
         # Only the tab on screen computes its spectrogram, a hidden one waits
         for tab_index in range(self.tab_widget.count()):
@@ -714,16 +727,40 @@ class MainWindow(QMainWindow):
     def set_tier_display(self, hidden_tiers: list[str], tier_order: list[str]):
         """Show the tiers this way in every document, and in those opened later"""
         self.view_model.set_tier_display(hidden_tiers, tier_order)
+        self.apply_to_documents(self.apply_tier_display)
+
+    def apply_to_documents(self, apply: Callable[[DocumentViewModel], None]):
         for index in range(self.tab_widget.count()):
             tab = self.tab_widget.widget(index)
             if isinstance(tab, DocumentView):
-                self.apply_tier_display(tab.view_model)
+                apply(tab.view_model)
+
+    @pyqtSlot()
+    def choose_fonts(self):
+        """Ask for the font of the labels of each tier, for every document: the tiers
+        belong to the project, not to a file"""
+        doc = self.get_current_document()
+        if doc is None:
+            return
+
+        names = [tier.name for tier in listed_as_plotted(doc.view_model.tier_display())]
+        fonts = TierFontDialog.get_fonts(names, self.view_model.tier_fonts, self)
+        if fonts is None:
+            return
+
+        self.view_model.set_tier_fonts(fonts)
+        self.apply_to_documents(self.apply_tier_display)
+
+        # So the labels can be seen
+        if not doc.view_model.plot_layout_state.has_annotation():
+            self.plot_annotations()
 
     def apply_tier_display(self, doc_view_model: DocumentViewModel):
         """Make a document show the tiers the way every document does"""
         doc_view_model.set_tier_display(
             self.view_model.hidden_tiers, self.view_model.tier_order
         )
+        doc_view_model.set_tier_fonts(self.view_model.tier_fonts)
 
     def save_textgrid(self):
         doc = self.get_current_document()

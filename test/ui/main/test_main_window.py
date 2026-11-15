@@ -20,6 +20,7 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
+from ui.annotation.component.tier_font_dialog import TierFontDialog
 from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
@@ -1411,6 +1412,7 @@ def test_annotation_menu_offers_tier_and_export_actions(main_window: MainWindow)
     assert [a for a in menu.actions() if not a.isSeparator()] == [
         main_window.add_tiers_action,
         main_window.arrange_tiers_action,
+        main_window.choose_fonts_action,
         main_window.export_annotation_action,
     ]
 
@@ -1660,3 +1662,103 @@ def test_add_tiers_leaves_hidden_tiers_alone_when_none_was_added_back(
     main_window.add_tiers()
 
     assert main_window.view_model.hidden_tiers == ["phone"]
+
+
+# --------------------------- choose fonts ---------------------------
+
+
+def stub_font_dialog(
+    monkeypatch: pytest.MonkeyPatch, chosen: dict[str, str] | None
+) -> list[tuple[list[str], dict[str, str]]]:
+    offered: list[tuple[list[str], dict[str, str]]] = []
+
+    def get_fonts(
+        names: list[str], fonts: dict[str, str], parent: QWidget | None = None
+    ) -> dict[str, str] | None:
+        offered.append((names, fonts))
+        return chosen
+
+    monkeypatch.setattr(TierFontDialog, "get_fonts", get_fonts)
+    return offered
+
+
+def test_choose_fonts_is_enabled_only_while_a_document_is_open(
+    main_window: MainWindow,
+):
+    assert not main_window.choose_fonts_action.isEnabled()
+
+    add_document(main_window)
+
+    assert main_window.choose_fonts_action.isEnabled()
+
+
+def test_choose_fonts_does_nothing_without_a_document(main_window: MainWindow):
+    main_window.choose_fonts()  # must not raise
+
+
+def test_choose_fonts_offers_the_tiers_as_plotted_and_the_current_fonts(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    offered = stub_font_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    tiers = [
+        TierDisplayState("phone", 1),
+        TierDisplayState("word", 2),
+        TierDisplayState("tone"),
+    ]
+    monkeypatch.setattr(doc.view_model, "tier_display", lambda: tiers)
+    main_window.view_model.set_tier_fonts({"word": "Charis SIL"})
+
+    main_window.choose_fonts_action.trigger()
+
+    assert offered == [(["word", "phone", "tone"], {"word": "Charis SIL"})]
+
+
+def test_choose_fonts_applies_the_choice_to_every_document(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_font_dialog(monkeypatch, {"word": "Charis SIL"})
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+    load_signal(second, np.zeros(2000), fs=1000)
+
+    main_window.choose_fonts()
+
+    assert main_window.view_model.tier_fonts == {"word": "Charis SIL"}
+    for doc in (first, second):
+        assert doc.view_model.annotation_view_model.tier_fonts == {"word": "Charis SIL"}
+
+
+def test_choose_fonts_cancelled_changes_nothing(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_font_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    main_window.view_model.set_tier_fonts({"word": "Charis SIL"})
+
+    main_window.choose_fonts()
+
+    assert main_window.view_model.tier_fonts == {"word": "Charis SIL"}
+    assert doc.view_model.annotation_view_model.tier_fonts == {}
+
+
+def test_choose_fonts_shows_the_annotation_plot_if_it_is_hidden(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_font_dialog(monkeypatch, {"word": "Charis SIL"})
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    assert not doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.choose_fonts()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+
+def test_a_document_is_given_the_chosen_fonts_when_it_opens(main_window: MainWindow):
+    main_window.view_model.set_tier_fonts({"word": "Charis SIL"})
+    doc_view_model = main_window.view_model_factory.create(DocumentViewModel)
+
+    main_window.apply_tier_display(doc_view_model)
+
+    assert doc_view_model.annotation_view_model.tier_fonts == {"word": "Charis SIL"}
