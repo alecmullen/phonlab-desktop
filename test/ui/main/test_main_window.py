@@ -1547,6 +1547,7 @@ def test_arrange_tiers_applies_the_choice_to_every_document(
     )
     first = add_document(main_window, "one.wav")
     second = add_document(main_window, "two.wav")
+    load_signal(second, np.zeros(2000), fs=1000)
 
     main_window.arrange_tiers()
 
@@ -1570,6 +1571,46 @@ def test_arrange_tiers_cancelled_changes_nothing(
     assert main_window.view_model.hidden_tiers == ["word"]
     assert main_window.view_model.tier_order == ["phone"]
     assert doc.view_model.annotation_view_model.hidden_tiers == ["word"]
+
+
+def test_arrange_tiers_shows_the_annotation_plot_if_it_is_hidden(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(monkeypatch, [TierDisplayState("word", 1)])
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    assert not doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.arrange_tiers()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+    assert PlotType.ANNOTATION in main_window.view_model.display_plan
+
+
+def test_arrange_tiers_leaves_the_annotation_plot_alone_if_it_is_shown(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(monkeypatch, [TierDisplayState("word", 1)])
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    main_window.plot_annotations()
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.arrange_tiers()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+
+def test_arrange_tiers_cancelled_does_not_show_the_annotation_plot(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+
+    main_window.arrange_tiers()
+
+    assert not doc.view_model.plot_layout_state.has_annotation()
 
 
 def test_a_new_document_shows_the_tiers_the_same_way(main_window: MainWindow):

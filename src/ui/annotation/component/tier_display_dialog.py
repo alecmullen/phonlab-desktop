@@ -18,14 +18,22 @@ from ui.annotation.state.tier_display_state import HIDDEN_POSITION, TierDisplayS
 class TierDisplayDialog(QDialog):
     """Lets the user number the annotation tiers to choose which are shown and in what
     order: 1 is the bottom of the plot, 2 the next tier up, and so on. A tier with no
-    number is hidden"""
+    number is hidden.
+
+    The rows are laid out like the plot: the tier at the top of the plot first, and the
+    hidden tiers last. `tiers` are the tiers bottom to top, then the hidden ones"""
 
     def __init__(self, tiers: list[TierDisplayState], parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Show and Order Tiers"))
         self.setMinimumWidth(340)
 
-        self.table = QTableWidget(len(tiers), 2)
+        self.listed_names = [tier.name for tier in tiers]
+        shown = [tier for tier in tiers if tier.position != HIDDEN_POSITION]
+        hidden = [tier for tier in tiers if tier.position == HIDDEN_POSITION]
+        rows = [*reversed(shown), *hidden]
+
+        self.table = QTableWidget(len(rows), 2)
         self.table.setHorizontalHeaderLabels([self.tr("Tier"), self.tr("Position")])
         row_header = self.table.verticalHeader()
         if row_header is not None:
@@ -35,15 +43,19 @@ class TierDisplayDialog(QDialog):
         header = self.table.horizontalHeader()
         if header is not None:
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header_item = self.table.horizontalHeaderItem(0)
+        if header_item is not None:
+            header_item.setTextAlignment(_RIGHT)
 
         self.spin_boxes: list[QSpinBox] = []
-        for row, tier in enumerate(tiers):
+        for row, tier in enumerate(rows):
             name_item = QTableWidgetItem(tier.name)
             name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            name_item.setTextAlignment(_RIGHT)
             self.table.setItem(row, 0, name_item)
 
             spin_box = QSpinBox()
-            spin_box.setRange(HIDDEN_POSITION, len(tiers))
+            spin_box.setRange(HIDDEN_POSITION, len(rows))
             spin_box.setSpecialValueText(self.tr("Hidden"))
             spin_box.setValue(tier.position)
             self.table.setCellWidget(row, 1, spin_box)
@@ -55,25 +67,27 @@ class TierDisplayDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(
-            QLabel(
-                self.tr(
-                    "Number the tiers from the bottom of the plot up. "
-                    "Tiers shown as Hidden are left out."
-                )
+        intro = QLabel(
+            self.tr(
+                "Tiers are listed as they appear in the plot, top to bottom. "
+                "Number them from the bottom up; tiers shown as Hidden are left out."
             )
         )
+        intro.setWordWrap(True)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(intro)
         layout.addWidget(self.table)
         layout.addWidget(buttons)
 
     def tiers(self) -> list[TierDisplayState]:
-        tiers = []
+        """The tiers with the positions now chosen, in the order they were given"""
+        positions = {}
         for row, spin_box in enumerate(self.spin_boxes):
             item = self.table.item(row, 0)
             if item is not None:
-                tiers.append(TierDisplayState(item.text(), spin_box.value()))
-        return tiers
+                positions[item.text()] = spin_box.value()
+        return [TierDisplayState(name, positions[name]) for name in self.listed_names]
 
     @staticmethod
     def get_tiers(
@@ -84,3 +98,6 @@ class TierDisplayDialog(QDialog):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             return dlg.tiers()
         return None
+
+
+_RIGHT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter

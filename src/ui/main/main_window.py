@@ -706,6 +706,10 @@ class MainWindow(QMainWindow):
 
         self.set_tier_display(*hidden_and_order_from(tiers))
 
+        # So the tiers can be seen
+        if not doc.view_model.plot_layout_state.has_annotation():
+            self.plot_annotations()
+
     def set_tier_display(self, hidden_tiers: list[str], tier_order: list[str]):
         """Show the tiers this way in every document, and in those opened later"""
         self.view_model.set_tier_display(hidden_tiers, tier_order)
