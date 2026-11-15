@@ -1,10 +1,11 @@
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationType,
 )
+from res.constants import LABEL_FONT_FAMILY
 from ui.annotation.state.annotation_label_state import (
     AnnotationLabelState,
     to_label,
@@ -98,10 +99,11 @@ def update_annotation_state_from_window(
     end: float,
     hidden_tiers: Collection[str] = (),
     tier_order: Collection[str] = (),
+    tier_fonts: Mapping[str, str] | None = None,
 ) -> AnnotationState:
     """Builds the state to display for the window. Types named in `hidden_tiers`
     are left out and the others are in the order of `tier_order`, so tier indices
-    are rows of the plot."""
+    are rows of the plot. The labels of a type are in its font in `tier_fonts`."""
 
     types = []
     node_extents: dict[int, set[AnnotationNodeExtentState]] = {}
@@ -109,6 +111,7 @@ def update_annotation_state_from_window(
     for tier, type in enumerate(
         displayed_types(annotation.types, hidden_tiers, tier_order)
     ):
+        font = (tier_fonts or {}).get(type.type, LABEL_FONT_FAMILY)
         labels = []
         for label in type.labels:
             label_state = update_label_state(
@@ -118,6 +121,7 @@ def update_annotation_state_from_window(
                 annotation.nodes[label.s_node].x,
                 annotation.nodes[label.e_node].x,
                 tier,
+                font,
             )
 
             if label_state.is_visible:

@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import replace
 
 from PyQt6.QtCore import pyqtSlot
@@ -74,6 +74,7 @@ class AnnotationViewModel(ViewModel):
         # Names of the tiers left out of the plot, and the order of the others
         self.hidden_tiers: Collection[str] = ()
         self.tier_order: Collection[str] = ()
+        self.tier_fonts: Mapping[str, str] = {}
 
         self.create_label_use_case = create_label
         self.update_label_use_case = update_label
@@ -123,6 +124,7 @@ class AnnotationViewModel(ViewModel):
             *self.window_state,
             self.hidden_tiers,
             self.tier_order,
+            self.tier_fonts,
         )
         self.state_changed.emit(self.annotation_view_state)
 
@@ -143,6 +145,12 @@ class AnnotationViewModel(ViewModel):
         order of `tier_order`"""
         self.hidden_tiers = hidden_tiers
         self.tier_order = tier_order
+        self.update_annotation_change()
+
+    def set_tier_fonts(self, tier_fonts: Mapping[str, str]):
+        """Show the labels of each tier in its font from `tier_fonts`, and those of
+        the tiers it does not name in the default font"""
+        self.tier_fonts = tier_fonts
         self.update_annotation_change()
 
     def set_annotation_state(self, annotation: Annotation):

@@ -63,6 +63,16 @@ class MainViewModel(ViewModel):
         bottom to top"""
         return settings.tier_order
 
+    @property
+    def tier_fonts(self) -> dict[str, str]:
+        """The font family of the labels of each annotation tier, by tier name, in
+        every document. A tier not named uses the default font"""
+        return settings.tier_fonts
+
+    def set_tier_fonts(self, tier_fonts: dict[str, str]):
+        """Show the labels of each tier in its font for the rest of the session"""
+        settings.tier_fonts = tier_fonts
+
     def set_tier_display(self, hidden_tiers: list[str], tier_order: list[str]):
         """Hide the `hidden_tiers` and show the others in the order of `tier_order`
         for the rest of the session"""
@@ -84,20 +94,22 @@ class MainViewModel(ViewModel):
             layout = self.load_tier_layout_use_case(dir_path)
             settings.hidden_tiers = layout.hidden_tiers
             settings.tier_order = layout.tier_order
+            settings.tier_fonts = layout.tier_fonts
 
     def set_display_plan(self, plots: Iterable[PlotType]):
         """Make `plots` the display plan for the rest of the session"""
         settings.display_plan = plot_names(plots_from_names(plot_names(plots)))
 
     def save_window_layout(self):
-        """Save the display plan and the hidden tiers in the project file, so the
+        """Save the display plan and the tier layout in the project file, so the
         project opens with them next time"""
         if self.dir_path is None:
             raise ValueError("Cannot save window layout because no project is open")
 
         self.save_display_plan_use_case(settings.display_plan, self.dir_path)
         self.save_tier_layout_use_case(
-            TierLayout(settings.hidden_tiers, settings.tier_order), self.dir_path
+            TierLayout(settings.hidden_tiers, settings.tier_order, settings.tier_fonts),
+            self.dir_path,
         )
 
     def init_toml(self):

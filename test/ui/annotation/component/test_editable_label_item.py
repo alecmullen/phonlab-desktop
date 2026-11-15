@@ -227,3 +227,13 @@ def test_focus_out_without_change_does_not_call_on_edit(
 
 def test_event_filter_ignores_none_event(item: EditableLabelItem):
     assert item.eventFilter(item.textItem, None) is False
+
+
+def test_label_text_is_in_the_labels_font(plot: pg.PlotItem):
+    label = AnnotationLabelState(
+        pos=(0.5, 0.25), size=(1.0, 0.5), label="hello", font="Courier"
+    )
+
+    item = EditableLabelItem(label, (0.5, 0.5), (0, 0, 0), lambda: None, plot)
+
+    assert item.textItem.font().family() == "Courier"

@@ -24,6 +24,11 @@ class AppSettings:
     # can store its own.
     tier_order: list[str] = field(default_factory=list)
 
+    # The font family of the labels of each annotation tier, by tier name. A tier not
+    # named here uses the default font. Kept for the session only; a project can
+    # store its own.
+    tier_fonts: dict[str, str] = field(default_factory=dict)
+
     enable_annotation = True
 
 

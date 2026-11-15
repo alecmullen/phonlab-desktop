@@ -15,6 +15,7 @@ def reset_display_plan(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "display_plan", ["waveform"])
     monkeypatch.setattr(settings, "hidden_tiers", [])
     monkeypatch.setattr(settings, "tier_order", [])
+    monkeypatch.setattr(settings, "tier_fonts", {})
 
 
 @pytest.fixture

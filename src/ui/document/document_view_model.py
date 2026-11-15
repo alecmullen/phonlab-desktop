@@ -1,4 +1,4 @@
-from collections.abc import Callable, Collection, Iterable
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import replace
 
 import numpy as np
@@ -812,6 +812,9 @@ class DocumentViewModel(ViewModel):
         self, hidden_tiers: Collection[str], tier_order: Collection[str]
     ):
         self.annotation_view_model.set_tier_display(hidden_tiers, tier_order)
+
+    def set_tier_fonts(self, tier_fonts: Mapping[str, str]):
+        self.annotation_view_model.set_tier_fonts(tier_fonts)
 
     def save_textgrid(self, file_path: str, tg_type: str):
         self.annotation_view_model.write_textgrid(file_path, tg_type)
