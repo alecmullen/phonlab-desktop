@@ -60,12 +60,13 @@ SPECTROGRAM_MULTITAPER_NW = 3.0  # time-bandwidth product of the multitaper tape
 SPECTROGRAM_CEPSTRAL_LIFT_SEC = 0.003  # cepstral smoothing cutoff (quefrency)
 PHONLAB_DOCS_URL = "https://phonlab.readthedocs.io/en/latest/"
 # Documentation page of the phonlab function behind each spectrogram type
-# (keyed by SpectrogramTypeState value). LPC spectrograms are described under sgram()
+# (keyed by SpectrogramTypeState value). LPC spectra come from the coefficients
+# that RLPC_formants() calculates
 SPECTROGRAM_DOCS = {
     "fft": "acoustphon.html#phonlab.compute_sgram",
     "multitaper": "acoustphon.html#phonlab.compute_mt_sgram",
     "cepstral": "acoustphon.html#phonlab.cepstral_smooth",
-    "lpc": "acoustphon.html#phonlab.sgram",
+    "lpc": "acoustphon.html#phonlab.RLPC_formants",
     "mel": "audphon.html#phonlab.compute_mel_sgram",
 }
 # The mel spectrogram's filters reach 7600 Hz, so it needs a top frequency of at least 8000
