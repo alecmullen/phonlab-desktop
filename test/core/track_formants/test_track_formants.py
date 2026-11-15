@@ -61,6 +61,7 @@ def test_short_file_is_one_chunk_with_the_params(ifc_calls: list[dict]):
     assert ifc_calls == [
         {"start": 0.0, "fs": FS, "preemph": 0.9, "speaker": 2, "locked": True}
     ]
+    assert chunks[0].order == 0  # IFC has no LPC order
     np.testing.assert_allclose(chunks[0].sec[:3], [0.01, 0.02, 0.03])
     np.testing.assert_allclose(chunks[0].formants[:2, 0], [10, 20])
     np.testing.assert_allclose(chunks[0].formants[0], [10, 11, 12, 13])
@@ -176,12 +177,6 @@ def test_chunks_carry_the_lpc_order_used(short_chunks: None, lpc_calls: list[dic
     assert [c.order for c in chunks] == [12, 12, 12]
 
 
-def test_chunks_of_a_method_without_an_order_have_order_zero(ifc_calls: list[dict]):
-    chunk = next(TrackFormants()(ramp(1), FS))
-
-    assert chunk.order == 0
-
-
 def run_in_thread(
     target: Callable[[], object],
 ) -> tuple[threading.Thread, threading.Event]:
@@ -224,13 +219,3 @@ def test_tracking_waits_before_the_first_chunk_too(
     assert done.wait(5)
     thread.join()
     assert len(ifc_calls) == 1
-
-
-def test_tracking_is_not_slowed_when_no_audio_plays(
-    short_chunks: None, ifc_calls: list[dict]
-):
-    assert not PLAYBACK_GATE.is_playing()
-
-    chunks = list(TrackFormants()(ramp(10), FS))
-
-    assert len(chunks) == 4

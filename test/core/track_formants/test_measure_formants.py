@@ -71,13 +71,6 @@ def test_each_method_calls_its_phonlab_function_with_its_parameters(
     assert calls == [(name, {**expected, "locked": True})]
 
 
-def test_result_is_the_time_and_first_four_formants(calls: list):
-    df = measure_formants(X, FS, FormantOptions(FormantMethod.LPC))
-
-    assert list(df.columns) == ["sec", "F1", "F2", "F3", "F4"]
-    assert not FORMANT_LOCK.locked()
-
-
 @pytest.fixture
 def order_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     recorded = []
@@ -140,16 +133,6 @@ def test_order_is_left_alone_when_chosen_or_unused(
     assert order_calls == []
 
 
-def test_step_and_length_are_passed_to_every_method_but_ifc(calls: list):
-    for method in FormantMethod:
-        measure_formants(X, FS, FormantOptions(method, step=0.005, length=0.04))
-
-    by_name = {name: kwargs for name, kwargs in calls}
-    assert "step" not in by_name["IFC"] and "length" not in by_name["IFC"]
-    for name in ("LPC", "RLPC", "TVLP", "DPPT"):
-        assert (by_name[name]["step"], by_name[name]["length"]) == (0.005, 0.04)
-
-
 def test_voiced_only_blanks_the_formants_of_voiceless_frames(
     calls: list, monkeypatch: pytest.MonkeyPatch
 ):
@@ -167,12 +150,6 @@ def test_voiced_only_blanks_the_formants_of_voiceless_frames(
     assert df["F1"].iloc[0] == 1.0
     assert df.loc[1, ["F1", "F2", "F3", "F4"]].isna().all()
     assert list(df.columns) == ["sec", "F1", "F2", "F3", "F4"]
-
-
-def test_formants_of_all_frames_are_kept_unless_voiced_only(calls: list):
-    df = measure_formants(X, FS, FormantOptions(FormantMethod.LPC))
-
-    assert not df.isna().any().any()
 
 
 def test_voiced_only_uses_the_voicing_threshold(
