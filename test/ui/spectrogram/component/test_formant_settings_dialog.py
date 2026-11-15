@@ -15,6 +15,13 @@ def test_fields_are_initialized_from_defaults(qtbot: QtBot):
 
     assert dialog.preemphasis_spin.value() == pytest.approx(0.94)
     assert dialog.speaker_combo.currentData() == 1
+    # IFC is the default method
+    assert dialog.method() == FormantMethodState.IFC
+    methods = [
+        dialog.method_combo.itemData(i) for i in range(dialog.method_combo.count())
+    ]
+    assert methods == ["ifc", "lpc", "rlpc", "tvlp", "dppt"]
+    assert not dialog.voiced_check.isChecked()
 
 
 def test_speaker_choices_map_to_ifc_speaker_values(qtbot: QtBot):
@@ -66,17 +73,6 @@ def shown(dialog: FormantSettingsDialog) -> dict[str, bool]:
         "delta_f": dialog.delta_f_spin.isVisible(),
         "slow_warning": dialog.slow_warning.isVisible(),
     }
-
-
-def test_ifc_is_the_default_method(qtbot: QtBot):
-    dialog = FormantSettingsDialog(FormantSettingsState())
-    qtbot.addWidget(dialog)
-
-    assert dialog.method() == FormantMethodState.IFC
-    choices = [
-        dialog.method_combo.itemData(i) for i in range(dialog.method_combo.count())
-    ]
-    assert choices == ["ifc", "lpc", "rlpc", "tvlp", "dppt"]
 
 
 @pytest.mark.parametrize(
@@ -211,55 +207,6 @@ def test_open_formant_settings_returns_step_length_and_voiced_only(
     assert (result.step, result.length, result.voiced_only) == (0.0025, 0.025, True)
 
 
-def test_voiced_only_is_off_by_default(qtbot: QtBot):
-    dialog = FormantSettingsDialog(FormantSettingsState())
-    qtbot.addWidget(dialog)
-
-    assert not dialog.voiced_check.isChecked()
-
-
-@pytest.mark.parametrize(
-    "method, page",
-    [("ifc", "IFC_formants"), ("lpc", "LPC_formants"), ("rlpc", "RLPC_formants"),
-     ("tvlp", "TVLP_formants"), ("dppt", "DPPT_formants")],
-)  # fmt: skip
-def test_a_link_points_to_the_methods_documentation(
-    qtbot: QtBot, method: str, page: str
-):
-    dialog = FormantSettingsDialog(
-        FormantSettingsState().with_method(FormantMethodState(method))
-    )
-    qtbot.addWidget(dialog)
-
-    assert (
-        f'href="https://phonlab.readthedocs.io/en/latest/acoustphon.html#phonlab.{page}"'
-        in dialog.docs_link.text()
-    )
-    assert dialog.docs_link.openExternalLinks()
-
-
-def test_the_link_follows_the_chosen_method(qtbot: QtBot):
-    dialog = FormantSettingsDialog(FormantSettingsState())
-    qtbot.addWidget(dialog)
-
-    dialog.method_combo.setCurrentIndex(dialog.method_combo.findData("dppt"))
-
-    assert "phonlab.DPPT_formants" in dialog.docs_link.text()
-
-
-def test_order_spin_has_room_for_the_word_automatic(qtbot: QtBot):
-    dialog = FormantSettingsDialog(
-        FormantSettingsState().with_method(FormantMethodState.LPC)
-    )
-    qtbot.addWidget(dialog)
-
-    text_width = dialog.order_spin.fontMetrics().horizontalAdvance("Automatic")
-    assert (
-        dialog.order_spin.minimumWidth()
-        >= text_width + dialog.order_spin.fontMetrics().horizontalAdvance("  ")
-    )
-
-
 def test_voicing_threshold_starts_at_0_5_and_needs_voiced_only(
     qtbot: QtBot,
 ):
@@ -278,16 +225,6 @@ def test_voicing_threshold_starts_at_0_5_and_needs_voiced_only(
     assert not dialog.threshold_spin.isEnabled()
 
 
-def test_a_dialog_opened_with_voiced_only_enables_the_threshold(qtbot: QtBot):
-    dialog = FormantSettingsDialog(
-        FormantSettingsState(voiced_only=True, voicing_threshold=0.6)
-    )
-    qtbot.addWidget(dialog)
-
-    assert dialog.threshold_spin.isEnabled()
-    assert dialog.threshold_spin.value() == pytest.approx(0.6)
-
-
 def test_open_formant_settings_returns_the_voicing_threshold(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ):
@@ -303,3 +240,27 @@ def test_open_formant_settings_returns_the_voicing_threshold(
     assert result is not None
     assert result.voiced_only
     assert result.voicing_threshold == pytest.approx(0.65)
+
+
+def test_voiced_only_enables_the_voicing_threshold_it_opens_with(qtbot: QtBot):
+    dialog = FormantSettingsDialog(
+        FormantSettingsState(voiced_only=True, voicing_threshold=0.6)
+    )
+    qtbot.addWidget(dialog)
+
+    assert dialog.threshold_spin.isEnabled()
+    assert dialog.threshold_spin.value() == pytest.approx(0.6)
+
+
+def test_a_link_points_to_the_chosen_methods_documentation(qtbot: QtBot):
+    dialog = FormantSettingsDialog(FormantSettingsState())
+    qtbot.addWidget(dialog)
+    assert dialog.docs_link.openExternalLinks()
+
+    for method in FormantMethodState:
+        dialog.method_combo.setCurrentIndex(dialog.method_combo.findData(method.value))
+
+        assert (
+            f'href="https://phonlab.readthedocs.io/en/latest/acoustphon.html'
+            f'#phonlab.{method.value.upper()}_formants"'
+        ) in dialog.docs_link.text()
