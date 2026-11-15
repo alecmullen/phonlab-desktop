@@ -9,8 +9,10 @@ from support.view_models import make_spectrogram_view_model
 
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.spectrogram.compute_sgram import ComputeSpectrogram
+from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from core.spectrogram.entity.spectrogram_type import SpectrogramType
 from core.track_formants.entity.formant_track import FormantTrack
 from core.track_formants.track_formants import TrackFormants
 from res.constants import SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
@@ -21,6 +23,7 @@ from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.spectrogram.state.formant_settings import FormantSettingsState
 from ui.spectrogram.state.formant_track_state import FormantTrackState
+from ui.spectrogram.state.spectrogram_settings import SpectrogramTypeState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 SPECTROGRAM = Spectrogram(
@@ -307,6 +310,31 @@ def test_load_spectrogram_window_computes_fresh_when_window_extends_past_compute
     assert low_res_calls == [True]
 
 
+def test_load_spectrogram_window_skips_the_quick_look_for_the_slower_types(
+    qtbot: QtBot,
+):
+    # The quick look is computed on the GUI thread, which only the FFT is fast enough for
+    view_model = make_spectrogram_view_model()
+    view_model.spectrogram_settings = replace(
+        view_model.spectrogram_settings, type=SpectrogramTypeState.LPC
+    )
+    low_res_calls = []
+    view_model.compute_low_res_sgram = lambda x, fs, start, end: low_res_calls.append(
+        True
+    )
+    window_calls = []
+    view_model.compute_sgram_window = lambda x, fs, start, end: window_calls.append(
+        (start, end)
+    )
+
+    view_model.load_spectrogram_window(
+        np.zeros(10), np.arange(10, dtype=np.float64) / 1000, 1000, 2, 8
+    )
+
+    assert low_res_calls == []
+    assert window_calls == [(2, 8)]
+
+
 # --------------------------- compute_low_res_sgram ---------------------------
 
 
@@ -375,6 +403,42 @@ def test_compute_sgram_window_ignores_stale_generation(
     job.on_success(sgram)
 
     assert view_model.sgram_state.is_showing is False
+
+
+@pytest.mark.parametrize(
+    ("state_type", "core_type"),
+    [
+        (SpectrogramTypeState.FFT, SpectrogramType.FFT),
+        (SpectrogramTypeState.MULTITAPER, SpectrogramType.MULTITAPER),
+        (SpectrogramTypeState.CEPSTRAL, SpectrogramType.CEPSTRAL),
+        (SpectrogramTypeState.LPC, SpectrogramType.LPC),
+    ],
+)
+def test_the_chosen_type_is_computed(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+    state_type: SpectrogramTypeState,
+    core_type: SpectrogramType,
+):
+    compute_spectrogram = mock_use_case(ComputeSpectrogram)
+    compute_spectrogram_mmap = mock_use_case(ComputeSpectrogramMmap)
+    view_model = make_spectrogram_view_model(
+        compute_spectrogram=compute_spectrogram,
+        compute_spectrogram_mmap=compute_spectrogram_mmap,
+    )
+    view_model.spectrogram_settings = replace(
+        view_model.spectrogram_settings, type=state_type, step_size=0.004
+    )
+    x = np.arange(1000, dtype=np.float64)
+
+    view_model.compute_sgram_window(x, 1000, 100, 500)
+    view_model.compute_spectrogram_mmap(x, 1000)
+
+    for use_case in (compute_spectrogram, compute_spectrogram_mmap):
+        use_case.assert_called_once()
+        args = use_case.call_args.args
+        assert args[3] == 0.004  # step size
+        assert args[5] == core_type
 
 
 # --------------------------- compute_spectrogram_mmap ---------------------------

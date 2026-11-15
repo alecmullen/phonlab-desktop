@@ -9,6 +9,7 @@ from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from core.spectrogram.entity.spectrogram_type import SpectrogramType
 from core.track_formants.entity.formant_track import FormantTrack
 from core.track_formants.track_formants import TrackFormants
 from core.transform_audio.prep_audio import PrepAudio
@@ -32,7 +33,10 @@ from ui.spectrogram.state.formant_track_state import (
     FormantTrackState,
     to_formant_track_state,
 )
-from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
+from ui.spectrogram.state.spectrogram_settings import (
+    SpectrogramSettingsState,
+    SpectrogramTypeState,
+)
 from ui.spectrogram.state.spectrogram_state import SpectrogramState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
@@ -164,7 +168,10 @@ class SpectrogramViewModel(ViewModel):
             )
             self.state_changed.emit(self.sgram_state)
         else:
-            self.compute_low_res_sgram(x, fs, start, end)
+            # The quick first look is an FFT one. The other types are too slow to
+            # compute here on the GUI thread, so they show up with the window.
+            if self.spectrogram_settings.type == SpectrogramTypeState.FFT:
+                self.compute_low_res_sgram(x, fs, start, end)
             self.compute_sgram_window(x, fs, start, end)
 
     def compute_low_res_sgram(self, x: np.ndarray, fs: int, start: int, end: int):
@@ -179,7 +186,12 @@ class SpectrogramViewModel(ViewModel):
     def compute_sgram_window(self, x: np.ndarray, fs: int, start: int, end: int):
         settings = self.spectrogram_settings
         task = self.compute_sgram_use_case(
-            x[start:end], fs, settings.window_size, settings.step_size, settings.order
+            x[start:end],
+            fs,
+            settings.window_size,
+            settings.step_size,
+            settings.order,
+            SpectrogramType(settings.type.value),
         )
 
         generation = self._buffer_generation
@@ -225,7 +237,12 @@ class SpectrogramViewModel(ViewModel):
 
         settings = self.spectrogram_settings
         task = self.compute_sgram_mmap_use_case(
-            x, fs, settings.window_size, settings.step_size, settings.order
+            x,
+            fs,
+            settings.window_size,
+            settings.step_size,
+            settings.order,
+            SpectrogramType(settings.type.value),
         )
         self.launch_task("sgram_mmap", task, on_success, self.on_error, only_once=True)
 
