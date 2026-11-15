@@ -23,6 +23,7 @@ from ui.annotation.state.annotation_node_state import (
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import AnnotationState
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.document.state.status_message_state import StatusMessageState
 
 MOCK_ANNOTATION_NODES = MappingProxyType(
@@ -480,3 +481,53 @@ def test_trigger_write_textgrid_dialog_emits_save_action(qtbot: QtBot):
         view_model.trigger_write_textgrid_dialog()
 
     assert isinstance(blocker.args[0], SaveToTextGridAction)
+
+
+def make_seeded_view_model() -> tuple[
+    AnnotationViewModel, SeedableAnnotationRepository
+]:
+    repository = SeedableAnnotationRepository()
+    annotation = repository.seed(
+        Annotation(
+            {0: 0.0, 1: 1.0},
+            [
+                AnnotationType("word", [AnnotationLabel(0, 1, "cat")]),
+                AnnotationType("phone", [AnnotationLabel(0, 1, "k")]),
+            ],
+        )
+    )
+    assert annotation.id is not None
+    view_model = make_annotation_view_model(
+        filestem=repository.filenames[annotation.id], repository=repository
+    )
+    view_model.window_state = (2.5, 4.0)
+    return view_model, repository
+
+
+def test_trigger_tier_search_emits_action_for_tier(qtbot: QtBot):
+    view_model, repository = make_seeded_view_model()
+    stem = repository.filenames[0]
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.trigger_tier_search(1)
+
+    assert blocker.args[0] == TierSearchAction("phone", stem, 2.5)
+
+
+@pytest.mark.parametrize("tier_idx", [-1, 2])
+def test_trigger_tier_search_outside_tiers_shows_message(qtbot: QtBot, tier_idx: int):
+    view_model, _ = make_seeded_view_model()
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.trigger_tier_search(tier_idx)
+
+    assert isinstance(blocker.args[0], StatusMessageState)
+
+
+def test_trigger_tier_search_without_file_stem_shows_message(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.trigger_tier_search(0)
+
+    assert isinstance(blocker.args[0], StatusMessageState)

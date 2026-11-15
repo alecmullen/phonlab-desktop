@@ -92,6 +92,15 @@ class AnnotationPlot(DocumentPlot):
         self.addAction(save_to_textgrid_action)
         self.getViewBox().menu.addAction(save_to_textgrid_action)
 
+        search_tier_action = ContextMenuHintAction(
+            self.tr("Search in Tier..."),
+            parent=self,
+        )
+        search_tier_action.triggered.connect(self.search_in_tier)
+
+        self.addAction(search_tier_action)
+        self.getViewBox().menu.addAction(search_tier_action)
+
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
 
     @pyqtSlot()
@@ -286,3 +295,13 @@ class AnnotationPlot(DocumentPlot):
         self.view_model.create_label_from_selection(
             type_idx, start, end, pixel_width * SAME_NODE_PIXEL_THRESH
         )
+
+    def search_in_tier(self):
+        if self.context_pos is not None:
+            tier_idx = int(self.context_pos.y())
+        elif self.selected_type is not None:
+            tier_idx = self.selected_type
+        else:
+            tier_idx = -1
+
+        self.view_model.trigger_tier_search(tier_idx)

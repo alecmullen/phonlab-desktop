@@ -21,6 +21,7 @@ from ui.annotation.state.annotation_state import (
     update_annotation_state_from_window,
 )
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.base.view_model import ViewModel
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.status_message_state import StatusMessageState
@@ -41,6 +42,8 @@ class AnnotationViewModel(ViewModel):
         filestem: str | None = None,
     ):
         super().__init__()
+
+        self.file_stem = filestem
 
         self.annotation_state = AnnotationState()
         self.loading_state = LoadProgressState()
@@ -140,6 +143,22 @@ class AnnotationViewModel(ViewModel):
             self.parse_textgrid_use_case(file_path, file_stem),
             on_success,
             on_error,
+        )
+
+    def trigger_tier_search(self, tier_idx: int):
+        if self.file_stem is None or not 0 <= tier_idx < len(
+            self.annotation_state.types
+        ):
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Right-click a tier to search it"))
+            )
+            return
+        self.state_changed.emit(
+            TierSearchAction(
+                self.annotation_state.types[tier_idx].type,
+                self.file_stem,
+                self.window_state[0],
+            )
         )
 
     def trigger_write_textgrid_dialog(self):

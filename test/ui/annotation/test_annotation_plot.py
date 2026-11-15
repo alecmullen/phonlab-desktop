@@ -739,3 +739,53 @@ def test_create_label_from_selection_snaps_to_node_within_pixel_threshold(
     assert label.s_node == 1
     assert label.e_node not in (2, 3)
     assert nodes[label.e_node].x == pytest.approx(end)
+
+
+def _search_action(plot: AnnotationPlot) -> ContextMenuHintAction:
+    return next(
+        a
+        for a in plot.actions()
+        if isinstance(a, ContextMenuHintAction) and a.action_text == "Search in Tier..."
+    )
+
+
+def test_search_action_is_in_context_menu(qtbot: QtBot):
+    plot = AnnotationPlot(make_annotation_view_model())
+
+    assert _search_action(plot) in plot.getViewBox().menu.actions()
+
+
+def test_search_action_searches_tier_under_context_pos(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    searched = []
+    view_model.trigger_tier_search = searched.append  # type: ignore[method-assign]
+    plot = AnnotationPlot(view_model)
+    plot.context_pos = QPointF(0.5, 1.5)
+    plot.selected_type = 0
+
+    _search_action(plot).trigger()
+
+    assert searched == [1]
+
+
+def test_search_action_falls_back_to_tier_under_mouse(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    searched = []
+    view_model.trigger_tier_search = searched.append  # type: ignore[method-assign]
+    plot = AnnotationPlot(view_model)
+    plot.selected_type = 2
+
+    _search_action(plot).trigger()
+
+    assert searched == [2]
+
+
+def test_search_action_without_a_tier_passes_invalid_index(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    searched = []
+    view_model.trigger_tier_search = searched.append  # type: ignore[method-assign]
+    plot = AnnotationPlot(view_model)
+
+    _search_action(plot).trigger()
+
+    assert searched == [-1]
