@@ -298,7 +298,7 @@ def test_open_formant_dialog_tracks_formants_when_accepted(
 ):
     view_model = make_spectrogram_view_model()
     plot = SpectrogramPlot(view_model)
-    new_settings = FormantSettingsState(0.5, 2)
+    new_settings = FormantSettingsState(preemphasis=0.5, speaker=2)
     monkeypatch.setattr(
         "ui.spectrogram.spectrogram_plot.FormantSettingsDialog.open_formant_settings",
         staticmethod(lambda settings: new_settings),

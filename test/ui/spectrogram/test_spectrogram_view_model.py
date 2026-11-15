@@ -11,6 +11,8 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.entity.spectrogram import Spectrogram
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from core.track_formants.entity.formant_method import FormantMethod
+from core.track_formants.entity.formant_options import FormantOptions
 from core.track_formants.entity.formant_track import FormantTrack
 from core.track_formants.track_formants import TrackFormants
 from res.constants import SPECTROGRAM_PERCENTILE_SAMPLE_SIZE
@@ -19,7 +21,10 @@ from ui.document.state.audio_channel_state import AudioChannelState
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
-from ui.spectrogram.state.formant_settings import FormantSettingsState
+from ui.spectrogram.state.formant_settings import (
+    FormantMethodState,
+    FormantSettingsState,
+)
 from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
@@ -790,15 +795,19 @@ def test_track_formants_tracks_raw_audio_nearest_the_window_first(
 ):
     track_formants = mock_use_case(TrackFormants)
     view_model = make_formant_view_model(track_formants)
-    settings = FormantSettingsState(0.9, 2)
+    settings = FormantSettingsState(
+        FormantMethodState.TVLP, 0.9, order=12, top_frequency=7000, median_f0=120
+    )
 
     view_model.track_formants(settings)
 
     assert view_model.formant_settings == settings
-    x, fs, preemph, speaker, priority_sec = track_formants.call_args.args
+    x, fs, options, priority_sec = track_formants.call_args.args
     assert len(x) == 4000  # the whole file
     assert fs == 1000
-    assert (preemph, speaker) == (0.9, 2)
+    assert options == FormantOptions(
+        FormantMethod.TVLP, 0.9, order=12, top_frequency=7000, median_f0=120
+    )
     assert priority_sec == 1.0  # the window starts at 1 s
 
 
