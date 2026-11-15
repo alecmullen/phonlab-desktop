@@ -16,6 +16,16 @@ from PyQt6.QtWidgets import (
 from res.constants import LABEL_FONT_FAMILY
 
 
+def remove_bitmap_fonts(combo_box: QFontComboBox):
+    """Qt lists macOS's bitmap fonts (such as "GB18030 Bitmap") as scalable, but
+    fails to draw them: the drop-down, which draws each family in its own font,
+    logs "Failed to compute left/right minimum bearings" for each one it shows.
+    Call it after `setCurrentFont`, which fills the list again"""
+    for row in reversed(range(combo_box.count())):
+        if "bitmap" in combo_box.itemText(row).lower():
+            combo_box.removeItem(row)
+
+
 class TierFontDialog(QDialog):
     """Lets the user choose the font of the labels of each annotation tier. The tiers
     are listed as they appear in the plot, top to bottom.
@@ -59,6 +69,7 @@ class TierFontDialog(QDialog):
 
             combo_box = QFontComboBox()
             combo_box.setCurrentFont(QFont(fonts.get(name, LABEL_FONT_FAMILY)))
+            remove_bitmap_fonts(combo_box)  # after setCurrentFont, which lists them
             self.table.setCellWidget(row, 1, combo_box)
             self.combo_boxes.append(combo_box)
             self.initial_families.append(combo_box.currentFont().family())

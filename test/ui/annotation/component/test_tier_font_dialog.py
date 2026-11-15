@@ -81,3 +81,11 @@ def test_get_fonts_returns_none_when_cancelled(
     monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
 
     assert TierFontDialog.get_fonts(["word"], {}) is None
+
+
+def test_bitmap_fonts_are_not_offered(qtbot: QtBot):
+    dialog = make_dialog(qtbot)
+
+    for combo_box in dialog.combo_boxes:
+        families = [combo_box.itemText(i) for i in range(combo_box.count())]
+        assert not any("bitmap" in family.lower() for family in families)
