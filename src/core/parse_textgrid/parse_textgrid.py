@@ -21,9 +21,25 @@ class ParseTextGrid(UseCase[Annotation]):
     def __init__(self, annotation_repository: AnnotationRepository):
         self.annotation_repository = annotation_repository
 
-    def __call__(self, file_path: str, file_stem: str):
+    def __call__(self, file_path: str, file_stem: str, overwrite: bool = False):
+        """Replaces any existing content for file_stem only if overwrite is True"""
         try:
-            id = self.annotation_repository.create_annotation(file_stem)
+            existing = self.annotation_repository.find_annotation_by_file_stem(
+                file_stem
+            )
+            if existing is None:
+                id = self.annotation_repository.create_annotation(file_stem)
+            else:
+                id = existing.get_id()
+                if existing.nodes or existing.types:
+                    if not overwrite:
+                        raise ValueError(
+                            "Annotation for this file already exists in project database"
+                        )
+                    self.annotation_repository.clear_annotation(id)
+                # Otherwise the annotation has no content yet (a stem that was added
+                # without a TextGrid, or left behind by a parse that failed part-way),
+                # so fill it in
 
             tiers = phon.read_textgrid_with(file_path)
 

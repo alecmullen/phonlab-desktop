@@ -1,10 +1,13 @@
+import gc
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 import core.spectrogram.compute_sgram_mmap as compute_sgram_mmap_module
+import core.spectrogram.typed_sgram as typed_sgram_module
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
+from core.spectrogram.entity.spectrogram_type import SpectrogramType
 
 
 @pytest.fixture(autouse=True)
@@ -39,9 +42,7 @@ def make_fake_compute_sgram(
         sxx = np.full((n_freqs, n_frames), float(len(calls)), dtype=np.float32)
         return t, f, sxx
 
-    monkeypatch.setattr(
-        compute_sgram_mmap_module.phon, "compute_sgram", fake_compute_sgram
-    )
+    monkeypatch.setattr(typed_sgram_module.phon, "compute_sgram", fake_compute_sgram)
     return calls
 
 
@@ -157,16 +158,14 @@ def test_call_raises_runtime_error_and_cleans_up_on_chunk_failure(
     monkeypatch: pytest.MonkeyPatch, mmap_dir: Path
 ):
     probe = make_fake_compute_sgram(monkeypatch)
-    real_fake = compute_sgram_mmap_module.phon.compute_sgram
+    real_fake = typed_sgram_module.phon.compute_sgram
 
     def fail_after_probe(*args: object, **kwargs: object) -> tuple:
         if probe:  # the resolution probe already ran: this is a chunk
             raise ValueError("boom")
         return real_fake(*args, **kwargs)
 
-    monkeypatch.setattr(
-        compute_sgram_mmap_module.phon, "compute_sgram", fail_after_probe
-    )
+    monkeypatch.setattr(typed_sgram_module.phon, "compute_sgram", fail_after_probe)
 
     with pytest.raises(RuntimeError, match="Error during spectrogram computation"):
         run_in_chunks()
@@ -206,3 +205,140 @@ def test_cleanup_mmaps_is_safe_when_files_are_missing(mmap_dir: Path):
     ComputeSpectrogramMmap().cleanup_mmaps(
         None, None, str(mmap_dir / "gone.dat"), str(mmap_dir / "gone_t.dat")
     )
+
+
+# --------------------------- files of concurrent computations ---------------------------
+
+
+def test_each_computation_gets_files_of_its_own(monkeypatch: pytest.MonkeyPatch):
+    """One use case instance serves every document, so computations must not
+    share backing files: one recreating or deleting the file would pull the pages
+    out from under the other, which then dies with a bus error"""
+    make_fake_compute_sgram(monkeypatch)
+    use_case = ComputeSpectrogramMmap()
+    first = next(use_case(np.zeros(12), fs=100, chunk_duration=0.05))
+    second = next(use_case(np.zeros(30), fs=100, chunk_duration=0.05))
+
+    assert first.sxx_mmap.filename != second.sxx_mmap.filename
+    assert first.t_mmap.filename != second.t_mmap.filename
+
+
+def test_a_later_computation_leaves_an_earlier_spectrogram_intact(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    make_fake_compute_sgram(monkeypatch)
+    use_case = ComputeSpectrogramMmap()
+    first = list(use_case(np.zeros(12), fs=100, chunk_duration=0.05))[-1]
+    before = np.array(first.sxx_mmap[:, : first.frames_computed])
+
+    list(use_case(np.zeros(60), fs=100, chunk_duration=0.05))  # longer, then done
+
+    np.testing.assert_array_equal(first.sxx_mmap[:, : first.frames_computed], before)
+
+
+def test_closing_one_computation_does_not_remove_another_ones_files(
+    monkeypatch: pytest.MonkeyPatch, mmap_dir: Path
+):
+    make_fake_compute_sgram(monkeypatch)
+    use_case = ComputeSpectrogramMmap()
+    kept = use_case(np.zeros(12), fs=100, chunk_duration=0.05)
+    next(kept)
+    closed = use_case(np.zeros(12), fs=100, chunk_duration=0.05)
+    next(closed)
+
+    closed.close()
+
+    assert len(list(mmap_dir.glob("*.dat"))) == 2
+
+
+def test_files_of_a_finished_computation_are_removed_once_it_is_released(
+    monkeypatch: pytest.MonkeyPatch, mmap_dir: Path
+):
+    make_fake_compute_sgram(monkeypatch)
+    snapshots = run_in_chunks()
+    assert len(list(mmap_dir.glob("*.dat"))) == 2  # still in use
+
+    del snapshots
+    gc.collect()
+
+    assert list(mmap_dir.glob("*.dat")) == []
+
+
+def test_failure_before_the_files_exist_is_reported_as_a_computation_error(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def fail(*args: object, **kwargs: object) -> tuple:
+        raise ValueError("no resolution")
+
+    monkeypatch.setattr(ComputeSpectrogramMmap, "estimate_resolution", fail)
+
+    with pytest.raises(RuntimeError, match="Error during spectrogram computation"):
+        run_in_chunks()
+
+
+# --------------------------- spectrogram type ---------------------------
+
+
+def test_chunks_and_resolution_probe_use_the_requested_type(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = []
+
+    def fake_compute_typed_sgram(
+        x: np.ndarray,
+        fs: int,
+        sgram_type: SpectrogramType,
+        window_size: float,
+        step_size: float,
+        order: int,
+        nw: float,
+        lift: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        calls.append(sgram_type)
+        return np.arange(3.0), np.arange(4.0), np.zeros((4, 3), dtype=np.float32)
+
+    monkeypatch.setattr(
+        compute_sgram_mmap_module, "compute_typed_sgram", fake_compute_typed_sgram
+    )
+
+    list(
+        ComputeSpectrogramMmap()(
+            np.zeros(12), 100, 0.008, 0.004, 9, SpectrogramType.LPC, chunk_duration=1
+        )
+    )
+
+    assert len(calls) > 1  # the probe, then every chunk
+    assert set(calls) == {SpectrogramType.LPC}
+
+
+def test_chunks_and_resolution_probe_pass_nw_and_lift_on(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    params = []
+
+    def fake_compute_typed_sgram(
+        x: np.ndarray,
+        fs: int,
+        sgram_type: SpectrogramType,
+        window_size: float,
+        step_size: float,
+        order: int,
+        nw: float,
+        lift: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        params.append((nw, lift))
+        return np.arange(3.0), np.arange(4.0), np.zeros((4, 3), dtype=np.float32)
+
+    monkeypatch.setattr(
+        compute_sgram_mmap_module, "compute_typed_sgram", fake_compute_typed_sgram
+    )
+
+    list(
+        ComputeSpectrogramMmap()(
+            np.zeros(12), 100, 0.02, 0.004, 9, SpectrogramType.MULTITAPER,
+            chunk_duration=1, nw=4.5, lift=0.005,
+        )
+    )  # fmt: skip
+
+    assert len(params) > 1
+    assert set(params) == {(4.5, 0.005)}

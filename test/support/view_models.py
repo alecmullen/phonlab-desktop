@@ -15,9 +15,11 @@ from typing import Any, cast
 from support.annotation_repository import SeedableAnnotationRepository
 from support.mocks import mock_use_case
 
+from core.annotation.add_tiers import AddTiers
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.replace_in_tier import ReplaceInTier
 from core.annotation.search_tier import SearchTier
@@ -27,10 +29,18 @@ from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
+from core.project.add_project_files import AddProjectFiles
+from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
+from core.settings.entity.tier_layout import TierLayout
+from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.load_tier_layout import LoadTierLayout
+from core.settings.save_display_plan import SaveDisplayPlan
+from core.settings.save_tier_layout import SaveTierLayout
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from ui.annotation.annotation_view_model import AnnotationViewModel
@@ -108,6 +118,8 @@ def make_annotation_view_model(
     load_annotation: LoadAnnotation | None = None,
     filestem: str | None = None,
     repository: SeedableAnnotationRepository | None = None,
+    add_tiers: AddTiers | None = None,
+    list_tier_names: ListTierNames | None = None,
 ) -> AnnotationViewModel:
     repository = repository or SeedableAnnotationRepository()
     return AnnotationViewModel(
@@ -116,8 +128,10 @@ def make_annotation_view_model(
         update_node or UpdateNode(repository),
         delete_node or DeleteNode(repository),
         parse_text_grid or ParseTextGrid(repository),
-        write_text_grid or mock_use_case(WriteTextGrid),
+        write_text_grid or WriteTextGrid(),
         load_annotation or LoadAnnotation(repository),
+        add_tiers or AddTiers(repository),
+        list_tier_names or ListTierNames(repository),
         filestem,
     )
 
@@ -134,8 +148,31 @@ def make_tier_search_view_model(
     )
 
 
-def make_main_view_model() -> MainViewModel:
-    return MainViewModel()
+def make_main_view_model(
+    repository: SeedableAnnotationRepository | None = None,
+    load_display_plan: LoadDisplayPlan | None = None,
+    save_display_plan: SaveDisplayPlan | None = None,
+    load_tier_layout: LoadTierLayout | None = None,
+    save_tier_layout: SaveTierLayout | None = None,
+    warm_up_formants: WarmUpFormantTracking | None = None,
+) -> MainViewModel:
+    if load_display_plan is None:
+        load_display_plan = mock_use_case(LoadDisplayPlan)
+        load_display_plan.return_value = None
+    if load_tier_layout is None:
+        load_tier_layout = mock_use_case(LoadTierLayout)
+        load_tier_layout.return_value = TierLayout()
+    repository = repository or SeedableAnnotationRepository()
+    add_project_files = AddProjectFiles(repository, ParseTextGrid(repository))
+    return MainViewModel(
+        load_display_plan,
+        save_display_plan or mock_use_case(SaveDisplayPlan),
+        load_tier_layout,
+        save_tier_layout or mock_use_case(SaveTierLayout),
+        warm_up_formants or mock_use_case(WarmUpFormantTracking),
+        lambda _dir_path: add_project_files,
+        lambda _dir_path: RebuildProject(repository, add_project_files),
+    )
 
 
 def make_spectrogram_view_model(

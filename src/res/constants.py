@@ -1,5 +1,26 @@
 from ui.document.state.plot_layout_state import PlotType
 
+# -- Settings files --
+PROJECT_FILE_NAME = "phonlab.toml"
+DISPLAY_SECTION = "display"
+PLAN_KEY = "plan"
+HIDDEN_TIERS_KEY = "hidden_tiers"
+TIER_ORDER_KEY = "tier_order"
+TIER_FONTS_KEY = "tier_fonts"
+
+# -- Files --
+# Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
+AUDIO_FILE_SUFFIXES = (".wav",)
+TEXTGRID_FILE_SUFFIXES = (".textgrid",)
+PROJECT_DATABASE_FILENAME = "phonlab.db"
+
+# -- Mouse --
+# Two clicks closer together than this are a double-click. The system's setting is
+# often 500 ms, which turns a second click made to hear a selection again into a
+# double-click that zooms. A single click also waits this long, in case a second
+# click makes it a double-click
+DOUBLE_CLICK_INTERVAL_MS = 250
+
 # -- Document Window --
 DEFAULT_WINDOW_LENGTH = 10
 PLOT_ROW_SPACING = 8
@@ -28,12 +49,98 @@ SPECTROGRAM_PRE_EMPHASIS = 0.94
 SPECTROGRAM_LOW_PERCENTILE = 20
 SPECTROGRAM_HIGH_PERCENTILE = 80
 SPECTROGRAM_PERCENTILE_SAMPLE_SIZE = 100_000
+# Defaults for each spectrogram type (keyed by SpectrogramTypeState value), chosen
+# when the user picks a type in the settings. The types other than fft are slow
+# at a 1 ms step, so they start at 4 ms; the user can still lower it
+SPECTROGRAM_WINDOW_SEC = {
+    "fft": 0.008,
+    "multitaper": 0.02,
+    "cepstral": 0.04,
+    "lpc": 0.03,
+    "mel": 0.064,  # fixed by phonlab
+}
+SPECTROGRAM_STEP_SEC = {
+    "fft": 0.001,
+    "multitaper": 0.004,
+    "cepstral": 0.004,
+    "lpc": 0.004,
+    "mel": 0.001,
+}
+SPECTROGRAM_MULTITAPER_NW = 3.0  # time-bandwidth product of the multitaper tapers
+SPECTROGRAM_CEPSTRAL_LIFT_SEC = 0.003  # cepstral smoothing cutoff (quefrency)
+PHONLAB_DOCS_URL = "https://phonlab.readthedocs.io/en/latest/"
+# Documentation page of the phonlab function behind each spectrogram type
+# (keyed by SpectrogramTypeState value). LPC spectra come from the coefficients
+# that RLPC_formants() calculates
+SPECTROGRAM_DOCS = {
+    "fft": "acoustphon.html#phonlab.compute_sgram",
+    "multitaper": "acoustphon.html#phonlab.compute_mt_sgram",
+    "cepstral": "acoustphon.html#phonlab.cepstral_smooth",
+    "lpc": "acoustphon.html#phonlab.RLPC_formants",
+    "mel": "audphon.html#phonlab.compute_mel_sgram",
+}
+# The mel spectrogram's filters reach 7600 Hz, so it needs a top frequency of at least 8000
+MEL_MIN_TOP_FREQUENCY = 8000
+# Where the mel spectrogram's frequency axis is labeled (Hz)
+MEL_AXIS_TICKS_HZ = (
+    100,
+    200,
+    300,
+    500,
+    700,
+    1000,
+    1500,
+    2000,
+    3000,
+    4000,
+    5000,
+    6000,
+    7000,
+)
+# The cepstral spectrogram is analyzed this many seconds at a time to bound memory
+CEPSTRAL_SEGMENT_SEC = 5
 
 # -- Formant Tracking --
-FORMANT_PREEMPHASIS = 0.94
-FORMANT_F0_MIN = 70
-FORMANT_F0_MAX = 350
-FORMANT_SPEAKER = 1  # 0 = long vocal tract (male), 1 = medium (female), 2 = child
+# Preemphasis each formant method works best with, by FormantMethod value
+FORMANT_PREEMPHASIS = {
+    "ifc": 0.94,
+    "lpc": 0.94,
+    "rlpc": 0.94,
+    "tvlp": 0.95,
+    "dppt": 0.0,
+}
+FORMANT_STEP_SEC = 0.01
+# Analysis window length each formant method works best with. IFC has no
+# window length setting, so its entry only fills the dialog's field.
+FORMANT_LENGTH_SEC = {
+    "ifc": 0.03,
+    "lpc": 0.03,
+    "rlpc": 0.03,
+    "tvlp": 0.1,
+    "dppt": 0.03,
+}
+FORMANT_VOICING_THRESHOLD = 0.5  # phon.VAD() probability to count a frame as voiced
+# Documentation page of each formant method, by FormantMethod value
+FORMANT_DOCS = {
+    "ifc": "acoustphon.html#phonlab.IFC_formants",
+    "lpc": "acoustphon.html#phonlab.LPC_formants",
+    "rlpc": "acoustphon.html#phonlab.RLPC_formants",
+    "tvlp": "acoustphon.html#phonlab.TVLP_formants",
+    "dppt": "acoustphon.html#phonlab.DPPT_formants",
+}
+FORMANT_SPEAKER = 1  # 0 = long vocal tract, 1 = medium, 2 = short
+FORMANT_AUTO_ORDER = -1  # let phonlab choose the LPC order
+FORMANT_MIN_ORDER = 6
+FORMANT_MAX_ORDER = 30
+FORMANT_TOP_FREQUENCY = 6000  # RLPC and TVLP resample to twice this rate
+FORMANT_MEDIAN_F0 = 200  # TVLP's expected median pitch, in Hz
+FORMANT_DELTA_F = 1100  # DPPT's expected spacing between formants, in Hz
+# LPC_formants always analyzes audio resampled to this rate
+FORMANT_LPC_SAMPLE_RATE = 12000
+# Formants are tracked a chunk at a time. Both are whole seconds, so chunks
+# start on the 10 ms frame grid and on a sample at any sampling rate.
+FORMANT_CHUNK_SEC = 30
+FORMANT_CHUNK_OVERLAP_SEC = 1
 
 # -- Audio Processing __
 DEFAULT_FILTER_ORDER = 8
@@ -43,5 +150,8 @@ NODE_V_MARGIN = 7
 NODE_H_MARGIN = 5
 POINT_LABEL_WIDTH = 100
 LABEL_HEIGHT_RATIO = 0.8
+# The font of annotation labels, unless the user chose another for their tier
+LABEL_FONT_FAMILY = "Arial"
+LABEL_FONT_SIZE = 16
 SAME_NODE_THRESHOLD = 0.005
 SAME_NODE_PIXEL_THRESH = 7

@@ -1,16 +1,25 @@
 import logging
+from collections.abc import Collection, Mapping
 from dataclasses import replace
 
 from PyQt6.QtCore import pyqtSlot
 
+from core.annotation.add_tiers import (
+    AddTiers,
+    DuplicateTierNameError,
+    EmptyTierNameError,
+    NoTiersError,
+)
 from core.annotation.create_label import CreateLabel, ZeroLengthLabelError
 from core.annotation.delete_node import DeleteNode, DeleteNodeError
 from core.annotation.entity.annotation import Annotation
+from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
 from core.parse_textgrid.write_textgrid import TextgridType, WriteTextGrid
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_label_state import AnnotationLabelState, to_label
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
@@ -20,7 +29,10 @@ from ui.annotation.state.annotation_state import (
     to_annotation_state,
     update_annotation_state_from_window,
 )
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.annotation.state.tier_display_state import (
+    TierDisplayState,
+    tier_display_from,
+)
 from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.base.view_model import ViewModel
 from ui.document.state.load_progress_state import LoadProgressState
@@ -39,15 +51,17 @@ class AnnotationViewModel(ViewModel):
         parse_text_grid: ParseTextGrid,
         write_text_grid: WriteTextGrid,
         load_annotation: LoadAnnotation,
+        add_tiers: AddTiers,
+        list_tier_names: ListTierNames,
         filestem: str | None = None,
     ):
         super().__init__()
 
-        self.file_stem = filestem
-        self.load_annotation_use_case = load_annotation
-
         self.annotation_state = AnnotationState()
         self.loading_state = LoadProgressState()
+
+        self.filestem = filestem
+        self.load_annotation_use_case = load_annotation
 
         if filestem is not None:
             annotation = load_annotation(filestem)
@@ -58,12 +72,19 @@ class AnnotationViewModel(ViewModel):
 
         self.annotation_view_state = AnnotationState()
 
+        # Names of the tiers left out of the plot, and the order of the others
+        self.hidden_tiers: Collection[str] = ()
+        self.tier_order: Collection[str] = ()
+        self.tier_fonts: Mapping[str, str] = {}
+
         self.create_label_use_case = create_label
         self.update_label_use_case = update_label
         self.update_node_use_case = update_node
         self.delete_node_use_case = delete_node
         self.parse_textgrid_use_case = parse_text_grid
         self.write_textgrid_use_case = write_text_grid
+        self.add_tiers_use_case = add_tiers
+        self.list_tier_names_use_case = list_tier_names
 
     def change_node_state(self, drag_node: AnnotationNodeState, new_pos: float):
         new_pos = max(self.window_state[0], new_pos)
@@ -100,9 +121,38 @@ class AnnotationViewModel(ViewModel):
     def update_annotation_change(self):
         """Will update view for any changes to annotation or window"""
         self.annotation_view_state = update_annotation_state_from_window(
-            self.annotation_state, *self.window_state
+            self.annotation_state,
+            *self.window_state,
+            self.hidden_tiers,
+            self.tier_order,
+            self.tier_fonts,
         )
         self.state_changed.emit(self.annotation_view_state)
+
+    def tier_names(self) -> list[str]:
+        """The names of the tiers of this document's annotation"""
+        return [type.type for type in self.annotation_state.types]
+
+    def tier_display(self) -> list[TierDisplayState]:
+        """Every tier name in the project database, and where it is shown"""
+        return tier_display_from(
+            self.list_tier_names_use_case(), self.hidden_tiers, self.tier_order
+        )
+
+    def set_tier_display(
+        self, hidden_tiers: Collection[str], tier_order: Collection[str]
+    ):
+        """Leave the `hidden_tiers` out of the plot, and show the others in the
+        order of `tier_order`"""
+        self.hidden_tiers = hidden_tiers
+        self.tier_order = tier_order
+        self.update_annotation_change()
+
+    def set_tier_fonts(self, tier_fonts: Mapping[str, str]):
+        """Show the labels of each tier in its font from `tier_fonts`, and those of
+        the tiers it does not name in the default font"""
+        self.tier_fonts = tier_fonts
+        self.update_annotation_change()
 
     def set_annotation_state(self, annotation: Annotation):
         self.annotation_state = to_annotation_state(annotation)
@@ -120,7 +170,23 @@ class AnnotationViewModel(ViewModel):
         except (KeyError, AttributeError):
             raise ValueError("Missing node in annotation")
 
-    def parse_textgrid(self, file_path: str, file_stem: str):
+    def reload_annotation(self):
+        """Show the annotation currently in the database, e.g. after files were added
+        to the project"""
+        if self.filestem is None:
+            return
+        annotation = self.load_annotation_use_case(self.filestem)
+        if annotation is None:
+            self.annotation_state = AnnotationState()
+            self.update_annotation_change()
+        else:
+            self.set_annotation_state(annotation)
+
+    def has_annotation(self) -> bool:
+        """True if there are any nodes or tiers, e.g. loaded from the project database"""
+        return bool(self.annotation_state.nodes or self.annotation_state.types)
+
+    def parse_textgrid(self, file_path: str, file_stem: str, overwrite: bool = False):
         @pyqtSlot(object)
         def on_success(annotation: Annotation):
             self.set_loading_state(False)
@@ -141,38 +207,63 @@ class AnnotationViewModel(ViewModel):
 
         self.launch_task(
             "parse_textgrid",
-            self.parse_textgrid_use_case(file_path, file_stem),
+            self.parse_textgrid_use_case(file_path, file_stem, overwrite),
             on_success,
             on_error,
         )
 
-    def reload_annotation(self):
-        """Re-reads the annotation from the repository, for when its labels were
-        changed from outside this view model"""
-        if self.file_stem is None:
+    def trigger_add_tiers_dialog(self):
+        """Ask the user which tiers to add, offering the tier names in the project
+        database"""
+        if self.filestem is None:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Tiers cannot be added to this document"))
+            )
             return
-        annotation = self.load_annotation_use_case(self.file_stem)
-        if annotation is not None:
-            self.set_annotation_state(annotation)
+
+        self.state_changed.emit(
+            AddTiersAction(
+                self.list_tier_names_use_case(),
+                [type.type for type in self.annotation_state.types],
+            )
+        )
+
+    def add_tiers(self, names: list[str]):
+        if self.filestem is None:
+            return
+
+        try:
+            annotation = self.add_tiers_use_case(self.filestem, names)
+        except NoTiersError:
+            self.state_changed.emit(StatusMessageState(self.tr("No tiers to add")))
+            return
+        except EmptyTierNameError:
+            self.state_changed.emit(StatusMessageState(self.tr("A tier needs a name")))
+            return
+        except DuplicateTierNameError as err:
+            self.state_changed.emit(
+                StatusMessageState(
+                    self.tr("This file already has a tier named {}").format(err.name)
+                )
+            )
+            return
+
+        self.set_annotation_state(annotation)
+        self.state_changed.emit(
+            StatusMessageState(self.tr("Added {} tier(s)").format(len(names)))
+        )
 
     def trigger_tier_search(self, tier_idx: int):
-        if self.file_stem is None or not 0 <= tier_idx < len(
-            self.annotation_state.types
-        ):
+        """`tier_idx` is a row of the plot, which shows only some of the tiers"""
+        tiers = self.annotation_view_state.types
+        if self.filestem is None or not 0 <= tier_idx < len(tiers):
             self.state_changed.emit(
                 StatusMessageState(self.tr("Right-click a tier to search it"))
             )
             return
         self.state_changed.emit(
-            TierSearchAction(
-                self.annotation_state.types[tier_idx].type,
-                self.file_stem,
-                self.window_state[0],
-            )
+            TierSearchAction(tiers[tier_idx].type, self.filestem, self.window_state[0])
         )
-
-    def trigger_write_textgrid_dialog(self):
-        self.state_changed.emit(SaveToTextGridAction())
 
     def write_textgrid(self, file_path: str, tg_type: str):
         try:
@@ -255,9 +346,13 @@ class AnnotationViewModel(ViewModel):
     ):
         try:
             annotation = to_annotation(self.annotation_state)
+            # type_idx is a row of the plot, which shows only some of the tiers
+            type_id = self.annotation_view_state.types[type_idx].id
+            if type_id is None:
+                raise ValueError("AnnotationType.id is None")
             annotation = self.create_label_use_case(
                 annotation,
-                annotation.types[type_idx].get_id(),
+                type_id,
                 start,
                 end,
                 same_node_threshold,

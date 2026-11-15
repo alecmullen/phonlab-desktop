@@ -15,6 +15,7 @@ from core.annotation.entity.annotation import (
 )
 from res.constants import SAME_NODE_THRESHOLD
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 from ui.annotation.state.annotation_node_state import (
     AnnotationNodeExtentState,
@@ -22,7 +23,7 @@ from ui.annotation.state.annotation_node_state import (
 )
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import AnnotationState
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.document.state.status_message_state import StatusMessageState
 
@@ -474,13 +475,308 @@ def test_parse_textgrid_sets_loading_state_until_job_finishes(
     assert view_model.loading_state.is_loading is False
 
 
-def test_trigger_write_textgrid_dialog_emits_save_action(qtbot: QtBot):
+def test_opens_empty_for_a_registered_stem_without_annotation():
+    repository = SeedableAnnotationRepository()
+    repository.create_annotations_if_missing(["sample"])
+
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+
+    state = view_model.annotation_state
+    assert state.id is not None  # bound to the registered database row
+    assert state.nodes == {}
+    assert state.types == []
+
+
+def test_has_annotation_is_false_for_empty_annotation():
+    assert make_annotation_view_model().has_annotation() is False
+
+
+def test_has_annotation_is_true_for_annotation_loaded_from_repository():
+    repository = SeedableAnnotationRepository()
+    id = repository.create_annotation("sample")
+    repository.create_types(id, [AnnotationType("word", [])])
+
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+
+    assert view_model.has_annotation() is True
+
+
+def test_parse_textgrid_overwrites_loaded_annotation_when_requested(
+    tmp_path: Path, fake_job_manager: type[FakeJobManager]
+):
+    repository = SeedableAnnotationRepository()
+    id = repository.create_annotation("sample")
+    repository.create_types(id, [AnnotationType("old", [])])
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+    textgrid = tmp_path / "sample.TextGrid"
+    textgrid.write_text(TEXTGRID_FIXTURE)
+
+    view_model.parse_textgrid(str(textgrid), "sample", overwrite=True)
+    run_parse_job(view_model)
+
+    assert [t.type for t in view_model.annotation_state.types] == ["word"]
+
+
+def test_reload_annotation_shows_what_is_now_in_the_database():
+    repository = SeedableAnnotationRepository()
+    repository.create_annotations_if_missing(["sample"])
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+    assert view_model.has_annotation() is False
+    id = repository.find_annotation_by_file_stem("sample").get_id()
+    repository.create_types(id, [AnnotationType("word", [])])
+
+    view_model.reload_annotation()
+
+    assert [t.type for t in view_model.annotation_state.types] == ["word"]
+
+
+def test_reload_annotation_clears_state_when_stem_left_the_database():
+    repository = SeedableAnnotationRepository()
+    id = repository.create_annotation("sample")
+    repository.create_types(id, [AnnotationType("word", [])])
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+
+    repository.reset()
+    view_model.reload_annotation()
+
+    assert view_model.annotation_state == AnnotationState()
+
+
+def test_reload_annotation_does_nothing_without_a_file_stem():
+    view_model = make_annotation_view_model()
+
+    view_model.reload_annotation()
+
+    assert view_model.annotation_state == AnnotationState()
+
+
+# --------------------------- adding tiers ---------------------------
+
+
+def emitted(view_model: AnnotationViewModel) -> list:
+    received: list = []
+    view_model.subscribe(received.append)
+    return received
+
+
+def test_trigger_add_tiers_dialog_offers_database_tiers_and_those_the_file_has():
+    repository = SeedableAnnotationRepository()
+    other = repository.create_annotation("other")
+    repository.create_types(
+        other, [AnnotationType("break", []), AnnotationType("word", [])]
+    )
+    mine = repository.create_annotation("sample")
+    repository.create_types(mine, [AnnotationType("word", [])])
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+    received = emitted(view_model)
+
+    view_model.trigger_add_tiers_dialog()
+
+    assert received == [AddTiersAction(["break", "word"], ["word"])]
+
+
+def test_trigger_add_tiers_dialog_works_for_a_file_with_no_annotation():
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+    received = emitted(view_model)
+
+    view_model.trigger_add_tiers_dialog()
+
+    assert received == [AddTiersAction([], [])]
+
+
+def test_trigger_add_tiers_dialog_says_so_when_the_document_has_no_file():
+    view_model = make_annotation_view_model()
+    received = emitted(view_model)
+
+    view_model.trigger_add_tiers_dialog()
+
+    assert len(received) == 1 and isinstance(received[0], StatusMessageState)
+
+
+def test_add_tiers_shows_the_new_empty_tiers_for_a_file_with_no_annotation():
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+    received = emitted(view_model)
+
+    view_model.add_tiers(["word", "phone"])
+
+    state = view_model.annotation_state
+    assert [(t.type, t.labels) for t in state.types] == [("word", []), ("phone", [])]
+    assert state.id is not None
+    assert any(isinstance(s, AnnotationState) for s in received)
+
+
+def test_add_tiers_keeps_the_tiers_a_file_already_has():
+    repository = SeedableAnnotationRepository()
+    id = repository.create_annotation("sample")
+    repository.create_nodes(id, [0.0, 1.0], 0.005)
+    repository.create_types(id, [AnnotationType("word", [])])
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+
+    view_model.add_tiers(["phone"])
+
+    assert [t.type for t in view_model.annotation_state.types] == ["word", "phone"]
+    assert len(view_model.annotation_state.nodes) == 2
+
+
+def test_added_tiers_are_saved_in_the_database():
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+
+    view_model.add_tiers(["word"])
+
+    stored = repository.find_annotation_by_file_stem("sample")
+    assert stored is not None and [t.type for t in stored.types] == ["word"]
+
+
+def test_add_tiers_reports_a_name_the_file_already_has_and_changes_nothing():
+    repository = SeedableAnnotationRepository()
+    view_model = make_annotation_view_model(filestem="sample", repository=repository)
+    view_model.add_tiers(["word"])
+    received = emitted(view_model)
+
+    view_model.add_tiers(["phone", "word"])
+
+    assert [t.type for t in view_model.annotation_state.types] == ["word"]
+    assert len(received) == 1 and isinstance(received[0], StatusMessageState)
+    assert "word" in received[0].message
+
+
+@pytest.mark.parametrize("names", [[], [" "]])
+def test_add_tiers_reports_missing_names(names: list[str]):
+    view_model = make_annotation_view_model(filestem="sample")
+    received = emitted(view_model)
+
+    view_model.add_tiers(names)
+
+    assert len(received) == 1 and isinstance(received[0], StatusMessageState)
+    assert view_model.annotation_state.types == []
+
+
+def test_add_tiers_does_nothing_for_a_document_with_no_file():
+    view_model = make_annotation_view_model()
+    received = emitted(view_model)
+
+    view_model.add_tiers(["word"])
+
+    assert received == []
+
+
+def test_a_label_can_be_created_in_a_newly_added_tier():
+    """Adding tiers is the start of annotating a file that had no TextGrid"""
+    view_model = make_annotation_view_model(filestem="sample")
+    view_model.add_tiers(["word"])
+    view_model.set_window_state(0.0, 10.0)
+
+    view_model.create_label_from_selection(0, 1.0, 2.0, 0.005)
+
+    [word] = view_model.annotation_state.types
+    assert len(word.labels) == 1
+
+
+def test_tier_names_lists_the_tiers_of_the_annotation():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], []])
+
+    assert view_model.tier_names() == ["tier0", "tier1"]
+
+
+def test_tier_display_numbers_the_project_tiers_from_the_bottom_by_default():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], [], []])
+
+    assert view_model.tier_display() == [
+        TierDisplayState("tier0", 1),
+        TierDisplayState("tier1", 2),
+        TierDisplayState("tier2", 3),
+    ]
+
+
+def test_tier_display_follows_the_order_and_lists_hidden_tiers_last():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], [], []])
+    view_model.set_tier_display(["tier0"], ["tier2", "tier1"])
+
+    assert view_model.tier_display() == [
+        TierDisplayState("tier2", 1),
+        TierDisplayState("tier1", 2),
+        TierDisplayState("tier0"),
+    ]
+
+
+def test_set_tier_display_leaves_hidden_tiers_out_and_orders_the_rest(qtbot: QtBot):
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[(0, 1, "a")], [], []])
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.set_tier_display(["tier1"], ["tier2", "tier0"])
+
+    assert [type.type for type in view_model.annotation_view_state.types] == [
+        "tier2",
+        "tier0",
+    ]
+    assert blocker.args[0] is view_model.annotation_view_state
+
+
+def test_set_tier_display_emits_once(qtbot: QtBot):
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], []])
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.set_tier_display(["tier0"], ["tier1"])
+
+    assert len(received) == 1
+
+
+def test_tier_display_does_not_change_the_annotation_state():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[(0, 1, "a")], []])
+
+    view_model.set_tier_display(["tier0"], ["tier1"])
+
+    assert [type.type for type in view_model.annotation_state.types] == [
+        "tier0",
+        "tier1",
+    ]
+    assert label_spans(view_model, 0) == [(0, 1, "a")]
+
+
+def test_a_tier_in_neither_list_is_shown_after_the_ordered_tiers():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], [], []])
+
+    view_model.set_tier_display([], ["tier2"])
+
+    assert [type.type for type in view_model.annotation_view_state.types] == [
+        "tier2",
+        "tier0",
+        "tier1",
+    ]
+
+
+def test_tier_display_survives_a_new_annotation_state():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], []])
+    view_model.set_tier_display(["tier0"], [])
+
+    view_model.delete_node(0)
+
+    assert [type.type for type in view_model.annotation_view_state.types] == ["tier1"]
+
+
+def test_create_label_from_selection_uses_row_of_the_displayed_tiers():
+    view_model = make_annotated_view_model({0: 0.0, 1: 3.0}, [[], [], []])
+    view_model.set_tier_display(["tier1"], ["tier2", "tier0"])
+
+    view_model.create_label_from_selection(1, 1.0, 2.0, SAME_NODE_THRESHOLD)
+
+    assert len(label_spans(view_model, 0)) == 1
+    assert label_spans(view_model, 1) == []
+    assert label_spans(view_model, 2) == []
+
+
+def test_set_tier_fonts_announces_the_annotation_state(qtbot: QtBot):
     view_model = make_view_model({}, 0.0, 1.0)
 
     with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
-        view_model.trigger_write_textgrid_dialog()
+        view_model.set_tier_fonts({"word": "Charis SIL"})
 
-    assert isinstance(blocker.args[0], SaveToTextGridAction)
+    assert view_model.tier_fonts == {"word": "Charis SIL"}
+    assert isinstance(blocker.args[0], AnnotationState)
 
 
 def make_seeded_view_model() -> tuple[
@@ -500,7 +796,7 @@ def make_seeded_view_model() -> tuple[
     view_model = make_annotation_view_model(
         filestem=repository.filenames[annotation.id], repository=repository
     )
-    view_model.window_state = (2.5, 4.0)
+    view_model.set_window_state(2.5, 4.0)
     return view_model, repository
 
 
@@ -533,19 +829,11 @@ def test_trigger_tier_search_without_file_stem_shows_message(qtbot: QtBot):
     assert isinstance(blocker.args[0], StatusMessageState)
 
 
-def test_reload_annotation_picks_up_changes_made_to_repository(qtbot: QtBot):
+def test_trigger_tier_search_uses_row_of_the_displayed_tiers(qtbot: QtBot):
     view_model, repository = make_seeded_view_model()
-    label = repository.types[0][0].labels[0]
-    repository.update_label(replace(label, label="dog"))
+    view_model.set_tier_display(["word"], [])
 
-    with qtbot.waitSignal(view_model.state_changed, timeout=1000):
-        view_model.reload_annotation()
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.trigger_tier_search(0)
 
-    assert view_model.annotation_state.types[0].labels[0].label == "dog"
-
-
-def test_reload_annotation_without_file_stem_does_nothing(qtbot: QtBot):
-    view_model = make_annotation_view_model()
-
-    with qtbot.assertNotEmitted(view_model.state_changed):
-        view_model.reload_annotation()
+    assert blocker.args[0] == TierSearchAction("phone", repository.filenames[0], 2.5)

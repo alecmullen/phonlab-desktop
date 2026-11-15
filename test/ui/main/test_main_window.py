@@ -4,20 +4,26 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QKeyEvent
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
+from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QWidget
 from pytestqt.qtbot import QtBot
+from support.annotation_repository import SeedableAnnotationRepository
 from support.audio_player import FakeAudioPlayer
 from support.job_manager import FakeJobManager
 from support.mocks import mock_use_case
-from support.view_models import StubViewModelFactory
+from support.textgrid import write_simple_textgrid
+from support.view_models import StubViewModelFactory, make_main_view_model
 
 import ui.document.document_view as doc_view_module
 import ui.main.main_window as main_window_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
+from ui.annotation.annotation_plot import AnnotationPlot
+from ui.annotation.component.tier_display_dialog import TierDisplayDialog
+from ui.annotation.component.tier_font_dialog import TierFontDialog
 from ui.annotation.component.tier_search_dialog import TierSearchDialog
+from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.annotation.state.tier_search_state import (
     TierLabelsChangedState,
     TierSearchAction,
@@ -26,8 +32,10 @@ from ui.annotation.state.tier_search_state import (
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
+from ui.document.state.plot_layout_state import PlotType
 from ui.main.component.open_audio_dialog import OpenAudioDialog
 from ui.main.component.save_audio_dialog import SaveOptions
+from ui.main.main_view_model import MainViewModel
 from ui.main.main_window import MainWindow
 from ui.main.state.audio_open_options import AudioOpenOptionsState
 
@@ -43,13 +51,25 @@ def save_audio() -> SaveAudio:
 
 
 @pytest.fixture
+def project_repository() -> SeedableAnnotationRepository:
+    """The project database behind `main_window`"""
+    return SeedableAnnotationRepository()
+
+
+@pytest.fixture
 def main_window(
     qtbot: QtBot,
     fake_audio_player: type[FakeAudioPlayer],
     fake_job_manager: type[FakeJobManager],
     save_audio: SaveAudio,
+    project_repository: SeedableAnnotationRepository,
 ) -> MainWindow:
-    win = MainWindow(StubViewModelFactory(save_audio=save_audio))
+    win = MainWindow(
+        StubViewModelFactory(
+            {MainViewModel: make_main_view_model(project_repository)},
+            save_audio=save_audio,
+        )
+    )
     qtbot.addWidget(win)
     return win
 
@@ -153,6 +173,110 @@ def test_open_files_also_loads_a_paired_textgrid(
     assert {
         node.x for node in annotation_view_model.annotation_state.nodes.values()
     } == {0.0, 1.0}
+
+
+def stub_overwrite_scenario(
+    monkeypatch: pytest.MonkeyPatch,
+    has_annotation: bool,
+    *answers: QMessageBox.StandardButton,
+) -> tuple[list, list]:
+    """Every document reports `has_annotation`; returns the (path, overwrite) calls to
+    `load_textgrid` and the TextGrid names the user was asked about"""
+    loaded: list = []
+    asked: list = []
+    remaining = list(answers)
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
+    )
+    monkeypatch.setattr(
+        DocumentViewModel, "has_annotation", lambda self: has_annotation
+    )
+    monkeypatch.setattr(
+        DocumentView,
+        "load_textgrid",
+        lambda self, path, overwrite=False: loaded.append((Path(path).name, overwrite)),
+    )
+
+    def question(
+        parent: object, title: str, text: str, *args: object, **kwargs: object
+    ) -> QMessageBox.StandardButton:
+        asked.append(text)
+        return remaining.pop(0)
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return loaded, asked
+
+
+def paired_files(tmp_path: Path, *stems: str) -> list[tuple[str, str, str]]:
+    return [
+        (stem, str(tmp_path / f"{stem}.wav"), str(tmp_path / f"{stem}.TextGrid"))
+        for stem in stems
+    ]
+
+
+def test_open_files_loads_textgrid_without_asking_when_database_is_empty(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(monkeypatch, False)
+
+    main_window.open_files(paired_files(tmp_path, "a"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", False)]
+    assert asked == []
+
+
+def test_open_files_overwrites_existing_annotation_when_user_says_yes(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.Yes
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", True)]
+    assert asked == ["Overwrite the existing database with annotation from a.TextGrid?"]
+
+
+def test_open_files_skips_textgrid_when_user_says_no(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == [("b.TextGrid", True)]
+    assert len(asked) == 2
+
+
+def test_open_files_asks_once_and_overwrites_all_on_yes_to_all(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.YesToAll
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == [("a.TextGrid", True), ("b.TextGrid", True)]
+    assert len(asked) == 1
+
+
+def test_open_files_asks_once_and_skips_all_on_no_to_all(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.NoToAll
+    )
+
+    main_window.open_files(paired_files(tmp_path, "a", "b"), str(tmp_path))
+
+    assert loaded == []
+    assert len(asked) == 1
 
 
 def test_open_files_does_nothing_when_dialog_is_cancelled(
@@ -263,26 +387,151 @@ def test_select_project_does_nothing_when_dialog_is_cancelled(
     assert opened == []
 
 
-def test_select_project_opens_every_wav_with_its_paired_textgrid(
+def run_import_job(main_window: MainWindow):
+    """Runs the recorded project import job synchronously, as the worker would"""
+    job = main_window.view_model.job_managers["project_import"].jobs[0]
+    for result in job.task:
+        job.on_success(result)
+
+
+def make_project(tmp_path: Path, *names: str, database: bool = False) -> Path:
+    (tmp_path / "phonlab.toml").write_text("")
+    for name in names:
+        if name.lower().endswith(".textgrid"):
+            write_simple_textgrid(tmp_path / name)
+        else:
+            (tmp_path / name).write_bytes(b"")
+    if database:
+        (tmp_path / "phonlab.db").write_bytes(b"")
+    return tmp_path
+
+
+def test_select_project_builds_database_from_textgrids_before_opening_files(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    assert opened == []  # still importing
+    run_import_job(main_window)
+    [(files, dir_path)] = opened
+    assert dir_path == str(tmp_path)
+    # Annotations come from the database, so no TextGrid is passed on to be read
+    assert sorted(files) == [
+        ("a", str(tmp_path / "a.wav"), None),
+        ("b", str(tmp_path / "b.wav"), None),
+    ]
+    assert sorted(project_repository.filenames.values()) == ["a", "b"]
+    a = project_repository.find_annotation_by_file_stem("a")
+    assert a is not None and [type.type for type in a.types] == ["word"]
+
+
+def test_select_project_with_existing_database_opens_without_reading_textgrids(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", database=True)
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+
+    assert opened == [([("a", str(tmp_path / "a.wav"), None)], str(tmp_path))]
+    assert "project_import" not in main_window.view_model.job_managers
+    assert project_repository.filenames == {}
+
+
+def test_select_project_treats_extensions_case_insensitively(
     main_window: MainWindow,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     opened: list,
 ):
-    (tmp_path / "phonlab.toml").write_text("")
-    (tmp_path / "a.wav").write_bytes(b"")
-    (tmp_path / "a.TextGrid").write_text("")
-    (tmp_path / "b.wav").write_bytes(b"")
+    make_project(
+        tmp_path,
+        "lower.wav",
+        "upper.WAV",
+        "mixed.Wav",
+        "notes.wav.txt",
+        database=True,
+    )
     patch_directory_dialog(monkeypatch, str(tmp_path))
 
     main_window.select_project_to_open()
 
-    [(files, dir_path)] = opened
-    assert dir_path == str(tmp_path)
-    assert sorted(files) == [
-        ("a", str(tmp_path / "a.wav"), str(tmp_path / "a.TextGrid")),
-        ("b", str(tmp_path / "b.wav"), None),
-    ]
+    [(files, _)] = opened
+    assert sorted(stem for stem, _, _ in files) == ["lower", "mixed", "upper"]
+
+
+def test_select_project_reads_textgrid_with_any_case_suffix_on_first_open(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.textgrid")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_project_to_open()
+    run_import_job(main_window)
+
+    a = project_repository.find_annotation_by_file_stem("a")
+    assert a is not None and len(a.types) == 1
+
+
+def test_select_project_reports_unreadable_textgrid_and_still_opens(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav")
+    (tmp_path / "a.TextGrid").write_text("not a textgrid")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda parent, title, text, *a: warnings.append(text)),
+    )
+
+    main_window.select_project_to_open()
+    run_import_job(main_window)
+
+    assert len(warnings) == 1 and "a" in warnings[0]
+    assert len(opened) == 1
+
+
+def test_select_project_does_not_open_files_when_import_fails(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda parent, title, text, *a: warnings.append(text)),
+    )
+
+    main_window.select_project_to_open()
+    job = main_window.view_model.job_managers["project_import"].jobs[0]
+    job.on_error(RuntimeError("disk full"))
+
+    assert opened == []
+    assert len(warnings) == 1 and "disk full" in warnings[0]
 
 
 def test_select_project_initializes_toml_when_user_agrees(
@@ -299,9 +548,20 @@ def test_select_project_initializes_toml_when_user_agrees(
     )
 
     main_window.select_project_to_open()
+    run_import_job(main_window)
 
     assert (tmp_path / "phonlab.toml").is_file()
     assert opened == [([], str(tmp_path))]
+
+
+def test_open_single_document_accepts_uppercase_wav(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav = str(tmp_path / "sound.WAV")
+
+    main_window.open_single_document([wav], str(tmp_path))
+
+    assert opened == [([("sound", wav, None)], str(tmp_path))]
 
 
 def test_select_project_asks_again_when_user_declines_initializing(
@@ -513,6 +773,96 @@ def test_on_tab_changed_disables_spectrogram_action_when_not_prepped(
     assert main_window.sgramview_action.isEnabled() is False
 
 
+# --------------------------- display plan ---------------------------
+
+
+def test_switching_tabs_applies_the_current_display_plan(main_window: MainWindow):
+    first = add_document(main_window, "first.wav")
+    add_document(main_window, "second.wav")  # the current tab
+    main_window.view_model.set_display_plan({PlotType.WAVEFORM, PlotType.SPECTROGRAM})
+
+    main_window.tab_widget.setCurrentWidget(first)
+
+    assert PlotType.SPECTROGRAM in first.view_model.plot_layout_state.plots
+
+
+def test_toggling_a_plot_updates_the_display_plan(main_window: MainWindow):
+    doc = add_document(main_window)
+    doc.view_model.set_audio(
+        AudioState({0: AudioChannelState(np.zeros(2000), 1000)}),
+        primary_channel_idx=0,
+        reset_window=True,
+    )
+    doc.view_model.update_spectrogram = lambda: None
+
+    main_window.plot_wave_sgram()
+
+    assert settings.display_plan == ["waveform", "spectrogram"]
+
+
+def test_save_layout_action_needs_a_project(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    assert main_window.save_layout_action.isEnabled() is False
+    wav_path = tmp_path / "sound.wav"
+    wav_path.write_bytes(b"")
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
+    )
+
+    main_window.open_files([("sound", str(wav_path), None)], str(tmp_path))
+
+    assert main_window.save_layout_action.isEnabled() is True
+
+
+def test_save_window_layout_saves_the_plan_to_the_project(main_window: MainWindow):
+    save = main_window.view_model.save_display_plan_use_case
+    main_window.view_model.set_dir_path("/some/dir")
+    main_window.view_model.set_display_plan({PlotType.WAVEFORM, PlotType.SPECTROGRAM})
+
+    main_window.save_window_layout()
+
+    assert save.call_args.args == (["waveform", "spectrogram"], "/some/dir")
+
+
+def test_save_window_layout_reports_a_failed_save(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    main_window.view_model.set_dir_path("/some/dir")
+    main_window.view_model.save_display_plan_use_case.side_effect = OSError("denied")
+    errors = []
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda *args: errors.append(args))
+    )
+
+    main_window.save_window_layout()
+
+    assert len(errors) == 1
+
+
+def test_a_new_document_starts_with_the_display_plan(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    wav_path = tmp_path / "sound.wav"
+    wav_path.write_bytes(b"")
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda filename, parent=None: AudioOpenOptionsState()),
+    )
+    main_window.view_model.set_display_plan({PlotType.WAVEFORM, PlotType.ANNOTATION})
+
+    main_window.open_files([("sound", str(wav_path), None)], None)
+
+    doc = main_window.get_current_document()
+    assert doc.view_model.plot_layout_state.plots == {
+        PlotType.WAVEFORM,
+        PlotType.ANNOTATION,
+    }
+
+
 # --------------------------- delegation to current document ---------------------------
 
 
@@ -642,6 +992,44 @@ def test_key_press_for_unhandled_key_does_not_touch_document(main_window: MainWi
 
 
 # --------------------------- save / info dialogs ---------------------------
+
+
+def file_menu_actions(main_window: MainWindow) -> dict[str, QAction]:
+    menu_bar = main_window.menuBar()
+    file_menu = next(a.menu() for a in menu_bar.actions() if a.text() == "&File")
+    return {a.text(): a for a in file_menu.actions() if not a.isSeparator()}
+
+
+def test_file_menu_offers_save_audio_and_the_annotation_menu_exports_annotation(
+    main_window: MainWindow,
+):
+    actions = file_menu_actions(main_window)
+
+    assert actions["Save &Audio…"] is main_window.save_audio_action
+    assert "&Export Annotation…" not in actions
+    assert main_window.save_audio_action is not main_window.export_annotation_action
+
+
+def test_save_menu_items_open_their_own_dialogs(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    doc = add_document(main_window)
+    calls = []
+    monkeypatch.setattr(
+        main_window_module.SaveAudioDialog,
+        "get_options",
+        staticmethod(lambda doc, name, parent=None: calls.append("audio")),
+    )
+    doc.open_save_textgrid = lambda: calls.append("textgrid")
+
+    main_window.save_audio_action.trigger()
+    main_window.export_annotation_action.trigger()
+
+    assert calls == ["audio", "textgrid"]
+
+
+def test_save_menu_item_has_the_standard_save_shortcut(main_window: MainWindow):
+    assert main_window.save_audio_action.shortcut() == QKeySequence.StandardKey.Save
 
 
 def test_save_audio_invokes_save_use_case_with_selected_options(
@@ -780,6 +1168,662 @@ def test_close_event_cleans_up_all_documents_and_accepts(main_window: MainWindow
 
     assert doc.view_model.audio_player.stopped is True
     assert event.isAccepted() is True
+
+
+# --------------------------- project menu ---------------------------
+
+
+def test_project_actions_are_disabled_until_a_project_is_open(
+    main_window: MainWindow, tmp_path: Path
+):
+    assert not main_window.add_files_action.isEnabled()
+    assert not main_window.rebuild_action.isEnabled()
+
+    main_window.view_model.set_dir_path(str(tmp_path))
+    main_window.update_project_actions()
+
+    assert main_window.add_files_action.isEnabled()
+    assert main_window.rebuild_action.isEnabled()
+
+
+def test_menus_are_ordered_file_edit_project_annotation_view(main_window: MainWindow):
+    titles = [
+        action.text().replace("&", "") for action in main_window.menuBar().actions()
+    ]
+
+    assert titles == ["File", "Edit", "Project", "Annotation", "View"]
+
+
+def test_project_menu_lists_the_project_actions(main_window: MainWindow):
+    menu = next(
+        action.menu()
+        for action in main_window.menuBar().actions()
+        if action.text().replace("&", "") == "Project"
+    )
+
+    assert menu.actions() == [main_window.add_files_action, main_window.rebuild_action]
+
+
+def capture_information(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    messages: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda parent, title, text, *a: messages.append(text)),
+    )
+    return messages
+
+
+def test_add_new_files_registers_new_stems_and_reads_textgrids_for_empty_ones(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "old.wav", "new.wav", "new.TextGrid", "old.TextGrid")
+    project_repository.create_annotation("old")  # in the database, but empty
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = capture_information(monkeypatch)
+
+    main_window.add_new_files()
+    run_import_job(main_window)
+
+    assert sorted(project_repository.filenames.values()) == ["new", "old"]
+    for stem in ("new", "old"):
+        annotation = project_repository.find_annotation_by_file_stem(stem)
+        assert annotation is not None and len(annotation.types) == 1
+    assert messages == ["Added 1 new files and read 2 TextGrids."]
+
+
+def test_add_new_files_leaves_existing_annotations_alone(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    capture_information(monkeypatch)
+    main_window.add_new_files()
+    run_import_job(main_window)
+    before = project_repository.find_annotation_by_file_stem("a")
+    main_window.view_model.job_managers.clear()
+
+    main_window.add_new_files()
+    run_import_job(main_window)
+
+    assert project_repository.find_annotation_by_file_stem("a") == before
+
+
+def test_add_new_files_reloads_annotations_of_open_documents(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    capture_information(monkeypatch)
+    reloaded: list[DocumentViewModel] = []
+    monkeypatch.setattr(
+        DocumentViewModel, "reload_annotation", lambda self: reloaded.append(self)
+    )
+    first, second = add_document(main_window), add_document(main_window, "two.wav")
+
+    main_window.add_new_files()
+    run_import_job(main_window)
+
+    assert reloaded == [first.view_model, second.view_model]
+
+
+def test_add_new_files_reports_unreadable_textgrids(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav")
+    (tmp_path / "a.TextGrid").write_text("not a textgrid")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = capture_information(monkeypatch)
+
+    main_window.add_new_files()
+    run_import_job(main_window)
+
+    [message] = messages
+    assert "Could not read the TextGrid for: a" in message
+
+
+def test_rebuild_project_does_nothing_when_user_declines(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav")
+    project_repository.create_annotation("stale")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.No),
+    )
+
+    main_window.rebuild_project()
+
+    assert "project_import" not in main_window.view_model.job_managers
+    assert list(project_repository.filenames.values()) == ["stale"]
+
+
+def test_rebuild_project_rereads_textgrids_into_a_new_database(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    project_repository.create_annotation("stale")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    questions: list[str] = []
+
+    def question(
+        parent: object, title: str, text: str, *args: object
+    ) -> QMessageBox.StandardButton:
+        questions.append(text)
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    messages = capture_information(monkeypatch)
+    reloaded: list[DocumentViewModel] = []
+    monkeypatch.setattr(
+        DocumentViewModel, "reload_annotation", lambda self: reloaded.append(self)
+    )
+    doc = add_document(main_window)
+
+    main_window.rebuild_project()
+    run_import_job(main_window)
+
+    assert str(tmp_path) in questions[0]
+    assert list(project_repository.filenames.values()) == ["a"]
+    assert messages == ["Rebuilt the project database from 1 TextGrids."]
+    assert reloaded == [doc.view_model]
+
+
+def test_open_single_document_accepts_textgrid_with_any_case_suffix(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav, textgrid = str(tmp_path / "a.wav"), str(tmp_path / "a.textgrid")
+
+    main_window.open_single_document([wav, textgrid], str(tmp_path))
+
+    assert opened == [([("a", wav, textgrid)], str(tmp_path))]
+
+
+# --------------------------- spectrogram only for the shown tab ---------------------------
+
+
+def test_only_the_current_tab_is_shown(main_window: MainWindow):
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+    third = add_document(main_window, "three.wav")
+
+    assert [d.view_model.is_shown for d in (first, second, third)] == [
+        False,
+        False,
+        True,
+    ]
+
+
+def test_switching_tabs_changes_which_document_is_shown(main_window: MainWindow):
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+
+    main_window.tab_widget.setCurrentIndex(0)
+
+    assert first.view_model.is_shown
+    assert not second.view_model.is_shown
+
+
+def test_closing_the_current_tab_shows_the_one_that_becomes_current(
+    main_window: MainWindow,
+):
+    first = add_document(main_window, "one.wav")
+    add_document(main_window, "two.wav")
+    assert not first.view_model.is_shown
+
+    main_window.close_current_tab()
+
+    assert main_window.tab_widget.count() == 1
+    assert first.view_model.is_shown
+
+
+def test_clip_tab_opens_hidden_behind_its_source(main_window: MainWindow):
+    source = add_document(main_window, "source.wav")
+    load_signal(source, np.arange(10000), fs=1000)
+    source.view_model.start_selection(2.0)
+    source.view_model.continue_selection(3.0)
+
+    main_window.copy_selection()
+
+    assert main_window.tab_widget.count() == 2
+    clip = main_window.tab_widget.widget(1)
+    assert isinstance(clip, DocumentView)
+    assert not clip.view_model.is_shown
+    assert source.view_model.is_shown
+
+
+# --------------------------- annotation menu ---------------------------
+
+
+def test_annotation_menu_offers_tier_and_export_actions(main_window: MainWindow):
+    menu = next(
+        action.menu()
+        for action in main_window.menuBar().actions()
+        if action.text().replace("&", "") == "Annotation"
+    )
+
+    assert [a for a in menu.actions() if not a.isSeparator()] == [
+        main_window.add_tiers_action,
+        main_window.arrange_tiers_action,
+        main_window.choose_fonts_action,
+        main_window.export_annotation_action,
+    ]
+
+
+def test_add_tiers_is_disabled_until_a_document_is_open(main_window: MainWindow):
+    assert not main_window.add_tiers_action.isEnabled()
+
+    add_document(main_window)
+
+    assert main_window.add_tiers_action.isEnabled()
+
+
+def test_add_tiers_is_disabled_again_when_the_last_document_closes(
+    main_window: MainWindow,
+):
+    add_document(main_window)
+
+    main_window.close_current_tab()
+
+    assert not main_window.add_tiers_action.isEnabled()
+
+
+def test_add_tiers_asks_the_current_document_which_tiers_to_add(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    opened: list[DocumentView] = []
+    monkeypatch.setattr(
+        DocumentView, "open_add_tiers", lambda self: opened.append(self)
+    )
+    add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+    load_signal(second, np.zeros(2000), fs=1000)
+
+    main_window.add_tiers_action.trigger()
+
+    assert opened == [second]
+
+
+def test_add_tiers_shows_the_annotation_plot_if_it_is_hidden(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(DocumentView, "open_add_tiers", lambda self: None)
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    assert not doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.add_tiers()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+    assert PlotType.ANNOTATION in main_window.view_model.display_plan
+
+
+def test_add_tiers_leaves_the_annotation_plot_alone_if_it_is_shown(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(DocumentView, "open_add_tiers", lambda self: None)
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    main_window.plot_annotations()
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.add_tiers()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+
+def test_add_tiers_does_nothing_without_a_document(main_window: MainWindow):
+    main_window.add_tiers()  # must not raise
+
+
+# --------------------------- show and order tiers ---------------------------
+
+
+def stub_tier_dialog(
+    monkeypatch: pytest.MonkeyPatch, chosen: list[TierDisplayState] | None
+) -> list[list[TierDisplayState]]:
+    offered: list[list[TierDisplayState]] = []
+
+    def get_tiers(
+        tiers: list[TierDisplayState], parent: QWidget | None = None
+    ) -> list[TierDisplayState] | None:
+        offered.append(tiers)
+        return chosen
+
+    monkeypatch.setattr(TierDisplayDialog, "get_tiers", get_tiers)
+    return offered
+
+
+def test_arrange_tiers_is_disabled_until_a_document_is_open(main_window: MainWindow):
+    assert not main_window.arrange_tiers_action.isEnabled()
+
+    add_document(main_window)
+
+    assert main_window.arrange_tiers_action.isEnabled()
+
+
+def test_arrange_tiers_is_disabled_again_when_the_last_document_closes(
+    main_window: MainWindow,
+):
+    add_document(main_window)
+
+    main_window.close_current_tab()
+
+    assert not main_window.arrange_tiers_action.isEnabled()
+
+
+def test_arrange_tiers_does_nothing_without_a_document(main_window: MainWindow):
+    main_window.arrange_tiers()  # must not raise
+
+
+def test_arrange_tiers_offers_the_current_documents_tier_display(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    tiers = [TierDisplayState("word", 1), TierDisplayState("phone")]
+    offered = stub_tier_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    monkeypatch.setattr(doc.view_model, "tier_display", lambda: tiers)
+
+    main_window.arrange_tiers_action.trigger()
+
+    assert offered == [tiers]
+
+
+def test_arrange_tiers_applies_the_choice_to_every_document(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(
+        monkeypatch,
+        [
+            TierDisplayState("word", 2),
+            TierDisplayState("phone"),
+            TierDisplayState("tone", 1),
+        ],
+    )
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+    load_signal(second, np.zeros(2000), fs=1000)
+
+    main_window.arrange_tiers()
+
+    assert main_window.view_model.hidden_tiers == ["phone"]
+    assert main_window.view_model.tier_order == ["tone", "word"]
+    for doc in (first, second):
+        annotation_vm = doc.view_model.annotation_view_model
+        assert annotation_vm.hidden_tiers == ["phone"]
+        assert annotation_vm.tier_order == ["tone", "word"]
+
+
+def test_arrange_tiers_cancelled_changes_nothing(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    main_window.set_tier_display(["word"], ["phone"])
+
+    main_window.arrange_tiers()
+
+    assert main_window.view_model.hidden_tiers == ["word"]
+    assert main_window.view_model.tier_order == ["phone"]
+    assert doc.view_model.annotation_view_model.hidden_tiers == ["word"]
+
+
+def test_arrange_tiers_shows_the_annotation_plot_if_it_is_hidden(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(monkeypatch, [TierDisplayState("word", 1)])
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    assert not doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.arrange_tiers()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+    assert PlotType.ANNOTATION in main_window.view_model.display_plan
+
+
+def test_arrange_tiers_leaves_the_annotation_plot_alone_if_it_is_shown(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(monkeypatch, [TierDisplayState("word", 1)])
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    main_window.plot_annotations()
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.arrange_tiers()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+
+def test_arrange_tiers_cancelled_does_not_show_the_annotation_plot(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+
+    main_window.arrange_tiers()
+
+    assert not doc.view_model.plot_layout_state.has_annotation()
+
+
+def test_a_new_document_shows_the_tiers_the_same_way(main_window: MainWindow):
+    main_window.view_model.set_tier_display(["phone"], ["word"])
+    doc = add_document(main_window)
+
+    main_window.apply_tier_display(doc.view_model)
+
+    annotation_vm = doc.view_model.annotation_view_model
+    assert annotation_vm.hidden_tiers == ["phone"]
+    assert annotation_vm.tier_order == ["word"]
+
+
+def add_tier_when_adding_tiers(
+    doc: DocumentView, monkeypatch: pytest.MonkeyPatch, added: str
+):
+    names = ["word"]
+    monkeypatch.setattr(doc.view_model, "tier_names", lambda: list(names))
+    monkeypatch.setattr(
+        DocumentView, "open_add_tiers", lambda self: names.append(added)
+    )
+
+
+def test_add_tiers_shows_a_tier_just_added_that_was_hidden(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    main_window.set_tier_display(["tone", "phone"], ["word"])
+    add_tier_when_adding_tiers(doc, monkeypatch, "tone")
+
+    main_window.add_tiers()
+
+    assert main_window.view_model.hidden_tiers == ["phone"]
+    assert main_window.view_model.tier_order == ["word"]
+    assert doc.view_model.annotation_view_model.hidden_tiers == ["phone"]
+
+
+def test_add_tiers_leaves_hidden_tiers_alone_when_none_was_added_back(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    main_window.set_tier_display(["phone"], [])
+    add_tier_when_adding_tiers(doc, monkeypatch, "tone")
+
+    main_window.add_tiers()
+
+    assert main_window.view_model.hidden_tiers == ["phone"]
+
+
+# --------------------------- Ctrl+L with several documents open ---------------------------
+
+
+def open_two_documents_with_annotation(
+    main_window: MainWindow, qtbot: QtBot
+) -> tuple[DocumentView, DocumentView]:
+    docs = []
+    for name in ("one.wav", "two.wav"):
+        doc = add_document(main_window, name)
+        load_signal(doc, np.zeros(2000), fs=1000)
+        doc.view_model.toggle_annotations()
+        QApplication.processEvents()
+        docs.append(doc)
+    main_window.show()
+    qtbot.waitExposed(main_window)
+    main_window.activateWindow()
+    QApplication.processEvents()
+    return docs[0], docs[1]
+
+
+def test_ctrl_l_is_not_ambiguous_with_two_documents_open(
+    main_window: MainWindow, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    from PyQt6.QtCore import qInstallMessageHandler
+    from PyQt6.QtTest import QTest
+
+    open_two_documents_with_annotation(main_window, qtbot)
+    messages: list[str] = []
+    previous = qInstallMessageHandler(lambda mode, ctx, msg: messages.append(msg))
+    try:
+        QTest.keyClick(main_window, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+        QApplication.processEvents()
+    finally:
+        qInstallMessageHandler(previous)
+
+    assert [m for m in messages if "mbiguous" in m] == []
+
+
+def test_ctrl_l_reaches_the_annotation_of_the_document_on_screen_only(
+    main_window: MainWindow, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    from PyQt6.QtTest import QTest
+
+    first, second = open_two_documents_with_annotation(main_window, qtbot)
+    reached: list[DocumentView] = []
+    for doc in (first, second):
+        plot = next(p for p in doc.document_plots if isinstance(p, AnnotationPlot))
+        plot.create_label_action.triggered.connect(lambda *_, d=doc: reached.append(d))
+
+    QTest.keyClick(main_window, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+    QApplication.processEvents()
+
+    assert reached == [second]  # the second tab is the one on screen
+
+
+# --------------------------- choose fonts ---------------------------
+
+
+def stub_font_dialog(
+    monkeypatch: pytest.MonkeyPatch, chosen: dict[str, str] | None
+) -> list[tuple[list[str], dict[str, str]]]:
+    offered: list[tuple[list[str], dict[str, str]]] = []
+
+    def get_fonts(
+        names: list[str], fonts: dict[str, str], parent: QWidget | None = None
+    ) -> dict[str, str] | None:
+        offered.append((names, fonts))
+        return chosen
+
+    monkeypatch.setattr(TierFontDialog, "get_fonts", get_fonts)
+    return offered
+
+
+def test_choose_fonts_is_enabled_only_while_a_document_is_open(
+    main_window: MainWindow,
+):
+    assert not main_window.choose_fonts_action.isEnabled()
+
+    add_document(main_window)
+
+    assert main_window.choose_fonts_action.isEnabled()
+
+
+def test_choose_fonts_does_nothing_without_a_document(main_window: MainWindow):
+    main_window.choose_fonts()  # must not raise
+
+
+def test_choose_fonts_offers_the_tiers_as_plotted_and_the_current_fonts(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    offered = stub_font_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    tiers = [
+        TierDisplayState("phone", 1),
+        TierDisplayState("word", 2),
+        TierDisplayState("tone"),
+    ]
+    monkeypatch.setattr(doc.view_model, "tier_display", lambda: tiers)
+    main_window.view_model.set_tier_fonts({"word": "Charis SIL"})
+
+    main_window.choose_fonts_action.trigger()
+
+    assert offered == [(["word", "phone", "tone"], {"word": "Charis SIL"})]
+
+
+def test_choose_fonts_applies_the_choice_to_every_document(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_font_dialog(monkeypatch, {"word": "Charis SIL"})
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+    load_signal(second, np.zeros(2000), fs=1000)
+
+    main_window.choose_fonts()
+
+    assert main_window.view_model.tier_fonts == {"word": "Charis SIL"}
+    for doc in (first, second):
+        assert doc.view_model.annotation_view_model.tier_fonts == {"word": "Charis SIL"}
+
+
+def test_choose_fonts_cancelled_changes_nothing(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_font_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    main_window.view_model.set_tier_fonts({"word": "Charis SIL"})
+
+    main_window.choose_fonts()
+
+    assert main_window.view_model.tier_fonts == {"word": "Charis SIL"}
+    assert doc.view_model.annotation_view_model.tier_fonts == {}
+
+
+def test_choose_fonts_shows_the_annotation_plot_if_it_is_hidden(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_font_dialog(monkeypatch, {"word": "Charis SIL"})
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    assert not doc.view_model.plot_layout_state.has_annotation()
+
+    main_window.choose_fonts()
+
+    assert doc.view_model.plot_layout_state.has_annotation()
+
+
+def test_a_document_is_given_the_chosen_fonts_when_it_opens(main_window: MainWindow):
+    main_window.view_model.set_tier_fonts({"word": "Charis SIL"})
+    doc_view_model = main_window.view_model_factory.create(DocumentViewModel)
+
+    main_window.apply_tier_display(doc_view_model)
+
+    assert doc_view_model.annotation_view_model.tier_fonts == {"word": "Charis SIL"}
 
 
 # --------------------------- tier search ---------------------------

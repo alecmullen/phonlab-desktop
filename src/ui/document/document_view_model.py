@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import replace
 
 import numpy as np
@@ -20,8 +20,9 @@ from res.constants import (
     MAX_UNDO_HISTORY,
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
@@ -84,6 +85,9 @@ class DocumentViewModel(ViewModel):
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
+
+        # Whether this document's tab is on screen (see set_shown)
+        self.is_shown = True
         self.playback_state = PlaybackState()
         self.mark_state: MarkState = MarkState()
         self.audio_loaded_state: AudioLoaded = AudioLoaded()
@@ -125,14 +129,19 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_sgram_state_change(self, model: State):
-        if isinstance(model, (LoadProgressState, AudioPrepped)):
+        if isinstance(model, (LoadProgressState, AudioPrepped, StatusMessageState)):
             self.state_changed.emit(model)
+        if (
+            isinstance(model, AudioPrepped)
+            and self.plot_layout_state.has_spectrogram()
+            and not self.spectrogram_view_model.sgram_state.is_showing
+        ):
+            # The spectrogram was asked for before its audio was ready
+            self.update_spectrogram()
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
-        if isinstance(
-            model, (StatusMessageState, SaveToTextGridAction, TierSearchAction)
-        ):
+        if isinstance(model, (StatusMessageState, AddTiersAction, TierSearchAction)):
             self.state_changed.emit(model)
         elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
@@ -184,6 +193,26 @@ class DocumentViewModel(ViewModel):
             plots.remove(PlotType.ANNOTATION)
 
         self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
+        self.state_changed.emit(self.plot_layout_state)
+
+    def set_plots(self, plots: Iterable[PlotType]):
+        """Show exactly `plots` (at least one), e.g. to carry the display plan
+        of another document over to this one."""
+        new_plots = set(plots) or {PlotType.WAVEFORM}
+        if new_plots == self.plot_layout_state.plots:
+            return
+
+        self.plot_layout_state = replace(self.plot_layout_state, plots=new_plots)
+        if self.primary_channel() is None:
+            # Nothing to plot yet; the view lays out the plots once audio loads
+            return
+
+        if self.plot_layout_state.has_waveform():
+            self.update_audio_waveform()
+        if self.plot_layout_state.has_spectrogram():
+            self.update_spectrogram()
+        if self.plot_layout_state.has_annotation():
+            self.update_annotation_state()
         self.state_changed.emit(self.plot_layout_state)
 
     def load_audio(self, filepath: str, options: AudioOpenOptionsState):
@@ -362,7 +391,27 @@ class DocumentViewModel(ViewModel):
 
         self.spectrogram_view_model.prep_audio(x, fs)
 
+    def set_shown(self, shown: bool):
+        """Tell the document whether its tab is the one on screen. The spectrogram
+        is only computed for a shown document, so opening many files at once
+        computes one spectrogram, and each of the others when its tab is first
+        looked at"""
+        if shown == self.is_shown:
+            return
+        self.is_shown = shown
+
+        if (
+            shown
+            and self.plot_layout_state.has_spectrogram()
+            and self.primary_channel() is not None
+            and not self.spectrogram_view_model.sgram_state.is_showing
+        ):
+            self.update_spectrogram()
+
     def update_spectrogram(self):
+        if not self.is_shown:
+            return  # set_shown() catches up when the document is shown
+
         primary_channel = self.primary_channel()
         if primary_channel is None:
             raise RuntimeError("Missing primary audio channel")
@@ -575,9 +624,6 @@ class DocumentViewModel(ViewModel):
         if self.pending_reveal is not None:
             self.reveal_span(*self.pending_reveal)
 
-    def reload_annotation(self):
-        self.annotation_view_model.reload_annotation()
-
     def center_on_selection(self):
         """Center the window on the selection's midpoint, or on the mark when
         nothing is selected."""
@@ -771,6 +817,26 @@ class DocumentViewModel(ViewModel):
         if not channels:
             raise RuntimeError("Cannot save audio that is not loaded")
         self.save_audio_use_case(path, channels, target_fs, scale)
+
+    def trigger_add_tiers(self):
+        self.annotation_view_model.trigger_add_tiers_dialog()
+
+    def add_tiers(self, names: list[str]):
+        self.annotation_view_model.add_tiers(names)
+
+    def tier_names(self) -> list[str]:
+        return self.annotation_view_model.tier_names()
+
+    def tier_display(self) -> list[TierDisplayState]:
+        return self.annotation_view_model.tier_display()
+
+    def set_tier_display(
+        self, hidden_tiers: Collection[str], tier_order: Collection[str]
+    ):
+        self.annotation_view_model.set_tier_display(hidden_tiers, tier_order)
+
+    def set_tier_fonts(self, tier_fonts: Mapping[str, str]):
+        self.annotation_view_model.set_tier_fonts(tier_fonts)
 
     def save_textgrid(self, file_path: str, tg_type: str):
         self.annotation_view_model.write_textgrid(file_path, tg_type)
@@ -1398,9 +1464,17 @@ class DocumentViewModel(ViewModel):
             return
         self.undo_stack.append(cmd)
 
-    def parse_textgrid(self, file_path: str):
+    def reload_annotation(self):
+        self.annotation_view_model.reload_annotation()
+
+    def has_annotation(self) -> bool:
+        return self.annotation_view_model.has_annotation()
+
+    def parse_textgrid(self, file_path: str, overwrite: bool = False):
         if self.file_stem is not None:
-            self.annotation_view_model.parse_textgrid(file_path, self.file_stem)
+            self.annotation_view_model.parse_textgrid(
+                file_path, self.file_stem, overwrite
+            )
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):

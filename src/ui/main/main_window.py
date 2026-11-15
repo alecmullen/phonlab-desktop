@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt, pyqtSlot
@@ -7,14 +8,22 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QMainWindow,
     QMessageBox,
+    QProgressDialog,
     QSizePolicy,
     QTabWidget,
     QToolBar,
     QWidget,
 )
 
+from core.project.scan_project_files import is_audio_file, is_textgrid_file
 from core.settings.app_settings import settings
+from ui.annotation.component.tier_display_dialog import TierDisplayDialog
+from ui.annotation.component.tier_font_dialog import TierFontDialog
 from ui.annotation.component.tier_search_dialog import TierSearchDialog
+from ui.annotation.state.tier_display_state import (
+    hidden_and_order_from,
+    listed_as_plotted,
+)
 from ui.annotation.state.tier_search_state import (
     TierLabelsChangedState,
     TierSearchAction,
@@ -23,12 +32,14 @@ from ui.annotation.state.tier_search_state import (
 from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
+from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
 from ui.main.component.open_audio_dialog import OpenAudioDialog
 from ui.main.component.save_audio_dialog import SaveAudioDialog
 from ui.main.main_view_model import MainViewModel
+from ui.main.state.project_import_state import ProjectImportState
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
@@ -41,8 +52,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Phonlab")
         self.resize(1200, 800)
 
-        self.filters = "Sound files and TextGrids (*.wav *.TextGrid)"
+        self.filters = (
+            "Sound files and TextGrids (*.wav *.WAV *.TextGrid *.textgrid *.TEXTGRID)"
+        )
         self.splash = None
+        self.progress_dialog: QProgressDialog | None = None
+        self.on_import_finished: Callable[[ProjectImportState], None] | None = None
         self.clipboard: AudioState | None = None
         self.clip_counters: dict[str, int] = {}
         self.tier_search_dialog: TierSearchDialog | None = None
@@ -55,14 +70,15 @@ class MainWindow(QMainWindow):
         self.tab_widget.currentChanged.connect(self.on_tab_changed)
         self.setCentralWidget(self.tab_widget)
 
+        self.view_model_factory = view_model_factory
+        self.view_model = view_model_factory.create(MainViewModel)
+        self.view_model.subscribe(self.on_view_model_state_changed)
+
         # --------- Menu --------------------
         self.create_menus()
 
         # ------- toolbar -------------
         self.create_toolbar()
-
-        self.view_model_factory = view_model_factory
-        self.view_model = view_model_factory.create(MainViewModel)
 
     def create_menus(self):
         """Create application menus"""
@@ -83,18 +99,25 @@ class MainWindow(QMainWindow):
         self.close_action.setShortcut("Ctrl+W")
         self.close_action.triggered.connect(self.close_current_tab)
 
-        self.save_action = QAction(self.tr("&Save…"), self)
-        self.save_action.setStatusTip(
+        self.save_audio_action = QAction(self.tr("Save &Audio…"), self)
+        self.save_audio_action.setStatusTip(
             self.tr("Save the current document's audio to a file")
         )
-        self.save_action.setShortcut(QKeySequence.StandardKey.Save)
-        self.save_action.triggered.connect(self.save_audio)
+        self.save_audio_action.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_audio_action.triggered.connect(self.save_audio)
 
-        self.save_action = QAction(self.tr("Save to TextGrid…"), self)
-        self.save_action.setStatusTip(
-            self.tr("Save the current document's annotations to a TextGrid")
+        self.export_annotation_action = QAction(self.tr("&Export Annotation…"), self)
+        self.export_annotation_action.setStatusTip(
+            self.tr("Export the current document's annotations to a file")
         )
-        self.save_action.triggered.connect(self.save_textgrid)
+        self.export_annotation_action.triggered.connect(self.save_textgrid)
+
+        self.save_layout_action = QAction(self.tr("Save Window &Layout"), self)
+        self.save_layout_action.setStatusTip(
+            self.tr("Save which plots are shown in the project file")
+        )
+        self.save_layout_action.setEnabled(False)
+        self.save_layout_action.triggered.connect(self.save_window_layout)
 
         self.audio_info_action = QAction(self.tr("Audio &Info"), self)
         self.audio_info_action.setShortcut("Ctrl+I")
@@ -116,7 +139,9 @@ class MainWindow(QMainWindow):
             fileMenu.addAction(self.open_action)
             fileMenu.addAction(self.close_action)
             fileMenu.addSeparator()
-            fileMenu.addAction(self.save_action)
+            fileMenu.addAction(self.save_audio_action)
+            fileMenu.addSeparator()
+            fileMenu.addAction(self.save_layout_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.audio_info_action)
             fileMenu.addSeparator()
@@ -207,6 +232,60 @@ class MainWindow(QMainWindow):
             self.tr("Center view on the selection, or the mark if nothing is selected")
         )
         self.recenter_action.triggered.connect(self.recenter_on_selection)
+
+        self.add_files_action = QAction(self.tr("&Add New Files"), self)
+        self.add_files_action.setStatusTip(
+            self.tr(
+                "Add files that are not in the project database yet, and read TextGrids "
+                "for files that have no annotation"
+            )
+        )
+        self.add_files_action.triggered.connect(self.add_new_files)
+
+        self.rebuild_action = QAction(self.tr("&Rebuild Project…"), self)
+        self.rebuild_action.setStatusTip(
+            self.tr("Read all TextGrids into a new project database")
+        )
+        self.rebuild_action.triggered.connect(self.rebuild_project)
+
+        # Project Menu
+        if mainMenu is not None:
+            projectMenu = mainMenu.addMenu(self.tr("&Project"))
+        if projectMenu is not None:
+            projectMenu.addAction(self.add_files_action)
+            projectMenu.addAction(self.rebuild_action)
+        self.update_project_actions()
+
+        self.add_tiers_action = QAction(self.tr("&Add Tiers…"), self)
+        self.add_tiers_action.setStatusTip(
+            self.tr("Add annotation tiers to the current file")
+        )
+        self.add_tiers_action.setEnabled(False)
+        self.add_tiers_action.triggered.connect(self.add_tiers)
+
+        self.arrange_tiers_action = QAction(self.tr("&Show and Order Tiers…"), self)
+        self.arrange_tiers_action.setStatusTip(
+            self.tr("Choose which annotation tiers are shown and in what order")
+        )
+        self.arrange_tiers_action.setEnabled(False)
+        self.arrange_tiers_action.triggered.connect(self.arrange_tiers)
+
+        self.choose_fonts_action = QAction(self.tr("Choose &Fonts…"), self)
+        self.choose_fonts_action.setStatusTip(
+            self.tr("Choose the font of the labels of each annotation tier")
+        )
+        self.choose_fonts_action.setEnabled(False)
+        self.choose_fonts_action.triggered.connect(self.choose_fonts)
+
+        # Annotation Menu
+        if settings.enable_annotation and mainMenu is not None:
+            annotationMenu = mainMenu.addMenu(self.tr("&Annotation"))
+            if annotationMenu is not None:
+                annotationMenu.addAction(self.add_tiers_action)
+                annotationMenu.addAction(self.arrange_tiers_action)
+                annotationMenu.addAction(self.choose_fonts_action)
+                annotationMenu.addSeparator()
+                annotationMenu.addAction(self.export_annotation_action)
 
         # View Menu
         if mainMenu is not None:
@@ -333,8 +412,6 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def select_project_to_open(self):
-        files_to_load: list[tuple[str, str, str | None]] = []
-
         dir_path = QFileDialog.getExistingDirectory(
             self, self.tr("Open Phonlab Directory")
         )
@@ -359,27 +436,153 @@ class MainWindow(QMainWindow):
                 self.view_model.set_dir_path(dir_path)
                 self.view_model.init_toml()
 
-        all_files = list(dir.glob("*"))
-        for path in all_files:
-            if str(path).endswith(".wav"):
-                file_stem = path.relative_to(dir_path).with_suffix("").as_posix()
+        self.view_model.set_dir_path(dir_path)
 
-                annotation_file = next(
-                    (
-                        str(file)
-                        for file in all_files
-                        if str(file).endswith(f"{file_stem}.TextGrid")
-                    ),
-                    None,
+        if self.view_model.is_new_project():
+            # First time here: build the project database from every TextGrid
+            self.run_project_import(
+                self.view_model.add_project_files,
+                lambda state: self.open_new_project(dir_path, state),
+            )
+        else:
+            self.open_project_files(dir_path)
+
+    def open_project_files(self, dir_path: str):
+        """Open the project's audio files. TextGrids are not read: once a project has
+        a database it holds the annotations, and Project > Rebuild re-reads them"""
+        files = [
+            (file_stem, audio_file, None)
+            for file_stem, audio_file, _ in self.view_model.project_files()
+        ]
+        self.open_files(files, dir_path)
+
+    def open_new_project(self, dir_path: str, state: ProjectImportState):
+        if len(state.failed) > 0:
+            QMessageBox.warning(
+                self, self.tr("Project"), self.describe_import(state, rebuilt=False)
+            )
+        self.open_project_files(dir_path)
+
+    def update_project_actions(self):
+        """Project menu items only apply once a project directory is open"""
+        has_project = self.view_model.dir_path is not None
+        self.add_files_action.setEnabled(has_project)
+        self.rebuild_action.setEnabled(has_project)
+
+    @pyqtSlot()
+    def add_new_files(self):
+        self.run_project_import(
+            self.view_model.add_project_files,
+            lambda state: self.finish_project_update(state, rebuilt=False),
+        )
+
+    @pyqtSlot()
+    def rebuild_project(self):
+        answer = QMessageBox.question(
+            self,
+            self.tr("Rebuild Project"),
+            self.tr(
+                "Rebuild the project database from the TextGrids in {}? Annotation "
+                "changes that were not saved to a TextGrid will be left out. The "
+                "current database is kept as a backup."
+            ).format(self.view_model.dir_path),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self.run_project_import(
+            self.view_model.rebuild_project,
+            lambda state: self.finish_project_update(state, rebuilt=True),
+        )
+
+    def run_project_import(
+        self,
+        start: Callable[[], None],
+        on_finished: Callable[[ProjectImportState], None],
+    ):
+        self.on_import_finished = on_finished
+        start()
+
+    def finish_project_update(self, state: ProjectImportState, rebuilt: bool):
+        """Show the database's current annotations in the open tabs, and report"""
+        for index in range(self.tab_widget.count()):
+            doc = self.tab_widget.widget(index)
+            if isinstance(doc, DocumentView):
+                doc.view_model.reload_annotation()
+
+        QMessageBox.information(
+            self,
+            self.tr("Project"),
+            self.describe_import(state, rebuilt),
+        )
+
+    def describe_import(self, state: ProjectImportState, rebuilt: bool) -> str:
+        if rebuilt:
+            lines = [
+                self.tr("Rebuilt the project database from {} TextGrids.").format(
+                    len(state.imported)
                 )
+            ]
+            if state.backup is not None:
+                lines.append(
+                    self.tr("The previous database was saved as {}.").format(
+                        Path(state.backup).name
+                    )
+                )
+        else:
+            lines = [
+                self.tr("Added {} new files and read {} TextGrids.").format(
+                    state.registered, len(state.imported)
+                )
+            ]
+        if len(state.failed) > 0:
+            lines.append(
+                self.tr("Could not read the TextGrid for: {}").format(
+                    ", ".join(state.failed)
+                )
+            )
+        return "\n".join(lines)
 
-                files_to_load.append((file_stem, str(path), annotation_file))
+    @pyqtSlot(object)
+    def on_view_model_state_changed(self, state: State):
+        if not isinstance(state, ProjectImportState):
+            return
 
-        self.open_files(files_to_load, dir_path)
+        if not state.finished:
+            self.show_import_progress(state)
+            return
+
+        if self.progress_dialog is not None:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+        on_finished, self.on_import_finished = self.on_import_finished, None
+        if state.error is not None:
+            QMessageBox.warning(
+                self,
+                self.tr("Project"),
+                self.tr("Could not update the project database: {}").format(
+                    state.error
+                ),
+            )
+        elif on_finished is not None:
+            on_finished(state)
+
+    def show_import_progress(self, state: ProjectImportState):
+        if self.progress_dialog is None:
+            self.progress_dialog = QProgressDialog(
+                self.tr("Reading TextGrids…"), "", 0, state.total, self
+            )
+            self.progress_dialog.setCancelButton(None)
+            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progress_dialog.setMinimumDuration(500)
+        self.progress_dialog.setValue(state.done)
 
     def open_single_document(self, filenames: list[str], dir: str | None = None):
-        audio_files = [name for name in filenames if name.endswith(".wav")]
-        annotation_files = [name for name in filenames if name.endswith(".TextGrid")]
+        audio_files = [name for name in filenames if is_audio_file(name)]
+        annotation_files = [name for name in filenames if is_textgrid_file(name)]
         if len(audio_files) == 0:
             raise ValueError(self.tr("Please include a .wav file"))
         if len(audio_files) > 1 or len(annotation_files) > 1:
@@ -427,6 +630,11 @@ class MainWindow(QMainWindow):
         and .TextGrid files"""
 
         self.view_model.set_dir_path(dir_path)
+        self.save_layout_action.setEnabled(dir_path is not None)
+        self.update_project_actions()
+
+        # Set by a "to all" answer, so the user is asked at most once per call
+        overwrite_all: bool | None = None
 
         for idx, (file_stem, audio_file, annotation_file) in enumerate(paired_files):
             if idx > 4:
@@ -444,6 +652,8 @@ class MainWindow(QMainWindow):
                 DocumentViewModel, file_stem, dir_path
             )
             doc_view_model.subscribe(self.on_doc_state_change)
+            doc_view_model.set_plots(self.view_model.display_plan)
+            self.apply_tier_display(doc_view_model)
             doc = DocumentView(doc_view_model)
             doc.origin_name = Path(audio_file).name
             doc.origin_path = audio_file
@@ -457,14 +667,39 @@ class MainWindow(QMainWindow):
             # Load the audio file
             doc.load_audio(audio_file, options)
 
-            if annotation_file is not None:
-                doc.load_textgrid(annotation_file)
+            if annotation_file is None:
+                continue
+
+            overwrite = False
+            if doc.view_model.has_annotation():
+                # The database already has an annotation for this file
+                if overwrite_all is None:
+                    answer = ask_overwrite_annotation(
+                        self, annotation_file, allow_all=True
+                    )
+                    if answer == QMessageBox.StandardButton.YesToAll:
+                        overwrite_all = True
+                    elif answer == QMessageBox.StandardButton.NoToAll:
+                        overwrite_all = False
+                    overwrite = answer in (
+                        QMessageBox.StandardButton.Yes,
+                        QMessageBox.StandardButton.YesToAll,
+                    )
+                else:
+                    overwrite = overwrite_all
+                if not overwrite:
+                    continue
+
+            doc.load_textgrid(annotation_file, overwrite)
 
     def _open_clip_tab(self, source_doc: DocumentView, clip: AudioState):
         """Open a new tab containing the just-copied/cut samples, without
         stealing focus from source_doc"""
         doc_view_model = self.view_model_factory.create(DocumentViewModel)
         doc_view_model.subscribe(self.on_doc_state_change)
+        doc_view_model.set_plots(self.view_model.display_plan)
+        self.apply_tier_display(doc_view_model)
+        doc_view_model.set_shown(False)  # opened behind the source document
         doc = DocumentView(doc_view_model)
 
         # Always name after the ORIGINAL source file
@@ -487,7 +722,19 @@ class MainWindow(QMainWindow):
     def on_tab_changed(self, index: int):
         doc = self.get_current_document()
 
+        self.add_tiers_action.setEnabled(doc is not None)
+        self.arrange_tiers_action.setEnabled(doc is not None)
+        self.choose_fonts_action.setEnabled(doc is not None)
+
+        # Only the tab on screen computes its spectrogram, a hidden one waits
+        for tab_index in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(tab_index)
+            if isinstance(tab, DocumentView):
+                tab.view_model.set_shown(tab is doc)
+
         if doc is not None:
+            # Every document shows the plots the user last chose
+            doc.view_model.set_plots(self.view_model.display_plan)
             self.sgramview_action.setEnabled(
                 doc.view_model.spectrogram_view_model.prepped_audio_state is not None
             )
@@ -511,10 +758,103 @@ class MainWindow(QMainWindow):
                 self.tr("Could not save the file:\n{}").format(err),
             )
 
+    @pyqtSlot()
+    def add_tiers(self):
+        doc = self.get_current_document()
+        if doc is None:
+            return
+
+        # So the new tiers can be seen
+        if not doc.view_model.plot_layout_state.has_annotation():
+            self.plot_annotations()
+        tiers_before = doc.view_model.tier_names()
+        doc.open_add_tiers()
+
+        # Tiers the user just added are meant to be seen
+        added = [
+            name for name in doc.view_model.tier_names() if name not in tiers_before
+        ]
+        hidden_tiers = self.view_model.hidden_tiers
+        if any(name in hidden_tiers for name in added):
+            self.set_tier_display(
+                [name for name in hidden_tiers if name not in added],
+                self.view_model.tier_order,
+            )
+
+    @pyqtSlot()
+    def arrange_tiers(self):
+        """Ask which tiers to show and in what order, for every document: the tiers
+        belong to the project, not to a file"""
+        doc = self.get_current_document()
+        if doc is None:
+            return
+
+        tiers = TierDisplayDialog.get_tiers(doc.view_model.tier_display(), self)
+        if tiers is None:
+            return
+
+        self.set_tier_display(*hidden_and_order_from(tiers))
+
+        # So the tiers can be seen
+        if not doc.view_model.plot_layout_state.has_annotation():
+            self.plot_annotations()
+
+    def set_tier_display(self, hidden_tiers: list[str], tier_order: list[str]):
+        """Show the tiers this way in every document, and in those opened later"""
+        self.view_model.set_tier_display(hidden_tiers, tier_order)
+        self.apply_to_documents(self.apply_tier_display)
+
+    def apply_to_documents(self, apply: Callable[[DocumentViewModel], None]):
+        for index in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(index)
+            if isinstance(tab, DocumentView):
+                apply(tab.view_model)
+
+    @pyqtSlot()
+    def choose_fonts(self):
+        """Ask for the font of the labels of each tier, for every document: the tiers
+        belong to the project, not to a file"""
+        doc = self.get_current_document()
+        if doc is None:
+            return
+
+        names = [tier.name for tier in listed_as_plotted(doc.view_model.tier_display())]
+        fonts = TierFontDialog.get_fonts(names, self.view_model.tier_fonts, self)
+        if fonts is None:
+            return
+
+        self.view_model.set_tier_fonts(fonts)
+        self.apply_to_documents(self.apply_tier_display)
+
+        # So the labels can be seen
+        if not doc.view_model.plot_layout_state.has_annotation():
+            self.plot_annotations()
+
+    def apply_tier_display(self, doc_view_model: DocumentViewModel):
+        """Make a document show the tiers the way every document does"""
+        doc_view_model.set_tier_display(
+            self.view_model.hidden_tiers, self.view_model.tier_order
+        )
+        doc_view_model.set_tier_fonts(self.view_model.tier_fonts)
+
     def save_textgrid(self):
         doc = self.get_current_document()
         if doc:
             doc.open_save_textgrid()
+
+    def save_window_layout(self):
+        try:
+            self.view_model.save_window_layout()
+        except (OSError, ValueError) as err:
+            QMessageBox.critical(
+                self,
+                self.tr("Save Window Layout"),
+                self.tr("Could not save the window layout:\n{}").format(err),
+            )
+            return
+        status_bar = self.statusBar()
+        if status_bar is not None:
+            status_bar.showMessage(self.tr("Window layout saved to project"), 3000)
 
     def show_audio_info(self):
         doc = self.get_current_document()
@@ -539,16 +879,19 @@ class MainWindow(QMainWindow):
         doc = self.get_current_document()
         if doc:
             doc.toggle_wave()
+            self.view_model.set_display_plan(doc.view_model.plot_layout_state.plots)
 
     def plot_wave_sgram(self):
         doc = self.get_current_document()
         if doc:
             doc.toggle_spectrogram()
+            self.view_model.set_display_plan(doc.view_model.plot_layout_state.plots)
 
     def plot_annotations(self):
         doc = self.get_current_document()
         if doc:
             doc.toggle_annotations()
+            self.view_model.set_display_plan(doc.view_model.plot_layout_state.plots)
 
     def show_all(self):
         doc = self.get_current_document()

@@ -1,8 +1,10 @@
 from typing import cast
 
+from core.annotation.add_tiers import AddTiers
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.replace_in_tier import ReplaceInTier
 from core.annotation.repository.annotation_repository import AnnotationRepository
@@ -13,10 +15,17 @@ from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
+from core.project.add_project_files import AddProjectFiles
+from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
+from core.settings.load_display_plan import LoadDisplayPlan
+from core.settings.load_tier_layout import LoadTierLayout
+from core.settings.save_display_plan import SaveDisplayPlan
+from core.settings.save_tier_layout import SaveTierLayout
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 
@@ -31,6 +40,7 @@ class UseCaseFactory:
         self.filter_audio = FilterAudio()
         self.save_audio = SaveAudio()
         self.track_formants = TrackFormants()
+        self.warm_up_formants = WarmUpFormantTracking()
         self.compute_sgram = ComputeSpectrogram()
         self.compute_sgram_mmap = ComputeSpectrogramMmap()
         self.clear_interval = ClearInterval(self.annotation_repository)
@@ -42,7 +52,19 @@ class UseCaseFactory:
         self.delete_node = DeleteNode(self.annotation_repository)
         self.load_annotation = LoadAnnotation(self.annotation_repository)
         self.parse_textgrid = ParseTextGrid(self.annotation_repository)
+        self.add_tiers = AddTiers(self.annotation_repository)
+        self.list_tier_names = ListTierNames(self.annotation_repository)
         self.write_textgrid = WriteTextGrid()
+        self.load_display_plan = LoadDisplayPlan()
+        self.save_display_plan = SaveDisplayPlan()
+        self.load_tier_layout = LoadTierLayout()
+        self.save_tier_layout = SaveTierLayout()
+        self.add_project_files = AddProjectFiles(
+            self.annotation_repository, self.parse_textgrid
+        )
+        self.rebuild_project = RebuildProject(
+            self.annotation_repository, self.add_project_files
+        )
 
     def provide[T](
         self,
@@ -61,6 +83,8 @@ class UseCaseFactory:
             use_case = self.save_audio
         if use_case_type is TrackFormants:
             use_case = self.track_formants
+        if use_case_type is WarmUpFormantTracking:
+            use_case = self.warm_up_formants
         if use_case_type is ComputeSpectrogram:
             use_case = self.compute_sgram
         if use_case_type is ComputeSpectrogramMmap:
@@ -81,10 +105,27 @@ class UseCaseFactory:
             use_case = self.delete_node
         if use_case_type is LoadAnnotation:
             use_case = self.load_annotation
+        if use_case_type is AddProjectFiles:
+            use_case = self.add_project_files
+        if use_case_type is RebuildProject:
+            use_case = self.rebuild_project
+        if use_case_type is AddTiers:
+            use_case = self.add_tiers
+        if use_case_type is ListTierNames:
+            use_case = self.list_tier_names
         if use_case_type is ParseTextGrid:
             use_case = self.parse_textgrid
         if use_case_type is WriteTextGrid:
             use_case = self.write_textgrid
+
+        if use_case_type is LoadDisplayPlan:
+            use_case = self.load_display_plan
+        if use_case_type is SaveDisplayPlan:
+            use_case = self.save_display_plan
+        if use_case_type is LoadTierLayout:
+            use_case = self.load_tier_layout
+        if use_case_type is SaveTierLayout:
+            use_case = self.save_tier_layout
 
         if use_case is None:
             raise TypeError(f"No provider method for {use_case_type!s} found")

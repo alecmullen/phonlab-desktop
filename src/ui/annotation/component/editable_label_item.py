@@ -7,18 +7,19 @@ from PyQt6.QtGui import (
     QFont,
     QFontMetrics,
     QKeyEvent,
-    QMouseEvent,
     QTextCursor,
     QTextOption,
 )
 
-from res.constants import POINT_LABEL_WIDTH
+from res.constants import LABEL_FONT_SIZE, POINT_LABEL_WIDTH
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 
 
 class EditableLabelItem(pg.TextItem):
     """
-    A custom pyqtgraph TextItem that becomes editable on a double-click.
+    A pyqtgraph TextItem for a label's text. The annotation plot calls setEditable
+    when the label is clicked. It does not react to mouse clicks itself, so right
+    clicks reach the plot's context menu.
     """
 
     def __init__(
@@ -39,7 +40,7 @@ class EditableLabelItem(pg.TextItem):
 
         text = " ".join(label.label.splitlines())
 
-        font = QFont("Arial", 16)
+        font = QFont(label.font, LABEL_FONT_SIZE)
         metrics = QFontMetrics(font)
         num_lines = int(label_height / (metrics.lineSpacing() * 1.5))
         clipped_text = metrics.elidedText(
@@ -62,27 +63,7 @@ class EditableLabelItem(pg.TextItem):
 
         self.on_edit = on_edit
 
-        self.right_mouse_pressed: bool = False
         self.text_at_edit_start: str | None = None
-
-    def mousePressEvent(self, a0: QMouseEvent | None):
-        if a0 is None:
-            return
-        if a0.button() == Qt.MouseButton.RightButton:
-            self.right_mouse_pressed = True
-            a0.accept()
-        else:
-            a0.ignore()
-
-    def mouseReleaseEvent(self, a0: QMouseEvent | None):
-        if a0 is None:
-            return
-        if a0.button() == Qt.MouseButton.RightButton and self.right_mouse_pressed:
-            self.setEditable(True)
-            a0.accept()
-            self.right_mouse_pressed = False
-        else:
-            a0.ignore()
 
     def setEditable(self, editable: bool):
         if editable:

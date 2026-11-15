@@ -1,9 +1,11 @@
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationType,
 )
+from res.constants import LABEL_FONT_FAMILY
 from ui.annotation.state.annotation_label_state import (
     AnnotationLabelState,
     to_label,
@@ -73,14 +75,43 @@ def to_annotation_state(annotation: Annotation) -> AnnotationState:
     )
 
 
+def tier_order_key(tier_order: Collection[str]) -> Callable[[str], int]:
+    """Sorts tier names by `tier_order`, with those it does not name after"""
+    rank = {name: idx for idx, name in enumerate(tier_order)}
+    return lambda name: rank.get(name, len(rank))
+
+
+def displayed_types(
+    types: list[AnnotationTypeState],
+    hidden_tiers: Collection[str] = (),
+    tier_order: Collection[str] = (),
+) -> list[AnnotationTypeState]:
+    """The types to show, top to bottom: those not named in `hidden_tiers`, ordered by
+    `tier_order`. Types it does not name come after, in their own order"""
+    order_key = tier_order_key(tier_order)
+    shown = [type for type in types if type.type not in hidden_tiers]
+    return sorted(shown, key=lambda type: order_key(type.type))
+
+
 def update_annotation_state_from_window(
-    annotation: AnnotationState, start: float, end: float
+    annotation: AnnotationState,
+    start: float,
+    end: float,
+    hidden_tiers: Collection[str] = (),
+    tier_order: Collection[str] = (),
+    tier_fonts: Mapping[str, str] | None = None,
 ) -> AnnotationState:
+    """Builds the state to display for the window. Types named in `hidden_tiers`
+    are left out and the others are in the order of `tier_order`, so tier indices
+    are rows of the plot. The labels of a type are in its font in `tier_fonts`."""
 
     types = []
     node_extents: dict[int, set[AnnotationNodeExtentState]] = {}
 
-    for tier, type in enumerate(annotation.types):
+    for tier, type in enumerate(
+        displayed_types(annotation.types, hidden_tiers, tier_order)
+    ):
+        font = (tier_fonts or {}).get(type.type, LABEL_FONT_FAMILY)
         labels = []
         for label in type.labels:
             label_state = update_label_state(
@@ -90,6 +121,7 @@ def update_annotation_state_from_window(
                 annotation.nodes[label.s_node].x,
                 annotation.nodes[label.e_node].x,
                 tier,
+                font,
             )
 
             if label_state.is_visible:
