@@ -44,6 +44,7 @@ class AnnotationViewModel(ViewModel):
         super().__init__()
 
         self.file_stem = filestem
+        self.load_annotation_use_case = load_annotation
 
         self.annotation_state = AnnotationState()
         self.loading_state = LoadProgressState()
@@ -144,6 +145,15 @@ class AnnotationViewModel(ViewModel):
             on_success,
             on_error,
         )
+
+    def reload_annotation(self):
+        """Re-reads the annotation from the repository, for when its labels were
+        changed from outside this view model"""
+        if self.file_stem is None:
+            return
+        annotation = self.load_annotation_use_case(self.file_stem)
+        if annotation is not None:
+            self.set_annotation_state(annotation)
 
     def trigger_tier_search(self, tier_idx: int):
         if self.file_stem is None or not 0 <= tier_idx < len(

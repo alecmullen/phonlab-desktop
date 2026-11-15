@@ -531,3 +531,21 @@ def test_trigger_tier_search_without_file_stem_shows_message(qtbot: QtBot):
         view_model.trigger_tier_search(0)
 
     assert isinstance(blocker.args[0], StatusMessageState)
+
+
+def test_reload_annotation_picks_up_changes_made_to_repository(qtbot: QtBot):
+    view_model, repository = make_seeded_view_model()
+    label = repository.types[0][0].labels[0]
+    repository.update_label(replace(label, label="dog"))
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000):
+        view_model.reload_annotation()
+
+    assert view_model.annotation_state.types[0].labels[0].label == "dog"
+
+
+def test_reload_annotation_without_file_stem_does_nothing(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+
+    with qtbot.assertNotEmitted(view_model.state_changed):
+        view_model.reload_annotation()

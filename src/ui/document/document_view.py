@@ -209,6 +209,7 @@ class DocumentView(QWidget):
         if isinstance(model, AudioLoaded):
             self.reset_slider(model.fs)
             self.update_plot_layout(self.view_model.plot_layout_state)
+            self.view_model.reveal_pending_span()
         elif isinstance(model, SelectState):
             self.update_selection_box(model)
         elif isinstance(model, DocumentWindowState):

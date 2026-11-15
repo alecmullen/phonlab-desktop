@@ -14,6 +14,13 @@ from PyQt6.QtWidgets import (
 )
 
 from core.settings.app_settings import settings
+from ui.annotation.component.tier_search_dialog import TierSearchDialog
+from ui.annotation.state.tier_search_state import (
+    TierLabelsChangedState,
+    TierSearchAction,
+    TierSearchMatchState,
+)
+from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.document.document_view import DocumentView
@@ -38,6 +45,8 @@ class MainWindow(QMainWindow):
         self.splash = None
         self.clipboard: AudioState | None = None
         self.clip_counters: dict[str, int] = {}
+        self.tier_search_dialog: TierSearchDialog | None = None
+        self.tier_search_dir_path: str | None = None
 
         # Create tab widget
         self.tab_widget = QTabWidget()
@@ -255,6 +264,72 @@ class MainWindow(QMainWindow):
     def on_doc_state_change(self, state: State):
         if isinstance(state, AudioPrepped):
             self.sgramview_action.setEnabled(True)
+        elif isinstance(state, TierSearchAction):
+            self.open_tier_search(state)
+
+    def open_tier_search(self, action: TierSearchAction):
+        """Show the search window for the tier, which stays open as the user moves
+        between files, so it belongs to the window rather than to any one document"""
+        dir_path = self.view_model.dir_path
+        if self.tier_search_dialog is None or self.tier_search_dir_path != dir_path:
+            if self.tier_search_dialog is not None:
+                self.tier_search_dialog.close()
+            view_model = self.view_model_factory.create(TierSearchViewModel, dir_path)
+            view_model.subscribe(self.on_tier_search_state_change)
+            self.tier_search_dialog = TierSearchDialog(view_model, self)
+            self.tier_search_dir_path = dir_path
+
+        self.tier_search_dialog.view_model.set_target(
+            action.tier_name, action.file_stem, action.start
+        )
+        self.tier_search_dialog.show_and_focus()
+
+    @pyqtSlot(object)
+    def on_tier_search_state_change(self, state: State):
+        if isinstance(state, TierSearchMatchState):
+            self.show_tier_match(state)
+        elif isinstance(state, TierLabelsChangedState):
+            for doc in self.documents():
+                if doc.view_model.file_stem in state.file_stems:
+                    doc.view_model.reload_annotation()
+
+    def documents(self) -> list[DocumentView]:
+        widgets = (self.tab_widget.widget(i) for i in range(self.tab_widget.count()))
+        return [widget for widget in widgets if isinstance(widget, DocumentView)]
+
+    def show_tier_match(self, match: TierSearchMatchState):
+        """Bring the matching label into view, opening its file if it isn't open"""
+        doc = self.find_document(match.file_stem)
+        if doc is None:
+            doc = self.open_project_document(match.file_stem)
+        if doc is None:
+            return
+
+        self.tab_widget.setCurrentWidget(doc)
+        doc.view_model.reveal_span(match.start, match.end)
+
+    def find_document(self, file_stem: str) -> DocumentView | None:
+        return next(
+            (doc for doc in self.documents() if doc.view_model.file_stem == file_stem),
+            None,
+        )
+
+    def open_project_document(self, file_stem: str) -> DocumentView | None:
+        dir_path = self.view_model.dir_path
+        audio_file = Path(dir_path or "") / f"{file_stem}.wav"
+        if dir_path is None or not audio_file.exists():
+            QMessageBox.information(
+                self,
+                self.tr("Search in Tier"),
+                self.tr("Cannot open the audio file for this match: {}").format(
+                    audio_file
+                ),
+            )
+            return None
+
+        # The annotation is already in the project database, so no TextGrid is given
+        self.open_files([(file_stem, str(audio_file), None)], dir_path)
+        return self.find_document(file_stem)
 
     @pyqtSlot()
     def select_project_to_open(self):
