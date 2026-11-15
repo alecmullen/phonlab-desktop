@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import (
 
 from core.project.scan_project_files import is_audio_file, is_textgrid_file
 from core.settings.app_settings import settings
+from ui.annotation.component.tier_display_dialog import TierDisplayDialog
+from ui.annotation.state.tier_display_state import hidden_and_order_from
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
@@ -249,11 +251,19 @@ class MainWindow(QMainWindow):
         self.add_tiers_action.setEnabled(False)
         self.add_tiers_action.triggered.connect(self.add_tiers)
 
+        self.arrange_tiers_action = QAction(self.tr("&Show and Order Tiers…"), self)
+        self.arrange_tiers_action.setStatusTip(
+            self.tr("Choose which annotation tiers are shown and in what order")
+        )
+        self.arrange_tiers_action.setEnabled(False)
+        self.arrange_tiers_action.triggered.connect(self.arrange_tiers)
+
         # Annotation Menu
         if settings.enable_annotation and mainMenu is not None:
             annotationMenu = mainMenu.addMenu(self.tr("&Annotation"))
             if annotationMenu is not None:
                 annotationMenu.addAction(self.add_tiers_action)
+                annotationMenu.addAction(self.arrange_tiers_action)
 
         # View Menu
         if mainMenu is not None:
@@ -555,6 +565,7 @@ class MainWindow(QMainWindow):
             )
             doc_view_model.subscribe(self.on_doc_state_change)
             doc_view_model.set_plots(self.view_model.display_plan)
+            self.apply_tier_display(doc_view_model)
             doc = DocumentView(doc_view_model)
             doc.origin_name = Path(audio_file).name
             doc.origin_path = audio_file
@@ -599,6 +610,7 @@ class MainWindow(QMainWindow):
         doc_view_model = self.view_model_factory.create(DocumentViewModel)
         doc_view_model.subscribe(self.on_doc_state_change)
         doc_view_model.set_plots(self.view_model.display_plan)
+        self.apply_tier_display(doc_view_model)
         doc_view_model.set_shown(False)  # opened behind the source document
         doc = DocumentView(doc_view_model)
 
@@ -623,6 +635,7 @@ class MainWindow(QMainWindow):
         doc = self.get_current_document()
 
         self.add_tiers_action.setEnabled(doc is not None)
+        self.arrange_tiers_action.setEnabled(doc is not None)
 
         # Only the tab on screen computes its spectrogram, a hidden one waits
         for tab_index in range(self.tab_widget.count()):
@@ -665,7 +678,51 @@ class MainWindow(QMainWindow):
         # So the new tiers can be seen
         if not doc.view_model.plot_layout_state.has_annotation():
             self.plot_annotations()
+        tiers_before = doc.view_model.tier_names()
         doc.open_add_tiers()
+
+        # Tiers the user just added are meant to be seen
+        added = [
+            name for name in doc.view_model.tier_names() if name not in tiers_before
+        ]
+        hidden_tiers = self.view_model.hidden_tiers
+        if any(name in hidden_tiers for name in added):
+            self.set_tier_display(
+                [name for name in hidden_tiers if name not in added],
+                self.view_model.tier_order,
+            )
+
+    @pyqtSlot()
+    def arrange_tiers(self):
+        """Ask which tiers to show and in what order, for every document: the tiers
+        belong to the project, not to a file"""
+        doc = self.get_current_document()
+        if doc is None:
+            return
+
+        tiers = TierDisplayDialog.get_tiers(doc.view_model.tier_display(), self)
+        if tiers is None:
+            return
+
+        self.set_tier_display(*hidden_and_order_from(tiers))
+
+        # So the tiers can be seen
+        if not doc.view_model.plot_layout_state.has_annotation():
+            self.plot_annotations()
+
+    def set_tier_display(self, hidden_tiers: list[str], tier_order: list[str]):
+        """Show the tiers this way in every document, and in those opened later"""
+        self.view_model.set_tier_display(hidden_tiers, tier_order)
+        for index in range(self.tab_widget.count()):
+            tab = self.tab_widget.widget(index)
+            if isinstance(tab, DocumentView):
+                self.apply_tier_display(tab.view_model)
+
+    def apply_tier_display(self, doc_view_model: DocumentViewModel):
+        """Make a document show the tiers the way every document does"""
+        doc_view_model.set_tier_display(
+            self.view_model.hidden_tiers, self.view_model.tier_order
+        )
 
     def save_textgrid(self):
         doc = self.get_current_document()

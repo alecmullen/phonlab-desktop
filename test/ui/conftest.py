@@ -13,6 +13,8 @@ from ui.document.document_view_model import DocumentViewModel
 def reset_display_plan(monkeypatch: pytest.MonkeyPatch):
     """The display plan lives in process-wide settings; start each test fresh"""
     monkeypatch.setattr(settings, "display_plan", ["waveform"])
+    monkeypatch.setattr(settings, "hidden_tiers", [])
+    monkeypatch.setattr(settings, "tier_order", [])
 
 
 @pytest.fixture

@@ -45,6 +45,23 @@ class MainViewModel(ViewModel):
         """The plots every document shows: whichever the user last chose"""
         return plots_from_names(settings.display_plan)
 
+    @property
+    def hidden_tiers(self) -> list[str]:
+        """The names of the annotation tiers every document leaves out"""
+        return settings.hidden_tiers
+
+    @property
+    def tier_order(self) -> list[str]:
+        """The names of the annotation tiers in the order every document shows them,
+        bottom to top"""
+        return settings.tier_order
+
+    def set_tier_display(self, hidden_tiers: list[str], tier_order: list[str]):
+        """Hide the `hidden_tiers` and show the others in the order of `tier_order`
+        for the rest of the session"""
+        settings.hidden_tiers = hidden_tiers
+        settings.tier_order = tier_order
+
     def set_dir_path(self, dir_path: str | None):
         if dir_path == self.dir_path:
             return
