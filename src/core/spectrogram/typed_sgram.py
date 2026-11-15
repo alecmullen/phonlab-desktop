@@ -4,7 +4,11 @@ from phonlab.acoustic.sgram_ import _typed_sgram  # no public equivalent yet
 from phonlab.utils.prep_audio_ import DEFAULT_PEAK
 
 from core.spectrogram.entity.spectrogram_type import SpectrogramType
-from res.constants import CEPSTRAL_SEGMENT_SEC
+from res.constants import (
+    CEPSTRAL_SEGMENT_SEC,
+    SPECTROGRAM_CEPSTRAL_LIFT_SEC,
+    SPECTROGRAM_MULTITAPER_NW,
+)
 
 
 def compute_typed_sgram(
@@ -14,6 +18,8 @@ def compute_typed_sgram(
     window_size: float,
     step_size: float,
     order: int,
+    nw: float = SPECTROGRAM_MULTITAPER_NW,
+    lift: float = SPECTROGRAM_CEPSTRAL_LIFT_SEC,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """A spectrogram of `x`, as (times, frequency of each row, sxx), in decibels
     (the mel type is on a log scale of its own). The frequencies are in Hz, except
@@ -23,12 +29,15 @@ def compute_typed_sgram(
     `order` sets the FFT size, 2**order, so the number of frequency rows is the
     same for all the types but the mel one: it has 80 rows, evenly spaced on the
     mel scale from 80 to 7600 Hz, and a fixed 64 ms window, so `window_size`
-    does not apply to it."""
+    does not apply to it.
+
+    `nw` is the multitaper type's time-bandwidth product, and `lift` (seconds)
+    is how much the cepstral type smooths; the other types ignore them."""
     if sgram_type == SpectrogramType.FFT:
         return phon.compute_sgram(x, fs, window_size, step_size, order)
     if sgram_type == SpectrogramType.MULTITAPER:
         t, f, sxx, _, _ = _typed_sgram(
-            x, fs, sgram_type, window_size, step_size, order=order
+            x, fs, sgram_type, window_size, step_size, order=order, NW=nw
         )
         return t, f, sxx
     if sgram_type == SpectrogramType.LPC:
@@ -40,11 +49,16 @@ def compute_typed_sgram(
     if sgram_type == SpectrogramType.MEL:
         t, f, sxx, _, _ = _typed_sgram(x, fs, sgram_type, None, step_size)
         return t, f, sxx
-    return _cepstral_sgram(x, fs, window_size, step_size, order)
+    return _cepstral_sgram(x, fs, window_size, step_size, order, lift)
 
 
 def _cepstral_sgram(
-    x: np.ndarray, fs: int, window_size: float, step_size: float, order: int
+    x: np.ndarray,
+    fs: int,
+    window_size: float,
+    step_size: float,
+    order: int,
+    lift: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """The cepstrally smoothed spectrogram has a fixed 8192 frequency rows, which
     needs ~66 KB per frame: gigabytes for a long recording. So analyze a few
@@ -63,7 +77,12 @@ def _cepstral_sgram(
         end = min(start + segment, len(x))
         first = max(start - pad, 0)
         t, f, sxx, _, _ = _typed_sgram(
-            x[first : end + pad], fs, SpectrogramType.CEPSTRAL, window_size, step_size
+            x[first : end + pad],
+            fs,
+            SpectrogramType.CEPSTRAL,
+            window_size,
+            step_size,
+            lift=lift,
         )
         frame = first // step + np.arange(len(t))  # index on the whole file's grid
         keep = frame >= start // step

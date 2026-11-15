@@ -71,6 +71,8 @@ def test_invoke_passes_the_spectrogram_type_on(monkeypatch: pytest.MonkeyPatch):
         window_size: float,
         step_size: float,
         order: int,
+        nw: float,
+        lift: float,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         types.append(sgram_type)
         return np.zeros(1), np.zeros(1), np.zeros((1, 1))
@@ -83,3 +85,29 @@ def test_invoke_passes_the_spectrogram_type_on(monkeypatch: pytest.MonkeyPatch):
     ComputeSpectrogram().run_sync(np.zeros(4), 1000)
 
     assert types == [SpectrogramType.LPC, SpectrogramType.FFT]
+
+
+def test_invoke_passes_nw_and_lift_on(monkeypatch: pytest.MonkeyPatch):
+    params = []
+
+    def fake_compute_typed_sgram(
+        x: np.ndarray,
+        fs: int,
+        sgram_type: SpectrogramType,
+        window_size: float,
+        step_size: float,
+        order: int,
+        nw: float,
+        lift: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        params.append((nw, lift))
+        return np.zeros(1), np.zeros(1), np.zeros((1, 1))
+
+    monkeypatch.setattr(
+        compute_sgram_module, "compute_typed_sgram", fake_compute_typed_sgram
+    )
+
+    ComputeSpectrogram().run_sync(np.zeros(4), 1000, nw=4.5, lift=0.005)
+    ComputeSpectrogram().run_sync(np.zeros(4), 1000)
+
+    assert params == [(4.5, 0.005), (3.0, 0.003)]
