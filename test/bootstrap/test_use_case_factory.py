@@ -5,9 +5,11 @@ from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.replace_in_tier import ReplaceInTier
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
+from core.annotation.search_tier import SearchTier
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
@@ -36,6 +38,8 @@ USE_CASE_TYPES = [
     DeleteNode,
     LoadAnnotation,
     ParseTextGrid,
+    SearchTier,
+    ReplaceInTier,
 ]
 
 

@@ -1,7 +1,7 @@
 import time
 
-from sqlalchemy import delete, exists, or_, select
-from sqlalchemy.orm import selectinload
+from sqlalchemy import Row, delete, exists, or_, select
+from sqlalchemy.orm import aliased, selectinload
 
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_label import AnnotationLabelEntity
@@ -26,6 +26,42 @@ class AnnotationDataSource(DataSource):
             annotation = session.scalar(stmt)
 
         return annotation
+
+    def find_labels_by_tier_name(
+        self, tier_name: str, file_stem: str | None = None
+    ) -> list[Row]:
+        """Rows of (file_stem, tier name, label id, label text, start node id,
+        end node id, start time, end time) for every label on tiers with this name"""
+        start_node = aliased(AnnotationNodeEntity)
+        end_node = aliased(AnnotationNodeEntity)
+        stmt = (
+            select(
+                AnnotationEntity.file_stem,
+                AnnotationTypeEntity.name,
+                AnnotationLabelEntity.id,
+                AnnotationLabelEntity.label_text,
+                AnnotationLabelEntity.start_node_id,
+                AnnotationLabelEntity.end_node_id,
+                start_node.time,
+                end_node.time,
+            )
+            .join(
+                AnnotationTypeEntity,
+                AnnotationTypeEntity.annotation_id == AnnotationEntity.id,
+            )
+            .join(
+                AnnotationLabelEntity,
+                AnnotationLabelEntity.annotation_type_id == AnnotationTypeEntity.id,
+            )
+            .join(start_node, start_node.id == AnnotationLabelEntity.start_node_id)
+            .join(end_node, end_node.id == AnnotationLabelEntity.end_node_id)
+            .where(AnnotationTypeEntity.name == tier_name)
+        )
+        if file_stem is not None:
+            stmt = stmt.where(AnnotationEntity.file_stem == file_stem)
+
+        with self.database.open_session() as session:
+            return list(session.execute(stmt).all())
 
     def get_annotation_by_id(self, id: int) -> AnnotationEntity:
         with self.database.open_session() as session:

@@ -4,7 +4,9 @@ from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.replace_in_tier import ReplaceInTier
 from core.annotation.repository.annotation_repository import AnnotationRepository
+from core.annotation.search_tier import SearchTier
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
@@ -34,6 +36,8 @@ class UseCaseFactory:
         self.clear_interval = ClearInterval(self.annotation_repository)
         self.create_label = CreateLabel(self.clear_interval, self.annotation_repository)
         self.update_label = UpdateLabel(self.annotation_repository)
+        self.search_tier = SearchTier(self.annotation_repository)
+        self.replace_in_tier = ReplaceInTier(self.update_label)
         self.update_node = UpdateNode(self.annotation_repository)
         self.delete_node = DeleteNode(self.annotation_repository)
         self.load_annotation = LoadAnnotation(self.annotation_repository)
@@ -67,6 +71,10 @@ class UseCaseFactory:
             use_case = self.create_label
         if use_case_type is UpdateLabel:
             use_case = self.update_label
+        if use_case_type is SearchTier:
+            use_case = self.search_tier
+        if use_case_type is ReplaceInTier:
+            use_case = self.replace_in_tier
         if use_case_type is UpdateNode:
             use_case = self.update_node
         if use_case_type is DeleteNode:

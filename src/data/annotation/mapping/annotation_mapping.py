@@ -1,8 +1,11 @@
+from sqlalchemy import Row
+
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
 )
+from core.annotation.entity.tier_label import TierLabel
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_label import AnnotationLabelEntity
 from data.annotation.entity.annotation_type import AnnotationTypeEntity
@@ -44,3 +47,10 @@ def label_to_entity(label: AnnotationLabel) -> AnnotationLabelEntity:
     if label.id is not None:
         entity.id = label.id
     return entity
+
+
+def row_to_tier_label(row: Row) -> TierLabel:
+    file_stem, tier_name, id, text, s_node, e_node, start, end = row
+    return TierLabel(
+        file_stem, tier_name, AnnotationLabel(s_node, e_node, text, id), start, end
+    )

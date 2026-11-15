@@ -3,6 +3,7 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
+from core.annotation.entity.tier_label import TierLabel
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.entity.annotation import AnnotationEntity
@@ -11,6 +12,7 @@ from data.annotation.mapping.annotation_mapping import (
     entity_to_annotation,
     entity_to_label,
     label_to_entity,
+    row_to_tier_label,
     type_to_entity,
 )
 
@@ -98,3 +100,9 @@ class DataAnnotationRepository(AnnotationRepository):
     def delete_label(self, label: AnnotationLabel):
         entity = label_to_entity(label)
         self.local_datasource.delete_label(entity)
+
+    def find_labels_by_tier_name(
+        self, tier_name: str, file_stem: str | None = None
+    ) -> list[TierLabel]:
+        rows = self.local_datasource.find_labels_by_tier_name(tier_name, file_stem)
+        return [row_to_tier_label(row) for row in rows]

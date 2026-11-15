@@ -6,6 +6,7 @@ from core.annotation.entity.annotation import (
     AnnotationType,
     get_matching_node,
 )
+from core.annotation.entity.tier_label import TierLabel
 from core.annotation.repository.annotation_repository import AnnotationRepository
 
 
@@ -159,3 +160,26 @@ class InMemAnnotationRepository(AnnotationRepository):
                         type, labels=[l for l in type.labels if l.id != label.id]
                     )
                     return
+
+    def find_labels_by_tier_name(
+        self, tier_name: str, file_stem: str | None = None
+    ) -> list[TierLabel]:
+        found = []
+        for annotation_id, stem in self.filenames.items():
+            if file_stem is not None and stem != file_stem:
+                continue
+            nodes = self.nodes[annotation_id]
+            for type in self.types[annotation_id]:
+                if type.type != tier_name:
+                    continue
+                for label in type.labels:
+                    found.append(
+                        TierLabel(
+                            stem,
+                            type.type,
+                            label,
+                            nodes[label.s_node],
+                            nodes[label.e_node],
+                        )
+                    )
+        return found

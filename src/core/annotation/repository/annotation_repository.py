@@ -5,6 +5,7 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
+from core.annotation.entity.tier_label import TierLabel
 
 
 class AnnotationRepository(Protocol):
@@ -24,3 +25,6 @@ class AnnotationRepository(Protocol):
     def delete_label(self, label: AnnotationLabel): ...
     def create_label(self, label: AnnotationLabel, type_id: int) -> AnnotationLabel: ...
     def update_label(self, label: AnnotationLabel): ...
+    def find_labels_by_tier_name(
+        self, tier_name: str, file_stem: str | None = None
+    ) -> list[TierLabel]: ...
