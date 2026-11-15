@@ -2,6 +2,7 @@ from dataclasses import replace
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -12,7 +13,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from res.constants import FORMANT_AUTO_ORDER, FORMANT_MAX_ORDER, FORMANT_MIN_ORDER
+from res.constants import (
+    FORMANT_AUTO_ORDER,
+    FORMANT_DOCS,
+    FORMANT_MAX_ORDER,
+    FORMANT_MIN_ORDER,
+    PHONLAB_DOCS_URL,
+)
 from ui.spectrogram.state.formant_settings import (
     FormantMethodState,
     FormantSettingsState,
@@ -44,6 +51,11 @@ class FormantSettingsDialog(QDialog):
         )
         self.form.addRow(self.tr("Method:"), self.method_combo)
 
+        self.docs_link = QLabel()
+        self.docs_link.setTextFormat(Qt.TextFormat.RichText)
+        self.docs_link.setOpenExternalLinks(True)
+        self.form.addRow(self.docs_link)
+
         self.preemphasis_spin = QDoubleSpinBox()
         self.preemphasis_spin.setRange(0.0, 1.0)
         self.preemphasis_spin.setSingleStep(0.01)
@@ -69,6 +81,11 @@ class FormantSettingsDialog(QDialog):
             if settings.order >= FORMANT_MIN_ORDER
             else FORMANT_MIN_ORDER - 1
         )
+        # room for "Automatic" and a little to spare
+        self.order_spin.setMinimumWidth(
+            self.order_spin.sizeHint().width()
+            + self.order_spin.fontMetrics().horizontalAdvance("  ")
+        )
         self.form.addRow(self.tr("LPC order:"), self.order_spin)
 
         self.top_frequency_spin = QSpinBox()
@@ -90,6 +107,29 @@ class FormantSettingsDialog(QDialog):
         self.delta_f_spin.setSuffix(self.tr(" Hz"))
         self.delta_f_spin.setValue(settings.delta_f)
         self.form.addRow(self.tr("Formant spacing:"), self.delta_f_spin)
+
+        self.step_spin = QDoubleSpinBox()
+        self.step_spin.setRange(1.0, 50.0)
+        self.step_spin.setDecimals(1)
+        self.step_spin.setSuffix(self.tr(" ms"))
+        self.step_spin.setValue(settings.step * 1000)
+        self.form.addRow(self.tr("Step:"), self.step_spin)
+
+        self.length_spin = QDoubleSpinBox()
+        self.length_spin.setRange(5.0, 200.0)
+        self.length_spin.setDecimals(1)
+        self.length_spin.setSuffix(self.tr(" ms"))
+        self.length_spin.setValue(settings.length * 1000)
+        self.form.addRow(self.tr("Window length:"), self.length_spin)
+
+        self.voiced_check = QCheckBox(self.tr("Voiced frames only"))
+        self.voiced_check.setToolTip(
+            self.tr(
+                "Use voice activity detection to drop formants from voiceless frames"
+            )
+        )
+        self.voiced_check.setChecked(settings.voiced_only)
+        self.form.addRow(self.voiced_check)
 
         self.slow_warning = QLabel(
             self.tr(
@@ -115,9 +155,10 @@ class FormantSettingsDialog(QDialog):
         return FormantMethodState(self.method_combo.currentData())
 
     def on_method_changed(self):
-        """Offer the new method's usual preemphasis"""
+        """Offer the new method's usual preemphasis and window length"""
         method_settings = FormantSettingsState().with_method(self.method())
         self.preemphasis_spin.setValue(method_settings.preemphasis)
+        self.length_spin.setValue(method_settings.length * 1000)
         self.limit_to_method()
 
     def limit_to_method(self):
@@ -129,8 +170,16 @@ class FormantSettingsDialog(QDialog):
             self.top_frequency_spin: method in (M.RLPC, M.TVLP),
             self.median_f0_spin: method == M.TVLP,
             self.delta_f_spin: method == M.DPPT,
+            self.step_spin: method != M.IFC,  # IFC measures every 10 ms
+            self.length_spin: method != M.IFC,
             self.slow_warning: method == M.TVLP,
         }
+        url = PHONLAB_DOCS_URL + FORMANT_DOCS[method.value]
+        self.docs_link.setText(
+            self.tr("Documentation: {}").format(
+                f'<a href="{url}">{self.method_combo.currentText()}</a>'
+            )
+        )
         for widget, visible in shown.items():
             self.form.setRowVisible(widget, visible)
         self.adjustSize()
@@ -150,6 +199,9 @@ class FormantSettingsDialog(QDialog):
                 top_frequency=dialog.top_frequency_spin.value(),
                 median_f0=dialog.median_f0_spin.value(),
                 delta_f=dialog.delta_f_spin.value(),
+                step=round(dialog.step_spin.value() / 1000, 6),
+                length=round(dialog.length_spin.value() / 1000, 6),
+                voiced_only=dialog.voiced_check.isChecked(),
             )
         return None
 

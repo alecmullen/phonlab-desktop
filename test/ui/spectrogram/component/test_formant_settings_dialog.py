@@ -21,6 +21,7 @@ def test_fields_are_initialized_from_defaults(qtbot: QtBot):
         dialog.method_combo.itemData(i) for i in range(dialog.method_combo.count())
     ]
     assert methods == ["ifc", "lpc", "rlpc", "tvlp", "dppt"]
+    assert not dialog.voiced_check.isChecked()
 
 
 def test_speaker_choices_map_to_ifc_speaker_values(qtbot: QtBot):
@@ -151,4 +152,70 @@ def test_open_formant_settings_returns_the_chosen_method_and_its_settings(
         order=14,
         top_frequency=8000,
         median_f0=120,
+        length=0.1,
     )
+
+
+def test_step_and_length_are_shown_in_ms_for_every_method_but_ifc(qtbot: QtBot):
+    for method in FormantMethodState:
+        dialog = FormantSettingsDialog(FormantSettingsState().with_method(method))
+        qtbot.addWidget(dialog)
+        visible = shown_step_and_length(dialog)
+        assert visible == (method != FormantMethodState.IFC)
+
+    dialog = FormantSettingsDialog(
+        FormantSettingsState(FormantMethodState.LPC, step=0.005, length=0.04)
+    )
+    qtbot.addWidget(dialog)
+    assert dialog.step_spin.value() == pytest.approx(5.0)
+    assert dialog.length_spin.value() == pytest.approx(40.0)
+
+
+def shown_step_and_length(dialog: FormantSettingsDialog) -> bool:
+    dialog.show()
+    assert dialog.step_spin.isVisible() == dialog.length_spin.isVisible()
+    return dialog.step_spin.isVisible()
+
+
+def test_changing_the_method_offers_its_usual_window_length(qtbot: QtBot):
+    dialog = FormantSettingsDialog(
+        FormantSettingsState().with_method(FormantMethodState.LPC)
+    )
+    qtbot.addWidget(dialog)
+    assert dialog.length_spin.value() == pytest.approx(30.0)
+
+    dialog.method_combo.setCurrentIndex(dialog.method_combo.findData("tvlp"))
+
+    assert dialog.length_spin.value() == pytest.approx(100.0)
+
+
+def test_open_formant_settings_returns_step_length_and_voiced_only(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    def fake_exec(self: FormantSettingsDialog) -> QDialog.DialogCode:
+        self.method_combo.setCurrentIndex(self.method_combo.findData("lpc"))
+        self.step_spin.setValue(2.5)
+        self.length_spin.setValue(25.0)
+        self.voiced_check.setChecked(True)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(FormantSettingsDialog, "exec", fake_exec)
+
+    result = FormantSettingsDialog.open_formant_settings(FormantSettingsState())
+
+    assert result is not None
+    assert (result.step, result.length, result.voiced_only) == (0.0025, 0.025, True)
+
+
+def test_a_link_points_to_the_chosen_methods_documentation(qtbot: QtBot):
+    dialog = FormantSettingsDialog(FormantSettingsState())
+    qtbot.addWidget(dialog)
+    assert dialog.docs_link.openExternalLinks()
+
+    for method in FormantMethodState:
+        dialog.method_combo.setCurrentIndex(dialog.method_combo.findData(method.value))
+
+        assert (
+            f'href="https://phonlab.readthedocs.io/en/latest/acoustphon.html'
+            f'#phonlab.{method.value.upper()}_formants"'
+        ) in dialog.docs_link.text()
