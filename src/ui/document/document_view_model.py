@@ -92,6 +92,9 @@ class DocumentViewModel(ViewModel):
         self.mark_state: MarkState = MarkState()
         self.audio_loaded_state: AudioLoaded = AudioLoaded()
 
+        # A span (s) to bring into view once audio finishes loading
+        self.pending_reveal: tuple[float, float] | None = None
+
         self.audio_options: AudioOpenOptionsState = AudioOpenOptionsState()
 
         self.undo_stack: list[EditCommandState] = []
@@ -602,6 +605,24 @@ class DocumentViewModel(ViewModel):
         self.update_document_window(document_window_state)
 
         self.remove_selection()
+
+    def reveal_span(self, start: float, end: float):
+        """Select the span (start and end in seconds) and center the window on it, with
+        the annotation plot showing. If the audio is still loading, waits for it"""
+        if self.primary_channel() is None:
+            self.pending_reveal = (start, end)
+            return
+
+        self.pending_reveal = None
+        if not self.plot_layout_state.has_annotation():
+            self.toggle_annotations()
+        self.start_selection(start)
+        self.continue_selection(end)
+        self.center_on_selection()
+
+    def reveal_pending_span(self):
+        if self.pending_reveal is not None:
+            self.reveal_span(*self.pending_reveal)
 
     def center_on_selection(self):
         """Center the window on the selection's midpoint, or on the mark when

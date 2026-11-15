@@ -126,6 +126,20 @@ def test_load_from_samples_builds_wave_plot_and_sets_up_slider(
 # --------------------------- state dispatch ---------------------------
 
 
+def test_span_revealed_while_audio_loads_is_shown_once_loaded(
+    view: DocumentView, document_view_model: DocumentViewModel
+):
+    document_view_model.reveal_span(5.0, 7.0)
+
+    document_view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
+    )
+
+    assert document_view_model.plot_layout_state.has_annotation()
+    assert document_view_model.select_state.sel_start == 5.0
+    assert any(isinstance(plot, AnnotationPlot) for plot in view.document_plots)
+
+
 def test_on_state_change_routes_each_state_type_to_its_handler(view: DocumentView):
     calls = []
     view.reset_slider = lambda fs: calls.append(("reset_slider", fs))

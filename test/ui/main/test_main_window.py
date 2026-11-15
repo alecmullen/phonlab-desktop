@@ -22,7 +22,13 @@ from core.settings.app_settings import settings
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.component.tier_font_dialog import TierFontDialog
+from ui.annotation.component.tier_search_dialog import TierSearchDialog
 from ui.annotation.state.tier_display_state import TierDisplayState
+from ui.annotation.state.tier_search_state import (
+    TierLabelsChangedState,
+    TierSearchAction,
+    TierSearchMatchState,
+)
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
@@ -1818,3 +1824,141 @@ def test_a_document_is_given_the_chosen_fonts_when_it_opens(main_window: MainWin
     main_window.apply_tier_display(doc_view_model)
 
     assert doc_view_model.annotation_view_model.tier_fonts == {"word": "Charis SIL"}
+
+
+# --------------------------- tier search ---------------------------
+
+
+def add_stemmed_document(main_window: MainWindow, file_stem: str) -> DocumentView:
+    vm = main_window.view_model_factory.create(DocumentViewModel, file_stem, None)
+    doc = DocumentView(vm)
+    main_window.tab_widget.addTab(doc, file_stem)
+    main_window.tab_widget.setCurrentIndex(main_window.tab_widget.count() - 1)
+    return doc
+
+
+def test_tier_search_action_opens_dialog_for_tier(main_window: MainWindow):
+    doc = add_stemmed_document(main_window, "a")
+
+    doc.view_model.state_changed.emit(TierSearchAction("word", "a", 1.5))
+    # The document does not know about the main window until opened through it
+    main_window.on_doc_state_change(TierSearchAction("word", "a", 1.5))
+
+    dialog = main_window.tier_search_dialog
+    assert dialog is not None
+    assert dialog.isVisible()
+    assert dialog.view_model.tier_name == "word"
+    assert dialog.view_model.file_stem == "a"
+    assert dialog.view_model.cursor[:2] == ("a", 1.5)
+
+
+def test_tier_search_reuses_dialog_and_retargets_it(main_window: MainWindow):
+    main_window.on_doc_state_change(TierSearchAction("word", "a"))
+    dialog = main_window.tier_search_dialog
+
+    main_window.on_doc_state_change(TierSearchAction("phone", "b"))
+
+    assert main_window.tier_search_dialog is dialog
+    assert dialog is not None
+    assert dialog.view_model.tier_name == "phone"
+    assert dialog.view_model.file_stem == "b"
+
+
+def test_tier_search_dialog_is_replaced_when_project_changes(main_window: MainWindow):
+    main_window.on_doc_state_change(TierSearchAction("word", "a"))
+    first = main_window.tier_search_dialog
+
+    main_window.view_model.set_dir_path("/project")
+    main_window.on_doc_state_change(TierSearchAction("word", "a"))
+
+    assert main_window.tier_search_dialog is not first
+    assert isinstance(main_window.tier_search_dialog, TierSearchDialog)
+    assert main_window.tier_search_dialog.view_model.is_project
+    assert first is not None
+    assert not first.isVisible()
+
+
+def test_match_in_open_document_switches_to_it_and_reveals_span(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    first = add_stemmed_document(main_window, "a")
+    add_stemmed_document(main_window, "b")
+    revealed = []
+    monkeypatch.setattr(first.view_model, "reveal_span", lambda *a: revealed.append(a))
+
+    main_window.show_tier_match(TierSearchMatchState("a", 1.0, 2.0))
+
+    assert main_window.get_current_document() is first
+    assert revealed == [(1.0, 2.0)]
+
+
+def test_match_in_unopened_file_opens_it_first(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "c.wav").write_bytes(b"")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    opened = []
+    revealed = []
+
+    def fake_open_files(files: list, dir_path: str | None):
+        opened.append((files, dir_path))
+        doc = add_stemmed_document(main_window, files[0][0])
+        monkeypatch.setattr(
+            doc.view_model, "reveal_span", lambda *a: revealed.append(a)
+        )
+
+    monkeypatch.setattr(main_window, "open_files", fake_open_files)
+
+    main_window.show_tier_match(TierSearchMatchState("sub/c", 3.0, 4.0))
+
+    assert opened == [
+        ([("sub/c", str(tmp_path / "sub" / "c.wav"), None)], str(tmp_path))
+    ]
+    assert revealed == [(3.0, 4.0)]
+
+
+def test_match_in_file_that_cannot_be_opened_shows_message(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda *args: messages.append(args[2])
+    )
+
+    main_window.show_tier_match(TierSearchMatchState("gone", 0.0, 1.0))
+
+    assert len(messages) == 1
+    assert main_window.tab_widget.count() == 0
+
+
+def test_match_in_closed_document_without_project_shows_message(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    messages = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda *args: messages.append(args[2])
+    )
+
+    main_window.show_tier_match(TierSearchMatchState("/tmp/closed", 0.0, 1.0))
+
+    assert len(messages) == 1
+
+
+def test_changed_labels_reload_only_documents_showing_those_files(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    changed = add_stemmed_document(main_window, "a")
+    untouched = add_stemmed_document(main_window, "b")
+    reloaded = []
+    monkeypatch.setattr(
+        changed.view_model, "reload_annotation", lambda: reloaded.append("a")
+    )
+    monkeypatch.setattr(
+        untouched.view_model, "reload_annotation", lambda: reloaded.append("b")
+    )
+
+    main_window.on_tier_search_state_change(TierLabelsChangedState(frozenset({"a"})))
+
+    assert reloaded == ["a"]
