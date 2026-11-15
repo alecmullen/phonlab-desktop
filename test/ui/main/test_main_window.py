@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QWidget
 from pytestqt.qtbot import QtBot
 from support.annotation_repository import SeedableAnnotationRepository
 from support.audio_player import FakeAudioPlayer
@@ -20,6 +20,8 @@ from core.load_audio.entity.audio_signal import AudioSignal
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
 from ui.annotation.annotation_plot import AnnotationPlot
+from ui.annotation.component.tier_display_dialog import TierDisplayDialog
+from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
@@ -1407,7 +1409,10 @@ def test_annotation_menu_offers_add_tiers(main_window: MainWindow):
         if action.text().replace("&", "") == "Annotation"
     )
 
-    assert menu.actions() == [main_window.add_tiers_action]
+    assert menu.actions() == [
+        main_window.add_tiers_action,
+        main_window.arrange_tiers_action,
+    ]
 
 
 def test_add_tiers_is_disabled_until_a_document_is_open(main_window: MainWindow):
@@ -1474,6 +1479,146 @@ def test_add_tiers_leaves_the_annotation_plot_alone_if_it_is_shown(
 
 def test_add_tiers_does_nothing_without_a_document(main_window: MainWindow):
     main_window.add_tiers()  # must not raise
+
+
+# --------------------------- show and order tiers ---------------------------
+
+
+def stub_tier_dialog(
+    monkeypatch: pytest.MonkeyPatch, chosen: list[TierDisplayState] | None
+) -> list[list[TierDisplayState]]:
+    offered: list[list[TierDisplayState]] = []
+
+    def get_tiers(
+        tiers: list[TierDisplayState], parent: QWidget | None = None
+    ) -> list[TierDisplayState] | None:
+        offered.append(tiers)
+        return chosen
+
+    monkeypatch.setattr(TierDisplayDialog, "get_tiers", get_tiers)
+    return offered
+
+
+def test_arrange_tiers_is_disabled_until_a_document_is_open(main_window: MainWindow):
+    assert not main_window.arrange_tiers_action.isEnabled()
+
+    add_document(main_window)
+
+    assert main_window.arrange_tiers_action.isEnabled()
+
+
+def test_arrange_tiers_is_disabled_again_when_the_last_document_closes(
+    main_window: MainWindow,
+):
+    add_document(main_window)
+
+    main_window.close_current_tab()
+
+    assert not main_window.arrange_tiers_action.isEnabled()
+
+
+def test_arrange_tiers_does_nothing_without_a_document(main_window: MainWindow):
+    main_window.arrange_tiers()  # must not raise
+
+
+def test_arrange_tiers_offers_the_current_documents_tier_display(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    tiers = [TierDisplayState("word", 1), TierDisplayState("phone")]
+    offered = stub_tier_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    monkeypatch.setattr(doc.view_model, "tier_display", lambda: tiers)
+
+    main_window.arrange_tiers_action.trigger()
+
+    assert offered == [tiers]
+
+
+def test_arrange_tiers_applies_the_choice_to_every_document(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(
+        monkeypatch,
+        [
+            TierDisplayState("word", 2),
+            TierDisplayState("phone"),
+            TierDisplayState("tone", 1),
+        ],
+    )
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+
+    main_window.arrange_tiers()
+
+    assert main_window.view_model.hidden_tiers == ["phone"]
+    assert main_window.view_model.tier_order == ["tone", "word"]
+    for doc in (first, second):
+        annotation_vm = doc.view_model.annotation_view_model
+        assert annotation_vm.hidden_tiers == ["phone"]
+        assert annotation_vm.tier_order == ["tone", "word"]
+
+
+def test_arrange_tiers_cancelled_changes_nothing(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    stub_tier_dialog(monkeypatch, None)
+    doc = add_document(main_window)
+    main_window.set_tier_display(["word"], ["phone"])
+
+    main_window.arrange_tiers()
+
+    assert main_window.view_model.hidden_tiers == ["word"]
+    assert main_window.view_model.tier_order == ["phone"]
+    assert doc.view_model.annotation_view_model.hidden_tiers == ["word"]
+
+
+def test_a_new_document_shows_the_tiers_the_same_way(main_window: MainWindow):
+    main_window.view_model.set_tier_display(["phone"], ["word"])
+    doc = add_document(main_window)
+
+    main_window.apply_tier_display(doc.view_model)
+
+    annotation_vm = doc.view_model.annotation_view_model
+    assert annotation_vm.hidden_tiers == ["phone"]
+    assert annotation_vm.tier_order == ["word"]
+
+
+def add_tier_when_adding_tiers(
+    doc: DocumentView, monkeypatch: pytest.MonkeyPatch, added: str
+):
+    names = ["word"]
+    monkeypatch.setattr(doc.view_model, "tier_names", lambda: list(names))
+    monkeypatch.setattr(
+        DocumentView, "open_add_tiers", lambda self: names.append(added)
+    )
+
+
+def test_add_tiers_shows_a_tier_just_added_that_was_hidden(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    main_window.set_tier_display(["tone", "phone"], ["word"])
+    add_tier_when_adding_tiers(doc, monkeypatch, "tone")
+
+    main_window.add_tiers()
+
+    assert main_window.view_model.hidden_tiers == ["phone"]
+    assert main_window.view_model.tier_order == ["word"]
+    assert doc.view_model.annotation_view_model.hidden_tiers == ["phone"]
+
+
+def test_add_tiers_leaves_hidden_tiers_alone_when_none_was_added_back(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    doc = add_document(main_window)
+    load_signal(doc, np.zeros(2000), fs=1000)
+    main_window.set_tier_display(["phone"], [])
+    add_tier_when_adding_tiers(doc, monkeypatch, "tone")
+
+    main_window.add_tiers()
+
+    assert main_window.view_model.hidden_tiers == ["phone"]
 
 
 # --------------------------- Ctrl+L with several documents open ---------------------------
