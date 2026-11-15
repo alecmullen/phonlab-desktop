@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Collection
 from dataclasses import replace
 
 from PyQt6.QtCore import pyqtSlot
@@ -29,6 +30,10 @@ from ui.annotation.state.annotation_state import (
     update_annotation_state_from_window,
 )
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.annotation.state.tier_display_state import (
+    TierDisplayState,
+    tier_display_from,
+)
 from ui.base.view_model import ViewModel
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.status_message_state import StatusMessageState
@@ -66,6 +71,10 @@ class AnnotationViewModel(ViewModel):
         self.window_state: tuple[float, float] = (0.0, 0.0)
 
         self.annotation_view_state = AnnotationState()
+
+        # Names of the tiers left out of the plot, and the order of the others
+        self.hidden_tiers: Collection[str] = ()
+        self.tier_order: Collection[str] = ()
 
         self.create_label_use_case = create_label
         self.update_label_use_case = update_label
@@ -111,9 +120,31 @@ class AnnotationViewModel(ViewModel):
     def update_annotation_change(self):
         """Will update view for any changes to annotation or window"""
         self.annotation_view_state = update_annotation_state_from_window(
-            self.annotation_state, *self.window_state
+            self.annotation_state,
+            *self.window_state,
+            self.hidden_tiers,
+            self.tier_order,
         )
         self.state_changed.emit(self.annotation_view_state)
+
+    def tier_names(self) -> list[str]:
+        """The names of the tiers of this document's annotation"""
+        return [type.type for type in self.annotation_state.types]
+
+    def tier_display(self) -> list[TierDisplayState]:
+        """Every tier name in the project database, and where it is shown"""
+        return tier_display_from(
+            self.list_tier_names_use_case(), self.hidden_tiers, self.tier_order
+        )
+
+    def set_tier_display(
+        self, hidden_tiers: Collection[str], tier_order: Collection[str]
+    ):
+        """Leave the `hidden_tiers` out of the plot, and show the others in the
+        order of `tier_order`"""
+        self.hidden_tiers = hidden_tiers
+        self.tier_order = tier_order
+        self.update_annotation_change()
 
     def set_annotation_state(self, annotation: Annotation):
         self.annotation_state = to_annotation_state(annotation)
@@ -298,9 +329,13 @@ class AnnotationViewModel(ViewModel):
     ):
         try:
             annotation = to_annotation(self.annotation_state)
+            # type_idx is a row of the plot, which shows only some of the tiers
+            type_id = self.annotation_view_state.types[type_idx].id
+            if type_id is None:
+                raise ValueError("AnnotationType.id is None")
             annotation = self.create_label_use_case(
                 annotation,
-                annotation.types[type_idx].get_id(),
+                type_id,
                 start,
                 end,
                 same_node_threshold,

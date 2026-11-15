@@ -24,6 +24,7 @@ from ui.annotation.state.annotation_node_state import (
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import AnnotationState
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.document.state.status_message_state import StatusMessageState
 
 MOCK_ANNOTATION_NODES = MappingProxyType(
@@ -681,3 +682,97 @@ def test_a_label_can_be_created_in_a_newly_added_tier():
 
     [word] = view_model.annotation_state.types
     assert len(word.labels) == 1
+
+
+def test_tier_names_lists_the_tiers_of_the_annotation():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], []])
+
+    assert view_model.tier_names() == ["tier0", "tier1"]
+
+
+def test_tier_display_numbers_the_project_tiers_from_the_bottom_by_default():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], [], []])
+
+    assert view_model.tier_display() == [
+        TierDisplayState("tier0", 1),
+        TierDisplayState("tier1", 2),
+        TierDisplayState("tier2", 3),
+    ]
+
+
+def test_tier_display_follows_the_order_and_lists_hidden_tiers_last():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], [], []])
+    view_model.set_tier_display(["tier0"], ["tier2", "tier1"])
+
+    assert view_model.tier_display() == [
+        TierDisplayState("tier2", 1),
+        TierDisplayState("tier1", 2),
+        TierDisplayState("tier0"),
+    ]
+
+
+def test_set_tier_display_leaves_hidden_tiers_out_and_orders_the_rest(qtbot: QtBot):
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[(0, 1, "a")], [], []])
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.set_tier_display(["tier1"], ["tier2", "tier0"])
+
+    assert [type.type for type in view_model.annotation_view_state.types] == [
+        "tier2",
+        "tier0",
+    ]
+    assert blocker.args[0] is view_model.annotation_view_state
+
+
+def test_set_tier_display_emits_once(qtbot: QtBot):
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], []])
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.set_tier_display(["tier0"], ["tier1"])
+
+    assert len(received) == 1
+
+
+def test_tier_display_does_not_change_the_annotation_state():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[(0, 1, "a")], []])
+
+    view_model.set_tier_display(["tier0"], ["tier1"])
+
+    assert [type.type for type in view_model.annotation_state.types] == [
+        "tier0",
+        "tier1",
+    ]
+    assert label_spans(view_model, 0) == [(0, 1, "a")]
+
+
+def test_a_tier_in_neither_list_is_shown_after_the_ordered_tiers():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], [], []])
+
+    view_model.set_tier_display([], ["tier2"])
+
+    assert [type.type for type in view_model.annotation_view_state.types] == [
+        "tier2",
+        "tier0",
+        "tier1",
+    ]
+
+
+def test_tier_display_survives_a_new_annotation_state():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], []])
+    view_model.set_tier_display(["tier0"], [])
+
+    view_model.delete_node(0)
+
+    assert [type.type for type in view_model.annotation_view_state.types] == ["tier1"]
+
+
+def test_create_label_from_selection_uses_row_of_the_displayed_tiers():
+    view_model = make_annotated_view_model({0: 0.0, 1: 3.0}, [[], [], []])
+    view_model.set_tier_display(["tier1"], ["tier2", "tier0"])
+
+    view_model.create_label_from_selection(1, 1.0, 2.0, SAME_NODE_THRESHOLD)
+
+    assert len(label_spans(view_model, 0)) == 1
+    assert label_spans(view_model, 1) == []
+    assert label_spans(view_model, 2) == []
