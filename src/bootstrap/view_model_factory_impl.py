@@ -4,9 +4,11 @@ from bootstrap.use_case_factory_impl import UseCaseFactory
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.replace_in_tier import ReplaceInTier
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
+from core.annotation.search_tier import SearchTier
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
@@ -23,6 +25,7 @@ from data.annotation.datasource.annotation_datasource import AnnotationDataSourc
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.view_model import ViewModel
 from ui.document.document_view_model import DocumentViewModel
@@ -55,6 +58,8 @@ class ViewModelFactoryImpl(ViewModelFactory):
             view_model = self.create_spectrogram_view_model(*args, **kwargs)
         elif view_model_type is AnnotationViewModel:
             view_model = self.create_annotation_view_model(*args, **kwargs)
+        elif view_model_type is TierSearchViewModel:
+            view_model = self.create_tier_search_view_model(*args, **kwargs)
         elif view_model_type is AudioWaveViewModel:
             view_model = self.create_audio_wave_view_model(*args, **kwargs)
         elif view_model_type is MainViewModel:
@@ -122,6 +127,17 @@ class ViewModelFactoryImpl(ViewModelFactory):
             use_case_factory.provide(WriteTextGrid),
             use_case_factory.provide(LoadAnnotation),
             file_stem,
+        )
+
+    def create_tier_search_view_model(
+        self, dir_path: str | None = None
+    ) -> TierSearchViewModel:
+        use_case_factory = self.get_use_case_factory(dir_path)
+
+        return TierSearchViewModel(
+            use_case_factory.provide(SearchTier),
+            use_case_factory.provide(ReplaceInTier),
+            is_project=dir_path is not None,
         )
 
     def create_audio_wave_view_model(self, channel_idx: int) -> AudioWaveViewModel:

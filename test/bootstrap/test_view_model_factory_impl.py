@@ -9,6 +9,7 @@ import ui.base.view_model as view_model_module
 import ui.document.document_view_model as dvm_module
 from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.main_view_model import MainViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
@@ -29,6 +30,7 @@ def fake_threads(monkeypatch: pytest.MonkeyPatch):
         (DocumentViewModel, ("stem", None)),
         (SpectrogramViewModel, ()),
         (AnnotationViewModel, ()),
+        (TierSearchViewModel, ()),
         (AudioWaveViewModel, (0,)),
         (MainViewModel, ()),
     ],
@@ -50,6 +52,13 @@ def test_document_view_model_keeps_file_stem(qtbot: QtBot):
     view_model = ViewModelFactoryImpl().create(DocumentViewModel, "stem", None)
 
     assert view_model.file_stem == "stem"
+
+
+def test_tier_search_view_model_searches_project_only_with_dir_path(tmp_path: Path):
+    factory = ViewModelFactoryImpl()
+
+    assert not factory.create(TierSearchViewModel).is_project
+    assert factory.create(TierSearchViewModel, str(tmp_path)).is_project
 
 
 def test_use_case_factory_without_dir_path_is_in_memory():

@@ -19,6 +19,8 @@ from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.replace_in_tier import ReplaceInTier
+from core.annotation.search_tier import SearchTier
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
@@ -32,6 +34,7 @@ from core.track_formants.track_formants import TrackFormants
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.view_model import ViewModel
 from ui.document.document_view_model import DocumentViewModel
@@ -80,6 +83,8 @@ class StubViewModelFactory(ViewModelFactory):
             view_model = make_spectrogram_view_model()
         elif view_model_type is AnnotationViewModel:
             view_model = make_annotation_view_model()
+        elif view_model_type is TierSearchViewModel:
+            view_model = make_tier_search_view_model(*args, **kwargs)
         elif view_model_type is AudioWaveViewModel:
             view_model = AudioWaveViewModel(*args, **kwargs)
         elif view_model_type is MainViewModel:
@@ -114,6 +119,18 @@ def make_annotation_view_model(
         write_text_grid or mock_use_case(WriteTextGrid),
         load_annotation or LoadAnnotation(repository),
         filestem,
+    )
+
+
+def make_tier_search_view_model(
+    dir_path: str | None = None,
+    repository: SeedableAnnotationRepository | None = None,
+) -> TierSearchViewModel:
+    repository = repository or SeedableAnnotationRepository()
+    return TierSearchViewModel(
+        SearchTier(repository),
+        ReplaceInTier(UpdateLabel(repository)),
+        is_project=dir_path is not None,
     )
 
 
