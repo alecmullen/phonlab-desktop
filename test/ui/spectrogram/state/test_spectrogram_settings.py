@@ -37,6 +37,7 @@ def test_type_defaults_to_fft():
         (SpectrogramTypeState.MULTITAPER, 0.02, 0.004),
         (SpectrogramTypeState.CEPSTRAL, 0.04, 0.004),
         (SpectrogramTypeState.LPC, 0.03, 0.004),
+        (SpectrogramTypeState.MEL, 0.064, 0.001),
     ],
 )
 def test_with_type_takes_the_window_and_step_usual_for_the_type(
@@ -77,3 +78,24 @@ def test_order_is_a_whole_number():
     state = SpectrogramSettingsState(fs=16000, window_size=0.04, order=1)
 
     assert type(state.order) is int
+
+
+def test_mel_needs_a_sample_rate_that_holds_its_filters():
+    # They reach 7600 Hz, so a top frequency of at least 8000
+    low = SpectrogramSettingsState(fs=8000, type=SpectrogramTypeState.MEL)
+    high = SpectrogramSettingsState(fs=24000, type=SpectrogramTypeState.MEL)
+
+    assert low.fs == 16000
+    assert high.fs == 24000
+
+
+def test_with_type_mel_raises_a_low_sample_rate():
+    state = SpectrogramSettingsState(fs=8000).with_type(SpectrogramTypeState.MEL)
+
+    assert state.fs == 16000
+
+
+def test_other_types_keep_a_low_sample_rate():
+    state = SpectrogramSettingsState(fs=8000, type=SpectrogramTypeState.LPC)
+
+    assert state.fs == 8000

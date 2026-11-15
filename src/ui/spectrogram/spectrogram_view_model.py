@@ -37,7 +37,7 @@ from ui.spectrogram.state.spectrogram_settings import (
     SpectrogramSettingsState,
     SpectrogramTypeState,
 )
-from ui.spectrogram.state.spectrogram_state import SpectrogramState
+from ui.spectrogram.state.spectrogram_state import FrequencyScale, SpectrogramState
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 
@@ -200,18 +200,32 @@ class SpectrogramViewModel(ViewModel):
         def on_success(sgram: Spectrogram):
             if generation != self._buffer_generation:
                 return
-            self.update_sgram_window_state(sgram.t, sgram.f, sgram.sxx, fs, start)
+            self.update_sgram_window_state(
+                sgram.t,
+                sgram.f,
+                sgram.sxx,
+                fs,
+                start,
+                frequency_scale_of(settings.type),
+            )
 
         self.launch_task("sgram_window", task, on_success, self.on_error)
 
     def update_sgram_window_state(
-        self, t: np.ndarray, f: np.ndarray, sxx: np.ndarray, fs: int, start: int
+        self,
+        t: np.ndarray,
+        f: np.ndarray,
+        sxx: np.ndarray,
+        fs: int,
+        start: int,
+        frequency_scale: FrequencyScale = FrequencyScale.HZ,
     ):
         self.sgram_state = replace(
             self.sgram_state,
             t_window=t + (start / fs),
             sxx_window=sxx,
             f=f,
+            frequency_scale=frequency_scale,
             is_showing=True,
         )
         self.update_sxx_percentiles(sxx)
@@ -364,3 +378,9 @@ class SpectrogramViewModel(ViewModel):
     @pyqtSlot(object)
     def on_error(self, err: Exception):
         print(err)
+
+
+def frequency_scale_of(type: SpectrogramTypeState) -> FrequencyScale:
+    if type == SpectrogramTypeState.MEL:
+        return FrequencyScale.MEL
+    return FrequencyScale.HZ

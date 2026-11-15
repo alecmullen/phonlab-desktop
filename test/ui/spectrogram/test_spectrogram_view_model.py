@@ -24,6 +24,7 @@ from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.spectrogram.state.formant_settings import FormantSettingsState
 from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_settings import SpectrogramTypeState
+from ui.spectrogram.state.spectrogram_state import FrequencyScale
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 SPECTROGRAM = Spectrogram(
@@ -412,6 +413,7 @@ def test_compute_sgram_window_ignores_stale_generation(
         (SpectrogramTypeState.MULTITAPER, SpectrogramType.MULTITAPER),
         (SpectrogramTypeState.CEPSTRAL, SpectrogramType.CEPSTRAL),
         (SpectrogramTypeState.LPC, SpectrogramType.LPC),
+        (SpectrogramTypeState.MEL, SpectrogramType.MEL),
     ],
 )
 def test_the_chosen_type_is_computed(
@@ -439,6 +441,33 @@ def test_the_chosen_type_is_computed(
         args = use_case.call_args.args
         assert args[3] == 0.004  # step size
         assert args[5] == core_type
+
+
+@pytest.mark.parametrize(
+    ("state_type", "scale"),
+    [
+        (SpectrogramTypeState.FFT, FrequencyScale.HZ),
+        (SpectrogramTypeState.LPC, FrequencyScale.HZ),
+        (SpectrogramTypeState.MEL, FrequencyScale.MEL),
+    ],
+)
+def test_the_window_comes_with_the_frequency_scale_of_its_type(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+    state_type: SpectrogramTypeState,
+    scale: FrequencyScale,
+):
+    view_model = make_spectrogram_view_model()
+    view_model.spectrogram_settings = replace(
+        view_model.spectrogram_settings, type=state_type
+    )
+    view_model.compute_sgram_window(np.arange(1000, dtype=np.float64), 1000, 100, 500)
+
+    view_model.job_managers["sgram_window"].jobs[0].on_success(
+        Spectrogram(t=np.array([0.0]), f=np.array([0.0]), sxx=np.array([[1.0]]))
+    )
+
+    assert view_model.sgram_state.frequency_scale == scale
 
 
 # --------------------------- compute_spectrogram_mmap ---------------------------

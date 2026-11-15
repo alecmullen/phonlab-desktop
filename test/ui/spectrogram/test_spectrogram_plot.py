@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 import numpy as np
+import phonlab as phon
 import pytest
 from pytestqt.qtbot import QtBot
 from support.view_models import make_spectrogram_view_model
@@ -9,7 +10,7 @@ from ui.base.state import State
 from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.spectrogram.state.formant_settings import FormantSettingsState
 from ui.spectrogram.state.formant_track_state import FormantTrackState
-from ui.spectrogram.state.spectrogram_state import SpectrogramState
+from ui.spectrogram.state.spectrogram_state import FrequencyScale, SpectrogramState
 
 
 def make_sgram_state(**overrides: object) -> SpectrogramState:
@@ -330,3 +331,94 @@ def test_open_formant_dialog_does_nothing_when_cancelled(
     plot.open_formant_dialog()
 
     assert calls == []
+
+
+# --------------------------- mel scale ---------------------------
+
+# Four rows, evenly spaced on the mel scale from 100 to 1000 Hz
+MEL_ROWS = np.linspace(phon.Hz_to_mel(100), phon.Hz_to_mel(1000), 4)
+ROW_HZ = phon.mel_to_Hz(MEL_ROWS)
+HALF_ROW = (MEL_ROWS[1] - MEL_ROWS[0]) / 2
+
+
+def make_mel_state() -> SpectrogramState:
+    return make_sgram_state(
+        f=MEL_ROWS,
+        frequency_scale=FrequencyScale.MEL,
+        t_window=np.array([0.0, 1.0]),
+        sxx_window=np.ones((4, 2)),
+    )
+
+
+def test_a_mel_spectrogram_is_drawn_on_the_mel_scale(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+
+    plot.plot_spectrogram(make_mel_state())
+
+    # Each row is centered on its place
+    rect = plot.spec_img.mapRectToParent(plot.spec_img.boundingRect())
+    assert rect.top() == pytest.approx(MEL_ROWS[0] - HALF_ROW)
+    assert rect.bottom() == pytest.approx(MEL_ROWS[-1] + HALF_ROW)
+    assert plot.getViewBox().viewRange()[1] == pytest.approx(
+        [MEL_ROWS[0] - HALF_ROW, MEL_ROWS[-1] + HALF_ROW]
+    )
+
+
+def test_a_mel_spectrogram_is_labeled_in_hz_at_the_places_of_those_frequencies(
+    qtbot: QtBot,
+):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+
+    plot.plot_spectrogram(make_mel_state())
+
+    ticks = plot.getAxis("left")._tickLevels[0]
+    assert [label for _, label in ticks] == ["100", "200", "300", "500", "700", "1000"]
+    places = [place for place, _ in ticks]
+    assert places == pytest.approx(
+        phon.Hz_to_mel(np.array([100, 200, 300, 500, 700, 1000]))
+    )
+
+
+def test_formants_are_put_where_their_frequency_is_on_the_mel_scale(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+    plot.plot_spectrogram(make_mel_state())
+
+    plot.plot_formants(
+        FormantTrackState(
+            sec=np.array([0.5]),
+            formants=np.array([[ROW_HZ[1], 300.0, 50.0, 5000.0]]),
+        )
+    )
+
+    x, y = plot.formant_dots.getData()
+    # The two outside the rows' reach are left out rather than put at the edge
+    assert list(x) == [0.5, 0.5]
+    assert list(y) == pytest.approx([MEL_ROWS[1], phon.Hz_to_mel(300.0)])
+
+
+def test_formants_are_replaced_when_the_scale_of_the_axis_changes(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+    track = FormantTrackState(
+        sec=np.array([0.5]), formants=np.array([[ROW_HZ[1], 5000.0]])
+    )
+    plot.plot_spectrogram(make_sgram_state())
+    plot.plot_formants(track)
+    assert list(plot.formant_dots.getData()[1]) == pytest.approx([ROW_HZ[1], 5000.0])
+
+    plot.plot_spectrogram(make_mel_state())
+
+    assert list(plot.formant_dots.getData()[1]) == pytest.approx([MEL_ROWS[1]])
+
+    plot.plot_spectrogram(make_sgram_state())
+
+    assert list(plot.formant_dots.getData()[1]) == pytest.approx([ROW_HZ[1], 5000.0])
+
+
+def test_going_back_to_hz_takes_the_mel_labels_off(qtbot: QtBot):
+    plot = SpectrogramPlot(make_spectrogram_view_model())
+    plot.plot_spectrogram(make_mel_state())
+
+    plot.plot_spectrogram(make_sgram_state())
+
+    assert plot.getAxis("left")._tickLevels is None
+    assert plot.getViewBox().viewRange()[1] == pytest.approx([0.0, 200.0])

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 import numpy as np
 
@@ -6,9 +7,19 @@ from res.constants import DEFAULT_GRAY_CUTOFF
 from ui.base.state import State
 
 
+class FrequencyScale(StrEnum):
+    """How the rows of the spectrogram are spaced in frequency"""
+
+    HZ = "hz"  # evenly in Hz
+    MEL = "mel"  # evenly on the mel scale (closer together in Hz at the top)
+
+
 @dataclass(frozen=True)
 class SpectrogramState(State):
+    # The frequency of each row of the spectrogram: in Hz, or in mels when the
+    # frequency scale is mel
     f: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    frequency_scale: FrequencyScale = FrequencyScale.HZ
 
     t_window: np.ndarray = field(default_factory=lambda: np.zeros(0))
     sxx_window: np.ndarray = field(default_factory=lambda: np.zeros(0))
