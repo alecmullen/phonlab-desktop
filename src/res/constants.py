@@ -4,6 +4,8 @@ from ui.document.state.plot_layout_state import PlotType
 PROJECT_FILE_NAME = "phonlab.toml"
 DISPLAY_SECTION = "display"
 PLAN_KEY = "plan"
+HIDDEN_TIERS_KEY = "hidden_tiers"
+TIER_ORDER_KEY = "tier_order"
 
 # -- Files --
 # Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
