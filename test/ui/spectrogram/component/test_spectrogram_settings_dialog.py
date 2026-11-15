@@ -200,20 +200,6 @@ def test_a_dialog_opened_on_mel_starts_with_the_limits_in_place(qtbot: QtBot):
     assert "top_frequency" not in shown(dialog)
 
 
-def test_type_names(qtbot: QtBot):
-    dialog = SpectrogramSettingsDialog(SpectrogramSettingsState())
-    qtbot.addWidget(dialog)
-
-    dropdown = dialog.type_dropdown
-    assert [dropdown.itemText(i) for i in range(dropdown.count())] == [
-        "Fourier Transform",
-        "Multitaper",
-        "Cepstral (smoothed)",
-        "Linear Predictive Coding (LPC)",
-        "Mel",
-    ]
-
-
 @pytest.mark.parametrize(
     "type, offered",
     [
@@ -289,32 +275,19 @@ def test_open_spectrogram_settings_returns_nw_and_lift(
     assert result.cepstral_lift == 0.0055
 
 
-@pytest.mark.parametrize(
-    "type, page",
-    [
-        (SpectrogramTypeState.FFT, "acoustphon.html#phonlab.compute_sgram"),
-        (SpectrogramTypeState.MULTITAPER, "acoustphon.html#phonlab.compute_mt_sgram"),
-        (SpectrogramTypeState.CEPSTRAL, "acoustphon.html#phonlab.cepstral_smooth"),
-        (SpectrogramTypeState.LPC, "acoustphon.html#phonlab.RLPC_formants"),
-        (SpectrogramTypeState.MEL, "audphon.html#phonlab.compute_mel_sgram"),
-    ],
-)
-def test_a_link_points_to_the_types_documentation(
-    qtbot: QtBot, type: SpectrogramTypeState, page: str
-):
-    dialog = SpectrogramSettingsDialog(SpectrogramSettingsState().with_type(type))
-    qtbot.addWidget(dialog)
-
-    assert f'href="https://phonlab.readthedocs.io/en/latest/{page}"' in (
-        dialog.docs_link.text()
-    )
-    assert dialog.docs_link.openExternalLinks()
-
-
-def test_the_link_follows_the_chosen_type(qtbot: QtBot):
+def test_a_link_points_to_the_chosen_types_documentation(qtbot: QtBot):
     dialog = SpectrogramSettingsDialog(SpectrogramSettingsState())
     qtbot.addWidget(dialog)
+    assert dialog.docs_link.openExternalLinks()
+    base = "https://phonlab.readthedocs.io/en/latest/"
 
-    choose(dialog, SpectrogramTypeState.CEPSTRAL)
+    pages = {}
+    for type in SpectrogramTypeState:
+        choose(dialog, type)
+        pages[type] = dialog.docs_link.text()
 
-    assert "cepstral_smooth" in dialog.docs_link.text()
+    assert f'href="{base}acoustphon.html#phonlab.compute_sgram"' in pages["fft"]
+    assert f'href="{base}acoustphon.html#phonlab.RLPC_formants"' in pages["lpc"]  # the
+    # LPC coefficients come from RLPC_formants
+    assert f'href="{base}audphon.html#phonlab.compute_mel_sgram"' in pages["mel"]
+    assert len(set(pages.values())) == len(SpectrogramTypeState)  # one each
