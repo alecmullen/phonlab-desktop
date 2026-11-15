@@ -1161,7 +1161,7 @@ def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
     assert positions == sorted(positions)
 
 
-def test_annotation_menu_has_create_label_first_then_a_separator_then_navigation(
+def test_annotation_menu_has_its_own_actions_first_then_a_separator_then_navigation(
     all_plots_view: DocumentView,
 ):
     all_plots_view.view_model.set_mark(4.0)
@@ -1172,9 +1172,9 @@ def test_annotation_menu_has_create_label_first_then_a_separator_then_navigation
     menu.aboutToShow.emit()  # opening it again changes nothing
     actions = menu.actions()
 
-    assert actions[0] is plot.create_label_action
-    assert actions[1].isSeparator()
-    assert actions[2:] == [
+    assert actions[:2] == [plot.create_label_action, plot.search_tier_action]
+    assert actions[2].isSeparator()
+    assert actions[3:] == [
         all_plots_view.recenter_action,
         all_plots_view.set_mark_action,
         all_plots_view.remove_mark_action,

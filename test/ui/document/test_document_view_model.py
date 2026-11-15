@@ -17,6 +17,7 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.tier_display_state import TierDisplayState
+from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import (
@@ -1202,6 +1203,17 @@ def test_set_tier_display_delegates_to_annotation_view_model(
     view_model.set_tier_display(["phone"], ["word"])
 
     annotation_view_model.set_tier_display.assert_called_once_with(["phone"], ["word"])
+
+
+def test_on_annot_state_changed_forwards_tier_search_action(
+    view_model: DocumentViewModel, qtbot: QtBot
+):
+    action = TierSearchAction("word", "stem", 1.0)
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.on_annot_state_changed(action)
+
+    assert blocker.args[0] is action
 
 
 def test_save_textgrid_delegates_to_annotation_view_model(
