@@ -10,6 +10,7 @@ under test are the real ones; use cases that touch disk or run long
 computations are mocks (see `support.mocks`).
 """
 
+from collections.abc import Callable
 from typing import Any, cast
 
 from support.annotation_repository import SeedableAnnotationRepository
@@ -155,6 +156,7 @@ def make_main_view_model(
     load_tier_layout: LoadTierLayout | None = None,
     save_tier_layout: SaveTierLayout | None = None,
     warm_up_formants: WarmUpFormantTracking | None = None,
+    close_project_database: Callable[[str], None] | None = None,
 ) -> MainViewModel:
     if load_display_plan is None:
         load_display_plan = mock_use_case(LoadDisplayPlan)
@@ -172,6 +174,7 @@ def make_main_view_model(
         warm_up_formants or mock_use_case(WarmUpFormantTracking),
         lambda _dir_path: add_project_files,
         lambda _dir_path: RebuildProject(repository, add_project_files),
+        close_project_database or (lambda _dir_path: None),
     )
 
 

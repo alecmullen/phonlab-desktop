@@ -41,6 +41,7 @@ class MainViewModel(ViewModel):
         warm_up_formants: WarmUpFormantTracking,
         provide_add_project_files: Callable[[str], AddProjectFiles],
         provide_rebuild_project: Callable[[str], RebuildProject],
+        close_project_database: Callable[[str], None],
     ):
         super().__init__()
         self.load_display_plan_use_case = load_display_plan
@@ -52,6 +53,7 @@ class MainViewModel(ViewModel):
         self.dir_path: str | None = None
         self.provide_add_project_files = provide_add_project_files
         self.provide_rebuild_project = provide_rebuild_project
+        self.close_project_database = close_project_database
 
     @property
     def display_plan(self) -> frozenset[PlotType]:
@@ -101,6 +103,16 @@ class MainViewModel(ViewModel):
             settings.hidden_tiers = layout.hidden_tiers
             settings.tier_order = layout.tier_order
             settings.tier_fonts = layout.tier_fonts
+
+    def close_project(self):
+        """Close the open project's database. Like `set_dir_path(None)`, it keeps the
+        display plan and tier layout the project gave. Does nothing when no project
+        is open"""
+        if self.dir_path is None:
+            return
+
+        self.close_project_database(self.dir_path)
+        self.dir_path = None
 
     def set_display_plan(self, plots: Iterable[PlotType]):
         """Make `plots` the display plan for the rest of the session"""

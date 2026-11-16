@@ -38,6 +38,9 @@ class DataAnnotationRepository(AnnotationRepository):
     def reset(self) -> str | None:
         return self.local_datasource.reset()
 
+    def close(self) -> None:
+        self.local_datasource.close()
+
     def clear_annotation(self, annotation_id: int) -> None:
         self.local_datasource.clear_annotation(annotation_id)
 

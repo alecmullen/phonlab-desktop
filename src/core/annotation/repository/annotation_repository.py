@@ -20,6 +20,11 @@ class AnnotationRepository(Protocol):
         one was backed up, if it was"""
         ...
 
+    def close(self) -> None:
+        """Release the database, so another project can be opened. A repository that
+        is used again after this reconnects"""
+        ...
+
     def clear_annotation(self, annotation_id: int) -> None:
         """Delete all nodes, types and labels, keeping the annotation (file stem)"""
         ...
