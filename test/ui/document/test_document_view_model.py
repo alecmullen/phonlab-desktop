@@ -1434,6 +1434,31 @@ def test_scale_selection_only_and_undo(view_model: DocumentViewModel):
     np.testing.assert_array_equal(view_model.primary_channel().x, x)
 
 
+def test_toggle_channel_active_to_the_current_state_does_not_prep_again(
+    view_model: DocumentViewModel,
+):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    calls = []
+    view_model.prep_audio_spectrogram = lambda: calls.append(True)
+
+    view_model.toggle_channel_active(1, True)  # already active
+
+    assert calls == []
+
+
+def test_toggle_channel_active_that_changes_the_channels_preps_once(
+    view_model: DocumentViewModel,
+):
+    load_stereo(view_model, np.arange(1000), np.arange(1000) * -1, fs=1000)
+    calls = []
+    view_model.prep_audio_spectrogram = lambda: calls.append(True)
+
+    view_model.toggle_channel_active(1, False)
+
+    assert view_model.active_channels().keys() == {0}
+    assert calls == [True]
+
+
 def test_reverse_stereo_applies_only_to_active_channels(view_model: DocumentViewModel):
     x0, x1 = np.arange(1000), np.arange(1000) * -1
     load_stereo(view_model, x0, x1, fs=1000)

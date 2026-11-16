@@ -1,5 +1,5 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QSignalBlocker, Qt, QTimer, pyqtSlot
 from PyQt6.QtWidgets import QCheckBox, QGraphicsProxyWidget, QPushButton, QWidget
 from pyqtgraph import PlotDataItem
 
@@ -133,7 +133,10 @@ class AudioWavePlot(DocumentPlot):
 
     def _apply_active_state(self, is_active: bool):
         if self.active_checkbox is not None:
-            self.active_checkbox.setChecked(is_active)
+            # Showing the state is not a click: only the user's clicks may
+            # report a toggle, or every redraw would re-apply the same state.
+            with QSignalBlocker(self.active_checkbox):
+                self.active_checkbox.setChecked(is_active)
         if self.wave_curve is not None:
             self.wave_curve.setPen(ACTIVE_PEN if is_active else INACTIVE_PEN)
 
