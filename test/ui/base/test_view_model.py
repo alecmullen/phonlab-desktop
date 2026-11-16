@@ -83,6 +83,19 @@ def test_launch_task_queues_job_on_existing_manager(
     assert len(manager.queued_jobs) == 1
 
 
+def test_launch_task_passes_replace_pending_on_to_the_queued_job(
+    qtbot: QtBot, fake_job_manager: type[FakeJobManager]
+):
+    view_model = ViewModel()
+    view_model.launch_task("key1", dummy_task(), noop, noop)
+    manager = view_model.job_managers["key1"]
+
+    view_model.launch_task("key1", dummy_task(), noop, noop)
+    view_model.launch_task("key1", dummy_task(), noop, noop, replace_pending=True)
+
+    assert [job.replace_pending for job in manager.queued_jobs] == [False, True]
+
+
 def test_launch_task_only_once_skips_queueing_on_existing_manager(
     qtbot: QtBot, fake_job_manager: type[FakeJobManager]
 ):
