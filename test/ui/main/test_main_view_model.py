@@ -340,3 +340,35 @@ def test_save_window_layout_saves_tier_fonts_to_project():
         TierLayout(tier_fonts={"word": "Charis SIL"}),
         "/some/dir",
     )
+
+
+def test_close_project_closes_its_database_and_forgets_the_directory():
+    closed: list[str] = []
+    view_model = make_main_view_model(close_project_database=closed.append)
+    view_model.set_dir_path("/some/dir")
+
+    view_model.close_project()
+
+    assert closed == ["/some/dir"]
+    assert view_model.dir_path is None
+
+
+def test_close_project_without_a_project_does_nothing():
+    closed: list[str] = []
+    view_model = make_main_view_model(close_project_database=closed.append)
+
+    view_model.close_project()
+
+    assert closed == []
+
+
+def test_close_project_keeps_current_tier_layout():
+    load = mock_use_case(LoadTierLayout)
+    load.return_value = TierLayout(["hidden"], ["a", "b"], {"a": "Arial"})
+    view_model = make_main_view_model(load_tier_layout=load)
+    view_model.set_dir_path("/some/dir")
+
+    view_model.close_project()
+
+    assert settings.hidden_tiers == ["hidden"]
+    assert settings.tier_order == ["a", "b"]

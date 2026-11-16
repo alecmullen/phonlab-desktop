@@ -16,6 +16,7 @@ from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.project.add_project_files import AddProjectFiles
+from core.project.close_project import CloseProject
 from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
 from core.settings.load_display_plan import LoadDisplayPlan
@@ -65,6 +66,7 @@ class UseCaseFactory:
         self.rebuild_project = RebuildProject(
             self.annotation_repository, self.add_project_files
         )
+        self.close_project = CloseProject(self.annotation_repository)
 
     def provide[T](
         self,
@@ -109,6 +111,8 @@ class UseCaseFactory:
             use_case = self.add_project_files
         if use_case_type is RebuildProject:
             use_case = self.rebuild_project
+        if use_case_type is CloseProject:
+            use_case = self.close_project
         if use_case_type is AddTiers:
             use_case = self.add_tiers
         if use_case_type is ListTierNames:

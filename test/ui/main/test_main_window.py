@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence
-from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QWidget
+from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
 from pytestqt.qtbot import QtBot
 from support.annotation_repository import SeedableAnnotationRepository
 from support.audio_player import FakeAudioPlayer
@@ -34,6 +34,7 @@ from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
 from ui.document.state.plot_layout_state import PlotType
 from ui.main.component.open_audio_dialog import OpenAudioDialog
+from ui.main.component.open_path_dialog import OpenPathDialog
 from ui.main.component.save_audio_dialog import SaveOptions
 from ui.main.main_view_model import MainViewModel
 from ui.main.main_window import MainWindow
@@ -359,22 +360,22 @@ def opened(main_window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> list:
     return calls
 
 
-def patch_directory_dialog(monkeypatch: pytest.MonkeyPatch, *answers: str):
-    remaining = list(answers)
+def patch_open_dialog(monkeypatch: pytest.MonkeyPatch, *selections: list[str]):
+    """Answers each open dialog with the next selection: a directory or files"""
+    remaining = list(selections)
     monkeypatch.setattr(
-        QFileDialog,
-        "getExistingDirectory",
+        OpenPathDialog,
+        "get_paths",
         staticmethod(lambda *args, **kwargs: remaining.pop(0)),
     )
 
 
-def patch_file_dialog(monkeypatch: pytest.MonkeyPatch, *selections: list[str]):
-    remaining = list(selections)
-    monkeypatch.setattr(
-        QFileDialog,
-        "getOpenFileNames",
-        staticmethod(lambda *args, **kwargs: (remaining.pop(0), "")),
-    )
+def patch_directory_dialog(monkeypatch: pytest.MonkeyPatch, *answers: str):
+    """Answers each open dialog with a directory, or cancels when it is ''"""
+    patch_open_dialog(monkeypatch, *([answer] if answer else [] for answer in answers))
+
+
+patch_file_dialog = patch_open_dialog
 
 
 def test_select_project_does_nothing_when_dialog_is_cancelled(
@@ -382,7 +383,7 @@ def test_select_project_does_nothing_when_dialog_is_cancelled(
 ):
     patch_directory_dialog(monkeypatch, "")
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
 
     assert opened == []
 
@@ -395,6 +396,7 @@ def run_import_job(main_window: MainWindow):
 
 
 def make_project(tmp_path: Path, *names: str, database: bool = False) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "phonlab.toml").write_text("")
     for name in names:
         if name.lower().endswith(".textgrid"):
@@ -416,7 +418,7 @@ def test_select_project_builds_database_from_textgrids_before_opening_files(
     make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav")
     patch_directory_dialog(monkeypatch, str(tmp_path))
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
 
     assert opened == []  # still importing
     run_import_job(main_window)
@@ -442,7 +444,7 @@ def test_select_project_with_existing_database_opens_without_reading_textgrids(
     make_project(tmp_path, "a.wav", "a.TextGrid", database=True)
     patch_directory_dialog(monkeypatch, str(tmp_path))
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
 
     assert opened == [([("a", str(tmp_path / "a.wav"), None)], str(tmp_path))]
     assert "project_import" not in main_window.view_model.job_managers
@@ -465,7 +467,7 @@ def test_select_project_treats_extensions_case_insensitively(
     )
     patch_directory_dialog(monkeypatch, str(tmp_path))
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
 
     [(files, _)] = opened
     assert sorted(stem for stem, _, _ in files) == ["lower", "mixed", "upper"]
@@ -481,7 +483,7 @@ def test_select_project_reads_textgrid_with_any_case_suffix_on_first_open(
     make_project(tmp_path, "a.wav", "a.textgrid")
     patch_directory_dialog(monkeypatch, str(tmp_path))
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
     run_import_job(main_window)
 
     a = project_repository.find_annotation_by_file_stem("a")
@@ -504,7 +506,7 @@ def test_select_project_reports_unreadable_textgrid_and_still_opens(
         staticmethod(lambda parent, title, text, *a: warnings.append(text)),
     )
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
     run_import_job(main_window)
 
     assert len(warnings) == 1 and "a" in warnings[0]
@@ -526,7 +528,7 @@ def test_select_project_does_not_open_files_when_import_fails(
         staticmethod(lambda parent, title, text, *a: warnings.append(text)),
     )
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
     job = main_window.view_model.job_managers["project_import"].jobs[0]
     job.on_error(RuntimeError("disk full"))
 
@@ -547,7 +549,7 @@ def test_select_project_initializes_toml_when_user_agrees(
         staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.Yes),
     )
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
     run_import_job(main_window)
 
     assert (tmp_path / "phonlab.toml").is_file()
@@ -577,7 +579,7 @@ def test_select_project_asks_again_when_user_declines_initializing(
         staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.No),
     )
 
-    main_window.select_project_to_open()
+    main_window.select_path_to_open()
 
     assert not (tmp_path / "phonlab.toml").exists()
     assert opened == []
@@ -618,7 +620,7 @@ def test_select_files_does_nothing_when_dialog_is_cancelled(
 ):
     patch_file_dialog(monkeypatch, [])
 
-    main_window.select_files_to_open()
+    main_window.select_path_to_open()
 
     assert opened == []
 
@@ -628,7 +630,7 @@ def test_select_files_opens_selected_document(
 ):
     patch_file_dialog(monkeypatch, ["/data/sound.wav"])
 
-    main_window.select_files_to_open()
+    main_window.select_path_to_open()
 
     assert opened == [([("/data/sound", "/data/sound.wav", None)], None)]
 
@@ -644,26 +646,197 @@ def test_select_files_reports_invalid_selection_and_asks_again(
         staticmethod(lambda *args, **kwargs: messages.append(args)),
     )
 
-    main_window.select_files_to_open()
+    main_window.select_path_to_open()
 
     assert len(messages) == 1
     assert opened == []
 
 
-def test_select_new_tab_files_starts_in_current_project_dir(
+def test_select_path_starts_in_current_project_dir(
     main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ):
     main_window.view_model.set_dir_path("/project")
     directories: list = []
-    monkeypatch.setattr(
-        main_window,
-        "select_files_to_open",
-        lambda dir=None: directories.append(dir),
-    )
 
-    main_window.select_new_tab_files()
+    def get_paths(
+        parent: QWidget | None, caption: str, directory: str | None, filter: str
+    ) -> list[str]:
+        directories.append(directory)
+        return []
+
+    monkeypatch.setattr(OpenPathDialog, "get_paths", staticmethod(get_paths))
+
+    main_window.select_path_to_open()
 
     assert directories == ["/project"]
+
+
+# --------------------------- closing the project ---------------------------
+
+
+@pytest.fixture
+def closed_databases(main_window: MainWindow) -> list[str]:
+    """The project directories whose database was closed"""
+    closed: list[str] = []
+    main_window.view_model.close_project_database = closed.append
+    return closed
+
+
+def add_project_document(
+    main_window: MainWindow, dir_path: Path, stem: str = "a"
+) -> DocumentView:
+    vm = main_window.view_model_factory.create(DocumentViewModel, stem, str(dir_path))
+    doc = DocumentView(vm)
+    main_window.tab_widget.addTab(doc, f"{stem}.wav")
+    return doc
+
+
+def test_opening_a_project_closes_every_open_tab_and_the_open_project(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    closed_databases: list[str],
+):
+    first = make_project(tmp_path / "first", "a.wav", database=True)
+    second = make_project(tmp_path / "second", "b.wav", database=True)
+    main_window.view_model.set_dir_path(str(first))
+    add_project_document(main_window, first)
+    add_document(main_window, "other.wav")
+    patch_open_dialog(monkeypatch, [str(second)])
+
+    main_window.select_path_to_open()
+
+    assert closed_databases == [str(first)]
+    assert main_window.tab_widget.count() == 0
+    assert main_window.view_model.dir_path == str(second)
+    assert opened == [([("b", str(second / "b.wav"), None)], str(second))]
+
+
+def test_opening_a_project_closes_a_document_opened_on_its_own(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    project = make_project(tmp_path / "project", "a.wav", database=True)
+    add_document(main_window, "single.wav")
+    patch_open_dialog(monkeypatch, [str(project)])
+
+    main_window.select_path_to_open()
+
+    assert main_window.tab_widget.count() == 0
+
+
+def test_declining_to_initialize_a_project_keeps_the_open_project(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    closed_databases: list[str],
+):
+    first = make_project(tmp_path / "first", "a.wav", database=True)
+    (tmp_path / "empty").mkdir()
+    main_window.view_model.set_dir_path(str(first))
+    doc = add_project_document(main_window, first)
+    patch_open_dialog(monkeypatch, [str(tmp_path / "empty")], [])
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.No),
+    )
+
+    main_window.select_path_to_open()
+
+    assert closed_databases == []
+    assert main_window.documents() == [doc]
+    assert main_window.view_model.dir_path == str(first)
+
+
+def test_opening_a_sound_file_outside_the_project_closes_the_project(
+    main_window: MainWindow,
+    tmp_path: Path,
+    opened: list,
+    closed_databases: list[str],
+):
+    project = make_project(tmp_path / "project", "a.wav", database=True)
+    main_window.view_model.set_dir_path(str(project))
+    add_project_document(main_window, project)
+    main_window.save_layout_action.setEnabled(True)
+    main_window.tier_search_dialog = type(
+        "FakeDialog", (), {"close": lambda self: None}
+    )()  # type: ignore[assignment]
+    outside = str(tmp_path / "elsewhere.wav")
+
+    main_window.open_single_document([outside], str(project))
+
+    assert closed_databases == [str(project)]
+    assert main_window.documents() == []
+    assert main_window.view_model.dir_path is None
+    assert main_window.tier_search_dialog is None
+    assert main_window.save_layout_action.isEnabled() is False
+    assert not main_window.add_files_action.isEnabled()
+    assert opened == [([(str(tmp_path / "elsewhere"), outside, None)], None)]
+
+
+def test_opening_a_sound_file_in_the_project_keeps_the_project_open(
+    main_window: MainWindow,
+    tmp_path: Path,
+    opened: list,
+    closed_databases: list[str],
+):
+    project = make_project(tmp_path, "a.wav", database=True)
+    main_window.view_model.set_dir_path(str(project))
+    doc = add_project_document(main_window, project)
+    wav = str(project / "sub" / "b.wav")
+
+    main_window.open_single_document([wav], str(project))
+
+    assert closed_databases == []
+    assert main_window.documents() == [doc]
+    assert opened == [([("sub/b", wav, None)], str(project))]
+
+
+def test_invalid_selection_keeps_the_project_open(
+    main_window: MainWindow, tmp_path: Path, closed_databases: list[str]
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+
+    with pytest.raises(ValueError):
+        main_window.open_single_document([str(tmp_path / "a.TextGrid")], str(tmp_path))
+
+    assert closed_databases == []
+    assert main_window.view_model.dir_path == str(tmp_path)
+
+
+def test_close_project_without_a_project_does_nothing(
+    main_window: MainWindow, closed_databases: list[str]
+):
+    doc = add_document(main_window)
+
+    main_window.close_project()
+
+    assert closed_databases == []
+    assert main_window.documents() == [doc]
+
+
+def test_open_paths_opens_a_lone_directory_as_a_project(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    make_project(tmp_path, "a.wav", database=True)
+
+    main_window.open_paths([str(tmp_path)])
+
+    assert opened == [([("a", str(tmp_path / "a.wav"), None)], str(tmp_path))]
+
+
+def test_open_paths_opens_sound_files_as_a_document(
+    main_window: MainWindow, tmp_path: Path, opened: list
+):
+    wav = str(tmp_path / "sound.wav")
+
+    main_window.open_paths([wav])
+
+    assert opened == [([(str(tmp_path / "sound"), wav, None)], None)]
 
 
 # --------------------------- copy/cut open a clip tab ---------------------------

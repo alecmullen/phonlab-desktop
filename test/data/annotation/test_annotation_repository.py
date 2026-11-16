@@ -401,3 +401,14 @@ def test_find_labels_by_tier_name_ignores_other_tiers(
     seeded_annotation(repository)
 
     assert repository.find_labels_by_tier_name("phone") == []
+
+
+# --------------------------- close ---------------------------
+
+
+def test_repository_keeps_working_after_close(repository: DataAnnotationRepository):
+    id = seeded_annotation(repository)
+
+    repository.close()
+
+    assert len(repository.get_annotation_by_id(id).nodes) == 3

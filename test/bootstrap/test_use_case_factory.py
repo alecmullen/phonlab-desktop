@@ -18,6 +18,7 @@ from core.edit_audio.edit_audio import EditAudio
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.project.add_project_files import AddProjectFiles
+from core.project.close_project import CloseProject
 from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
@@ -48,6 +49,7 @@ USE_CASE_TYPES = [
     ListTierNames,
     AddProjectFiles,
     RebuildProject,
+    CloseProject,
     SearchTier,
     ReplaceInTier,
 ]
