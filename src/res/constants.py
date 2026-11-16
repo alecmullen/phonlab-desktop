@@ -1,5 +1,8 @@
 from ui.document.state.plot_layout_state import PlotType
 
+# -- Mouse --
+DOUBLE_CLICK_INTERVAL_MS = 250
+
 # -- Settings files --
 PROJECT_FILE_NAME = "phonlab.toml"
 DISPLAY_SECTION = "display"
