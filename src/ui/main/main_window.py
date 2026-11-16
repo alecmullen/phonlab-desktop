@@ -431,9 +431,7 @@ class MainWindow(QMainWindow):
             answer = QMessageBox.question(
                 self,
                 self.tr("Initialize Project"),
-                self.tr(
-                    "No phonlab.toml found. Initialize phonlab project at {}?"
-                ).format(dir_path),
+                self.tr("Make a project out of this folder?"),
             )
             if answer != QMessageBox.StandardButton.Yes:
                 self.select_path_to_open()
@@ -491,9 +489,14 @@ class MainWindow(QMainWindow):
         self.open_files(files, dir_path)
 
     def open_new_project(self, dir_path: str, state: ProjectImportState):
+        """Report what was found in the new project's TextGrids, then open its files"""
         if len(state.failed) > 0:
             QMessageBox.warning(
-                self, self.tr("Project"), self.describe_import(state, rebuilt=False)
+                self, self.tr("Project"), self.describe_new_project(state)
+            )
+        elif state.total > 0:
+            QMessageBox.information(
+                self, self.tr("Project"), self.describe_new_project(state)
             )
         self.open_project_files(dir_path)
 
@@ -602,13 +605,24 @@ class MainWindow(QMainWindow):
                     state.registered, len(state.imported)
                 )
             ]
-        if len(state.failed) > 0:
-            lines.append(
-                self.tr("Could not read the TextGrid for: {}").format(
-                    ", ".join(state.failed)
-                )
+        return "\n".join(lines + self.describe_failures(state))
+
+    def describe_new_project(self, state: ProjectImportState) -> str:
+        lines = [
+            self.tr("Found {} TextGrids and built the project database.").format(
+                state.total
             )
-        return "\n".join(lines)
+        ]
+        return "\n".join(lines + self.describe_failures(state))
+
+    def describe_failures(self, state: ProjectImportState) -> list[str]:
+        if len(state.failed) == 0:
+            return []
+        return [
+            self.tr("Could not read the TextGrid for: {}").format(
+                ", ".join(state.failed)
+            )
+        ]
 
     @pyqtSlot(object)
     def on_view_model_state_changed(self, state: State):

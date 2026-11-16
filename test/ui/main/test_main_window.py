@@ -417,11 +417,13 @@ def test_select_project_builds_database_from_textgrids_before_opening_files(
 ):
     make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav")
     patch_directory_dialog(monkeypatch, str(tmp_path))
+    messages = capture_information(monkeypatch)
 
     main_window.select_path_to_open()
 
     assert opened == []  # still importing
     run_import_job(main_window)
+    assert messages == ["Found 1 TextGrids and built the project database."]
     [(files, dir_path)] = opened
     assert dir_path == str(tmp_path)
     # Annotations come from the database, so no TextGrid is passed on to be read
@@ -482,6 +484,7 @@ def test_select_project_reads_textgrid_with_any_case_suffix_on_first_open(
 ):
     make_project(tmp_path, "a.wav", "a.textgrid")
     patch_directory_dialog(monkeypatch, str(tmp_path))
+    capture_information(monkeypatch)
 
     main_window.select_path_to_open()
     run_import_job(main_window)
@@ -509,7 +512,52 @@ def test_select_project_reports_unreadable_textgrid_and_still_opens(
     main_window.select_path_to_open()
     run_import_job(main_window)
 
-    assert len(warnings) == 1 and "a" in warnings[0]
+    [warning] = warnings
+    assert warning.splitlines() == [
+        "Found 1 TextGrids and built the project database.",
+        "Could not read the TextGrid for: a",
+    ]
+    assert len(opened) == 1
+
+
+def test_select_project_shows_reading_progress_while_building_the_database(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav", "b.TextGrid")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    capture_information(monkeypatch)
+    main_window.select_path_to_open()
+    job = main_window.view_model.job_managers["project_import"].jobs[0]
+    results = iter(job.task)
+
+    job.on_success(next(results))  # the TextGrids have been counted
+
+    dialog = main_window.progress_dialog
+    assert dialog is not None
+    assert dialog.labelText() == "Reading TextGrids…" and dialog.maximum() == 2
+    for result in results:
+        job.on_success(result)
+    assert main_window.progress_dialog is None
+    assert len(opened) == 1
+
+
+def test_select_project_reports_nothing_when_it_has_no_textgrids(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    messages = capture_information(monkeypatch)
+
+    main_window.select_path_to_open()
+    run_import_job(main_window)
+
+    assert messages == []
     assert len(opened) == 1
 
 
@@ -543,15 +591,20 @@ def test_select_project_initializes_toml_when_user_agrees(
     opened: list,
 ):
     patch_directory_dialog(monkeypatch, str(tmp_path))
-    monkeypatch.setattr(
-        QMessageBox,
-        "question",
-        staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.Yes),
-    )
+    questions: list[str] = []
+
+    def question(
+        parent: object, title: str, text: str, *args: object
+    ) -> QMessageBox.StandardButton:
+        questions.append(text)
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
 
     main_window.select_path_to_open()
     run_import_job(main_window)
 
+    assert questions == ["Make a project out of this folder?"]
     assert (tmp_path / "phonlab.toml").is_file()
     assert opened == [([], str(tmp_path))]
 
