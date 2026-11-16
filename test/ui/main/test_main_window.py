@@ -1516,6 +1516,100 @@ def test_rebuild_project_rereads_textgrids_into_a_new_database(
     assert reloaded == [doc.view_model]
 
 
+def add_project_document(
+    main_window: MainWindow, tmp_path: Path, file_stem: str = "a"
+) -> DocumentView:
+    """A tab for a file of the project in tmp_path, as `open_files` creates it"""
+    main_window.view_model.set_dir_path(str(tmp_path))
+    vm = main_window.view_model_factory.create(
+        DocumentViewModel, file_stem, str(tmp_path)
+    )
+    doc = DocumentView(vm)
+    main_window.tab_widget.addTab(doc, f"{file_stem}.wav")
+    main_window.tab_widget.setCurrentIndex(main_window.tab_widget.count() - 1)
+    return doc
+
+
+def test_rebuild_annotation_action_needs_a_project_file_in_the_current_tab(
+    main_window: MainWindow, tmp_path: Path
+):
+    assert not main_window.rebuild_annotation_action.isEnabled()
+
+    add_document(main_window)  # a tab that is not a project file
+    assert not main_window.rebuild_annotation_action.isEnabled()
+
+    add_project_document(main_window, tmp_path)
+    assert main_window.rebuild_annotation_action.isEnabled()
+
+    main_window.tab_widget.setCurrentIndex(0)
+    assert not main_window.rebuild_annotation_action.isEnabled()
+
+
+def test_rebuild_annotation_replaces_the_annotation_with_the_textgrid_when_user_says_yes(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav", "b.TextGrid")
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.Yes
+    )
+    add_project_document(main_window, tmp_path, "b")
+
+    main_window.rebuild_annotation()
+
+    assert loaded == [("b.TextGrid", True)]
+    assert asked == ["Overwrite the existing database with annotation from b.TextGrid?"]
+
+
+def test_rebuild_annotation_does_nothing_when_user_says_no(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.No
+    )
+    add_project_document(main_window, tmp_path)
+
+    main_window.rebuild_annotation()
+
+    assert loaded == []
+    assert len(asked) == 1
+
+
+def test_rebuild_annotation_does_not_ask_when_the_annotation_is_empty(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    loaded, asked = stub_overwrite_scenario(monkeypatch, False)
+    add_project_document(main_window, tmp_path)
+
+    main_window.rebuild_annotation()
+
+    assert loaded == [("a.TextGrid", False)]
+    assert asked == []
+
+
+def test_rebuild_annotation_reports_a_file_without_a_textgrid(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav")
+    loaded, asked = stub_overwrite_scenario(monkeypatch, True)
+    messages = capture_information(monkeypatch)
+    add_project_document(main_window, tmp_path)
+
+    main_window.rebuild_annotation()
+
+    assert loaded == [] and asked == []
+    assert messages == ["There is no TextGrid for a in the project directory."]
+
+
+def test_rebuild_annotation_does_nothing_without_a_current_document(
+    main_window: MainWindow, tmp_path: Path
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+
+    main_window.rebuild_annotation()  # does not raise
+
+
 def test_open_single_document_accepts_textgrid_with_any_case_suffix(
     main_window: MainWindow, tmp_path: Path, opened: list
 ):
@@ -1582,7 +1676,9 @@ def test_clip_tab_opens_hidden_behind_its_source(main_window: MainWindow):
 # --------------------------- annotation menu ---------------------------
 
 
-def test_annotation_menu_offers_tier_and_export_actions(main_window: MainWindow):
+def test_annotation_menu_offers_tier_rebuild_and_export_actions(
+    main_window: MainWindow,
+):
     menu = next(
         action.menu()
         for action in main_window.menuBar().actions()
@@ -1593,6 +1689,7 @@ def test_annotation_menu_offers_tier_and_export_actions(main_window: MainWindow)
         main_window.add_tiers_action,
         main_window.arrange_tiers_action,
         main_window.choose_fonts_action,
+        main_window.rebuild_annotation_action,
         main_window.export_annotation_action,
     ]
 

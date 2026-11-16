@@ -238,3 +238,33 @@ def test_invoke_replaces_existing_annotation_when_overwrite_is_true(tmp_path: Pa
     assert [type.type for type in result.types] == ["word"]
     assert len(repository.filenames) == 1
     assert repository.get_annotation_by_id(result.get_id()) == result
+
+
+def test_invoke_keeps_existing_annotation_when_overwriting_with_an_unreadable_file(
+    tmp_path: Path,
+):
+    repository = InMemAnnotationRepository()
+    parse_use_case = ParseTextGrid(repository)
+    original = next(
+        parse_use_case(write_textgrid(tmp_path, TWO_TIER_TEXTGRID), "sample")
+    )
+    broken = write_textgrid(tmp_path, "xmin = 0\nxmax = 1.0\n", "broken.TextGrid")
+
+    with pytest.raises(ParseTextGridError):
+        next(parse_use_case(broken, "sample", overwrite=True))
+
+    assert repository.find_annotation_by_file_stem("sample") == original
+
+
+def test_invoke_overwrite_leaves_the_annotations_of_other_files_alone(tmp_path: Path):
+    repository = InMemAnnotationRepository()
+    parse_use_case = ParseTextGrid(repository)
+    next(parse_use_case(write_textgrid(tmp_path, TWO_TIER_TEXTGRID), "one"))
+    other = next(parse_use_case(write_textgrid(tmp_path, TWO_TIER_TEXTGRID), "two"))
+    path = write_textgrid(tmp_path, SIMPLE_TEXTGRID, "replacement.TextGrid")
+
+    next(parse_use_case(path, "one", overwrite=True))
+
+    assert repository.find_annotation_by_file_stem("two") == other
+    one = repository.find_annotation_by_file_stem("one")
+    assert one is not None and [type.type for type in one.types] == ["word"]

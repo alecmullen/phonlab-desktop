@@ -197,12 +197,24 @@ def test_project_files_pairs_audio_with_textgrid_ignoring_case(tmp_path: Path):
     ]
 
 
+def test_textgrid_for_finds_the_textgrid_of_a_file_stem(tmp_path: Path):
+    view_model = make_main_view_model()
+    view_model.set_dir_path(str(tmp_path))
+    for name in ("a.wav", "a.TextGrid", "b.wav"):
+        (tmp_path / name).write_bytes(b"")
+
+    assert view_model.textgrid_for("a") == str(tmp_path / "a.TextGrid")
+    assert view_model.textgrid_for("b") is None
+    assert view_model.textgrid_for("missing") is None
+
+
 def test_project_operations_raise_without_dir_path():
     view_model = make_main_view_model()
 
     for operation in (
         view_model.is_new_project,
         view_model.project_files,
+        lambda: view_model.textgrid_for("a"),
         view_model.add_project_files,
         view_model.rebuild_project,
     ):

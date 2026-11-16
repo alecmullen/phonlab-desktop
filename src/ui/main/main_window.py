@@ -250,6 +250,17 @@ class MainWindow(QMainWindow):
         )
         self.rebuild_action.triggered.connect(self.rebuild_project)
 
+        self.rebuild_annotation_action = QAction(
+            self.tr("&Rebuild from TextGrid…"), self
+        )
+        self.rebuild_annotation_action.setStatusTip(
+            self.tr(
+                "Replace the current file's annotation with its TextGrid. Other "
+                "files' annotations are left as they are"
+            )
+        )
+        self.rebuild_annotation_action.triggered.connect(self.rebuild_annotation)
+
         # Project Menu
         if mainMenu is not None:
             projectMenu = mainMenu.addMenu(self.tr("&Project"))
@@ -287,6 +298,7 @@ class MainWindow(QMainWindow):
                 annotationMenu.addAction(self.arrange_tiers_action)
                 annotationMenu.addAction(self.choose_fonts_action)
                 annotationMenu.addSeparator()
+                annotationMenu.addAction(self.rebuild_annotation_action)
                 annotationMenu.addAction(self.export_annotation_action)
 
         # View Menu
@@ -490,6 +502,10 @@ class MainWindow(QMainWindow):
         has_project = self.view_model.dir_path is not None
         self.add_files_action.setEnabled(has_project)
         self.rebuild_action.setEnabled(has_project)
+        doc = self.get_current_document()
+        self.rebuild_annotation_action.setEnabled(
+            has_project and doc is not None and doc.view_model.file_stem is not None
+        )
 
     @pyqtSlot()
     def add_new_files(self):
@@ -518,6 +534,33 @@ class MainWindow(QMainWindow):
             self.view_model.rebuild_project,
             lambda state: self.finish_project_update(state, rebuilt=True),
         )
+
+    @pyqtSlot()
+    def rebuild_annotation(self):
+        """Replace the current file's annotation with the one in its TextGrid. Only
+        this file's entries are removed from the database; the rest is untouched"""
+        doc = self.get_current_document()
+        if doc is None or doc.view_model.file_stem is None:
+            return
+
+        textgrid_file = self.view_model.textgrid_for(doc.view_model.file_stem)
+        if textgrid_file is None:
+            QMessageBox.information(
+                self,
+                self.tr("Rebuild Annotation"),
+                self.tr("There is no TextGrid for {} in the project directory.").format(
+                    doc.view_model.file_stem
+                ),
+            )
+            return
+
+        overwrite = doc.view_model.has_annotation()
+        if overwrite:
+            answer = ask_overwrite_annotation(self, textgrid_file)
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+
+        doc.load_textgrid(textgrid_file, overwrite)
 
     def run_project_import(
         self,
@@ -757,6 +800,7 @@ class MainWindow(QMainWindow):
     pyqtSlot(int)
 
     def on_tab_changed(self, index: int):
+        self.update_project_actions()
         doc = self.get_current_document()
 
         self.add_tiers_action.setEnabled(doc is not None)

@@ -151,6 +151,13 @@ class MainViewModel(ViewModel):
             for file in scan_project_files(self._project_dir())
         ]
 
+    def textgrid_for(self, file_stem: str) -> str | None:
+        """The TextGrid in the project directory that belongs to file_stem, if any"""
+        for stem, _, textgrid_file in self.project_files():
+            if stem == file_stem:
+                return textgrid_file
+        return None
+
     def add_project_files(self):
         """Add files new to the project to its database: file stems that are not in it
         yet, and TextGrids of files whose annotation is empty"""
