@@ -1,3 +1,4 @@
+import gc
 from pathlib import Path
 
 import numpy as np
@@ -206,3 +207,72 @@ def test_cleanup_mmaps_is_safe_when_files_are_missing(mmap_dir: Path):
     ComputeSpectrogramMmap().cleanup_mmaps(
         None, None, str(mmap_dir / "gone.dat"), str(mmap_dir / "gone_t.dat")
     )
+
+
+# --------------------------- files of concurrent computations ---------------------------
+
+
+def test_each_computation_gets_files_of_its_own(monkeypatch: pytest.MonkeyPatch):
+    """One use case instance serves every document, so computations must not
+    share backing files: one recreating or deleting the file would pull the pages
+    out from under the other, which then dies with a bus error"""
+    make_fake_compute_sgram(monkeypatch)
+    use_case = ComputeSpectrogramMmap()
+    first = next(use_case(np.zeros(12), fs=100, chunk_duration=0.05))
+    second = next(use_case(np.zeros(30), fs=100, chunk_duration=0.05))
+
+    assert first.sxx_mmap.filename != second.sxx_mmap.filename
+    assert first.t_mmap.filename != second.t_mmap.filename
+
+
+def test_a_later_computation_leaves_an_earlier_spectrogram_intact(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    make_fake_compute_sgram(monkeypatch)
+    use_case = ComputeSpectrogramMmap()
+    first = list(use_case(np.zeros(12), fs=100, chunk_duration=0.05))[-1]
+    before = np.array(first.sxx_mmap[:, : first.frames_computed])
+
+    list(use_case(np.zeros(60), fs=100, chunk_duration=0.05))  # longer, then done
+
+    np.testing.assert_array_equal(first.sxx_mmap[:, : first.frames_computed], before)
+
+
+def test_closing_one_computation_does_not_remove_another_ones_files(
+    monkeypatch: pytest.MonkeyPatch, mmap_dir: Path
+):
+    make_fake_compute_sgram(monkeypatch)
+    use_case = ComputeSpectrogramMmap()
+    kept = use_case(np.zeros(12), fs=100, chunk_duration=0.05)
+    next(kept)
+    closed = use_case(np.zeros(12), fs=100, chunk_duration=0.05)
+    next(closed)
+
+    closed.close()
+
+    assert len(list(mmap_dir.glob("*.dat"))) == 2
+
+
+def test_files_of_a_finished_computation_are_removed_once_it_is_released(
+    monkeypatch: pytest.MonkeyPatch, mmap_dir: Path
+):
+    make_fake_compute_sgram(monkeypatch)
+    snapshots = run_in_chunks()
+    assert len(list(mmap_dir.glob("*.dat"))) == 2  # still in use
+
+    del snapshots
+    gc.collect()
+
+    assert list(mmap_dir.glob("*.dat")) == []
+
+
+def test_failure_before_the_files_exist_is_reported_as_a_computation_error(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def fail(*args: object, **kwargs: object) -> tuple:
+        raise ValueError("no resolution")
+
+    monkeypatch.setattr(ComputeSpectrogramMmap, "estimate_resolution", fail)
+
+    with pytest.raises(RuntimeError, match="Error during spectrogram computation"):
+        run_in_chunks()

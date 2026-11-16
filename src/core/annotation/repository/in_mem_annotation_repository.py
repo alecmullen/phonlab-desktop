@@ -32,6 +32,21 @@ class InMemAnnotationRepository(AnnotationRepository):
         self.types[id] = []
         return id
 
+    def reset(self) -> str | None:
+        self.filenames.clear()
+        self.nodes.clear()
+        self.types.clear()
+        return None
+
+    def clear_annotation(self, annotation_id: int) -> None:
+        self.nodes[annotation_id] = {}
+        self.types[annotation_id] = []
+
+    def create_annotations_if_missing(self, file_stems: list[str]) -> None:
+        for file_stem in file_stems:
+            if file_stem not in self.filenames.values():
+                self.create_annotation(file_stem)
+
     def create_node(
         self, annotation_id: int, time: float, same_threshold: float
     ) -> tuple[int, float]:

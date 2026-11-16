@@ -1,11 +1,18 @@
 from ui.document.state.plot_layout_state import PlotType
 
 # -- Mouse --
-# Two clicks closer together than this are a double-click. The system's setting is
-# often 500 ms, which turns a second click made to hear a selection again into a
-# double-click that zooms. A single click also waits this long, in case a second
-# click makes it a double-click
 DOUBLE_CLICK_INTERVAL_MS = 250
+
+# -- Settings files --
+PROJECT_FILE_NAME = "phonlab.toml"
+DISPLAY_SECTION = "display"
+PLAN_KEY = "plan"
+
+# -- Files --
+# Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
+AUDIO_FILE_SUFFIXES = (".wav",)
+TEXTGRID_FILE_SUFFIXES = (".textgrid",)
+PROJECT_DATABASE_FILENAME = "phonlab.db"
 
 # -- Document Window --
 DEFAULT_WINDOW_LENGTH = 10
