@@ -1176,8 +1176,8 @@ def test_ctrl_l_reaches_the_annotation_of_the_document_on_screen_only(
     QApplication.processEvents()
 
     assert reached == [second]  # the second tab is the one on screen
-    
-    
+
+
 # --------------------------- spectrogram only for the shown tab ---------------------------
 
 
