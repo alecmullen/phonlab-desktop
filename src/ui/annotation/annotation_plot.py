@@ -70,16 +70,16 @@ class AnnotationPlot(DocumentPlot):
 
     def set_up_menu(self):
         shortcut = QKeySequence("Ctrl+L")
-        create_label_action = ContextMenuHintAction(
+        self.create_label_action = ContextMenuHintAction(
             self.tr("Create Label"),
             shortcut.toString(QKeySequence.SequenceFormat.NativeText),
             parent=self,
         )
-        create_label_action.setShortcut(shortcut)
-        create_label_action.triggered.connect(self.create_label_from_selection)
+        self.create_label_action.setShortcut(shortcut)
+        self.create_label_action.triggered.connect(self.create_label_from_selection)
 
-        self.addAction(create_label_action)
-        self.getViewBox().menu.addAction(create_label_action)
+        self.addAction(self.create_label_action)
+        self.getViewBox().menu.addAction(self.create_label_action)
 
         save_to_textgrid_action = ContextMenuHintAction(
             self.tr("Save to TextGrid..."),
@@ -93,6 +93,10 @@ class AnnotationPlot(DocumentPlot):
         self.getViewBox().menu.addAction(save_to_textgrid_action)
 
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
+
+    def set_shortcuts_active(self, active: bool):
+        """Prevent ambiguous shortcuts when multible tabs open"""
+        self.create_label_action.setEnabled(active)
 
     @pyqtSlot()
     def on_context_menu_about_to_close(self):
