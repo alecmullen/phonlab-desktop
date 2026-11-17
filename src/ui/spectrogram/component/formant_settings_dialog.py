@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from res.constants import FORMANT_AUTO_ORDER, FORMANT_MAX_ORDER, FORMANT_MIN_ORDER
 from core.track_formants.entity.formant_options import FormantSpeakerType
+from res.constants import FORMANT_AUTO_ORDER, FORMANT_MAX_ORDER, FORMANT_MIN_ORDER
 from ui.spectrogram.state.formant_settings import (
     FormantMethodState,
     FormantSettingsState,
