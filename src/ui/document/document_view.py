@@ -78,8 +78,7 @@ class DocumentView(QWidget):
 
         # Create graphics layout widget
         self.graphics_widget = DocumentGraphicsWidget()
-        # Connected once: the scene outlives the plots, which are rebuilt
-        # whenever the layout changes. on_mouse_moved tells the plots
+        self.graphics_widget.resized.connect(self.apply_row_heights)
         self.graphics_widget.scene().sigMouseMoved.connect(self.on_mouse_moved)
 
         # Initialize plot items (will be created in plot methods)
@@ -497,15 +496,12 @@ class DocumentView(QWidget):
             plot.on_mouse_moved(pos)
 
         if self.mouse_pressed and not self.left_button_is_down():
-            # The release was never delivered (it can go missing, e.g. with a
-            # touch-surface mouse), so the selection would follow the pointer for
-            # ever. Treat it as released
+            # Treat it as released
             press_pos = pos if self.press_scene_pos is None else self.press_scene_pos
             self.end_press(press_pos, Qt.KeyboardModifier.NoModifier)
             return
 
-        # While dragging, the nearest plot stands in when the pointer leaves the
-        # plots: over the margins and gaps, or outside the window
+        # Use nearest plot if no plot is under the cursor
         plot_under = self._get_document_plot_at(pos)
         plot = plot_under
         if plot is None and self.mouse_pressed:
@@ -549,8 +545,7 @@ class DocumentView(QWidget):
 
     def _plot_to_press_in(self, scene_pos: QPointF) -> DocumentPlot | None:
         """The plot a press at scene_pos is on. The margins and gaps between plots
-        count as the nearest plot, so a drag started a few pixels off the edge of
-        a plot still selects"""
+        count as the nearest plot"""
         clicked_plot = self._get_document_plot_at(scene_pos)
         if clicked_plot is not None:
             return clicked_plot
@@ -569,8 +564,6 @@ class DocumentView(QWidget):
             return
 
         if a0.button() != Qt.MouseButton.LeftButton:
-            # Only the left button makes selections, and only its release ends
-            # them. A press by another button would never be ended
             return
 
         scene_pos = self.map_scene_to_graphics_widget(a0.position())
@@ -638,7 +631,7 @@ class DocumentView(QWidget):
             self.is_dragging = False
             self.view_model.play_selected_audio()
         elif modifiers == Qt.KeyboardModifier.ShiftModifier:
-            self.play_window_or_selection(scene_pos)
+            self.play_for_shift_click(scene_pos)
         else:
             self.pending_single_click = scene_pos
             if self.click_timer is not None:
@@ -646,7 +639,7 @@ class DocumentView(QWidget):
             self.click_timer = QTimer()
             self.click_timer.setSingleShot(True)
             self.click_timer.timeout.connect(self.handle_single_click)
-            self.click_timer.start(250)
+            self.click_timer.start(DOUBLE_CLICK_INTERVAL_MS)
 
     def play_for_shift_click(self, scene_pos: QPointF):
         """Shift+click plays: the audio between the nodes of the label clicked in the
