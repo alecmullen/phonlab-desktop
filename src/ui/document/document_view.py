@@ -4,8 +4,10 @@ from PyQt6.QtGui import (
     QAction,
     QDragEnterEvent,
     QDropEvent,
+    QHideEvent,
     QMouseEvent,
     QResizeEvent,
+    QShowEvent,
     QWheelEvent,
 )
 from PyQt6.QtWidgets import (
@@ -20,7 +22,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
+from res.constants import DOUBLE_CLICK_INTERVAL_MS, PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
@@ -29,6 +31,7 @@ from ui.common.document_plot import DocumentPlot
 from ui.document.component.audio_info_dialog import AudioInfoDialog
 from ui.document.component.document_graphics_widget import DocumentGraphicsWidget
 from ui.document.component.filter_dialog import FilterAudioDialog
+from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.paste_special_dialog import PasteSpecialDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
@@ -240,8 +243,8 @@ class DocumentView(QWidget):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
-    def load_textgrid(self, file_path: str):
-        self.view_model.parse_textgrid(file_path)
+    def load_textgrid(self, file_path: str, overwrite: bool = False):
+        self.view_model.parse_textgrid(file_path, overwrite)
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -345,6 +348,7 @@ class DocumentView(QWidget):
                 is_bottom_plot=is_bottom,
             )
             self.add_shared_context_menu_actions(annot_plot.getViewBox())
+            annot_plot.set_shortcuts_active(self.isVisible())
             self.graphics_widget.addItem(annot_plot, row=row, col=0)
             annot_plot.show()
             return [annot_plot]
@@ -564,6 +568,12 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
+        if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+            # A second Shift+click is a request to hear it again, not to zoom
+            self.play_window_or_selection(scene_pos)
+            a0.accept()
+            return
+
         mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
 
@@ -587,7 +597,7 @@ class DocumentView(QWidget):
                 self.view_model.play_selected_audio()
             else:
                 if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                    self.play_window_or_selection(scene_pos)
+                    self.play_for_shift_click(scene_pos)
                 else:
                     self.pending_single_click = scene_pos
                     if self.click_timer is not None:
@@ -595,9 +605,20 @@ class DocumentView(QWidget):
                     self.click_timer = QTimer()
                     self.click_timer.setSingleShot(True)
                     self.click_timer.timeout.connect(self.handle_single_click)
-                    self.click_timer.start(250)
+                    self.click_timer.start(DOUBLE_CLICK_INTERVAL_MS)
 
         a0.accept()
+
+    def play_for_shift_click(self, scene_pos: QPointF):
+        """Shift+click plays: the audio between the nodes of the label clicked in the
+        annotation plot, anywhere else the selection or the visible window"""
+        clicked_plot = self._get_document_plot_at(scene_pos)
+        if isinstance(clicked_plot, AnnotationPlot) and clicked_plot.handle_shift_click(
+            scene_pos
+        ):
+            return
+
+        self.play_window_or_selection(scene_pos)
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
@@ -615,6 +636,19 @@ class DocumentView(QWidget):
 
         self.pending_single_click = None
         self.click_timer = None
+
+    def showEvent(self, a0: QShowEvent | None):
+        super().showEvent(a0)
+        self.set_plot_shortcuts_active(True)
+
+    def hideEvent(self, a0: QHideEvent | None):
+        super().hideEvent(a0)
+        self.set_plot_shortcuts_active(False)
+
+    def set_plot_shortcuts_active(self, active: bool):
+        for plot in self.document_plots:
+            if isinstance(plot, AnnotationPlot):
+                plot.set_shortcuts_active(active)
 
     def resizeEvent(self, a0: QResizeEvent | None):
         if a0 is None:
@@ -783,7 +817,13 @@ class DocumentView(QWidget):
         mime_data = a0.mimeData()
         if mime_data is not None:
             path = mime_data.urls()[0].toLocalFile()
-            self.load_textgrid(path)
+            overwrite = False
+            if self.view_model.has_annotation():
+                answer = ask_overwrite_annotation(self, path)
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+                overwrite = True
+            self.load_textgrid(path, overwrite)
 
     @pyqtSlot()
     def open_resample_dialog(self):
