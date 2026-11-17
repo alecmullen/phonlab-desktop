@@ -9,7 +9,6 @@ DISPLAY_SECTION = "display"
 PLAN_KEY = "plan"
 
 # -- Files --
-# Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
 AUDIO_FILE_SUFFIXES = (".wav",)
 TEXTGRID_FILE_SUFFIXES = (".textgrid",)
 PROJECT_DATABASE_FILENAME = "phonlab.db"
@@ -45,9 +44,6 @@ SPECTROGRAM_PERCENTILE_SAMPLE_SIZE = 100_000
 
 # -- Formant Tracking --
 FORMANT_PREEMPHASIS = 0.94
-FORMANT_SPEAKER = 1  # 0 = long vocal tract, 1 = medium, 2 = short
-# Formants are tracked a chunk at a time. Both are whole seconds, so chunks
-# start on the 10 ms frame grid and on a sample at any sampling rate.
 FORMANT_CHUNK_SEC = 30
 FORMANT_CHUNK_OVERLAP_SEC = 1
 

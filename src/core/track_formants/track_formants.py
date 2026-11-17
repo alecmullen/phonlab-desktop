@@ -10,8 +10,8 @@ from res.constants import (
     FORMANT_CHUNK_OVERLAP_SEC,
     FORMANT_CHUNK_SEC,
     FORMANT_PREEMPHASIS,
-    FORMANT_SPEAKER,
 )
+from ui.spectrogram.state.formant_settings import FormantSpeakerType
 
 FORMANT_COLUMNS = ["F1", "F2", "F3", "F4"]
 FRAMES_PER_SEC = 100  # IFC_formants measures every 10 ms, on a 10 ms grid
@@ -28,7 +28,7 @@ class TrackFormants(UseCase[FormantTrack]):
         x: np.ndarray,
         fs: int,
         preemph: float = FORMANT_PREEMPHASIS,
-        speaker: int = FORMANT_SPEAKER,
+        speaker: FormantSpeakerType = FormantSpeakerType.MEDIUM,
         priority_sec: float = 0.0,
     ):
         duration = len(x) / fs
@@ -38,7 +38,7 @@ class TrackFormants(UseCase[FormantTrack]):
         order = sorted(range(n_chunks), key=lambda k: (abs(k - first), k < first))
 
         for k in order:
-            yield self._track_chunk(x, fs, preemph, speaker, k, k == n_chunks - 1)
+            yield self._track_chunk(x, fs, preemph, speaker.value, k, k == n_chunks - 1)
 
     def _track_chunk(
         self,
@@ -53,8 +53,7 @@ class TrackFormants(UseCase[FormantTrack]):
         chunk_end = chunk_start + FORMANT_CHUNK_SEC
 
         # Analyze a little before and after the chunk so its edge frames are
-        # measured with their full context. Chunk and overlap are whole
-        # seconds, so analysis starts on a sample and on the 10 ms frame grid.
+        # measured with their full context
         analysis_start = max(0, chunk_start - FORMANT_CHUNK_OVERLAP_SEC)
         analysis_end = chunk_end + FORMANT_CHUNK_OVERLAP_SEC
         segment = x[analysis_start * fs : analysis_end * fs]
