@@ -2,11 +2,9 @@ import pytest
 from PyQt6.QtWidgets import QDialog
 from pytestqt.qtbot import QtBot
 
+from core.track_formants.entity.formant_options import FormantSpeakerType
 from ui.spectrogram.component.formant_settings_dialog import FormantSettingsDialog
-from ui.spectrogram.state.formant_settings import (
-    FormantSettingsState,
-    FormantSpeakerType,
-)
+from ui.spectrogram.state.formant_settings import FormantSettingsState
 
 
 def test_fields_are_initialized_from_defaults(qtbot: QtBot):
