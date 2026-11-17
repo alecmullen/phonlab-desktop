@@ -1,12 +1,14 @@
 from ui.document.state.plot_layout_state import PlotType
 
+# -- Mouse --
+DOUBLE_CLICK_INTERVAL_MS = 250
+
 # -- Settings files --
 PROJECT_FILE_NAME = "phonlab.toml"
 DISPLAY_SECTION = "display"
 PLAN_KEY = "plan"
 
 # -- Files --
-# Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
 AUDIO_FILE_SUFFIXES = (".wav",)
 TEXTGRID_FILE_SUFFIXES = (".textgrid",)
 PROJECT_DATABASE_FILENAME = "phonlab.db"
@@ -49,7 +51,6 @@ FORMANT_PREEMPHASIS = {
     "tvlp": 0.95,
     "dppt": 0.0,
 }
-FORMANT_SPEAKER = 1  # 0 = long vocal tract, 1 = medium, 2 = short
 FORMANT_AUTO_ORDER = -1  # let phonlab choose the LPC order
 FORMANT_MIN_ORDER = 6
 FORMANT_MAX_ORDER = 30

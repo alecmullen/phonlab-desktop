@@ -1,5 +1,5 @@
 from dataclasses import dataclass, replace
-from enum import StrEnum
+from enum import Enum, StrEnum
 
 from core.track_formants.entity.formant_method import FormantMethod
 from core.track_formants.entity.formant_options import FormantOptions
@@ -8,7 +8,6 @@ from res.constants import (
     FORMANT_DELTA_F,
     FORMANT_MEDIAN_F0,
     FORMANT_PREEMPHASIS,
-    FORMANT_SPEAKER,
     FORMANT_TOP_FREQUENCY,
 )
 from ui.base.state import State
@@ -24,6 +23,12 @@ class FormantMethodState(StrEnum):
     DPPT = "dppt"
 
 
+class FormantSpeakerType(Enum):
+    LONG = 0
+    MEDIUM = 1
+    SHORT = 2
+
+
 @dataclass(frozen=True)
 class FormantSettingsState(State):
     """Formant tracking settings. Which of them the dialog offers, and which
@@ -31,7 +36,7 @@ class FormantSettingsState(State):
 
     method: FormantMethodState = FormantMethodState.IFC
     preemphasis: float = FORMANT_PREEMPHASIS["ifc"]
-    speaker: int = FORMANT_SPEAKER
+    speaker: FormantSpeakerType = FormantSpeakerType.MEDIUM
     order: int = FORMANT_AUTO_ORDER
     top_frequency: int = FORMANT_TOP_FREQUENCY
     median_f0: int = FORMANT_MEDIAN_F0

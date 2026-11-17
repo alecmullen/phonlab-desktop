@@ -9,7 +9,10 @@ from PyQt6.QtWidgets import (
     QFormLayout,
 )
 
-from ui.spectrogram.state.formant_settings import FormantSettingsState
+from ui.spectrogram.state.formant_settings import (
+    FormantSettingsState,
+    FormantSpeakerType,
+)
 
 
 class FormantSettingsDialog(QDialog):
@@ -29,9 +32,11 @@ class FormantSettingsDialog(QDialog):
         layout.addRow(self.tr("Preemphasis:"), self.preemphasis_spin)
 
         self.speaker_combo = QComboBox()
-        self.speaker_combo.addItem(self.tr("Long vocal tract"), 0)
-        self.speaker_combo.addItem(self.tr("Medium"), 1)
-        self.speaker_combo.addItem(self.tr("Short vocal tract"), 2)
+        self.speaker_combo.addItem(self.tr("Long vocal tract"), FormantSpeakerType.LONG)
+        self.speaker_combo.addItem(self.tr("Medium"), FormantSpeakerType.MEDIUM)
+        self.speaker_combo.addItem(
+            self.tr("Short vocal tract"), FormantSpeakerType.SHORT
+        )
         self.speaker_combo.setCurrentIndex(
             self.speaker_combo.findData(settings.speaker)
         )
@@ -54,6 +59,6 @@ class FormantSettingsDialog(QDialog):
             return replace(
                 settings,
                 preemphasis=dialog.preemphasis_spin.value(),
-                speaker=int(dialog.speaker_combo.currentData()),
+                speaker=dialog.speaker_combo.currentData(),
             )
         return None
