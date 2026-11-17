@@ -34,11 +34,14 @@ from ui.document.state.status_message_state import StatusMessageState
 from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
+from ui.spectrogram.state.spectrogram_state import SpectrogramState
 
 
 @pytest.fixture
 def spectrogram_view_model() -> SpectrogramViewModel:
-    return mock_view_model(SpectrogramViewModel)
+    view_model = mock_view_model(SpectrogramViewModel)
+    view_model.sgram_state = SpectrogramState()
+    return view_model
 
 
 @pytest.fixture
@@ -390,6 +393,159 @@ def test_toggle_annotations_adds_and_removes_annotations(
 
     view_model.toggle_annotations()
     assert PlotType.ANNOTATION not in view_model.plot_layout_state.plots
+
+
+def test_set_plots_replaces_the_layout_and_emits_it(view_model: DocumentViewModel):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.update_spectrogram = lambda: None
+    emitted = []
+    view_model.subscribe(emitted.append)
+
+    view_model.set_plots({PlotType.WAVEFORM, PlotType.SPECTROGRAM})
+
+    expected = PlotLayoutState({PlotType.WAVEFORM, PlotType.SPECTROGRAM})
+    assert view_model.plot_layout_state == expected
+    assert expected in emitted
+
+
+def test_set_plots_with_no_plots_falls_back_to_waveform(view_model: DocumentViewModel):
+    view_model.set_plots({PlotType.ANNOTATION})
+
+    view_model.set_plots(set())
+
+    assert view_model.plot_layout_state.plots == {PlotType.WAVEFORM}
+
+
+def test_set_plots_with_the_current_layout_emits_nothing(view_model: DocumentViewModel):
+    emitted = []
+    view_model.subscribe(emitted.append)
+
+    view_model.set_plots({PlotType.WAVEFORM})
+
+    assert emitted == []
+
+
+def test_set_plots_updates_the_new_plots_when_audio_is_loaded(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    calls = []
+    view_model.update_spectrogram = lambda: calls.append("spectrogram")
+    view_model.update_annotation_state = lambda: calls.append("annotation")
+
+    view_model.set_plots({PlotType.SPECTROGRAM, PlotType.ANNOTATION})
+
+    assert calls == ["spectrogram", "annotation"]
+
+
+def test_set_plots_before_audio_loads_only_records_the_layout(
+    view_model: DocumentViewModel,
+):
+    def fail():
+        raise AssertionError("no audio to plot yet")
+
+    view_model.update_spectrogram = fail
+    emitted = []
+    view_model.subscribe(emitted.append)
+
+    view_model.set_plots({PlotType.SPECTROGRAM})
+
+    assert PlotType.SPECTROGRAM in view_model.plot_layout_state.plots
+    assert emitted == []
+
+
+def test_spectrogram_requested_before_prep_is_shown_once_audio_is_prepped(
+    view_model: DocumentViewModel,
+):
+    calls = []
+    view_model.update_spectrogram = lambda: calls.append(True)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+
+    view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
+
+    assert calls == [True]
+
+
+# --------------------------- spectrogram only for the shown document ---------------------------
+
+
+def test_a_document_is_shown_by_default(view_model: DocumentViewModel):
+    assert view_model.is_shown
+
+
+def test_hidden_document_does_not_compute_its_spectrogram(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_shown_document_computes_its_spectrogram_when_audio_is_prepped(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    spectrogram_view_model.set_window_state.reset_mock()
+
+    view_model.spectrogram_view_model.state_changed.emit(AudioPrepped())
+
+    spectrogram_view_model.set_window_state.assert_called_once()
+
+
+def test_hidden_document_computes_its_spectrogram_once_it_is_shown(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_called_once()
+
+
+def test_showing_a_document_without_a_spectrogram_plot_computes_nothing(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    load_signal(view_model, np.zeros(2000), fs=1000)
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_showing_a_document_before_its_audio_loads_computes_nothing(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    view_model.set_shown(False)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
+
+
+def test_showing_a_document_whose_spectrogram_is_already_up_does_not_recompute(
+    view_model: DocumentViewModel, spectrogram_view_model: SpectrogramViewModel
+):
+    load_signal(view_model, np.zeros(2000), fs=1000)
+    view_model.set_plots({PlotType.SPECTROGRAM})
+    view_model.set_shown(False)
+    spectrogram_view_model.set_window_state.reset_mock()
+    spectrogram_view_model.sgram_state = replace(
+        spectrogram_view_model.sgram_state, is_showing=True
+    )
+
+    view_model.set_shown(True)
+
+    spectrogram_view_model.set_window_state.assert_not_called()
 
 
 # --------------------------- primary_channel ---------------------------
@@ -1054,7 +1210,37 @@ def test_parse_textgrid_delegates_to_annotation_view_model(
 
     view_model.parse_textgrid("a.TextGrid")
 
-    annotation_view_model.parse_textgrid.assert_called_once_with("a.TextGrid", "a")
+    annotation_view_model.parse_textgrid.assert_called_once_with(
+        "a.TextGrid", "a", False
+    )
+
+
+def test_parse_textgrid_passes_overwrite_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.file_stem = "a"
+
+    view_model.parse_textgrid("a.TextGrid", overwrite=True)
+
+    annotation_view_model.parse_textgrid.assert_called_once_with(
+        "a.TextGrid", "a", True
+    )
+
+
+def test_reload_annotation_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    view_model.reload_annotation()
+
+    annotation_view_model.reload_annotation.assert_called_once_with()
+
+
+def test_has_annotation_delegates_to_annotation_view_model(
+    view_model: DocumentViewModel, annotation_view_model: AnnotationViewModel
+):
+    annotation_view_model.has_annotation.return_value = True
+
+    assert view_model.has_annotation() is True
 
 
 def test_parse_textgrid_does_nothing_without_file_stem(

@@ -11,6 +11,7 @@ from pytestqt.qtbot import QtBot
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
+from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
@@ -244,6 +245,41 @@ def test_double_click_zooms_to_selection(loaded_view: DocumentView):
     assert document_view_model.document_window_state.end == 5000
 
 
+def test_shift_double_click_plays_the_selection_again_instead_of_zooming(
+    loaded_view: DocumentView,
+):
+    document_view_model = loaded_view.view_model
+    document_view_model.start_selection(1.0)
+    document_view_model.continue_selection(5.0)
+    window_before = document_view_model.document_window_state
+
+    dbl_click = mouse_event(
+        loaded_view,
+        2.0,
+        QEvent.Type.MouseButtonDblClick,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    loaded_view.mouseDoubleClickEvent(dbl_click)
+
+    assert document_view_model.document_window_state == window_before
+    assert document_view_model.select_state.is_selected
+    assert len(document_view_model.audio_player.played) == 1
+
+
+def test_a_single_click_waits_as_long_as_the_double_click_interval(
+    loaded_view: DocumentView,
+):
+    loaded_view.mousePressEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
+    )
+    loaded_view.mouseReleaseEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonRelease)
+    )
+
+    assert loaded_view.click_timer is not None
+    assert loaded_view.click_timer.interval() == DOUBLE_CLICK_INTERVAL_MS
+
+
 def test_click_after_release_sets_mark_at_click_position(
     qtbot: QtBot, loaded_view: DocumentView
 ):
@@ -354,11 +390,9 @@ def test_drag_enter_event_ignores_non_url_mime_data(view: DocumentView):
     assert event.isAccepted() is False
 
 
-def test_drop_event_loads_textgrid_from_first_url(view: DocumentView):
-    calls = []
-    view.load_textgrid = lambda path: calls.append(path)
+def drop_event(path: str) -> QDropEvent:
     mime = QMimeData()
-    mime.setUrls([QUrl.fromLocalFile("/tmp/example.TextGrid")])
+    mime.setUrls([QUrl.fromLocalFile(path)])
     event = QDropEvent(
         QPointF(0, 0),
         Qt.DropAction.CopyAction,
@@ -366,10 +400,72 @@ def test_drop_event_loads_textgrid_from_first_url(view: DocumentView):
         Qt.MouseButton.NoButton,
         Qt.KeyboardModifier.NoModifier,
     )
+    # The event does not own its mime data; keep it alive as long as the event
+    event.mime_data = mime  # ty: ignore[unresolved-attribute]
+    return event
 
-    view.dropEvent(event)
 
-    assert calls == ["/tmp/example.TextGrid"]
+def stub_drop(
+    view: DocumentView,
+    monkeypatch: pytest.MonkeyPatch,
+    has_annotation: bool,
+    *answers: QMessageBox.StandardButton,
+) -> tuple[list, list]:
+    """Returns the (path, overwrite) load_textgrid calls and the questions asked"""
+    calls: list = []
+    asked: list = []
+    remaining = list(answers)
+    view.load_textgrid = lambda path, overwrite=False: calls.append((path, overwrite))
+    monkeypatch.setattr(view.view_model, "has_annotation", lambda: has_annotation)
+
+    def question(
+        parent: object,
+        title: str,
+        text: str,
+        buttons: QMessageBox.StandardButton,
+        *args: object,
+    ) -> QMessageBox.StandardButton:
+        asked.append((text, buttons))
+        return remaining.pop(0)
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return calls, asked
+
+
+def test_drop_event_loads_textgrid_from_first_url(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, asked = stub_drop(view, monkeypatch, False)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == [("/tmp/example.TextGrid", False)]
+    assert asked == []
+
+
+def test_drop_event_overwrites_existing_annotation_when_user_says_yes(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, asked = stub_drop(view, monkeypatch, True, QMessageBox.StandardButton.Yes)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == [("/tmp/example.TextGrid", True)]
+    [(text, buttons)] = asked
+    assert (
+        text == "Overwrite the existing database with annotation from example.TextGrid?"
+    )
+    assert buttons == QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+
+
+def test_drop_event_keeps_existing_annotation_when_user_says_no(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, _ = stub_drop(view, monkeypatch, True, QMessageBox.StandardButton.No)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == []
 
 
 # --------------------------- resample dialog integration ---------------------------
@@ -753,6 +849,77 @@ def test_mouse_press_outside_plots_does_not_start_drag(loaded_view: DocumentView
     loaded_view.mousePressEvent(event)
 
     assert loaded_view.mouse_pressed is False
+
+
+def test_shift_click_on_an_annotation_label_plays_that_label_not_the_window(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    shift_clicked = []
+    monkeypatch.setattr(
+        plot, "handle_shift_click", lambda pos: shift_clicked.append(pos) or True
+    )
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(shift_clicked) == 1
+    assert window_plays == []
+
+
+def test_shift_click_in_the_annotation_plot_away_from_labels_plays_the_window(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    monkeypatch.setattr(plot, "handle_shift_click", lambda pos: False)
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(window_plays) == 1
+
+
+def test_shift_click_in_another_plot_plays_the_window_or_selection(
+    all_plots_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plot = plot_of(all_plots_view, SpectrogramPlot)
+    window_plays = []
+    monkeypatch.setattr(
+        all_plots_view, "play_window_or_selection", lambda pos: window_plays.append(pos)
+    )
+
+    all_plots_view.play_for_shift_click(scene_center(plot))
+
+    assert len(window_plays) == 1
+
+
+def test_releasing_a_shift_click_plays_without_setting_a_mark(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    plays = []
+    monkeypatch.setattr(loaded_view, "play_for_shift_click", plays.append)
+    loaded_view.mousePressEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
+    )
+
+    loaded_view.mouseReleaseEvent(
+        mouse_event(
+            loaded_view,
+            4.0,
+            QEvent.Type.MouseButtonRelease,
+            Qt.KeyboardModifier.ShiftModifier,
+        )
+    )
+
+    assert len(plays) == 1
+    assert loaded_view.click_timer is None
+    assert loaded_view.view_model.mark_state.is_set is False
 
 
 def test_single_click_on_label_selects_label_and_sets_no_mark(
@@ -1483,3 +1650,92 @@ def test_a_mouse_move_reaches_each_plot_once(
     all_plots_view.on_mouse_moved(QPointF(300, 100))
 
     assert sorted(calls) == [0, 1, 2]
+
+
+# --------------------------- row heights follow the graphics widget ---------------------------
+
+
+def test_resizing_the_graphics_widget_resizes_the_plot_rows(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(loaded_view, "apply_row_heights", lambda: calls.append(True))
+    loaded_view.graphics_widget.resized.disconnect()
+    loaded_view.graphics_widget.resized.connect(loaded_view.apply_row_heights)
+
+    loaded_view.graphics_widget.resized.emit()
+
+    assert calls == [True]
+
+
+def plots_bottom(view: DocumentView) -> float:
+    return max(plot.sceneBoundingRect().bottom() for plot in view.document_plots)
+
+
+def test_a_document_built_while_hidden_fills_the_space_it_is_later_shown_in(
+    qtbot: QtBot, document_view_model: DocumentViewModel
+):
+    """A tab opened in the background has its plots laid out while its page is still
+    at the default size, and is only resized when first shown, after the window
+    may have been made bigger"""
+    view = DocumentView(document_view_model)
+    qtbot.addWidget(view)
+    view.resize(640, 480)
+    document_view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
+    )
+    document_view_model.toggle_annotations()
+    QApplication.processEvents()
+    assert not view.isVisible()
+
+    view.resize(1000, 900)
+    view.show()
+    qtbot.waitExposed(view)
+    QApplication.processEvents()
+
+    space = view.graphics_widget.viewport().height()
+    assert plots_bottom(view) > space - 40
+
+
+# --------------------------- annotation shortcut follows visibility ---------------------------
+
+
+def test_annotation_shortcut_is_active_while_the_document_is_shown(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+
+    assert all_plots_view.isVisible()
+    assert plot.create_label_action.isEnabled()
+
+
+def test_annotation_shortcut_is_switched_off_when_the_document_is_hidden(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+
+    all_plots_view.hide()
+
+    assert not plot.create_label_action.isEnabled()
+
+
+def test_annotation_shortcut_comes_back_when_the_document_is_shown_again(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    all_plots_view.hide()
+
+    all_plots_view.show()
+
+    assert plot.create_label_action.isEnabled()
+
+
+def test_annotation_plot_added_to_a_hidden_document_starts_with_its_shortcut_off(
+    loaded_view: DocumentView,
+):
+    loaded_view.hide()
+
+    loaded_view.view_model.toggle_annotations()
+    QApplication.processEvents()
+
+    assert not plot_of(loaded_view, AnnotationPlot).create_label_action.isEnabled()

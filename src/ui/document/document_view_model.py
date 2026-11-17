@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 
 import numpy as np
@@ -83,6 +83,9 @@ class DocumentViewModel(ViewModel):
         self.select_state: SelectState = SelectState()
         self.document_window_state: DocumentWindowState = DocumentWindowState()
         self.plot_layout_state: PlotLayoutState = PlotLayoutState()
+
+        # Whether this document's tab is on screen (see set_shown)
+        self.is_shown = True
         self.playback_state = PlaybackState()
         self.mark_state: MarkState = MarkState()
         self.audio_loaded_state: AudioLoaded = AudioLoaded()
@@ -123,6 +126,13 @@ class DocumentViewModel(ViewModel):
     def on_sgram_state_change(self, model: State):
         if isinstance(model, (LoadProgressState, AudioPrepped)):
             self.state_changed.emit(model)
+        if (
+            isinstance(model, AudioPrepped)
+            and self.plot_layout_state.has_spectrogram()
+            and not self.spectrogram_view_model.sgram_state.is_showing
+        ):
+            # The spectrogram was asked for before its audio was ready
+            self.update_spectrogram()
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
@@ -178,6 +188,26 @@ class DocumentViewModel(ViewModel):
             plots.remove(PlotType.ANNOTATION)
 
         self.plot_layout_state = replace(self.plot_layout_state, plots=plots)
+        self.state_changed.emit(self.plot_layout_state)
+
+    def set_plots(self, plots: Iterable[PlotType]):
+        """Show exactly `plots` (at least one), e.g. to carry the display plan
+        of another document over to this one."""
+        new_plots = set(plots) or {PlotType.WAVEFORM}
+        if new_plots == self.plot_layout_state.plots:
+            return
+
+        self.plot_layout_state = replace(self.plot_layout_state, plots=new_plots)
+        if self.primary_channel() is None:
+            # Nothing to plot yet; the view lays out the plots once audio loads
+            return
+
+        if self.plot_layout_state.has_waveform():
+            self.update_audio_waveform()
+        if self.plot_layout_state.has_spectrogram():
+            self.update_spectrogram()
+        if self.plot_layout_state.has_annotation():
+            self.update_annotation_state()
         self.state_changed.emit(self.plot_layout_state)
 
     def load_audio(self, filepath: str, options: AudioOpenOptionsState):
@@ -356,7 +386,24 @@ class DocumentViewModel(ViewModel):
 
         self.spectrogram_view_model.prep_audio(x, fs)
 
+    def set_shown(self, shown: bool):
+        """Set if document is being shown. Only run spectrogram once document is showing."""
+        if shown == self.is_shown:
+            return
+        self.is_shown = shown
+
+        if (
+            shown
+            and self.plot_layout_state.has_spectrogram()
+            and self.primary_channel() is not None
+            and not self.spectrogram_view_model.sgram_state.is_showing
+        ):
+            self.update_spectrogram()
+
     def update_spectrogram(self):
+        if not self.is_shown:
+            return  # set_shown() catches up when the document is shown
+
         primary_channel = self.primary_channel()
         if primary_channel is None:
             raise RuntimeError("Missing primary audio channel")
@@ -1371,9 +1418,17 @@ class DocumentViewModel(ViewModel):
             return
         self.undo_stack.append(cmd)
 
-    def parse_textgrid(self, file_path: str):
+    def reload_annotation(self):
+        self.annotation_view_model.reload_annotation()
+
+    def has_annotation(self) -> bool:
+        return self.annotation_view_model.has_annotation()
+
+    def parse_textgrid(self, file_path: str, overwrite: bool = False):
         if self.file_stem is not None:
-            self.annotation_view_model.parse_textgrid(file_path, self.file_stem)
+            self.annotation_view_model.parse_textgrid(
+                file_path, self.file_stem, overwrite
+            )
 
     @pyqtSlot(object)
     def on_error(self, err: Exception):
