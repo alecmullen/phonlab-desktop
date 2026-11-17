@@ -216,7 +216,7 @@ class DocumentViewModel(ViewModel):
             self.update_annotation_state()
         self.state_changed.emit(self.plot_layout_state)
 
-    def load_audio(self, filepath: str, options: AudioOpenOptionsState):
+    def load_audio(self, filepath: str | list[str], options: AudioOpenOptionsState):
         self.audio_options = options
         self.channel_state = ChannelState(
             primary_channel=options.primary_channel,

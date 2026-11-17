@@ -12,12 +12,29 @@ from core.annotation.search_tier import SearchTier
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
+from core.import_metadata.apply_information_sources import ApplyInformationSources
+from core.import_metadata.import_metadata import ImportMetadata
+from core.import_metadata.information_sources_file import (
+    LoadInformationSources,
+    SaveInformationSource,
+)
+from core.import_metadata.match_metadata import MatchMetadata
+from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.inspect_database.inspect_database import ListTables, ReadTable
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.project.add_project_files import AddProjectFiles
 from core.project.close_project import CloseProject
 from core.project.rebuild_project import RebuildProject
+from core.project_layout.infer_layout import InferLayout
+from core.project_layout.project_layout_file import (
+    LoadProjectLayout,
+    SaveProjectLayout,
+)
+from core.project_layout.resolve_recordings import ResolveRecordings
+from core.project_layout.scan_project_tree import ScanProjectTree
+from core.project_layout.suggest_talker_names import SuggestTalkerNames
 from core.save_audio.save_audio import SaveAudio
 from core.settings.load_display_plan import LoadDisplayPlan
 from core.settings.load_tier_layout import LoadTierLayout
@@ -63,10 +80,31 @@ class UseCaseFactory:
         self.add_project_files = AddProjectFiles(
             self.annotation_repository, self.parse_textgrid
         )
+        self.read_metadata_csv = ReadMetadataCsv()
+        self.match_metadata = MatchMetadata(self.annotation_repository)
+        self.import_metadata = ImportMetadata(self.annotation_repository)
+        self.load_information_sources = LoadInformationSources()
+        self.save_information_source = SaveInformationSource()
+        self.apply_information_sources = ApplyInformationSources(
+            self.load_information_sources,
+            self.read_metadata_csv,
+            self.match_metadata,
+            self.import_metadata,
+        )
         self.rebuild_project = RebuildProject(
-            self.annotation_repository, self.add_project_files
+            self.annotation_repository,
+            self.add_project_files,
+            self.apply_information_sources,
         )
         self.close_project = CloseProject(self.annotation_repository)
+        self.scan_project_tree = ScanProjectTree()
+        self.infer_layout = InferLayout()
+        self.resolve_recordings = ResolveRecordings()
+        self.load_project_layout = LoadProjectLayout()
+        self.save_project_layout = SaveProjectLayout()
+        self.suggest_talker_names = SuggestTalkerNames()
+        self.list_tables = ListTables(self.annotation_repository)
+        self.read_table = ReadTable(self.annotation_repository)
 
     def provide[T](
         self,
@@ -121,6 +159,35 @@ class UseCaseFactory:
             use_case = self.parse_textgrid
         if use_case_type is WriteTextGrid:
             use_case = self.write_textgrid
+        if use_case_type is ScanProjectTree:
+            use_case = self.scan_project_tree
+        if use_case_type is InferLayout:
+            use_case = self.infer_layout
+        if use_case_type is ResolveRecordings:
+            use_case = self.resolve_recordings
+        if use_case_type is LoadProjectLayout:
+            use_case = self.load_project_layout
+        if use_case_type is SaveProjectLayout:
+            use_case = self.save_project_layout
+        if use_case_type is SuggestTalkerNames:
+            use_case = self.suggest_talker_names
+        if use_case_type is ReadMetadataCsv:
+            use_case = self.read_metadata_csv
+        if use_case_type is MatchMetadata:
+            use_case = self.match_metadata
+        if use_case_type is ImportMetadata:
+            use_case = self.import_metadata
+        if use_case_type is LoadInformationSources:
+            use_case = self.load_information_sources
+        if use_case_type is SaveInformationSource:
+            use_case = self.save_information_source
+        if use_case_type is ApplyInformationSources:
+            use_case = self.apply_information_sources
+
+        if use_case_type is ListTables:
+            use_case = self.list_tables
+        if use_case_type is ReadTable:
+            use_case = self.read_table
 
         if use_case_type is LoadDisplayPlan:
             use_case = self.load_display_plan

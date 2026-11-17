@@ -268,3 +268,14 @@ def test_invoke_overwrite_leaves_the_annotations_of_other_files_alone(tmp_path: 
     assert repository.find_annotation_by_file_stem("two") == other
     one = repository.find_annotation_by_file_stem("one")
     assert one is not None and [type.type for type in one.types] == ["word"]
+
+
+def test_invoke_reads_a_buckeye_file(tmp_path: Path):
+    (tmp_path / "s.words").write_text("h\n#\n  0.5000 121 hi; h ay; h ay; UH\n")
+    (tmp_path / "s.phones").write_text("h\n#\n  0.2000 122 h\n  0.5000 122 ay\n")
+
+    result = ParseTextGrid(InMemAnnotationRepository()).run_sync(
+        str(tmp_path / "s.words"), "s"
+    )
+
+    assert [type.type for type in result.types] == ["word", "phone"]

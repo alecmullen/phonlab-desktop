@@ -1,7 +1,5 @@
 import bisect
 
-import phonlab as phon
-
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
@@ -10,6 +8,7 @@ from core.annotation.entity.annotation import (
 )
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case import UseCase
+from core.read_tiers.read_tiers import read_tiers
 from res.constants import SAME_NODE_THRESHOLD
 
 
@@ -26,7 +25,7 @@ class ParseTextGrid(UseCase[Annotation]):
         file is read before anything in the database is touched, so an unreadable
         TextGrid leaves the existing annotation as it was"""
         try:
-            tiers = phon.read_textgrid_with(file_path)
+            tiers = read_tiers(file_path)
 
             existing = self.annotation_repository.find_annotation_by_file_stem(
                 file_stem
@@ -58,13 +57,11 @@ class ParseTextGrid(UseCase[Annotation]):
                 *sorted(nodes.items(), key=lambda item: item[1])
             )
 
+            times, ids = list(node_times_db), list(node_ids_db)
             types = [
                 AnnotationType(
                     tier["name"],
-                    [
-                        to_label(list(node_times_db), list(node_ids_db), label)
-                        for label in tier["labels"]
-                    ],
+                    [to_label(times, ids, label) for label in tier["labels"]],
                 )
                 for tier in tiers
             ]

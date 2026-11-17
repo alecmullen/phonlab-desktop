@@ -5,10 +5,12 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
+from core.annotation.entity.recording import Recording
 from core.annotation.entity.tier_label import TierLabel
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_label import AnnotationLabelEntity
 from data.annotation.entity.annotation_type import AnnotationTypeEntity
+from data.annotation.entity.recording_channel import RecordingChannelEntity
 
 
 def entity_to_annotation(entity: AnnotationEntity) -> Annotation:
@@ -54,3 +56,29 @@ def row_to_tier_label(row: Row) -> TierLabel:
     return TierLabel(
         file_stem, tier_name, AnnotationLabel(s_node, e_node, text, id), start, end
     )
+
+
+def entity_to_recording(
+    entity: AnnotationEntity, channels: list[RecordingChannelEntity]
+) -> Recording:
+    """The recording an annotation row describes, given its channel rows. The links
+    to talkers have to be loaded"""
+    return Recording(
+        file_stem=entity.file_stem,
+        audio_file=entity.audio_file,
+        annotation_file=entity.annotation_file,
+        channel_files={row.channel: row.audio_file for row in channels},
+        channel_talkers={
+            row.channel: row.talker.name for row in channels if row.talker is not None
+        },
+        data_files=dict(entity.data_files or {}),
+        talkers=[link.talker.name for link in entity.talker_links],
+        fields=dict(entity.fields or {}),
+    )
+
+
+def set_recording_columns(entity: AnnotationEntity, recording: Recording):
+    entity.audio_file = recording.audio_file
+    entity.annotation_file = recording.annotation_file
+    entity.data_files = dict(recording.data_files)
+    entity.fields = dict(recording.fields)

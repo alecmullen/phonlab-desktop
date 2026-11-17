@@ -6,7 +6,11 @@ import tomli_w
 from PyQt6.QtCore import pyqtSlot
 
 from core.project.add_project_files import AddProjectFiles
-from core.project.entity.project_import_result import ProjectImportResult
+from core.project.entity.project_file import ProjectFile
+from core.project.entity.project_import_result import (
+    ImportStage,
+    ProjectImportResult,
+)
 from core.project.rebuild_project import RebuildProject
 from core.project.scan_project_files import scan_project_files
 from core.settings.app_settings import settings
@@ -23,6 +27,7 @@ from ui.document.state.plot_layout_state import (
     plot_names,
     plots_from_names,
 )
+from ui.main.state.openable_file import OpenableFile
 from ui.main.state.project_import_state import (
     ProjectImportState,
     to_project_import_state,
@@ -143,17 +148,30 @@ class MainViewModel(ViewModel):
         """True if the project directory has no database yet"""
         return not (Path(self._project_dir()) / PROJECT_DATABASE_FILENAME).exists()
 
-    def project_files(self) -> list[tuple[str, str, str | None]]:
-        """(file_stem, audio_file, annotation_file) for each audio file in the project
-        directory, where annotation_file is None if it has no TextGrid"""
+    def project_files(self) -> list[OpenableFile]:
+        """(file_stem, audio_file, annotation_file, channel_files) for each recording
+        in the project, where annotation_file is None if it has no TextGrid and
+        channel_files lists the audio files of a recording stored as one file per
+        channel"""
+        root = Path(self._project_dir())
         return [
-            (file.file_stem, file.audio_path, file.textgrid_path)
-            for file in scan_project_files(self._project_dir())
+            OpenableFile(
+                file.file_stem,
+                file.audio_path,
+                file.textgrid_path,
+                tuple(
+                    str(root / path)
+                    for path in (
+                        file.recording.channel_files.values() if file.recording else ()
+                    )
+                ),
+            )
+            for file in scan_project_files(str(root))
         ]
 
     def textgrid_for(self, file_stem: str) -> str | None:
         """The TextGrid in the project directory that belongs to file_stem, if any"""
-        for stem, _, textgrid_file in self.project_files():
+        for stem, _, textgrid_file, _ in self.project_files():
             if stem == file_stem:
                 return textgrid_file
         return None
@@ -162,14 +180,29 @@ class MainViewModel(ViewModel):
         """Add files new to the project to its database: file stems that are not in it
         yet, and TextGrids of files whose annotation is empty"""
         dir_path = self._project_dir()
-        files = scan_project_files(dir_path)
-        self._launch_import(self.provide_add_project_files(dir_path)(files))
+        add_project_files = self.provide_add_project_files(dir_path)
+        self._launch_import(self._import_steps(dir_path, add_project_files))
 
     def rebuild_project(self):
-        """Read all TextGrids into a new project database, backing up the old one"""
+        """Read all TextGrids into a new project database, backing up the old one, and
+        add again the information from the CSV files the project remembers"""
         dir_path = self._project_dir()
-        files = scan_project_files(dir_path)
-        self._launch_import(self.provide_rebuild_project(dir_path)(files))
+        rebuild_project = self.provide_rebuild_project(dir_path)
+        self._launch_import(
+            self._import_steps(dir_path, lambda files: rebuild_project(files, dir_path))
+        )
+
+    def _import_steps(
+        self,
+        dir_path: str,
+        update: Callable[
+            [list[ProjectFile]], Generator[ProjectImportResult, None, None]
+        ],
+    ) -> Generator[ProjectImportResult, None, None]:
+        """Looks through the project's files and then runs `update` on them, in the
+        background where the user is told what is going on from the start"""
+        yield ProjectImportResult(stage=ImportStage.SCANNING)
+        yield from update(scan_project_files(dir_path))
 
     def _project_dir(self) -> str:
         if self.dir_path is None:

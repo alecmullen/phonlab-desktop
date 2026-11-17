@@ -16,7 +16,8 @@ from core.settings.save_tier_layout import SaveTierLayout
 from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from ui.document.state.plot_layout_state import PlotType
 from ui.main.main_view_model import MainViewModel
-from ui.main.state.project_import_state import ProjectImportState
+from ui.main.state.openable_file import OpenableFile
+from ui.main.state.project_import_state import ImportStageState, ProjectImportState
 
 
 def test_dir_path_defaults_to_none():
@@ -192,8 +193,8 @@ def test_project_files_pairs_audio_with_textgrid_ignoring_case(tmp_path: Path):
         (tmp_path / name).write_bytes(b"")
 
     assert view_model.project_files() == [
-        ("a", str(tmp_path / "a.WAV"), str(tmp_path / "a.textgrid")),
-        ("b", str(tmp_path / "b.wav"), None),
+        OpenableFile("a", str(tmp_path / "a.WAV"), str(tmp_path / "a.textgrid")),
+        OpenableFile("b", str(tmp_path / "b.wav"), None),
     ]
 
 
@@ -237,10 +238,14 @@ def test_add_project_files_registers_stems_and_reports_progress(
     view_model.add_project_files()
     run_import_job(view_model)
 
-    assert [(s.done, s.total, s.finished) for s in states] == [
-        (0, 1, False),
-        (1, 1, True),
+    assert [(s.stage, s.done, s.total, s.finished) for s in states] == [
+        (ImportStageState.SCANNING, 0, 0, False),
+        (ImportStageState.REGISTERING, 0, 0, False),
+        (ImportStageState.READING, 0, 1, False),
+        (ImportStageState.READING, 0, 1, False),
+        (ImportStageState.READING, 1, 1, True),
     ]
+    assert states[3].current == "a.TextGrid"
     assert states[-1].registered == 2
     assert states[-1].imported == ["a"]
     assert sorted(repository.filenames.values()) == ["a", "b"]

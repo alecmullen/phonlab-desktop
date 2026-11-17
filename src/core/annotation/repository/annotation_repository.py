@@ -1,11 +1,14 @@
-from typing import Protocol
+from typing import Any, Protocol
 
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
 )
+from core.annotation.entity.metadata import MetadataColumn, MetadataTarget
+from core.annotation.entity.recording import Recording, RecordingUpsertResult
 from core.annotation.entity.tier_label import TierLabel
+from core.inspect_database.entity.table_data import TableData
 
 
 class AnnotationRepository(Protocol):
@@ -51,3 +54,23 @@ class AnnotationRepository(Protocol):
     def find_labels_by_tier_name(
         self, tier_name: str, file_stem: str | None = None
     ) -> list[TierLabel]: ...
+    def upsert_recordings(
+        self, recordings: list[Recording], remove_others: bool = True
+    ) -> RecordingUpsertResult:
+        """Record the recordings next to their annotations, adding the ones that are
+        new. With remove_others, rows for recordings not given that hold no
+        annotation content are deleted"""
+        ...
+
+    def list_recordings(self) -> list[Recording]: ...
+    def list_talkers(self) -> list[str]: ...
+    def builtin_columns(self, target: MetadataTarget) -> list[str]: ...
+    def add_metadata(
+        self,
+        target: MetadataTarget,
+        columns: list[MetadataColumn],
+        values: dict[str, dict[str, Any]],
+    ) -> int: ...
+    def read_metadata(self, target: MetadataTarget) -> dict[str, dict[str, Any]]: ...
+    def list_tables(self) -> list[str]: ...
+    def read_table(self, name: str, limit: int) -> TableData: ...
