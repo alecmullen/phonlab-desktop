@@ -762,7 +762,7 @@ def test_on_state_changed_ignores_other_states(view_model: DocumentViewModel):
     assert calls == []
 
 
-def test_on_sgram_state_change_forwards_load_progress_and_prepped(
+def test_on_sgram_state_change_forwards_progress_prepped_and_status_messages(
     view_model: DocumentViewModel,
 ):
     received = []
@@ -770,9 +770,14 @@ def test_on_sgram_state_change_forwards_load_progress_and_prepped(
 
     view_model.on_sgram_state_change(LoadProgressState(True))
     view_model.on_sgram_state_change(AudioPrepped())
-    view_model.on_sgram_state_change(StatusMessageState("ignored"))
+    view_model.on_sgram_state_change(StatusMessageState("hello"))
+    view_model.on_sgram_state_change(SelectState())
 
-    assert [type(s).__name__ for s in received] == ["LoadProgressState", "AudioPrepped"]
+    assert [type(s).__name__ for s in received] == [
+        "LoadProgressState",
+        "AudioPrepped",
+        "StatusMessageState",
+    ]
 
 
 # --------------------------- stereo channel deletion ---------------------------

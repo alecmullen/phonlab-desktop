@@ -20,29 +20,43 @@ def test_defaults_are_ifc_with_a_medium_vocal_tract():
     assert settings.order == -1
 
 
-@pytest.mark.parametrize(
-    "method, preemphasis",
-    [("ifc", 0.94), ("lpc", 0.94), ("rlpc", 0.94), ("tvlp", 0.95), ("dppt", 0.0)],
-)
-def test_with_method_uses_that_methods_preemphasis(method: str, preemphasis: float):
-    settings = FormantSettingsState(preemphasis=0.5, speaker=2).with_method(
-        FormantMethodState(method)
-    )
-
-    assert settings.method == method
-    assert settings.preemphasis == preemphasis
-    assert settings.speaker == 2  # the rest is kept
-
-
 def test_method_states_mirror_core_methods():
     assert [m.value for m in FormantMethodState] == [m.value for m in FormantMethod]
 
 
 def test_to_formant_options_maps_every_field():
     settings = FormantSettingsState(
-        FormantMethodState.RLPC, 0.9, 2, 12, 7000, 150, 1000
+        FormantMethodState.RLPC, 0.9, 2, 12, 7000, 150, 1000, 0.005, 0.04, True
     )
 
     assert to_formant_options(settings) == FormantOptions(
-        FormantMethod.RLPC, 0.9, 2, 12, 7000, 150, 1000
+        FormantMethod.RLPC, 0.9, 2, 12, 7000, 150, 1000, 0.005, 0.04, True
     )
+
+
+@pytest.mark.parametrize(
+    "method, preemphasis, length",
+    [
+        ("ifc", 0.94, 0.03),
+        ("lpc", 0.94, 0.03),
+        ("rlpc", 0.94, 0.03),
+        ("tvlp", 0.95, 0.1),
+        ("dppt", 0.0, 0.03),
+    ],
+)
+def test_with_method_uses_that_methods_preemphasis_and_window_length(
+    method: str, preemphasis: float, length: float
+):
+    settings = FormantSettingsState(
+        preemphasis=0.5, speaker=2, step=0.005, length=0.05, voiced_only=True
+    )
+
+    changed = settings.with_method(FormantMethodState(method))
+
+    assert changed.method == method
+    assert (changed.preemphasis, changed.length) == (preemphasis, length)
+    assert (changed.speaker, changed.step, changed.voiced_only) == (
+        2,
+        0.005,
+        True,
+    )  # kept
