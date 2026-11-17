@@ -1,5 +1,6 @@
 import os
 import tempfile
+import weakref
 
 import numpy as np
 import phonlab as phon
@@ -18,6 +19,8 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         order: int = 9,
         chunk_duration: int = 300,
     ):
+        sxx_mmap = t_mmap = None
+        mmap_file = ts_file = ""
         try:
             n_freqs, frames_per_sec = self.estimate_resolution(
                 x, fs, window_size, step_size, order
@@ -27,12 +30,15 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
             estimated_frames = int(frames_per_sec * (len(x) / fs) * 1.2)
 
             temp_dir = tempfile.gettempdir()
-            mmap_file = os.path.join(temp_dir, f"spectrogram_{id(self)}.dat")
-            ts_file = os.path.join(temp_dir, f"spectrogram_ts_{id(self)}.dat")
+            mmap_file = self.new_temp_file(temp_dir, "spectrogram_")
+            ts_file = self.new_temp_file(temp_dir, "spectrogram_ts_")
 
             sxx_mmap, t_mmap = self.init_mmap(
                 mmap_file, ts_file, n_freqs, estimated_frames
             )
+
+            remove_file_when_released(sxx_mmap, mmap_file)
+            remove_file_when_released(t_mmap, ts_file)
 
             chunk_samples = int(chunk_duration * fs)
             frame_offset = 0
@@ -68,6 +74,12 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         except Exception as e:
             self.cleanup_mmaps(sxx_mmap, t_mmap, mmap_file, ts_file)
             raise RuntimeError(f"Error during spectrogram computation: {e}") from e
+
+    def new_temp_file(self, temp_dir: str, prefix: str) -> str:
+        """Create an empty file with a name no other computation will get"""
+        fd, path = tempfile.mkstemp(prefix=prefix, suffix=".dat", dir=temp_dir)
+        os.close(fd)
+        return path
 
     def estimate_resolution(
         self,
@@ -110,7 +122,11 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         return sxx_mmap, ts_mmap
 
     def cleanup_mmaps(
-        self, sxx_mmap: np.memmap, t_mmap: np.memmap, mmap_file: str, ts_file: str
+        self,
+        sxx_mmap: np.memmap | None,
+        t_mmap: np.memmap | None,
+        mmap_file: str,
+        ts_file: str,
     ):
         if sxx_mmap is not None:
             del sxx_mmap
@@ -123,3 +139,16 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
 
         if ts_file and os.path.exists(ts_file):
             os.remove(ts_file)
+
+
+def remove_file_when_released(array: np.memmap, path: str):
+    """Delete `path` once `array`, which is mapped to it, has been garbage collected
+    (or when the program exits)"""
+    weakref.finalize(array, remove_quietly, path)
+
+
+def remove_quietly(path: str):
+    try:
+        os.remove(path)
+    except OSError:
+        pass

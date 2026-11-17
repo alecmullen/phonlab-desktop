@@ -11,6 +11,7 @@ from pytestqt.qtbot import QtBot
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.transform_audio.entity.filter_spec import FilterType
 from core.transform_audio.filter_audio import FilterSpec
+from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.document_plot import DocumentPlot
@@ -243,6 +244,41 @@ def test_double_click_zooms_to_selection(loaded_view: DocumentView):
     assert document_view_model.document_window_state.end == 5000
 
 
+def test_shift_double_click_plays_the_selection_again_instead_of_zooming(
+    loaded_view: DocumentView,
+):
+    document_view_model = loaded_view.view_model
+    document_view_model.start_selection(1.0)
+    document_view_model.continue_selection(5.0)
+    window_before = document_view_model.document_window_state
+
+    dbl_click = mouse_event(
+        loaded_view,
+        2.0,
+        QEvent.Type.MouseButtonDblClick,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    loaded_view.mouseDoubleClickEvent(dbl_click)
+
+    assert document_view_model.document_window_state == window_before
+    assert document_view_model.select_state.is_selected
+    assert len(document_view_model.audio_player.played) == 1
+
+
+def test_a_single_click_waits_as_long_as_the_double_click_interval(
+    loaded_view: DocumentView,
+):
+    loaded_view.mousePressEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonPress)
+    )
+    loaded_view.mouseReleaseEvent(
+        mouse_event(loaded_view, 4.0, QEvent.Type.MouseButtonRelease)
+    )
+
+    assert loaded_view.click_timer is not None
+    assert loaded_view.click_timer.interval() == DOUBLE_CLICK_INTERVAL_MS
+
+
 def test_click_after_release_sets_mark_at_click_position(
     qtbot: QtBot, loaded_view: DocumentView
 ):
@@ -353,11 +389,9 @@ def test_drag_enter_event_ignores_non_url_mime_data(view: DocumentView):
     assert event.isAccepted() is False
 
 
-def test_drop_event_loads_textgrid_from_first_url(view: DocumentView):
-    calls = []
-    view.load_textgrid = lambda path: calls.append(path)
+def drop_event(path: str) -> QDropEvent:
     mime = QMimeData()
-    mime.setUrls([QUrl.fromLocalFile("/tmp/example.TextGrid")])
+    mime.setUrls([QUrl.fromLocalFile(path)])
     event = QDropEvent(
         QPointF(0, 0),
         Qt.DropAction.CopyAction,
@@ -365,10 +399,72 @@ def test_drop_event_loads_textgrid_from_first_url(view: DocumentView):
         Qt.MouseButton.NoButton,
         Qt.KeyboardModifier.NoModifier,
     )
+    # The event does not own its mime data; keep it alive as long as the event
+    event.mime_data = mime  # ty: ignore[unresolved-attribute]
+    return event
 
-    view.dropEvent(event)
 
-    assert calls == ["/tmp/example.TextGrid"]
+def stub_drop(
+    view: DocumentView,
+    monkeypatch: pytest.MonkeyPatch,
+    has_annotation: bool,
+    *answers: QMessageBox.StandardButton,
+) -> tuple[list, list]:
+    """Returns the (path, overwrite) load_textgrid calls and the questions asked"""
+    calls: list = []
+    asked: list = []
+    remaining = list(answers)
+    view.load_textgrid = lambda path, overwrite=False: calls.append((path, overwrite))
+    monkeypatch.setattr(view.view_model, "has_annotation", lambda: has_annotation)
+
+    def question(
+        parent: object,
+        title: str,
+        text: str,
+        buttons: QMessageBox.StandardButton,
+        *args: object,
+    ) -> QMessageBox.StandardButton:
+        asked.append((text, buttons))
+        return remaining.pop(0)
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return calls, asked
+
+
+def test_drop_event_loads_textgrid_from_first_url(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, asked = stub_drop(view, monkeypatch, False)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == [("/tmp/example.TextGrid", False)]
+    assert asked == []
+
+
+def test_drop_event_overwrites_existing_annotation_when_user_says_yes(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, asked = stub_drop(view, monkeypatch, True, QMessageBox.StandardButton.Yes)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == [("/tmp/example.TextGrid", True)]
+    [(text, buttons)] = asked
+    assert (
+        text == "Overwrite the existing database with annotation from example.TextGrid?"
+    )
+    assert buttons == QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+
+
+def test_drop_event_keeps_existing_annotation_when_user_says_no(
+    view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls, _ = stub_drop(view, monkeypatch, True, QMessageBox.StandardButton.No)
+
+    view.dropEvent(drop_event("/tmp/example.TextGrid"))
+
+    assert calls == []
 
 
 # --------------------------- resample dialog integration ---------------------------

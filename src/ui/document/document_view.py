@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
+from res.constants import DOUBLE_CLICK_INTERVAL_MS, PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
@@ -30,6 +30,7 @@ from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.audio_info_dialog import AudioInfoDialog
 from ui.document.component.filter_dialog import FilterAudioDialog
+from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
 from ui.document.component.paste_special_dialog import PasteSpecialDialog
 from ui.document.component.resample_dialog import ResampleAudioDialog
@@ -240,8 +241,8 @@ class DocumentView(QWidget):
         """Load an audio file into this document"""
         self.view_model.load_audio(filename, options)
 
-    def load_textgrid(self, file_path: str):
-        self.view_model.parse_textgrid(file_path)
+    def load_textgrid(self, file_path: str, overwrite: bool = False):
+        self.view_model.parse_textgrid(file_path, overwrite)
 
     def clear_plots(self):
         """Clear all current plots"""
@@ -565,6 +566,12 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
+        if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+            # A second Shift+click is a request to hear it again, not to zoom
+            self.play_window_or_selection(scene_pos)
+            a0.accept()
+            return
+
         mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
 
@@ -596,7 +603,7 @@ class DocumentView(QWidget):
                     self.click_timer = QTimer()
                     self.click_timer.setSingleShot(True)
                     self.click_timer.timeout.connect(self.handle_single_click)
-                    self.click_timer.start(250)
+                    self.click_timer.start(DOUBLE_CLICK_INTERVAL_MS)
 
         a0.accept()
 
@@ -797,7 +804,13 @@ class DocumentView(QWidget):
         mime_data = a0.mimeData()
         if mime_data is not None:
             path = mime_data.urls()[0].toLocalFile()
-            self.load_textgrid(path)
+            overwrite = False
+            if self.view_model.has_annotation():
+                answer = ask_overwrite_annotation(self, path)
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+                overwrite = True
+            self.load_textgrid(path, overwrite)
 
     @pyqtSlot()
     def open_resample_dialog(self):
