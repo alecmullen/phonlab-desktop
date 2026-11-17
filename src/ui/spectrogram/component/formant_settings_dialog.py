@@ -9,10 +9,8 @@ from PyQt6.QtWidgets import (
     QFormLayout,
 )
 
-from ui.spectrogram.state.formant_settings import (
-    FormantSettingsState,
-    FormantSpeakerType,
-)
+from core.track_formants.entity.formant_options import FormantSpeakerType
+from ui.spectrogram.state.formant_settings import FormantSettingsState
 
 
 class FormantSettingsDialog(QDialog):

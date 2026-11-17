@@ -6,7 +6,10 @@ import pytest
 
 import core.track_formants.measure_formants as measure_formants_module
 from core.track_formants.entity.formant_method import FormantMethod
-from core.track_formants.entity.formant_options import FormantOptions
+from core.track_formants.entity.formant_options import (
+    FormantOptions,
+    FormantSpeakerType,
+)
 from core.track_formants.formant_lock import FORMANT_LOCK
 from core.track_formants.measure_formants import measure_formants, with_chosen_order
 
@@ -49,7 +52,7 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict]]:
 @pytest.mark.parametrize(
     "options, name, expected",
     [
-        (FormantOptions(preemphasis=0.9, speaker=2), "IFC",
+        (FormantOptions(preemphasis=0.9, speaker=FormantSpeakerType.SHORT), "IFC",
          {"preemph": 0.9, "speaker": 2}),
         (FormantOptions(FormantMethod.LPC, 0.9, order=12), "LPC",
          {"preemph": 0.9, "order": 12}),

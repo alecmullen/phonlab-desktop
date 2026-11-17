@@ -1,8 +1,11 @@
 from dataclasses import dataclass, replace
-from enum import Enum, StrEnum
+from enum import StrEnum
 
 from core.track_formants.entity.formant_method import FormantMethod
-from core.track_formants.entity.formant_options import FormantOptions
+from core.track_formants.entity.formant_options import (
+    FormantOptions,
+    FormantSpeakerType,
+)
 from res.constants import (
     FORMANT_AUTO_ORDER,
     FORMANT_DELTA_F,
@@ -21,12 +24,6 @@ class FormantMethodState(StrEnum):
     RLPC = "rlpc"
     TVLP = "tvlp"
     DPPT = "dppt"
-
-
-class FormantSpeakerType(Enum):
-    LONG = 0
-    MEDIUM = 1
-    SHORT = 2
 
 
 @dataclass(frozen=True)

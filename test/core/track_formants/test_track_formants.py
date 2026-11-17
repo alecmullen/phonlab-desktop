@@ -5,10 +5,12 @@ import pytest
 import core.track_formants.measure_formants as measure_formants_module
 import core.track_formants.track_formants as track_formants_module
 from core.track_formants.entity.formant_method import FormantMethod
-from core.track_formants.entity.formant_options import FormantOptions
+from core.track_formants.entity.formant_options import (
+    FormantOptions,
+    FormantSpeakerType,
+)
 from core.track_formants.formant_lock import FORMANT_LOCK
 from core.track_formants.track_formants import TrackFormants
-from ui.spectrogram.state.formant_settings import FormantSpeakerType
 
 FS = 1000
 
@@ -51,7 +53,11 @@ def ramp(seconds: float) -> np.ndarray:
 
 def test_short_file_is_one_chunk_with_the_params(ifc_calls: list[dict]):
     chunks = list(
-        TrackFormants()(ramp(2), FS, FormantOptions(preemphasis=0.9, speaker=FormantSpeakerType.SHORT))
+        TrackFormants()(
+            ramp(2),
+            FS,
+            FormantOptions(preemphasis=0.9, speaker=FormantSpeakerType.SHORT),
+        )
     )
 
     assert len(chunks) == 1
