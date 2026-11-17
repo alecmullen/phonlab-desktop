@@ -121,7 +121,7 @@ def lpc_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     calls = []
 
     def fake_lpc_formants(
-        x: np.ndarray, fs: int, preemph: float, order: int
+        x: np.ndarray, fs: int, preemph: float, order: int, step: float, length: float
     ) -> pd.DataFrame:
         calls.append({"start": x[0], "order": order})
         sec = np.arange(0.015, len(x) / fs - 0.015, 0.01)
@@ -159,7 +159,7 @@ def test_automatic_order_is_chosen_once_from_the_first_chunk(
 ):
     chosen_from = []
 
-    def fake_choose_order(x: np.ndarray, fs: int) -> tuple[int, float]:
+    def fake_choose_order(x: np.ndarray, fs: int, length: float) -> tuple[int, float]:
         chosen_from.append(x[0])
         return 14, 0.5
 
@@ -169,3 +169,17 @@ def test_automatic_order_is_chosen_once_from_the_first_chunk(
 
     assert chosen_from == [5.0]  # the chunk at 6 s, less a second of overlap
     assert [call["order"] for call in lpc_calls] == [14, 14, 14, 14]
+
+
+def test_chunks_carry_the_lpc_order_used(short_chunks: None, lpc_calls: list[dict]):
+    chunks = list(
+        TrackFormants()(ramp(7), FS, FormantOptions(FormantMethod.LPC, order=12))
+    )
+
+    assert [c.order for c in chunks] == [12, 12, 12]
+
+
+def test_chunks_of_a_method_without_an_order_have_order_zero(ifc_calls: list[dict]):
+    chunk = next(TrackFormants()(ramp(1), FS))
+
+    assert chunk.order == 0

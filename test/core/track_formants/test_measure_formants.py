@@ -55,14 +55,15 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict]]:
         (FormantOptions(preemphasis=0.9, speaker=FormantSpeakerType.SHORT), "IFC",
          {"preemph": 0.9, "speaker": 2}),
         (FormantOptions(FormantMethod.LPC, 0.9, order=12), "LPC",
-         {"preemph": 0.9, "order": 12}),
+         {"preemph": 0.9, "order": 12, "step": 0.01, "length": 0.03}),
         (FormantOptions(FormantMethod.RLPC, 0.9, order=10, top_frequency=8000), "RLPC",
-         {"preemph": 0.9, "order": 10, "tf": 8000}),
+         {"preemph": 0.9, "order": 10, "tf": 8000, "step": 0.01, "length": 0.03}),
         (FormantOptions(FormantMethod.TVLP, 0.95, order=-1, top_frequency=7000,
-                        median_f0=120), "TVLP",
-         {"preemph": 0.95, "order": -1, "tf": 7000, "f0median": 120}),
+                        median_f0=120, length=0.1), "TVLP",
+         {"preemph": 0.95, "order": -1, "tf": 7000, "f0median": 120,
+          "step": 0.01, "length": 0.1}),
         (FormantOptions(FormantMethod.DPPT, 0.0, delta_f=900), "DPPT",
-         {"preemph": 0.0, "deltaF": 900}),
+         {"preemph": 0.0, "deltaF": 900, "step": 0.01, "length": 0.03}),
     ],
 )  # fmt: skip
 def test_each_method_calls_its_phonlab_function_with_its_parameters(
@@ -87,7 +88,10 @@ def order_calls(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     monkeypatch.setattr(
         measure_formants_module.phon,
         "choose_order",
-        lambda x, fs: (recorded.append({"fs": fs}) or 13, 0.1),
+        lambda x, fs, *length: (
+            recorded.append({"fs": fs, "length": length}) or 13,
+            0.1,
+        ),
     )
     return recorded
 
@@ -99,7 +103,7 @@ def test_order_is_chosen_from_audio_prepared_as_lpc_formants_does(order_calls: l
 
     assert order_calls == [
         {"target_fs": 12000, "preemph": 0.9, "scale": True, "fix_polarity": False},
-        {"fs": 12000},
+        {"fs": 12000, "length": (0.03,)},
     ]
 
 
@@ -113,6 +117,8 @@ def test_order_for_rlpc_and_tvlp_is_chosen_at_twice_the_top_frequency(
 
     assert order_calls[0]["target_fs"] == 14000
     assert order_calls[0]["fix_polarity"] is True
+    # TVLP's long frames are not given to choose_order()
+    assert order_calls[1]["length"] == (() if method == FormantMethod.TVLP else (0.03,))
 
 
 @pytest.mark.parametrize(
@@ -128,3 +134,22 @@ def test_order_is_left_alone_when_chosen_or_unused(
 ):
     assert with_chosen_order(X, FS, options) == options
     assert order_calls == []
+
+
+def test_voiced_only_blanks_the_formants_of_voiceless_frames(
+    calls: list, monkeypatch: pytest.MonkeyPatch
+):
+    vad_calls = []
+
+    def fake_vad(x: np.ndarray, fs: int, threshold: float) -> pd.DataFrame:
+        vad_calls.append(threshold)
+        return pd.DataFrame({"sec": [0.01, 0.02], "voiced": [True, False]})
+
+    monkeypatch.setattr(measure_formants_module.phon, "VAD", fake_vad)
+
+    df = measure_formants(X, FS, FormantOptions(FormantMethod.LPC, voiced_only=True))
+
+    assert vad_calls == [0.8]
+    assert df["F1"].iloc[0] == 1.0
+    assert df.loc[1, ["F1", "F2", "F3", "F4"]].isna().all()
+    assert list(df.columns) == ["sec", "F1", "F2", "F3", "F4"]

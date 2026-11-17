@@ -7,7 +7,7 @@ import phonlab as phon
 from core.track_formants.entity.formant_method import FormantMethod
 from core.track_formants.entity.formant_options import FormantOptions
 from core.track_formants.formant_lock import FORMANT_LOCK
-from res.constants import FORMANT_LPC_SAMPLE_RATE
+from res.constants import FORMANT_LPC_SAMPLE_RATE, FORMANT_VOICING_THRESHOLD
 
 FORMANT_COLUMNS = ["F1", "F2", "F3", "F4"]
 ORDER_METHODS = (FormantMethod.LPC, FormantMethod.RLPC, FormantMethod.TVLP)
@@ -18,15 +18,30 @@ def measure_formants(x: np.ndarray, fs: int, options: FormantOptions) -> pd.Data
     The result has a `sec` column (the time of each frame, from the start of `x`)
     and the columns F1-F4 in Hz. Every method does its own resampling and
     preemphasis."""
+    df = _track(x, fs, options)
+    if options.voiced_only:
+        df = _without_voiceless_frames(df, x, fs)
+    return df[["sec", *FORMANT_COLUMNS]]
+
+
+def _track(x: np.ndarray, fs: int, options: FormantOptions) -> pd.DataFrame:
     preemph = options.preemphasis
+    step, length = options.step, options.length
     with FORMANT_LOCK:
         match options.method:
             case FormantMethod.IFC:
-                df = phon.IFC_formants(
+                return phon.IFC_formants(
                     x, fs, preemph=preemph, speaker=options.speaker.value
                 )
             case FormantMethod.LPC:
-                df = phon.LPC_formants(x, fs, preemph=preemph, order=options.order)
+                return phon.LPC_formants(
+                    x,
+                    fs,
+                    preemph=preemph,
+                    order=options.order,
+                    step=step,
+                    length=length,
+                )
             case FormantMethod.RLPC:
                 df, _ = phon.RLPC_formants(
                     x,
@@ -34,19 +49,39 @@ def measure_formants(x: np.ndarray, fs: int, options: FormantOptions) -> pd.Data
                     tf=options.top_frequency,
                     preemph=preemph,
                     order=options.order,
+                    step=step,
+                    length=length,
                 )
+                return df
             case FormantMethod.TVLP:
-                df = phon.TVLP_formants(
+                return phon.TVLP_formants(
                     x,
                     fs,
                     tf=options.top_frequency,
                     order=options.order,
                     preemph=preemph,
                     f0median=options.median_f0,
+                    step=step,
+                    length=length,
                 )
             case FormantMethod.DPPT:
-                df = phon.DPPT_formants(x, fs, preemph=preemph, deltaF=options.delta_f)
-    return df[["sec", *FORMANT_COLUMNS]]
+                return phon.DPPT_formants(
+                    x,
+                    fs,
+                    preemph=preemph,
+                    deltaF=options.delta_f,
+                    step=step,
+                    length=length,
+                )
+
+
+def _without_voiceless_frames(df: pd.DataFrame, x: np.ndarray, fs: int) -> pd.DataFrame:
+    """`df` with the formants of frames that phon.VAD() finds voiceless set
+    to NaN"""
+    vad = phon.VAD(x, fs, threshold=FORMANT_VOICING_THRESHOLD)
+    df = phon.align_timeseries(df, vad, ts="sec", other_columns=["voiced"])
+    df.loc[~df["voiced"].astype(bool), FORMANT_COLUMNS] = np.nan
+    return df
 
 
 def with_chosen_order(
@@ -61,6 +96,9 @@ def with_chosen_order(
         target_fs, fix_polarity = FORMANT_LPC_SAMPLE_RATE, False
     else:
         target_fs, fix_polarity = options.top_frequency * 2, True
+    # LPC_formants and RLPC_formants choose with their frame length; TVLP's
+    # frames are longer than choose_order() is meant for, so it uses the default
+    frame_args = () if options.method == FormantMethod.TVLP else (options.length,)
     with FORMANT_LOCK:
         prepped, prepped_fs = phon.prep_audio(
             x,
@@ -70,5 +108,5 @@ def with_chosen_order(
             scale=True,
             fix_polarity=fix_polarity,
         )
-        order, _ = phon.choose_order(prepped, prepped_fs)
+        order, _ = phon.choose_order(prepped, prepped_fs, *frame_args)
     return replace(options, order=int(order))
