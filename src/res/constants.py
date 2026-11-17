@@ -43,7 +43,24 @@ SPECTROGRAM_HIGH_PERCENTILE = 80
 SPECTROGRAM_PERCENTILE_SAMPLE_SIZE = 100_000
 
 # -- Formant Tracking --
-FORMANT_PREEMPHASIS = 0.94
+# Preemphasis each formant method works best with, by FormantMethod value
+FORMANT_PREEMPHASIS = {
+    "ifc": 0.94,
+    "lpc": 0.94,
+    "rlpc": 0.94,
+    "tvlp": 0.95,
+    "dppt": 0.0,
+}
+FORMANT_AUTO_ORDER = -1  # let phonlab choose the LPC order
+FORMANT_MIN_ORDER = 6
+FORMANT_MAX_ORDER = 30
+FORMANT_TOP_FREQUENCY = 6000  # RLPC and TVLP resample to twice this rate
+FORMANT_MEDIAN_F0 = 200  # TVLP's expected median pitch, in Hz
+FORMANT_DELTA_F = 1100  # DPPT's expected spacing between formants, in Hz
+# LPC_formants always analyzes audio resampled to this rate
+FORMANT_LPC_SAMPLE_RATE = 12000
+# Formants are tracked a chunk at a time. Both are whole seconds, so chunks
+# start on the 10 ms frame grid and on a sample at any sampling rate.
 FORMANT_CHUNK_SEC = 30
 FORMANT_CHUNK_OVERLAP_SEC = 1
 
