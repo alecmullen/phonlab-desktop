@@ -21,6 +21,7 @@ from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 from ui.spectrogram.state.formant_settings import FormantSettingsState
 from ui.spectrogram.state.formant_track_state import FormantTrackState
+from ui.spectrogram.state.spectrogram_state import SpectrogramUnavailable
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 SPECTROGRAM = Spectrogram(
@@ -172,6 +173,7 @@ def test_load_spectrogram_hides_when_window_too_long(qtbot: QtBot):
 
     assert view_model.sgram_state.is_showing is False
     assert view_model.sgram_state.is_loading is False
+    assert view_model.sgram_state.unavailable == SpectrogramUnavailable.TOO_LONG
     assert received[-1] is view_model.sgram_state
 
 
@@ -188,6 +190,23 @@ def test_load_spectrogram_hides_when_window_too_short(qtbot: QtBot):
 
     assert view_model.sgram_state.is_showing is False
     assert view_model.sgram_state.is_loading is False
+    assert view_model.sgram_state.unavailable == SpectrogramUnavailable.TOO_SHORT
+
+
+def test_a_window_that_fits_clears_the_reason_the_spectrogram_was_unavailable(
+    qtbot: QtBot,
+):
+    view_model = make_spectrogram_view_model()
+    view_model.sgram_state = replace(
+        view_model.sgram_state, unavailable=SpectrogramUnavailable.TOO_LONG
+    )
+
+    view_model.update_sgram_window_state(
+        np.arange(3.0), np.arange(3.0), np.ones((3, 3)), 1000, 0
+    )
+
+    assert view_model.sgram_state.is_showing is True
+    assert view_model.sgram_state.unavailable is None
 
 
 def test_load_spectrogram_loads_window_and_computes_mmap_when_missing(
