@@ -1,7 +1,10 @@
 import pytest
 
 from core.track_formants.entity.formant_method import FormantMethod
-from core.track_formants.entity.formant_options import FormantOptions
+from core.track_formants.entity.formant_options import (
+    FormantOptions,
+    FormantSpeakerType,
+)
 from ui.spectrogram.state.formant_settings import (
     FormantMethodState,
     FormantSettingsState,
@@ -13,7 +16,7 @@ def test_defaults_are_ifc_with_a_medium_vocal_tract():
     settings = FormantSettingsState()
 
     assert settings.method == FormantMethodState.IFC
-    assert (settings.preemphasis, settings.speaker) == (0.94, 1)
+    assert (settings.preemphasis, settings.speaker) == (0.94, FormantSpeakerType.MEDIUM)
     assert settings.order == -1
 
 

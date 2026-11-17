@@ -2,13 +2,15 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from core.track_formants.entity.formant_method import FormantMethod
-from core.track_formants.entity.formant_options import FormantOptions
+from core.track_formants.entity.formant_options import (
+    FormantOptions,
+    FormantSpeakerType,
+)
 from res.constants import (
     FORMANT_AUTO_ORDER,
     FORMANT_DELTA_F,
     FORMANT_MEDIAN_F0,
     FORMANT_PREEMPHASIS,
-    FORMANT_SPEAKER,
     FORMANT_TOP_FREQUENCY,
 )
 from ui.base.state import State
@@ -31,7 +33,7 @@ class FormantSettingsState(State):
 
     method: FormantMethodState = FormantMethodState.IFC
     preemphasis: float = FORMANT_PREEMPHASIS["ifc"]
-    speaker: int = FORMANT_SPEAKER
+    speaker: FormantSpeakerType = FormantSpeakerType.MEDIUM
     order: int = FORMANT_AUTO_ORDER
     top_frequency: int = FORMANT_TOP_FREQUENCY
     median_f0: int = FORMANT_MEDIAN_F0

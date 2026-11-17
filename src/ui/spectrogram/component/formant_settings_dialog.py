@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from res.constants import FORMANT_AUTO_ORDER, FORMANT_MAX_ORDER, FORMANT_MIN_ORDER
+from core.track_formants.entity.formant_options import FormantSpeakerType
 from ui.spectrogram.state.formant_settings import (
     FormantMethodState,
     FormantSettingsState,
@@ -52,9 +53,11 @@ class FormantSettingsDialog(QDialog):
         self.form.addRow(self.tr("Preemphasis:"), self.preemphasis_spin)
 
         self.speaker_combo = QComboBox()
-        self.speaker_combo.addItem(self.tr("Long vocal tract"), 0)
-        self.speaker_combo.addItem(self.tr("Medium"), 1)
-        self.speaker_combo.addItem(self.tr("Short vocal tract"), 2)
+        self.speaker_combo.addItem(self.tr("Long vocal tract"), FormantSpeakerType.LONG)
+        self.speaker_combo.addItem(self.tr("Medium"), FormantSpeakerType.MEDIUM)
+        self.speaker_combo.addItem(
+            self.tr("Short vocal tract"), FormantSpeakerType.SHORT
+        )
         self.speaker_combo.setCurrentIndex(
             self.speaker_combo.findData(settings.speaker)
         )
@@ -145,7 +148,7 @@ class FormantSettingsDialog(QDialog):
                 settings,
                 method=dialog.method(),
                 preemphasis=dialog.preemphasis_spin.value(),
-                speaker=int(dialog.speaker_combo.currentData()),
+                speaker=dialog.speaker_combo.currentData(),
                 order=dialog.chosen_order(),
                 top_frequency=dialog.top_frequency_spin.value(),
                 median_f0=dialog.median_f0_spin.value(),

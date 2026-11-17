@@ -45,9 +45,7 @@ class TrackFormants(UseCase[FormantTrack]):
     def _segment(x: np.ndarray, fs: int, k: int) -> tuple[np.ndarray, int]:
         """The audio to analyze for chunk `k`, and where it starts in seconds.
         It extends a little before and after the chunk so the chunk's edge
-        frames are measured with their full context. Chunk and overlap are
-        whole seconds, so analysis starts on a sample and on the 10 ms frame
-        grid."""
+        frames are measured with their full context."""
         chunk_start = k * FORMANT_CHUNK_SEC
         analysis_start = max(0, chunk_start - FORMANT_CHUNK_OVERLAP_SEC)
         analysis_end = chunk_start + FORMANT_CHUNK_SEC + FORMANT_CHUNK_OVERLAP_SEC
@@ -68,9 +66,6 @@ class TrackFormants(UseCase[FormantTrack]):
         df = measure_formants(segment, fs, options)
 
         # Methods put their frames at different offsets on the 10 ms grid
-        # (IFC on it, the others half a frame after it), but all on the same
-        # grid whichever chunk measures them. Rounding off floating point
-        # noise lets a frame exactly on a chunk boundary go to the right chunk.
         sec = np.round(df["sec"].to_numpy(dtype=float) + analysis_start, 6)
         # the last chunk keeps everything to the end of the file
         keep = (sec >= chunk_start) & (is_last | (sec < chunk_end))
