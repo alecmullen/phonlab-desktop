@@ -16,7 +16,7 @@ def make_fake_prep_audio(
         fs: int,
         target_fs: int,
         scale: bool,
-        pre: float,
+        preemph: float,
         add_tiny_noise: bool,
     ) -> tuple[np.ndarray, int]:
         calls.append(
@@ -25,7 +25,7 @@ def make_fake_prep_audio(
                 "fs": fs,
                 "target_fs": target_fs,
                 "scale": scale,
-                "pre": pre,
+                "preemph": preemph,
                 "add_tiny_noise": add_tiny_noise,
             }
         )
@@ -52,7 +52,7 @@ def test_invoke_preps_each_retained_channel(monkeypatch: pytest.MonkeyPatch):
     assert result[0].fs == 8000
     np.testing.assert_array_equal(result[1].x, [6.0, 8.0])
     assert result[1].fs == 8000
-    assert [c["pre"] for c in calls] == [0.94, 0.94]
+    assert [c["preemph"] for c in calls] == [0.94, 0.94]
     assert [c["scale"] for c in calls] == [True, True]
     assert [c["add_tiny_noise"] for c in calls] == [True, True]
     assert [c["target_fs"] for c in calls] == [8000, 8000]
@@ -81,7 +81,7 @@ def test_invoke_defaults_pre_to_zero(monkeypatch: pytest.MonkeyPatch):
 
     use_case.run_sync(raw_signals, target_fs=8000, retained_channels=[0])
 
-    assert calls[0]["pre"] == 0
+    assert calls[0]["preemph"] == 0
 
 
 def test_invoke_yields_empty_dict_when_no_retained_channels(
