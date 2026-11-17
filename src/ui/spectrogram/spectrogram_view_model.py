@@ -38,7 +38,10 @@ from ui.spectrogram.state.formant_track_state import (
     to_formant_track_state,
 )
 from ui.spectrogram.state.spectrogram_settings import SpectrogramSettingsState
-from ui.spectrogram.state.spectrogram_state import SpectrogramState
+from ui.spectrogram.state.spectrogram_state import (
+    SpectrogramState,
+    SpectrogramUnavailable,
+)
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 
@@ -143,7 +146,14 @@ class SpectrogramViewModel(ViewModel):
         too_short = (end - start) < window_samples * 10
         if too_long or too_short:
             self.sgram_state = replace(
-                self.sgram_state, is_showing=False, is_loading=False
+                self.sgram_state,
+                is_showing=False,
+                is_loading=False,
+                unavailable=(
+                    SpectrogramUnavailable.TOO_LONG
+                    if too_long
+                    else SpectrogramUnavailable.TOO_SHORT
+                ),
             )
             self.state_changed.emit(self.sgram_state)
             return
@@ -175,6 +185,7 @@ class SpectrogramViewModel(ViewModel):
                 t_window=t_window,
                 sxx_window=sxx_window,
                 is_showing=True,
+                unavailable=None,
             )
             self.state_changed.emit(self.sgram_state)
         else:
@@ -215,6 +226,7 @@ class SpectrogramViewModel(ViewModel):
             sxx_window=sxx,
             f=f,
             is_showing=True,
+            unavailable=None,
         )
         self.update_sxx_percentiles(sxx)
         self.state_changed.emit(self.sgram_state)
@@ -305,8 +317,7 @@ class SpectrogramViewModel(ViewModel):
         self.state_changed.emit(FormantTrackState())
 
     def emit_formants(self):
-        """Emit the formants in the current window. Like the spectrogram, they
-        show only for a window short enough to read."""
+        """Emit the formants in the current window."""
         start, end = self._window_seconds()
         visible = FormantTrack()
         if end - start <= MAX_SGRAM_LENGTH:

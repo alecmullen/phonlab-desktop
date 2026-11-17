@@ -1,12 +1,14 @@
 from ui.document.state.plot_layout_state import PlotType
 
+# -- Mouse --
+DOUBLE_CLICK_INTERVAL_MS = 250
+
 # -- Settings files --
 PROJECT_FILE_NAME = "phonlab.toml"
 DISPLAY_SECTION = "display"
 PLAN_KEY = "plan"
 
 # -- Files --
-# Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
 AUDIO_FILE_SUFFIXES = (".wav",)
 TEXTGRID_FILE_SUFFIXES = (".textgrid",)
 PROJECT_DATABASE_FILENAME = "phonlab.db"
@@ -41,7 +43,6 @@ SPECTROGRAM_HIGH_PERCENTILE = 80
 SPECTROGRAM_PERCENTILE_SAMPLE_SIZE = 100_000
 
 # -- Formant Tracking --
-# Preemphasis each formant method works best with, by FormantMethod value
 FORMANT_PREEMPHASIS = {
     "ifc": 0.94,
     "lpc": 0.94,
@@ -69,17 +70,13 @@ FORMANT_DOCS = {
     "tvlp": "acoustphon.html#phonlab.TVLP_formants",
     "dppt": "acoustphon.html#phonlab.DPPT_formants",
 }
-FORMANT_SPEAKER = 1  # 0 = long vocal tract, 1 = medium, 2 = short
 FORMANT_AUTO_ORDER = -1  # let phonlab choose the LPC order
 FORMANT_MIN_ORDER = 6
 FORMANT_MAX_ORDER = 30
-FORMANT_TOP_FREQUENCY = 6000  # RLPC and TVLP resample to twice this rate
-FORMANT_MEDIAN_F0 = 200  # TVLP's expected median pitch, in Hz
-FORMANT_DELTA_F = 1100  # DPPT's expected spacing between formants, in Hz
-# LPC_formants always analyzes audio resampled to this rate
+FORMANT_TOP_FREQUENCY = 6000
+FORMANT_MEDIAN_F0 = 200
+FORMANT_DELTA_F = 1100
 FORMANT_LPC_SAMPLE_RATE = 12000
-# Formants are tracked a chunk at a time. Both are whole seconds, so chunks
-# start on the 10 ms frame grid and on a sample at any sampling rate.
 FORMANT_CHUNK_SEC = 30
 FORMANT_CHUNK_OVERLAP_SEC = 1
 

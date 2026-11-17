@@ -14,10 +14,10 @@ ORDER_METHODS = (FormantMethod.LPC, FormantMethod.RLPC, FormantMethod.TVLP)
 
 
 def measure_formants(x: np.ndarray, fs: int, options: FormantOptions) -> pd.DataFrame:
-    """Track the formants of `x` with the chosen method. The result has a
-    `sec` column (the time of each frame, from the start of `x`) and the
-    columns F1-F4 in Hz. Every method does its own resampling and
-    preemphasis, so `x` is the raw audio."""
+    """Track the formants of raw audio `x` with the chosen method, every 10 ms.
+    The result has a `sec` column (the time of each frame, from the start of `x`)
+    and the columns F1-F4 in Hz. Every method does its own resampling and
+    preemphasis."""
     df = _track(x, fs, options)
     if options.voiced_only:
         df = _without_voiceless_frames(df, x, fs)
@@ -31,7 +31,7 @@ def _track(x: np.ndarray, fs: int, options: FormantOptions) -> pd.DataFrame:
         match options.method:
             case FormantMethod.IFC:
                 return phon.IFC_formants(
-                    x, fs, preemph=preemph, speaker=options.speaker
+                    x, fs, preemph=preemph, speaker=options.speaker.value
                 )
             case FormantMethod.LPC:
                 return phon.LPC_formants(
@@ -87,10 +87,7 @@ def _without_voiceless_frames(df: pd.DataFrame, x: np.ndarray, fs: int) -> pd.Da
 def with_chosen_order(
     x: np.ndarray, fs: int, options: FormantOptions
 ) -> FormantOptions:
-    """The options with the LPC order fixed. When the order is automatic,
-    phonlab picks it from the loudest frame of the audio it is given, so
-    pieces of a file measured separately could get different orders and their
-    formants would jump at the seams. Choosing once, from `x`, avoids that."""
+    """The options with the LPC order fixed, for consistency across chunks"""
     if options.method not in ORDER_METHODS or options.order > 0:
         return options
 
