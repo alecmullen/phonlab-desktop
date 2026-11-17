@@ -23,15 +23,35 @@ from core.annotation.delete_node import DeleteNode
 from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.replace_in_tier import ReplaceInTier
+from core.annotation.repository.in_mem_annotation_repository import (
+    InMemAnnotationRepository,
+)
 from core.annotation.search_tier import SearchTier
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
+from core.import_metadata.apply_information_sources import ApplyInformationSources
+from core.import_metadata.import_metadata import ImportMetadata
+from core.import_metadata.information_sources_file import (
+    LoadInformationSources,
+    SaveInformationSource,
+)
+from core.import_metadata.match_metadata import MatchMetadata
+from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.inspect_database.inspect_database import ListTables, ReadTable
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.project.add_project_files import AddProjectFiles
 from core.project.rebuild_project import RebuildProject
+from core.project_layout.infer_layout import InferLayout
+from core.project_layout.project_layout_file import (
+    LoadProjectLayout,
+    SaveProjectLayout,
+)
+from core.project_layout.resolve_recordings import ResolveRecordings
+from core.project_layout.scan_project_tree import ScanProjectTree
+from core.project_layout.suggest_talker_names import SuggestTalkerNames
 from core.save_audio.save_audio import SaveAudio
 from core.settings.entity.tier_layout import TierLayout
 from core.settings.load_display_plan import LoadDisplayPlan
@@ -48,8 +68,11 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.view_model import ViewModel
+from ui.database_view.database_view_model import DatabaseViewModel
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.main_view_model import MainViewModel
+from ui.metadata_import.metadata_import_view_model import MetadataImportViewModel
+from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 
@@ -100,6 +123,12 @@ class StubViewModelFactory(ViewModelFactory):
             view_model = AudioWaveViewModel(*args, **kwargs)
         elif view_model_type is MainViewModel:
             view_model = make_main_view_model(*args, **kwargs)
+        elif view_model_type is ProjectLayoutViewModel:
+            view_model = make_project_layout_view_model(*args, **kwargs)
+        elif view_model_type is MetadataImportViewModel:
+            view_model = make_metadata_import_view_model(*args, **kwargs)
+        elif view_model_type is DatabaseViewModel:
+            view_model = make_database_view_model(*args, **kwargs)
         else:
             raise TypeError(f"No stub provided for {view_model_type!s}")
         return cast(T, view_model)
@@ -173,8 +202,52 @@ def make_main_view_model(
         save_tier_layout or mock_use_case(SaveTierLayout),
         warm_up_formants or mock_use_case(WarmUpFormantTracking),
         lambda _dir_path: add_project_files,
-        lambda _dir_path: RebuildProject(repository, add_project_files),
+        lambda _dir_path: RebuildProject(
+            repository,
+            add_project_files,
+            ApplyInformationSources(
+                LoadInformationSources(),
+                ReadMetadataCsv(),
+                MatchMetadata(repository),
+                ImportMetadata(repository),
+            ),
+        ),
         close_project_database or (lambda _dir_path: None),
+    )
+
+
+def make_project_layout_view_model(dir_path: str) -> ProjectLayoutViewModel:
+    return ProjectLayoutViewModel(
+        dir_path,
+        ScanProjectTree(),
+        InferLayout(),
+        ResolveRecordings(),
+        LoadProjectLayout(),
+        SaveProjectLayout(),
+        SuggestTalkerNames(),
+    )
+
+
+def make_database_view_model(
+    dir_path: str, repository: InMemAnnotationRepository | None = None
+) -> DatabaseViewModel:
+    repository = repository or InMemAnnotationRepository()
+    return DatabaseViewModel(ListTables(repository), ReadTable(repository))
+
+
+def make_metadata_import_view_model(
+    dir_path: str,
+    csv_path: str,
+    repository: InMemAnnotationRepository | None = None,
+) -> MetadataImportViewModel:
+    repository = repository or InMemAnnotationRepository()
+    return MetadataImportViewModel(
+        dir_path,
+        csv_path,
+        ReadMetadataCsv(),
+        MatchMetadata(repository),
+        ImportMetadata(repository),
+        SaveInformationSource(),
     )
 
 

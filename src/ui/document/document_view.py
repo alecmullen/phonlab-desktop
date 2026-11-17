@@ -245,8 +245,8 @@ class DocumentView(QWidget):
         elif isinstance(model, AddTiersAction):
             self.open_add_tiers_dialog(model)
 
-    def load_audio(self, filename: str, options: AudioOpenOptionsState):
-        """Load an audio file into this document"""
+    def load_audio(self, filename: str | list[str], options: AudioOpenOptionsState):
+        """Load an audio file into this document, or the files that are its channels"""
         self.view_model.load_audio(filename, options)
 
     def load_textgrid(self, file_path: str, overwrite: bool = False):

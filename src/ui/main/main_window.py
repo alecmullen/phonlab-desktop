@@ -1,10 +1,12 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt, pyqtSlot
 from PyQt6.QtGui import QAction, QCloseEvent, QIcon, QKeyEvent, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
+    QDialog,
+    QFileDialog,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -31,15 +33,23 @@ from ui.annotation.state.tier_search_state import (
 from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
+from ui.database_view.database_dialog import DatabaseDialog
+from ui.database_view.database_view_model import DatabaseViewModel
 from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
-from ui.main.component.open_audio_dialog import OpenAudioDialog
+from ui.main.component.open_audio_dialog import DEFAULT_SAMPLE_RATE, OpenAudioDialog
 from ui.main.component.open_path_dialog import OpenPathDialog
 from ui.main.component.save_audio_dialog import SaveAudioDialog
 from ui.main.main_view_model import MainViewModel
-from ui.main.state.project_import_state import ProjectImportState
+from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
+from ui.main.state.openable_file import OpenableFile
+from ui.main.state.project_import_state import ImportStageState, ProjectImportState
+from ui.metadata_import.metadata_import_dialog import MetadataImportDialog
+from ui.metadata_import.metadata_import_view_model import MetadataImportViewModel
+from ui.project_layout.project_layout_dialog import ProjectLayoutDialog
+from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
 
 
@@ -57,7 +67,9 @@ class MainWindow(QMainWindow):
         )
         self.splash = None
         self.progress_dialog: QProgressDialog | None = None
+        self.database_dialog: DatabaseDialog | None = None
         self.on_import_finished: Callable[[ProjectImportState], None] | None = None
+        self.import_title = ""
         self.clipboard: AudioState | None = None
         self.clip_counters: dict[str, int] = {}
         self.tier_search_dialog: TierSearchDialog | None = None
@@ -120,6 +132,31 @@ class MainWindow(QMainWindow):
         )
         self.save_layout_action.setEnabled(False)
         self.save_layout_action.triggered.connect(self.save_window_layout)
+
+        self.project_layout_action = QAction(self.tr("Project &Layout…"), self)
+        self.project_layout_action.setStatusTip(
+            self.tr("Review how the project's folders and files are organized")
+        )
+        self.project_layout_action.triggered.connect(self.edit_project_layout)
+
+        self.add_information_action = QAction(
+            self.tr("Add Information from &CSV…"), self
+        )
+        self.add_information_action.setStatusTip(
+            self.tr(
+                "Add columns about the talkers or the recordings of the project "
+                "from a CSV file"
+            )
+        )
+        self.add_information_action.triggered.connect(self.add_information_from_csv)
+
+        self.inspect_database_action = QAction(
+            self.tr("Inspect Project &Database…"), self
+        )
+        self.inspect_database_action.setStatusTip(
+            self.tr("Look at the tables of the project database")
+        )
+        self.inspect_database_action.triggered.connect(self.inspect_database)
 
         self.audio_info_action = QAction(self.tr("Audio &Info"), self)
         self.audio_info_action.setShortcut("Ctrl+I")
@@ -267,6 +304,10 @@ class MainWindow(QMainWindow):
         if projectMenu is not None:
             projectMenu.addAction(self.add_files_action)
             projectMenu.addAction(self.rebuild_action)
+            projectMenu.addSeparator()
+            projectMenu.addAction(self.project_layout_action)
+            projectMenu.addAction(self.add_information_action)
+            projectMenu.addAction(self.inspect_database_action)
         self.update_project_actions()
 
         self.add_tiers_action = QAction(self.tr("&Add Tiers…"), self)
@@ -409,19 +450,30 @@ class MainWindow(QMainWindow):
 
     def open_project_document(self, file_stem: str) -> DocumentView | None:
         dir_path = self.view_model.dir_path
-        audio_file = Path(dir_path or "") / f"{file_stem}.wav"
-        if dir_path is None or not audio_file.exists():
+        project_file = next(
+            (
+                file
+                for file in (self.view_model.project_files() if dir_path else [])
+                if file.file_stem == file_stem
+            ),
+            None,
+        )
+        if (
+            dir_path is None
+            or project_file is None
+            or not Path(project_file.audio_file).exists()
+        ):
             QMessageBox.information(
                 self,
                 self.tr("Search in Tier"),
                 self.tr("Cannot open the audio file for this match: {}").format(
-                    audio_file
+                    Path(dir_path or "") / f"{file_stem}.wav"
                 ),
             )
             return None
 
         # The annotation is already in the project database, so no TextGrid is given
-        self.open_files([(file_stem, str(audio_file), None)], dir_path)
+        self.open_files([project_file._replace(annotation_file=None)], dir_path)
         return self.find_document(file_stem)
 
     def open_project(self, dir_path: str):
@@ -446,10 +498,15 @@ class MainWindow(QMainWindow):
             self.view_model.init_toml()
 
         if self.view_model.is_new_project():
-            # First time here: build the project database from every TextGrid
+            # First time here: settle how the project is organized, then build the
+            # project database from its files
+            if not self.review_project_layout(dir_path):
+                self.close_project()
+                return
             self.run_project_import(
                 self.view_model.add_project_files,
                 lambda state: self.open_new_project(dir_path, state),
+                self.tr("Importing the project database"),
             )
         else:
             self.open_project_files(dir_path)
@@ -475,6 +532,10 @@ class MainWindow(QMainWindow):
             self.tier_search_dialog = None
             self.tier_search_dir_path = None
 
+        if self.database_dialog is not None:
+            self.database_dialog.close()
+            self.database_dialog = None
+
         self.view_model.close_project()
         self.save_layout_action.setEnabled(False)
         self.update_project_actions()
@@ -483,8 +544,8 @@ class MainWindow(QMainWindow):
         """Open the project's audio files. TextGrids are not read: once a project has
         a database it holds the annotations, and Project > Rebuild re-reads them"""
         files = [
-            (file_stem, audio_file, None)
-            for file_stem, audio_file, _ in self.view_model.project_files()
+            file._replace(annotation_file=None)
+            for file in self.view_model.project_files()
         ]
         self.open_files(files, dir_path)
 
@@ -505,6 +566,9 @@ class MainWindow(QMainWindow):
         has_project = self.view_model.dir_path is not None
         self.add_files_action.setEnabled(has_project)
         self.rebuild_action.setEnabled(has_project)
+        self.project_layout_action.setEnabled(has_project)
+        self.add_information_action.setEnabled(has_project)
+        self.inspect_database_action.setEnabled(has_project)
         doc = self.get_current_document()
         self.rebuild_annotation_action.setEnabled(
             has_project and doc is not None and doc.view_model.file_stem is not None
@@ -536,6 +600,7 @@ class MainWindow(QMainWindow):
         self.run_project_import(
             self.view_model.rebuild_project,
             lambda state: self.finish_project_update(state, rebuilt=True),
+            self.tr("Rebuilding the project database"),
         )
 
     @pyqtSlot()
@@ -569,8 +634,10 @@ class MainWindow(QMainWindow):
         self,
         start: Callable[[], None],
         on_finished: Callable[[ProjectImportState], None],
+        title: str = "",
     ):
         self.on_import_finished = on_finished
+        self.import_title = title or self.tr("Updating the project database")
         start()
 
     def finish_project_update(self, state: ProjectImportState, rebuilt: bool):
@@ -605,7 +672,28 @@ class MainWindow(QMainWindow):
                     state.registered, len(state.imported)
                 )
             ]
-        return "\n".join(lines + self.describe_failures(state))
+        return "\n".join(
+            lines + self.describe_information(state) + self.describe_failures(state)
+        )
+
+    def describe_information(self, state: ProjectImportState) -> list[str]:
+        """What happened to the information from CSV files a rebuild adds again"""
+        lines = []
+        if len(state.information_applied) > 0:
+            lines.append(
+                self.tr("Added the information from {} again.").format(
+                    ", ".join(state.information_applied)
+                )
+            )
+        if len(state.information_failed) > 0:
+            lines.append(
+                self.tr(
+                    "Could not add the information from {}: the file is missing or no "
+                    "longer fits the project. Add it again from Project > Add "
+                    "Information from CSV."
+                ).format(", ".join(state.information_failed))
+            )
+        return lines
 
     def describe_new_project(self, state: ProjectImportState) -> str:
         lines = [
@@ -650,14 +738,130 @@ class MainWindow(QMainWindow):
             on_finished(state)
 
     def show_import_progress(self, state: ProjectImportState):
-        if self.progress_dialog is None:
-            self.progress_dialog = QProgressDialog(
-                self.tr("Reading TextGrids…"), "", 0, state.total, self
+        """Tells the user what the long run of building the database is doing: which
+        step, and while annotation files are read, how far along and which file"""
+        dialog = self.progress_dialog
+        if dialog is None:
+            dialog = QProgressDialog("", "", 0, 0, self)
+            dialog.setWindowTitle(self.import_title)
+            dialog.setCancelButton(None)
+            dialog.setWindowModality(Qt.WindowModality.WindowModal)
+            dialog.setAutoClose(False)
+            dialog.setAutoReset(False)
+            dialog.setMinimumDuration(0)
+            dialog.setMinimumWidth(460)
+            self.progress_dialog = dialog
+
+        if state.stage is ImportStageState.READING and state.total > 0:
+            dialog.setRange(0, state.total)
+            dialog.setValue(state.done)
+            # Always two lines: a box that has shrunk to one line (between two files)
+            # does not grow again for the next file's name
+            dialog.setLabelText(
+                self.tr("Reading annotations: {} of {} done").format(
+                    state.done, state.total
+                )
+                + "\n"
+                + (
+                    self.tr("Now reading {}").format(state.current)
+                    if state.current
+                    else " "
+                )
             )
-            self.progress_dialog.setCancelButton(None)
-            self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-            self.progress_dialog.setMinimumDuration(500)
-        self.progress_dialog.setValue(state.done)
+            return
+
+        # steps whose length is not known show a busy indicator
+        dialog.setRange(0, 0)
+        dialog.setLabelText(
+            {
+                ImportStageState.SCANNING: self.tr(
+                    "Looking through the project's files…"
+                ),
+                ImportStageState.REGISTERING: self.tr(
+                    "Recording the files in the database…"
+                ),
+                ImportStageState.INFORMATION: self.tr(
+                    "Adding information from the CSV files…"
+                ),
+                ImportStageState.READING: self.tr("Reading annotations…"),
+            }[state.stage]
+        )
+
+    def review_project_layout(self, dir_path: str, force_review: bool = False) -> bool:
+        """Settle how the project's folders and files are organized, asking the user
+        when there is something to decide, and save it in the project. Returns False
+        if the user cancelled"""
+        layout_view_model = self.view_model_factory.create(
+            ProjectLayoutViewModel, dir_path
+        )
+        try:
+            return ProjectLayoutDialog.review_layout(
+                layout_view_model, self, force_review
+            )
+        except Exception as err:  # noqa: BLE001
+            QMessageBox.critical(self, self.tr("Project Layout"), str(err))
+            return False
+
+    @pyqtSlot()
+    def edit_project_layout(self):
+        """Review the layout, then bring the project database up to date with it"""
+        dir_path = self.view_model.dir_path
+        if dir_path is None:
+            return
+
+        if not self.review_project_layout(dir_path, force_review=True):
+            return
+
+        self.run_project_import(
+            self.view_model.add_project_files,
+            lambda state: self.finish_project_update(state, rebuilt=False),
+        )
+
+    @pyqtSlot()
+    def add_information_from_csv(self):
+        dir_path = self.view_model.dir_path
+        if dir_path is None:
+            return
+
+        csv_path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Choose a CSV file"),
+            dir_path,
+            self.tr("CSV files (*.csv *.tsv *.txt);;All files (*)"),
+        )
+        if csv_path == "":
+            return
+
+        view_model = self.view_model_factory.create(
+            MetadataImportViewModel, dir_path, csv_path
+        )
+        try:
+            view_model.prepare()
+        except (ValueError, OSError) as err:
+            QMessageBox.critical(self, self.tr("Add Information from CSV"), str(err))
+            return
+
+        dialog = MetadataImportDialog(view_model, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            QMessageBox.information(
+                self, self.tr("Add Information from CSV"), dialog.result_text
+            )
+
+    @pyqtSlot()
+    def inspect_database(self):
+        dir_path = self.view_model.dir_path
+        if dir_path is None:
+            return
+
+        view_model = self.view_model_factory.create(DatabaseViewModel, dir_path)
+        try:
+            view_model.prepare()
+        except Exception as err:  # noqa: BLE001
+            QMessageBox.critical(self, self.tr("Project Database"), str(err))
+            return
+
+        self.database_dialog = DatabaseDialog(view_model, self)
+        self.database_dialog.show()
 
     def open_paths(self, paths: list[str]):
         """Open what the user chose: a lone directory is a project, anything else is
@@ -696,6 +900,12 @@ class MainWindow(QMainWindow):
 
         self.open_files([(file_stem, audio_file, annotation_file)], dir)
 
+    def close_splash(self):
+        """Take the splash card away; it is only for the start, when nothing is open"""
+        if self.splash is not None:
+            self.splash.close()
+            self.splash = None
+
     @pyqtSlot()
     def select_path_to_open(self):
         """Ask for a project directory or sound files, starting in the open project"""
@@ -708,6 +918,8 @@ class MainWindow(QMainWindow):
         if len(paths) == 0:
             return
 
+        # the card would stay on top of the progress box of a project being built
+        self.close_splash()
         try:
             self.open_paths(paths)
         except ValueError as err:
@@ -715,13 +927,17 @@ class MainWindow(QMainWindow):
             self.select_path_to_open()
 
     def open_files(
-        self, paired_files: list[tuple[str, str, str | None]], dir_path: str | None
+        self,
+        paired_files: Sequence[tuple[str, str, str | None] | OpenableFile],
+        dir_path: str | None,
     ):
         """Open as audio file in separate tabs. paired_files is a list of tuples in the format
         (file_stem, audio_file, annotation_file), where file_stem is the path to the audio file,
         minus the suffix (relative path for project, absolute for ad-hoc singal document
         editing). audio_file and annotation_file are the absolute paths to the respective .wav
-        and .TextGrid files"""
+        and .TextGrid files. A recording stored as one audio file per channel has a fourth
+        element: the absolute paths of those files, in channel order, which are opened as the
+        channels of one document"""
 
         self.view_model.set_dir_path(dir_path)
         self.save_layout_action.setEnabled(dir_path is not None)
@@ -730,16 +946,30 @@ class MainWindow(QMainWindow):
         # Set by a "to all" answer, so the user is asked at most once per call
         overwrite_all: bool | None = None
 
-        for idx, (file_stem, audio_file, annotation_file) in enumerate(paired_files):
+        for idx, (file_stem, audio_file, annotation_file, *rest) in enumerate(
+            paired_files
+        ):
             if idx > 4:
                 return
-            options = OpenAudioDialog.get_options(audio_file, self)
+            channel_files = list(rest[0]) if rest else []
+            if channel_files:
+                n_channels = len(channel_files)
+                options = AudioOpenOptionsState(
+                    target_fs=DEFAULT_SAMPLE_RATE,
+                    channel_mode=(
+                        ChannelMode.STEREO
+                        if n_channels == 2
+                        else ChannelMode.MULTICHANNEL
+                    ),
+                    retained_channels=list(range(n_channels)),
+                    primary_channel=0,
+                )
+            else:
+                options = OpenAudioDialog.get_options(audio_file, self)
             if options is None:
                 return
 
-            if self.splash is not None:
-                self.splash.close()
-                self.splash = None
+            self.close_splash()
 
             # Create new document
             doc_view_model = self.view_model_factory.create(
@@ -749,7 +979,9 @@ class MainWindow(QMainWindow):
             doc_view_model.set_plots(self.view_model.display_plan)
             self.apply_tier_display(doc_view_model)
             doc = DocumentView(doc_view_model)
-            doc.origin_name = Path(audio_file).name
+            doc.origin_name = (
+                Path(file_stem).name if channel_files else Path(audio_file).name
+            )
             doc.origin_path = audio_file
 
             # Add tab with shortened filename
@@ -759,7 +991,7 @@ class MainWindow(QMainWindow):
             self.tab_widget.setTabToolTip(index, audio_file)
 
             # Load the audio file
-            doc.load_audio(audio_file, options)
+            doc.load_audio(channel_files or audio_file, options)
 
             if annotation_file is None:
                 continue

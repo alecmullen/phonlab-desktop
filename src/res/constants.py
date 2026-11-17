@@ -155,3 +155,30 @@ LABEL_FONT_FAMILY = "Arial"
 LABEL_FONT_SIZE = 16
 SAME_NODE_THRESHOLD = 0.005
 SAME_NODE_PIXEL_THRESH = 7
+
+# -- Project Import --
+PROJECT_AUDIO_EXTENSIONS = (".wav",)
+# Primary annotation extension (casefolded) -> format name
+ANNOTATION_FORMATS = {".textgrid": "textgrid", ".words": "buckeye", ".wrd": "timit"}
+# Extensions a format's reader reads itself, so they are not extra data files
+ANNOTATION_COMPANION_EXTENSIONS = {"buckeye": (".phones",), "timit": (".phn",)}
+PROJECT_IGNORED_NAMES = ("phonlab.db", "phonlab.toml")
+TALKER_FIELD_NAMES = ("talker", "speaker")
+# In a filename template: allows any characters (or none) that are not kept
+TEMPLATE_IGNORE_REST = "(ignore)"
+DATA_FILE_MIN_COVERAGE = 0.5  # share of recordings that must have a file kind
+PROJECT_PREVIEW_ROWS = 15
+CHANNEL_MIN_COVERAGE = 0.5  # share of audio files that are channel siblings
+CHANNEL_SAMPLE_GROUPS = 3  # groups whose headers are read to tell channels from takes
+PROJECT_REPORT_EXAMPLES = 8
+LAYOUT_TOML_KEY = "import"
+LAYOUT_VERSION = 1
+
+# -- Legacy Annotation Formats --
+TIMIT_DEFAULT_SAMPLE_RATE = 16000
+
+# -- Database Inspection --
+DATABASE_VIEW_ROW_LIMIT = 5000
+
+# -- Added Information (CSV files) --
+INFORMATION_TOML_KEY = "information"

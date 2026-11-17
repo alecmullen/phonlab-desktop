@@ -1,4 +1,5 @@
 from dataclasses import replace
+from typing import Any
 
 from core.annotation.entity.annotation import (
     Annotation,
@@ -6,8 +7,11 @@ from core.annotation.entity.annotation import (
     AnnotationType,
     get_matching_node,
 )
+from core.annotation.entity.metadata import MetadataColumn, MetadataTarget
+from core.annotation.entity.recording import Recording, RecordingUpsertResult
 from core.annotation.entity.tier_label import TierLabel
 from core.annotation.repository.annotation_repository import AnnotationRepository
+from core.inspect_database.entity.table_data import TableData
 
 
 class InMemAnnotationRepository(AnnotationRepository):
@@ -19,6 +23,11 @@ class InMemAnnotationRepository(AnnotationRepository):
         self.filenames: dict[int, str] = {}
         self.nodes: dict[int, dict[int, float]] = {}
         self.types: dict[int, list[AnnotationType]] = {}
+        self.recordings: dict[int, Recording] = {}
+        self.talkers: set[str] = set()
+        self.metadata: dict[MetadataTarget, dict[str, dict[str, Any]]] = {
+            target: {} for target in MetadataTarget
+        }
         self._next_type_id = 0
         self._next_label_id = 0
 
@@ -27,7 +36,7 @@ class InMemAnnotationRepository(AnnotationRepository):
             raise ValueError(
                 "Annotation for this file already exists in project database"
             )
-        id = len(self.filenames)
+        id = max(self.filenames, default=-1) + 1
         self.filenames[id] = file_stem
         self.nodes[id] = {}
         self.types[id] = []
@@ -210,3 +219,82 @@ class InMemAnnotationRepository(AnnotationRepository):
                         )
                     )
         return found
+
+    def upsert_recordings(
+        self, recordings: list[Recording], remove_others: bool = True
+    ) -> RecordingUpsertResult:
+        created = updated = removed = 0
+        ids_by_stem = {stem: id for id, stem in self.filenames.items()}
+        for recording in recordings:
+            id = ids_by_stem.get(recording.file_stem)
+            if id is None:
+                id = self.create_annotation(recording.file_stem)
+                created += 1
+            else:
+                updated += 1
+            self.recordings[id] = recording
+            self.talkers.update(recording.talkers)
+            self.talkers.update(recording.channel_talkers.values())
+
+        wanted = {recording.file_stem for recording in recordings}
+        for id, stem in list(self.filenames.items()):
+            if (
+                remove_others
+                and stem not in wanted
+                and not self.types[id]
+                and not self.nodes[id]
+            ):
+                del self.filenames[id]
+                del self.nodes[id]
+                del self.types[id]
+                self.recordings.pop(id, None)
+                removed += 1
+        return RecordingUpsertResult(created, updated, removed)
+
+    def list_recordings(self) -> list[Recording]:
+        return sorted(self.recordings.values(), key=lambda r: r.file_stem)
+
+    def list_talkers(self) -> list[str]:
+        return sorted(self.talkers)
+
+    def builtin_columns(self, target: MetadataTarget) -> list[str]:
+        if target == MetadataTarget.TALKER:
+            return ["id", "name"]
+        return [
+            "id",
+            "file_stem",
+            "audio_file",
+            "annotation_file",
+            "data_files",
+            "fields",
+        ]
+
+    def add_metadata(
+        self,
+        target: MetadataTarget,
+        columns: list[MetadataColumn],
+        values: dict[str, dict[str, Any]],
+    ) -> int:
+        keys = (
+            self.talkers
+            if target == MetadataTarget.TALKER
+            else set(self.filenames.values())
+        )
+        updated = 0
+        for key, row in values.items():
+            if key not in keys:
+                continue
+            stored = self.metadata[target].setdefault(key, {})
+            for column in columns:
+                stored[column.name] = row.get(column.name)
+            updated += 1
+        return updated
+
+    def read_metadata(self, target: MetadataTarget) -> dict[str, dict[str, Any]]:
+        return {key: dict(row) for key, row in self.metadata[target].items()}
+
+    def list_tables(self) -> list[str]:
+        raise NotImplementedError("Tables are only kept in a project database")
+
+    def read_table(self, name: str, limit: int) -> TableData:
+        raise NotImplementedError("Tables are only kept in a project database")

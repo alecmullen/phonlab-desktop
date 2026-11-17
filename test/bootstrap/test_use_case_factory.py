@@ -15,11 +15,23 @@ from core.annotation.search_tier import SearchTier
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
+from core.import_metadata.import_metadata import ImportMetadata
+from core.import_metadata.match_metadata import MatchMetadata
+from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.inspect_database.inspect_database import ListTables, ReadTable
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.project.add_project_files import AddProjectFiles
 from core.project.close_project import CloseProject
 from core.project.rebuild_project import RebuildProject
+from core.project_layout.infer_layout import InferLayout
+from core.project_layout.project_layout_file import (
+    LoadProjectLayout,
+    SaveProjectLayout,
+)
+from core.project_layout.resolve_recordings import ResolveRecordings
+from core.project_layout.scan_project_tree import ScanProjectTree
+from core.project_layout.suggest_talker_names import SuggestTalkerNames
 from core.save_audio.save_audio import SaveAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
@@ -52,6 +64,17 @@ USE_CASE_TYPES = [
     CloseProject,
     SearchTier,
     ReplaceInTier,
+    ScanProjectTree,
+    InferLayout,
+    ResolveRecordings,
+    LoadProjectLayout,
+    SaveProjectLayout,
+    SuggestTalkerNames,
+    ReadMetadataCsv,
+    MatchMetadata,
+    ImportMetadata,
+    ListTables,
+    ReadTable,
 ]
 
 

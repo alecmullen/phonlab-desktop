@@ -5,20 +5,32 @@ import numpy as np
 import pytest
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence
-from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
+from PyQt6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox, QWidget
 from pytestqt.qtbot import QtBot
 from support.annotation_repository import SeedableAnnotationRepository
 from support.audio_player import FakeAudioPlayer
 from support.job_manager import FakeJobManager
 from support.mocks import mock_use_case
 from support.textgrid import write_simple_textgrid
-from support.view_models import StubViewModelFactory, make_main_view_model
+from support.view_models import (
+    StubViewModelFactory,
+    make_database_view_model,
+    make_main_view_model,
+)
 
 import ui.document.document_view as doc_view_module
 import ui.main.main_window as main_window_module
+from core.annotation.entity.metadata import MetadataTarget
+from core.import_metadata.entity.information_source import InformationSource
+from core.import_metadata.information_sources_file import SaveInformationSource
 from core.load_audio.entity.audio_signal import AudioSignal
+from core.project_layout.entity.project_layout import ChannelRole, ProjectLayout
+from core.project_layout.project_layout_file import SaveProjectLayout
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
+from data.annotation.datasource.annotation_datasource import AnnotationDataSource
+from data.annotation.repository.annotation_repository import DataAnnotationRepository
+from data.base.database import SQLiteDatabase
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.component.tier_font_dialog import TierFontDialog
@@ -39,11 +51,31 @@ from ui.main.component.save_audio_dialog import SaveOptions
 from ui.main.main_view_model import MainViewModel
 from ui.main.main_window import MainWindow
 from ui.main.state.audio_open_options import AudioOpenOptionsState
+from ui.main.state.openable_file import OpenableFile
+from ui.metadata_import.metadata_import_dialog import MetadataImportDialog
+from ui.project_layout.project_layout_dialog import ProjectLayoutDialog
 
 
 @pytest.fixture(autouse=True)
 def disable_zero_crossing_snapping(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "cut_and_paste_at_zero_crossings", False)
+
+
+@pytest.fixture(autouse=True)
+def accept_layout_dialog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[ProjectLayoutDialog]:
+    """The dialog that asks how a new project is organized answers "Use This Layout"
+    at once; the dialogs shown are returned"""
+    shown: list[ProjectLayoutDialog] = []
+
+    def exec_(self: ProjectLayoutDialog) -> int:
+        shown.append(self)
+        self.accept_layout()
+        return self.result()
+
+    monkeypatch.setattr(ProjectLayoutDialog, "exec", exec_)
+    return shown
 
 
 @pytest.fixture
@@ -388,6 +420,43 @@ def test_select_project_does_nothing_when_dialog_is_cancelled(
     assert opened == []
 
 
+class FakeSplash:
+    def __init__(self):
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+
+def test_the_splash_card_goes_away_once_something_is_chosen_to_open(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    splash = FakeSplash()
+    main_window.splash = splash  # type: ignore[assignment]
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    capture_information(monkeypatch)
+
+    main_window.select_path_to_open()
+
+    assert splash.closed is True and main_window.splash is None
+
+
+def test_the_splash_card_stays_when_the_open_dialog_is_cancelled(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, opened: list
+):
+    splash = FakeSplash()
+    main_window.splash = splash  # type: ignore[assignment]
+    patch_directory_dialog(monkeypatch, "")
+
+    main_window.select_path_to_open()
+
+    assert splash.closed is False and main_window.splash is splash
+
+
 def run_import_job(main_window: MainWindow):
     """Runs the recorded project import job synchronously, as the worker would"""
     job = main_window.view_model.job_managers["project_import"].jobs[0]
@@ -428,8 +497,8 @@ def test_select_project_builds_database_from_textgrids_before_opening_files(
     assert dir_path == str(tmp_path)
     # Annotations come from the database, so no TextGrid is passed on to be read
     assert sorted(files) == [
-        ("a", str(tmp_path / "a.wav"), None),
-        ("b", str(tmp_path / "b.wav"), None),
+        OpenableFile("a", str(tmp_path / "a.wav"), None),
+        OpenableFile("b", str(tmp_path / "b.wav"), None),
     ]
     assert sorted(project_repository.filenames.values()) == ["a", "b"]
     a = project_repository.find_annotation_by_file_stem("a")
@@ -448,7 +517,9 @@ def test_select_project_with_existing_database_opens_without_reading_textgrids(
 
     main_window.select_path_to_open()
 
-    assert opened == [([("a", str(tmp_path / "a.wav"), None)], str(tmp_path))]
+    assert opened == [
+        ([OpenableFile("a", str(tmp_path / "a.wav"), None)], str(tmp_path))
+    ]
     assert "project_import" not in main_window.view_model.job_managers
     assert project_repository.filenames == {}
 
@@ -472,7 +543,7 @@ def test_select_project_treats_extensions_case_insensitively(
     main_window.select_path_to_open()
 
     [(files, _)] = opened
-    assert sorted(stem for stem, _, _ in files) == ["lower", "mixed", "upper"]
+    assert sorted(file.file_stem for file in files) == ["lower", "mixed", "upper"]
 
 
 def test_select_project_reads_textgrid_with_any_case_suffix_on_first_open(
@@ -533,13 +604,23 @@ def test_select_project_shows_reading_progress_while_building_the_database(
     job = main_window.view_model.job_managers["project_import"].jobs[0]
     results = iter(job.task)
 
-    job.on_success(next(results))  # the TextGrids have been counted
+    job.on_success(next(results))  # the project's files are being looked through
 
     dialog = main_window.progress_dialog
     assert dialog is not None
-    assert dialog.labelText() == "Reading TextGrids…" and dialog.maximum() == 2
+    assert dialog.windowTitle() == "Importing the project database"
+    assert dialog.labelText() == "Looking through the project's files…"
+    for _ in range(3):  # registered, TextGrids counted, first one about to be read
+        job.on_success(next(results))
+    assert dialog.maximum() == 2
+    assert dialog.labelText() == (
+        "Reading annotations: 0 of 2 done\nNow reading a.TextGrid"
+    )
     for result in results:
         job.on_success(result)
+        if main_window.progress_dialog is not None:
+            # the label keeps its height between files, so the next name has room
+            assert main_window.progress_dialog.labelText().count("\n") == 1
     assert main_window.progress_dialog is None
     assert len(opened) == 1
 
@@ -763,7 +844,7 @@ def test_opening_a_project_closes_every_open_tab_and_the_open_project(
     assert closed_databases == [str(first)]
     assert main_window.tab_widget.count() == 0
     assert main_window.view_model.dir_path == str(second)
-    assert opened == [([("b", str(second / "b.wav"), None)], str(second))]
+    assert opened == [([OpenableFile("b", str(second / "b.wav"), None)], str(second))]
 
 
 def test_opening_a_project_closes_a_document_opened_on_its_own(
@@ -879,7 +960,9 @@ def test_open_paths_opens_a_lone_directory_as_a_project(
 
     main_window.open_paths([str(tmp_path)])
 
-    assert opened == [([("a", str(tmp_path / "a.wav"), None)], str(tmp_path))]
+    assert opened == [
+        ([OpenableFile("a", str(tmp_path / "a.wav"), None)], str(tmp_path))
+    ]
 
 
 def test_open_paths_opens_sound_files_as_a_document(
@@ -1427,7 +1510,13 @@ def test_project_menu_lists_the_project_actions(main_window: MainWindow):
         if action.text().replace("&", "") == "Project"
     )
 
-    assert menu.actions() == [main_window.add_files_action, main_window.rebuild_action]
+    assert [action for action in menu.actions() if not action.isSeparator()] == [
+        main_window.add_files_action,
+        main_window.rebuild_action,
+        main_window.project_layout_action,
+        main_window.add_information_action,
+        main_window.inspect_database_action,
+    ]
 
 
 def capture_information(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -1567,6 +1656,72 @@ def test_rebuild_project_rereads_textgrids_into_a_new_database(
     assert list(project_repository.filenames.values()) == ["a"]
     assert messages == ["Rebuilt the project database from 1 TextGrids."]
     assert reloaded == [doc.view_model]
+
+
+def rebuild_a_project_that_remembers_information(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    csv_text: str | None,
+) -> list[str]:
+    """Rebuilds a project with two talker folders that remembers a talkers CSV file,
+    which is written first unless `csv_text` is None. Returns the messages shown"""
+    make_project(tmp_path)
+    for talker in ("t1", "t2"):
+        (tmp_path / talker).mkdir()
+        (tmp_path / talker / "a.wav").write_bytes(b"")
+        write_simple_textgrid(tmp_path / talker / "a.TextGrid")
+    if csv_text is not None:
+        (tmp_path / "talkers.csv").write_text(csv_text)
+    SaveInformationSource()(
+        str(tmp_path),
+        InformationSource(
+            "talkers.csv", MetadataTarget.TALKER, "talker", {"age": "age"}
+        ),
+    )
+    main_window.view_model.set_dir_path(str(tmp_path))
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.Yes),
+    )
+    messages = capture_information(monkeypatch)
+
+    main_window.rebuild_project()
+    run_import_job(main_window)
+    return messages
+
+
+def test_rebuilding_adds_the_remembered_csv_information_to_the_new_database(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    messages = rebuild_a_project_that_remembers_information(
+        main_window, monkeypatch, tmp_path, "talker,age\nt1,31\nt2,45\n"
+    )
+
+    assert project_repository.read_metadata(MetadataTarget.TALKER) == {
+        "t1": {"age": 31},
+        "t2": {"age": 45},
+    }
+    assert "Added the information from talkers.csv again." in messages[0]
+
+
+def test_rebuilding_reports_remembered_information_that_cannot_be_added(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    messages = rebuild_a_project_that_remembers_information(
+        main_window, monkeypatch, tmp_path, None
+    )
+
+    assert project_repository.read_metadata(MetadataTarget.TALKER) == {}
+    assert "Could not add the information from talkers.csv" in messages[0]
+    assert "Rebuilt the project database from 2 TextGrids." in messages[0]
 
 
 def add_project_document(
@@ -2236,7 +2391,7 @@ def test_match_in_unopened_file_opens_it_first(
     main_window.show_tier_match(TierSearchMatchState("sub/c", 3.0, 4.0))
 
     assert opened == [
-        ([("sub/c", str(tmp_path / "sub" / "c.wav"), None)], str(tmp_path))
+        ([OpenableFile("sub/c", str(tmp_path / "sub" / "c.wav"), None)], str(tmp_path))
     ]
     assert revealed == [(3.0, 4.0)]
 
@@ -2285,3 +2440,279 @@ def test_changed_labels_reload_only_documents_showing_those_files(
     main_window.on_tier_search_state_change(TierLabelsChangedState(frozenset({"a"})))
 
     assert reloaded == ["a"]
+
+
+# --------------------------- layout, extra information and the database window ---------------------------
+
+
+def test_new_project_asks_how_it_is_organized_before_building_the_database(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    accept_layout_dialog: list[ProjectLayoutDialog],
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav")  # b has no TextGrid
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    capture_information(monkeypatch)
+
+    main_window.select_path_to_open()
+
+    assert len(accept_layout_dialog) == 1
+    assert "[import]" in (tmp_path / "phonlab.toml").read_text()
+    assert "project_import" in main_window.view_model.job_managers
+
+
+def test_new_project_that_needs_no_decisions_is_not_asked(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    accept_layout_dialog: list[ProjectLayoutDialog],
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    capture_information(monkeypatch)
+
+    main_window.select_path_to_open()
+
+    assert accept_layout_dialog == []
+    assert "[import]" in (tmp_path / "phonlab.toml").read_text()  # saved all the same
+
+
+def test_cancelling_the_layout_dialog_opens_no_project(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    monkeypatch.setattr(
+        ProjectLayoutDialog, "exec", lambda self: QDialog.DialogCode.Rejected
+    )
+
+    main_window.select_path_to_open()
+
+    assert opened == []
+    assert "project_import" not in main_window.view_model.job_managers
+    assert main_window.view_model.dir_path is None
+    assert main_window.add_information_action.isEnabled() is False
+
+
+def test_project_with_a_database_is_opened_without_asking_about_its_layout(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    accept_layout_dialog: list[ProjectLayoutDialog],
+):
+    make_project(tmp_path, "a.wav", "b.wav", database=True)
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+
+    main_window.select_path_to_open()
+
+    assert accept_layout_dialog == []
+    assert len(opened) == 1
+
+
+def test_new_project_records_the_talkers_the_layout_finds(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path)
+    for talker, stem in (("t1", "a"), ("t2", "b")):
+        (tmp_path / talker).mkdir()
+        (tmp_path / talker / f"{stem}.wav").write_bytes(b"")
+        write_simple_textgrid(tmp_path / talker / f"{stem}.TextGrid")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    capture_information(monkeypatch)
+
+    main_window.select_path_to_open()
+    run_import_job(main_window)
+
+    assert {r.file_stem: r.talkers for r in project_repository.list_recordings()} == {
+        "t1/a": ["t1"],
+        "t2/b": ["t2"],
+    }
+
+
+def test_project_menu_items_about_layout_and_data_need_a_project(
+    main_window: MainWindow, tmp_path: Path
+):
+    actions = (
+        main_window.project_layout_action,
+        main_window.add_information_action,
+        main_window.inspect_database_action,
+    )
+    assert [action.isEnabled() for action in actions] == [False] * 3
+
+    main_window.view_model.set_dir_path(str(tmp_path))
+    main_window.update_project_actions()
+
+    assert [action.isEnabled() for action in actions] == [True] * 3
+
+
+def test_reviewing_the_layout_updates_the_project_database(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    accept_layout_dialog: list[ProjectLayoutDialog],
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", database=True)
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = capture_information(monkeypatch)
+
+    main_window.edit_project_layout()
+
+    assert len(accept_layout_dialog) == 1  # asked although nothing needed deciding
+    run_import_job(main_window)
+    assert messages == ["Added 1 new files and read 1 TextGrids."]
+
+
+def test_cancelling_the_layout_review_changes_nothing(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", database=True)
+    main_window.view_model.set_dir_path(str(tmp_path))
+    monkeypatch.setattr(
+        ProjectLayoutDialog, "exec", lambda self: QDialog.DialogCode.Rejected
+    )
+
+    main_window.edit_project_layout()
+
+    assert "project_import" not in main_window.view_model.job_managers
+    assert "[import]" not in (tmp_path / "phonlab.toml").read_text()
+
+
+def test_adding_information_reports_a_file_that_cannot_be_used(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    (tmp_path / "info.csv").write_text("only,a,header\n")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(tmp_path / "info.csv"), "")),
+    )
+    errors: list = []
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda *args: errors.append(args))
+    )
+
+    main_window.add_information_from_csv()
+
+    assert len(errors) == 1
+
+
+def test_adding_information_shows_the_dialog_for_the_chosen_file(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    (tmp_path / "info.csv").write_text("talker,age\nAnn,31\n")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(tmp_path / "info.csv"), "")),
+    )
+    shown: list[MetadataImportDialog] = []
+    monkeypatch.setattr(
+        MetadataImportDialog,
+        "exec",
+        lambda self: shown.append(self) or QDialog.DialogCode.Rejected,
+    )
+
+    main_window.add_information_from_csv()
+
+    [dialog] = shown
+    assert dialog.state.file_name == "info.csv"
+
+
+def test_adding_information_does_nothing_when_no_file_is_chosen(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: ("", "")),
+    )
+
+    main_window.add_information_from_csv()  # would raise if it went on
+
+
+def test_inspecting_the_database_opens_a_window_that_closes_with_the_project(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+    database = SQLiteDatabase()  # tables are only read from a real project database
+    database.connect(str(tmp_path))
+    view_model = make_database_view_model(
+        str(tmp_path), DataAnnotationRepository(AnnotationDataSource(database))
+    )
+    monkeypatch.setattr(
+        main_window.view_model_factory, "create", lambda *args, **kwargs: view_model
+    )
+
+    main_window.inspect_database()
+
+    dialog = main_window.database_dialog
+    assert dialog is not None
+    assert dialog.table_combo.currentText() == "recording"
+
+    main_window.close_project()
+
+    assert main_window.database_dialog is None
+    database.engine.dispose()
+
+
+def test_open_files_opens_channel_files_as_one_document_without_asking(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    left, right = tmp_path / "a_L.wav", tmp_path / "a_R.wav"
+    left.write_bytes(b"")
+    right.write_bytes(b"")
+    monkeypatch.setattr(
+        OpenAudioDialog,
+        "get_options",
+        staticmethod(lambda *args, **kwargs: pytest.fail("asked about the audio")),
+    )
+    loaded: list = []
+    monkeypatch.setattr(
+        DocumentView,
+        "load_audio",
+        lambda self, files, options: loaded.append((files, options)),
+    )
+
+    main_window.open_files(
+        [OpenableFile("a", str(left), None, (str(left), str(right)))], str(tmp_path)
+    )
+
+    [(files, options)] = loaded
+    assert files == [str(left), str(right)]
+    assert options.channel_mode == "stereo"
+    assert options.retained_channels == [0, 1]
+    assert main_window.tab_widget.tabText(0) == "a"
+
+
+def test_a_tier_match_in_a_channel_recording_opens_its_channel_files(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a_L.wav", "a_R.wav", database=True)
+    SaveProjectLayout()(
+        str(tmp_path),
+        ProjectLayout(channels=(ChannelRole("L", "_L"), ChannelRole("R", "_R"))),
+    )
+    main_window.view_model.set_dir_path(str(tmp_path))
+    opened: list = []
+    monkeypatch.setattr(
+        main_window, "open_files", lambda files, dir_path: opened.append(files)
+    )
+
+    main_window.open_project_document("a")
+
+    [[file]] = opened
+    assert file.file_stem == "a"
+    assert file.channel_files == (str(tmp_path / "a_L.wav"), str(tmp_path / "a_R.wav"))

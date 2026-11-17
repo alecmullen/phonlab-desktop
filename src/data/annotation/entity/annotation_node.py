@@ -8,5 +8,5 @@ class AnnotationNodeEntity(BaseEntity):
     __tablename__ = "annotation_node"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    annotation_id: Mapped[int] = mapped_column(ForeignKey("annotation.id"))
+    annotation_id: Mapped[int] = mapped_column(ForeignKey("recording.id"))
     time: Mapped[float] = mapped_column()

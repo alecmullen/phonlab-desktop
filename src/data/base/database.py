@@ -1,10 +1,11 @@
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 
-from data.base.base_entity import BaseEntity
+from data.base.base_entity import ON_DEMAND, BaseEntity
 from res.constants import PROJECT_DATABASE_FILENAME
 
 
@@ -28,9 +29,19 @@ class SQLiteDatabase(Database):
     def connect(self, dir_path: str):
         self.dir_path = dir_path
         self.engine = create_engine(
-            f"sqlite:///{Path(dir_path) / PROJECT_DATABASE_FILENAME}", echo=True
+            f"sqlite:///{Path(dir_path) / PROJECT_DATABASE_FILENAME}",
+            # Logging every statement slows large imports down a great deal, so it is
+            # only done when asked for (to see what the app does: PHONLAB_SQL_ECHO=1)
+            echo=os.environ.get("PHONLAB_SQL_ECHO") == "1",
         )
-        BaseEntity.metadata.create_all(self.engine)
+        BaseEntity.metadata.create_all(
+            self.engine,
+            tables=[
+                table
+                for table in BaseEntity.metadata.sorted_tables
+                if not table.info.get(ON_DEMAND)
+            ],
+        )
 
     def close(self):
         """Close every connection to the database file. The engine reconnects if it is

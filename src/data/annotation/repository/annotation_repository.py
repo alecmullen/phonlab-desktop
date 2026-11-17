@@ -1,16 +1,23 @@
+import bisect
+from typing import Any
+
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
 )
+from core.annotation.entity.metadata import MetadataColumn, MetadataTarget
+from core.annotation.entity.recording import Recording, RecordingUpsertResult
 from core.annotation.entity.tier_label import TierLabel
 from core.annotation.repository.annotation_repository import AnnotationRepository
+from core.inspect_database.entity.table_data import TableData
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_node import AnnotationNodeEntity
 from data.annotation.mapping.annotation_mapping import (
     entity_to_annotation,
     entity_to_label,
+    entity_to_recording,
     label_to_entity,
     row_to_tier_label,
     type_to_entity,
@@ -73,11 +80,17 @@ class DataAnnotationRepository(AnnotationRepository):
     def create_nodes(
         self, annotation_id: int, nodes: list[float], same_threshold: float = 0.0
     ) -> dict[int, float]:
+        # A time that is within the threshold of a node the annotation already has
+        # is that node. The nodes are read once, not looked up for every time.
+        existing = self.local_datasource.list_nodes(annotation_id)
+        existing_times = [node.time for node in existing]
+
         node_entities = []
         for time in nodes:
-            node_entity = self.local_datasource.find_node_by_time(
-                annotation_id, time, same_threshold
-            )
+            node_entity = None
+            idx = bisect.bisect_left(existing_times, time - same_threshold)
+            if idx < len(existing) and existing_times[idx] <= time + same_threshold:
+                node_entity = existing[idx]
             if node_entity is None:
                 node_entity = AnnotationNodeEntity(
                     annotation_id=annotation_id, time=time
@@ -121,3 +134,38 @@ class DataAnnotationRepository(AnnotationRepository):
     ) -> list[TierLabel]:
         rows = self.local_datasource.find_labels_by_tier_name(tier_name, file_stem)
         return [row_to_tier_label(row) for row in rows]
+
+    def upsert_recordings(
+        self, recordings: list[Recording], remove_others: bool = True
+    ) -> RecordingUpsertResult:
+        return self.local_datasource.upsert_recordings(recordings, remove_others)
+
+    def list_recordings(self) -> list[Recording]:
+        channels = self.local_datasource.list_channels()
+        return [
+            entity_to_recording(entity, channels.get(entity.id, []))
+            for entity in self.local_datasource.list_recordings()
+        ]
+
+    def list_talkers(self) -> list[str]:
+        return self.local_datasource.list_talkers()
+
+    def builtin_columns(self, target: MetadataTarget) -> list[str]:
+        return self.local_datasource.builtin_columns(target)
+
+    def add_metadata(
+        self,
+        target: MetadataTarget,
+        columns: list[MetadataColumn],
+        values: dict[str, dict[str, Any]],
+    ) -> int:
+        return self.local_datasource.add_metadata(target, columns, values)
+
+    def read_metadata(self, target: MetadataTarget) -> dict[str, dict[str, Any]]:
+        return self.local_datasource.read_metadata(target)
+
+    def list_tables(self) -> list[str]:
+        return self.local_datasource.list_tables()
+
+    def read_table(self, name: str, limit: int) -> TableData:
+        return self.local_datasource.read_table(name, limit)

@@ -14,12 +14,25 @@ from core.annotation.search_tier import SearchTier
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
+from core.import_metadata.import_metadata import ImportMetadata
+from core.import_metadata.information_sources_file import SaveInformationSource
+from core.import_metadata.match_metadata import MatchMetadata
+from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.inspect_database.inspect_database import ListTables, ReadTable
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.project.add_project_files import AddProjectFiles
 from core.project.close_project import CloseProject
 from core.project.rebuild_project import RebuildProject
+from core.project_layout.infer_layout import InferLayout
+from core.project_layout.project_layout_file import (
+    LoadProjectLayout,
+    SaveProjectLayout,
+)
+from core.project_layout.resolve_recordings import ResolveRecordings
+from core.project_layout.scan_project_tree import ScanProjectTree
+from core.project_layout.suggest_talker_names import SuggestTalkerNames
 from core.save_audio.save_audio import SaveAudio
 from core.settings.load_display_plan import LoadDisplayPlan
 from core.settings.load_tier_layout import LoadTierLayout
@@ -38,8 +51,11 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.view_model import ViewModel
+from ui.database_view.database_view_model import DatabaseViewModel
 from ui.document.document_view_model import DocumentViewModel
 from ui.main.main_view_model import MainViewModel
+from ui.metadata_import.metadata_import_view_model import MetadataImportViewModel
+from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
 
@@ -74,6 +90,12 @@ class ViewModelFactoryImpl(ViewModelFactory):
             view_model = self.create_audio_wave_view_model(*args, **kwargs)
         elif view_model_type is MainViewModel:
             view_model = self.create_main_view_model(*args, **kwargs)
+        elif view_model_type is ProjectLayoutViewModel:
+            view_model = self.create_project_layout_view_model(*args, **kwargs)
+        elif view_model_type is MetadataImportViewModel:
+            view_model = self.create_metadata_import_view_model(*args, **kwargs)
+        elif view_model_type is DatabaseViewModel:
+            view_model = self.create_database_view_model(*args, **kwargs)
 
         if view_model is None:
             raise TypeError(f"No provider method for {view_model_type!s} found")
@@ -178,4 +200,40 @@ class ViewModelFactoryImpl(ViewModelFactory):
                 RebuildProject
             ),
             self.close_project,
+        )
+
+    def create_project_layout_view_model(self, dir_path: str) -> ProjectLayoutViewModel:
+        # These use cases only read the project's files, so they do not open (and so
+        # do not create) the project database
+        use_case_factory = self.get_use_case_factory(None)
+
+        return ProjectLayoutViewModel(
+            dir_path,
+            use_case_factory.provide(ScanProjectTree),
+            use_case_factory.provide(InferLayout),
+            use_case_factory.provide(ResolveRecordings),
+            use_case_factory.provide(LoadProjectLayout),
+            use_case_factory.provide(SaveProjectLayout),
+            use_case_factory.provide(SuggestTalkerNames),
+        )
+
+    def create_metadata_import_view_model(
+        self, dir_path: str, csv_path: str
+    ) -> MetadataImportViewModel:
+        use_case_factory = self.get_use_case_factory(dir_path)
+
+        return MetadataImportViewModel(
+            dir_path,
+            csv_path,
+            use_case_factory.provide(ReadMetadataCsv),
+            use_case_factory.provide(MatchMetadata),
+            use_case_factory.provide(ImportMetadata),
+            use_case_factory.provide(SaveInformationSource),
+        )
+
+    def create_database_view_model(self, dir_path: str) -> DatabaseViewModel:
+        use_case_factory = self.get_use_case_factory(dir_path)
+
+        return DatabaseViewModel(
+            use_case_factory.provide(ListTables), use_case_factory.provide(ReadTable)
         )

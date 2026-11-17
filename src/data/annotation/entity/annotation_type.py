@@ -9,7 +9,7 @@ class AnnotationTypeEntity(BaseEntity):
     __tablename__ = "annotation_type"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    annotation_id: Mapped[int] = mapped_column(ForeignKey("annotation.id"))
+    annotation_id: Mapped[int] = mapped_column(ForeignKey("recording.id"))
     name: Mapped[str] = mapped_column(String(255))
 
     labels: Mapped[list[AnnotationLabelEntity]] = relationship(

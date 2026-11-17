@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 
 from core.annotation.entity.annotation import AnnotationLabel, AnnotationType
+from core.annotation.entity.metadata import MetadataColumn, MetadataTarget, SqlType
+from core.annotation.entity.recording import Recording
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
@@ -412,3 +414,411 @@ def test_repository_keeps_working_after_close(repository: DataAnnotationReposito
     repository.close()
 
     assert len(repository.get_annotation_by_id(id).nodes) == 3
+
+
+# --------------------------- recordings ---------------------------
+
+
+def test_upsert_recordings_stores_files_talkers_and_fields(
+    repository: DataAnnotationRepository,
+):
+    recording = Recording(
+        "t1/a",
+        audio_file="t1/a.wav",
+        annotation_file="t1/a.TextGrid",
+        data_files={"track": "t1/a.trk"},
+        talkers=["t1", "t2"],
+        fields={"dialect": "north"},
+    )
+
+    result = repository.upsert_recordings([recording])
+
+    assert (result.created, result.updated, result.removed) == (1, 0, 0)
+    assert repository.list_recordings() == [recording]
+
+
+def test_upsert_recordings_updates_existing_rows_and_keeps_their_annotation(
+    repository: DataAnnotationRepository,
+):
+    id = seeded_annotation(repository)
+    repository.upsert_recordings([Recording("sample", audio_file="sample.wav")])
+    result = repository.upsert_recordings(
+        [Recording("sample", audio_file="sample.wav", talkers=["x"])]
+    )
+
+    assert (result.created, result.updated) == (0, 1)
+    assert repository.list_recordings()[0].talkers == ["x"]
+    assert len(repository.get_annotation_by_id(id).types[0].labels) == 2
+
+
+def test_upsert_recordings_removes_rows_without_annotation_that_are_gone(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)  # has a type, so it stays
+    repository.upsert_recordings([Recording("a"), Recording("b")])
+
+    result = repository.upsert_recordings([Recording("a")])
+
+    assert result.removed == 1
+    assert [r.file_stem for r in repository.list_recordings()] == ["a", "sample"]
+
+
+def test_annotation_rows_created_without_import_have_empty_recording_info(
+    repository: DataAnnotationRepository,
+):
+    repository.create_annotation("plain")
+
+    [recording] = repository.list_recordings()
+
+    assert recording == Recording("plain")
+
+
+def test_channel_files_and_talkers_are_stored(repository: DataAnnotationRepository):
+    recording = Recording(
+        "a",
+        audio_file="a_L.wav",
+        channel_files={"L": "a_L.wav", "R": "a_R.wav"},
+        channel_talkers={"L": "Ann", "R": "Bob"},
+        talkers=["Ann", "Bob"],
+    )
+
+    repository.upsert_recordings([recording])
+
+    assert repository.list_recordings() == [recording]
+
+
+# --------------------------- talkers and added information ---------------------------
+
+
+def test_upsert_recordings_makes_a_row_for_each_talker(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings(
+        [
+            Recording("a", talkers=["Ann", "Bob"]),
+            Recording("b", talkers=["Ann"]),
+        ]
+    )
+
+    assert repository.list_talkers() == ["Ann", "Bob"]
+
+
+def test_columns_can_be_added_to_a_table_that_has_rows(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", talkers=["Ann"]), Recording("b")])
+
+    updated = repository.add_metadata(
+        MetadataTarget.RECORDING,
+        [MetadataColumn("speech_rate", SqlType.REAL), MetadataColumn("cond")],
+        {"a": {"speech_rate": 4.5, "cond": "slow"}, "missing": {"cond": "x"}},
+    )
+
+    assert updated == 1  # "missing" names no recording
+    assert repository.read_metadata(MetadataTarget.RECORDING) == {
+        "a": {"speech_rate": 4.5, "cond": "slow"},
+        "b": {"speech_rate": None, "cond": None},
+    }
+    assert repository.list_recordings()[0].file_stem == "a"  # ordinary reads still work
+
+
+def test_talker_information_goes_in_the_talker_table(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", talkers=["Ann", "Bob"])])
+
+    repository.add_metadata(
+        MetadataTarget.TALKER,
+        [MetadataColumn("age", SqlType.INTEGER)],
+        {"Ann": {"age": 31}},
+    )
+
+    assert repository.read_metadata(MetadataTarget.TALKER) == {
+        "Ann": {"age": 31},
+        "Bob": {"age": None},
+    }
+
+
+def test_adding_the_same_column_again_updates_its_values(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a")])
+    column = [MetadataColumn("rate", SqlType.REAL)]
+    repository.add_metadata(MetadataTarget.RECORDING, column, {"a": {"rate": 1.0}})
+
+    repository.add_metadata(MetadataTarget.RECORDING, column, {"a": {"rate": 2.0}})
+
+    assert repository.read_metadata(MetadataTarget.RECORDING) == {"a": {"rate": 2.0}}
+
+
+def test_added_columns_survive_importing_the_recordings_again(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a")])
+    repository.add_metadata(
+        MetadataTarget.RECORDING,
+        [MetadataColumn("rate", SqlType.REAL)],
+        {"a": {"rate": 3.0}},
+    )
+
+    repository.upsert_recordings([Recording("a", talkers=["Ann"])])
+
+    assert repository.read_metadata(MetadataTarget.RECORDING) == {"a": {"rate": 3.0}}
+
+
+def test_unsafe_column_names_are_refused(repository: DataAnnotationRepository):
+    with pytest.raises(ValueError):
+        repository.add_metadata(
+            MetadataTarget.RECORDING,
+            [MetadataColumn('x"; DROP TABLE annotation; --')],
+            {},
+        )
+
+
+def test_builtin_columns_are_not_reported_as_added_information(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a")])
+
+    assert repository.read_metadata(MetadataTarget.RECORDING) == {}
+    assert "file_stem" in repository.builtin_columns(MetadataTarget.RECORDING)
+    assert repository.builtin_columns(MetadataTarget.TALKER) == ["id", "name"]
+
+
+# --------------------------- looking at tables ---------------------------
+
+
+def test_tables_list_puts_recordings_and_talkers_first(
+    repository: DataAnnotationRepository,
+):
+    assert repository.list_tables()[:3] == ["recording", "talker", "recording_talker"]
+
+
+def test_read_table_returns_columns_including_added_ones(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a"), Recording("b"), Recording("c")])
+    repository.add_metadata(
+        MetadataTarget.RECORDING,
+        [MetadataColumn("rate", SqlType.REAL)],
+        {"a": {"rate": 2.5}},
+    )
+
+    data = repository.read_table("recording", 2)
+
+    assert data.n_rows == 3
+    assert len(data.rows) == 2
+    assert data.columns[-1] == "rate"
+    assert data.rows[0][data.columns.index("file_stem")] == "a"
+    assert data.rows[0][-1] == 2.5
+
+
+def test_times_are_shown_with_three_places_wherever_they_appear(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)
+
+    nodes = table_rows(repository, "annotation_node")
+    labels = table_rows(repository, "annotation_label")
+
+    assert [row["time"] for row in nodes] == ["0.000", "0.500", "1.000"]
+    assert {row["start_node"] for row in labels} <= {"0.000", "0.500", "1.000"}
+    assert all(isinstance(row["end_node"], str) for row in labels)
+
+
+def test_read_table_refuses_names_that_are_not_tables(
+    repository: DataAnnotationRepository,
+):
+    with pytest.raises(ValueError):
+        repository.read_table('recording"; DROP TABLE recording; --', 10)
+
+
+# --------------------------- talkers and channels in their own tables ---------------------------
+
+
+def table_rows(repository: DataAnnotationRepository, name: str) -> list[dict]:
+    data = repository.read_table(name, 1000)
+    return [dict(zip(data.columns, row)) for row in data.rows]
+
+
+def test_the_recording_table_has_no_columns_for_talkers_or_channels(
+    repository: DataAnnotationRepository,
+):
+    data = repository.read_table("recording", 10)
+
+    assert data.columns == [
+        "id",
+        "file_stem",
+        "audio_file",
+        "annotation_file",
+        "data_files",
+        "fields",
+    ]
+
+
+def test_talkers_of_a_recording_are_linked_not_listed(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings(
+        [Recording("a", talkers=["Ann", "Bob"]), Recording("b", talkers=["Bob"])]
+    )
+
+    rows = table_rows(repository, "recording_talker")
+
+    assert [(r["recording"], r["talker"]) for r in rows] == [
+        ("a", "Ann"),
+        ("a", "Bob"),
+        ("b", "Bob"),
+    ]
+    assert repository.list_recordings()[0].talkers == ["Ann", "Bob"]
+
+
+def test_a_talker_is_one_row_however_many_recordings_it_is_in(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings(
+        [Recording("a", talkers=["Ann"]), Recording("b", talkers=["Ann"])]
+    )
+
+    assert repository.list_talkers() == ["Ann"]
+
+
+def test_adding_recordings_again_replaces_the_talkers_of_each(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", talkers=["Ann", "Bob"])])
+
+    repository.upsert_recordings([Recording("a", talkers=["Bob", "Ann", "Bob"])])
+
+    assert repository.list_recordings()[0].talkers == ["Bob", "Ann"]
+    assert len(table_rows(repository, "recording_talker")) == 2
+
+
+def test_channels_have_their_own_table_with_the_talker_on_each(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings(
+        [
+            Recording(
+                "a",
+                audio_file="a_L.wav",
+                channel_files={"L": "a_L.wav", "R": "a_R.wav"},
+                channel_talkers={"L": "Ann"},
+                talkers=["Ann"],
+            ),
+            Recording("b", audio_file="b.wav"),
+        ]
+    )
+
+    rows = table_rows(repository, "recording_channel")
+
+    assert [
+        (r["recording"], r["channel"], r["audio_file"], r["talker"]) for r in rows
+    ] == [
+        ("a", "L", "a_L.wav", "Ann"),
+        ("a", "R", "a_R.wav", None),
+    ]
+
+
+def test_a_channel_talker_not_listed_among_the_talkers_still_gets_a_row(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings(
+        [
+            Recording(
+                "a",
+                channel_files={"L": "a_L.wav"},
+                channel_talkers={"L": "Ann"},
+            )
+        ]
+    )
+
+    assert repository.list_talkers() == ["Ann"]
+    assert repository.list_recordings()[0].channel_talkers == {"L": "Ann"}
+
+
+def test_recordings_that_leave_the_project_take_their_links_with_them(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings(
+        [
+            Recording("a", talkers=["Ann"], channel_files={"L": "a.wav"}),
+            Recording("b", talkers=["Bob"]),
+        ]
+    )
+
+    repository.upsert_recordings([Recording("b", talkers=["Bob"])])
+
+    assert [r["recording"] for r in table_rows(repository, "recording_talker")] == ["b"]
+    assert table_rows(repository, "recording_channel") == []
+
+
+def test_there_is_no_channel_table_until_a_recording_has_channel_files(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", audio_file="a.wav")])
+
+    assert "recording_channel" not in repository.list_tables()
+    assert repository.list_recordings()[0].channel_files == {}
+    with pytest.raises(ValueError):
+        repository.read_table("recording_channel", 10)
+
+    repository.upsert_recordings(
+        [Recording("a", channel_files={"L": "a_L.wav", "R": "a_R.wav"})]
+    )
+
+    assert "recording_channel" in repository.list_tables()
+    assert repository.list_recordings()[0].channel_files == {
+        "L": "a_L.wav",
+        "R": "a_R.wav",
+    }
+
+
+def test_channel_rows_follow_the_recording_when_its_channels_change(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", channel_files={"L": "a_L.wav"})])
+
+    repository.upsert_recordings(
+        [Recording("a", channel_files={"L": "a_L.wav", "R": "a_R.wav"})]
+    )
+    assert [r["channel"] for r in table_rows(repository, "recording_channel")] == [
+        "L",
+        "R",
+    ]
+
+    repository.upsert_recordings([Recording("a", audio_file="a.wav")])
+    assert table_rows(repository, "recording_channel") == []
+
+
+# --------------------------- tables read with names instead of ids ---------------------------
+
+
+def test_annotation_tables_show_names_and_times_not_ids(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)
+
+    types = table_rows(repository, "annotation_type")
+    labels = table_rows(repository, "annotation_label")
+    nodes = table_rows(repository, "annotation_node")
+
+    assert [(r["recording"], r["name"]) for r in types] == [("sample", "word")]
+    assert [(r["annotation_type"], r["label_text"]) for r in labels] == [
+        ("word", "a"),
+        ("word", "b"),
+    ]
+    assert [(r["start_node"], r["end_node"]) for r in labels] == [
+        ("0.000", "0.500"),
+        ("0.500", "1.000"),
+    ]
+    assert {r["recording"] for r in nodes} == {"sample"}
+    assert sorted(r["time"] for r in nodes) == ["0.000", "0.500", "1.000"]
+
+
+def test_a_row_of_the_table_itself_keeps_its_own_id(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)
+
+    assert [r["id"] for r in table_rows(repository, "annotation_label")] == [1, 2]
