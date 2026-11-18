@@ -25,6 +25,7 @@ from core.settings.save_tier_layout import SaveTierLayout
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
@@ -145,6 +146,7 @@ class ViewModelFactoryImpl(ViewModelFactory):
             use_case_factory.provide(SaveDisplayPlan),
             use_case_factory.provide(LoadTierLayout),
             use_case_factory.provide(SaveTierLayout),
+            use_case_factory.provide(WarmUpFormantTracking),
             lambda dir_path: self.get_use_case_factory(dir_path).provide(
                 AddProjectFiles
             ),

@@ -3,10 +3,12 @@ import tempfile
 import weakref
 
 import numpy as np
-import phonlab as phon
 
 from core.base.use_case import UseCase
 from core.spectrogram.entity.spectrogram_mmap import SpectrogramMmap
+from core.spectrogram.entity.spectrogram_type import SpectrogramType
+from core.spectrogram.typed_sgram import compute_typed_sgram
+from res.constants import SPECTROGRAM_CEPSTRAL_LIFT_SEC, SPECTROGRAM_MULTITAPER_NW
 
 
 class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
@@ -17,22 +19,21 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         window_size: float = 0.008,
         step_size: float = 0.001,
         order: int = 9,
+        sgram_type: SpectrogramType = SpectrogramType.FFT,
         chunk_duration: int = 300,
+        nw: float = SPECTROGRAM_MULTITAPER_NW,
+        lift: float = SPECTROGRAM_CEPSTRAL_LIFT_SEC,
     ):
         sxx_mmap = t_mmap = None
         mmap_file = ts_file = ""
         try:
             n_freqs, frames_per_sec = self.estimate_resolution(
-                x, fs, window_size, step_size, order
+                x, fs, window_size, step_size, order, sgram_type, nw, lift
             )
 
             # Estimate total frames needed (with buffer)
             estimated_frames = int(frames_per_sec * (len(x) / fs) * 1.2)
 
-            # Every computation needs files of its own: this use case is shared by
-            # all documents, and a file recreated or deleted by one computation
-            # would pull the pages out from under another one still mapped to it
-            # (a bus error, SIGBUS, when it next touches them)
             temp_dir = tempfile.gettempdir()
             mmap_file = self.new_temp_file(temp_dir, "spectrogram_")
             ts_file = self.new_temp_file(temp_dir, "spectrogram_ts_")
@@ -41,8 +42,6 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
                 mmap_file, ts_file, n_freqs, estimated_frames
             )
 
-            # The spectrogram outlives this generator, which ends normally once all
-            # chunks are computed. Remove the files when it is no longer referenced
             remove_file_when_released(sxx_mmap, mmap_file)
             remove_file_when_released(t_mmap, ts_file)
 
@@ -54,8 +53,8 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
                 end = min(i + chunk_samples, len(x))
 
                 chunk = x[start:end]
-                ts, _, sxx = phon.compute_sgram(
-                    chunk, fs, window_size, step_size, order
+                ts, _, sxx = compute_typed_sgram(
+                    chunk, fs, sgram_type, window_size, step_size, order, nw, lift
                 )
                 ts = ts + (start / fs)
 
@@ -94,13 +93,16 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
         window_size: float = 0.008,
         step_size: float = 0.001,
         order: int = 9,
+        sgram_type: SpectrogramType = SpectrogramType.FFT,
+        nw: float = SPECTROGRAM_MULTITAPER_NW,
+        lift: float = SPECTROGRAM_CEPSTRAL_LIFT_SEC,
     ) -> tuple[int, float]:
         test_samples = min(len(x), fs)
 
         test_ts: np.ndarray
         test_sxx: np.ndarray
-        test_ts, _, test_sxx = phon.compute_sgram(
-            x[:test_samples], fs, window_size, step_size, order
+        test_ts, _, test_sxx = compute_typed_sgram(
+            x[:test_samples], fs, sgram_type, window_size, step_size, order, nw, lift
         )
 
         n_freqs = test_sxx.shape[0]
@@ -157,5 +159,4 @@ def remove_quietly(path: str):
     try:
         os.remove(path)
     except OSError:
-        # Already removed, or (on Windows) still mapped by something else
         pass

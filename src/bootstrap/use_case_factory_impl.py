@@ -23,6 +23,7 @@ from core.settings.save_tier_layout import SaveTierLayout
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 
@@ -37,6 +38,7 @@ class UseCaseFactory:
         self.filter_audio = FilterAudio()
         self.save_audio = SaveAudio()
         self.track_formants = TrackFormants()
+        self.warm_up_formants = WarmUpFormantTracking()
         self.compute_sgram = ComputeSpectrogram()
         self.compute_sgram_mmap = ComputeSpectrogramMmap()
         self.clear_interval = ClearInterval(self.annotation_repository)
@@ -77,6 +79,8 @@ class UseCaseFactory:
             use_case = self.save_audio
         if use_case_type is TrackFormants:
             use_case = self.track_formants
+        if use_case_type is WarmUpFormantTracking:
+            use_case = self.warm_up_formants
         if use_case_type is ComputeSpectrogram:
             use_case = self.compute_sgram
         if use_case_type is ComputeSpectrogramMmap:
@@ -105,7 +109,6 @@ class UseCaseFactory:
             use_case = self.parse_textgrid
         if use_case_type is WriteTextGrid:
             use_case = self.write_textgrid
-
         if use_case_type is LoadDisplayPlan:
             use_case = self.load_display_plan
         if use_case_type is SaveDisplayPlan:
