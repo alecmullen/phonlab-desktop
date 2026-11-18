@@ -1,3 +1,4 @@
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 
 from core.annotation.entity.annotation import (
@@ -73,14 +74,41 @@ def to_annotation_state(annotation: Annotation) -> AnnotationState:
     )
 
 
+def tier_order_key(tier_order: Collection[str]) -> Callable[[str], int]:
+    """Sorts tier names by `tier_order`, with those it does not name after"""
+    rank = {name: idx for idx, name in enumerate(tier_order)}
+    return lambda name: rank.get(name, len(rank))
+
+
+def displayed_types(
+    types: list[AnnotationTypeState],
+    hidden_tiers: Collection[str] = (),
+    tier_order: Collection[str] = (),
+) -> list[AnnotationTypeState]:
+    """The types to show, top to bottom: those not named in `hidden_tiers`, ordered by
+    `tier_order`. Types it does not name come after, in their own order"""
+    order_key = tier_order_key(tier_order)
+    shown = [type for type in types if type.type not in hidden_tiers]
+    return sorted(shown, key=lambda type: order_key(type.type))
+
+
 def update_annotation_state_from_window(
-    annotation: AnnotationState, start: float, end: float
+    annotation: AnnotationState,
+    start: float,
+    end: float,
+    hidden_tiers: Collection[str] = (),
+    tier_order: Collection[str] = (),
 ) -> AnnotationState:
+    """Builds the state to display for the window. Types named in `hidden_tiers`
+    are left out and the others are in the order of `tier_order`, so tier indices
+    are rows of the plot."""
 
     types = []
     node_extents: dict[int, set[AnnotationNodeExtentState]] = {}
 
-    for tier, type in enumerate(annotation.types):
+    for tier, type in enumerate(
+        displayed_types(annotation.types, hidden_tiers, tier_order)
+    ):
         labels = []
         for label in type.labels:
             label_state = update_label_state(

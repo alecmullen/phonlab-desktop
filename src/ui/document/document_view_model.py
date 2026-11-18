@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Collection, Iterable
 from dataclasses import replace
 
 import numpy as np
@@ -20,8 +20,10 @@ from res.constants import (
     MAX_UNDO_HISTORY,
 )
 from ui.annotation.annotation_view_model import AnnotationViewModel
+from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.base.view_model import ViewModel
@@ -136,7 +138,9 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
-        if isinstance(model, (StatusMessageState, SaveToTextGridAction)):
+        if isinstance(
+            model, (StatusMessageState, SaveToTextGridAction, AddTiersAction)
+        ):
             self.state_changed.emit(model)
         elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
@@ -791,6 +795,23 @@ class DocumentViewModel(ViewModel):
         if not channels:
             raise RuntimeError("Cannot save audio that is not loaded")
         self.save_audio_use_case(path, channels, target_fs, scale)
+
+    def trigger_add_tiers(self):
+        self.annotation_view_model.trigger_add_tiers_dialog()
+
+    def add_tiers(self, names: list[str]):
+        self.annotation_view_model.add_tiers(names)
+
+    def tier_names(self) -> list[str]:
+        return self.annotation_view_model.tier_names()
+
+    def tier_display(self) -> list[TierDisplayState]:
+        return self.annotation_view_model.tier_display()
+
+    def set_tier_display(
+        self, hidden_tiers: Collection[str], tier_order: Collection[str]
+    ):
+        self.annotation_view_model.set_tier_display(hidden_tiers, tier_order)
 
     def save_textgrid(self, file_path: str, tg_type: str):
         self.annotation_view_model.write_textgrid(file_path, tg_type)
