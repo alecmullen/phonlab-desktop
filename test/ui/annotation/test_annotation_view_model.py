@@ -23,7 +23,6 @@ from ui.annotation.state.annotation_node_state import (
 )
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import AnnotationState
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.document.state.status_message_state import StatusMessageState
 
@@ -473,15 +472,6 @@ def test_parse_textgrid_sets_loading_state_until_job_finishes(
 
     run_parse_job(view_model)
     assert view_model.loading_state.is_loading is False
-
-
-def test_trigger_write_textgrid_dialog_emits_save_action(qtbot: QtBot):
-    view_model = make_view_model({}, 0.0, 1.0)
-
-    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
-        view_model.trigger_write_textgrid_dialog()
-
-    assert isinstance(blocker.args[0], SaveToTextGridAction)
 
 
 def test_opens_empty_for_a_registered_stem_without_annotation():

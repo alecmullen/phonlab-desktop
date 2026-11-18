@@ -25,7 +25,6 @@ from res.constants import DOUBLE_CLICK_INTERVAL_MS, PLOT_ROW_SPACING, PLOT_ROW_W
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
@@ -232,8 +231,6 @@ class DocumentView(QWidget):
             self.open_filter_dialog()
         elif isinstance(model, AudioInfoAction):
             self.open_audio_info()
-        elif isinstance(model, SaveToTextGridAction):
-            self.open_save_textgrid()
         elif isinstance(model, AddTiersAction):
             self.open_add_tiers_dialog(model)
 

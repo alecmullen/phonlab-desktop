@@ -1383,17 +1383,6 @@ def stub_dialog(monkeypatch: pytest.MonkeyPatch, result: object, args: list):
     monkeypatch.setattr(SaveTextGridDialog, "get_options", staticmethod(get_options))
 
 
-def test_save_textgrid_action_opens_save_textgrid_dialog(
-    view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    calls = []
-    monkeypatch.setattr(view, "open_save_textgrid", lambda: calls.append(True))
-
-    view.on_state_change(SaveToTextGridAction())
-
-    assert calls == [True]
-
-
 def test_add_tiers_action_asks_which_tiers_and_adds_them(
     view: DocumentView, monkeypatch: pytest.MonkeyPatch
 ):
