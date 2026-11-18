@@ -127,7 +127,6 @@ class MainWindow(QMainWindow):
             fileMenu.addAction(self.close_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.save_audio_action)
-            fileMenu.addAction(self.export_annotation_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.save_layout_action)
             fileMenu.addSeparator()
@@ -264,6 +263,8 @@ class MainWindow(QMainWindow):
             if annotationMenu is not None:
                 annotationMenu.addAction(self.add_tiers_action)
                 annotationMenu.addAction(self.arrange_tiers_action)
+                annotationMenu.addSeparator()
+                annotationMenu.addAction(self.export_annotation_action)
 
         # View Menu
         if mainMenu is not None:

@@ -29,7 +29,6 @@ from ui.annotation.state.annotation_state import (
     to_annotation_state,
     update_annotation_state_from_window,
 )
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.annotation.state.tier_display_state import (
     TierDisplayState,
     tier_display_from,
@@ -244,9 +243,6 @@ class AnnotationViewModel(ViewModel):
         self.state_changed.emit(
             StatusMessageState(self.tr("Added {} tier(s)").format(len(names)))
         )
-
-    def trigger_write_textgrid_dialog(self):
-        self.state_changed.emit(SaveToTextGridAction())
 
     def write_textgrid(self, file_path: str, tg_type: str):
         try:
