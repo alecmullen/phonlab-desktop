@@ -62,7 +62,7 @@ SPECTROGRAM_DOCS = {
     "fft": "acoustphon.html#phonlab.compute_sgram",
     "multitaper": "acoustphon.html#phonlab.compute_mt_sgram",
     "cepstral": "acoustphon.html#phonlab.cepstral_smooth",
-    "lpc": "acoustphon.html#phonlab.sgram",
+    "lpc": "acoustphon.html#phonlab.RLPC_formants",
     "mel": "audphon.html#phonlab.compute_mel_sgram",
 }
 MEL_MIN_TOP_FREQUENCY = 8000
