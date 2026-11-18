@@ -85,6 +85,13 @@ class AnnotationDataSource(DataSource):
             annotation.nodes.clear()
             session.commit()
 
+    def list_tier_names(self) -> list[str]:
+        with self.database.open_session() as session:
+            stmt = select(AnnotationTypeEntity.name).distinct()
+            names = list(session.scalars(stmt))
+
+        return sorted(names, key=lambda name: (name.casefold(), name))
+
     def find_node_by_time(
         self, annotation_id: int, time: float, threshold: float
     ) -> AnnotationNodeEntity | None:

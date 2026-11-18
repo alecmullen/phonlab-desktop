@@ -120,3 +120,27 @@ def test_reset_removes_every_annotation():
     assert backup is None
     assert repository.find_annotation_by_file_stem("sample") is None
     assert repository.create_annotation("sample") == 0
+
+
+def test_create_node_works_on_an_annotation_that_has_no_nodes_yet():
+    repository = InMemAnnotationRepository()
+    id = repository.create_annotation("sample")
+
+    first = repository.create_node(id, 0.5, 0.005)
+    second = repository.create_node(id, 0.5, 0.005)
+
+    assert first == second == (0, 0.5)
+
+
+def test_list_tier_names_covers_every_annotation_once_sorted():
+    repository, _ = two_tier_repository()  # "word" and "phone"
+    other = repository.create_annotation("other")
+    repository.create_types(
+        other, [AnnotationType("word", []), AnnotationType("Break", [])]
+    )
+
+    assert repository.list_tier_names() == ["Break", "phone", "word"]
+
+
+def test_list_tier_names_is_empty_when_there_are_no_tiers():
+    assert InMemAnnotationRepository().list_tier_names() == []
