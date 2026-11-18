@@ -4,7 +4,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
-from res.constants import MAX_SGRAM_LENGTH, MEL_AXIS_TICKS_HZ
+from res.constants import MEL_AXIS_TICKS_HZ
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot

@@ -43,7 +43,7 @@ from ui.spectrogram.state.spectrogram_settings import (
     SpectrogramTypeState,
 )
 from ui.spectrogram.state.spectrogram_state import (
-    FrequencyScale
+    FrequencyScale,
     SpectrogramState,
     SpectrogramUnavailable,
 )

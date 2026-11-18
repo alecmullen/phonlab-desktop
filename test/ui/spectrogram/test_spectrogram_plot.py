@@ -11,7 +11,7 @@ from ui.spectrogram.spectrogram_plot import SpectrogramPlot
 from ui.spectrogram.state.formant_settings import FormantSettingsState
 from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_state import (
-    FrequencyScale
+    FrequencyScale,
     SpectrogramState,
     SpectrogramUnavailable,
 )

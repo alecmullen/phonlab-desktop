@@ -30,7 +30,10 @@ from ui.spectrogram.state.formant_settings import (
 )
 from ui.spectrogram.state.formant_track_state import FormantTrackState
 from ui.spectrogram.state.spectrogram_settings import SpectrogramTypeState
-from ui.spectrogram.state.spectrogram_state import FrequencyScale, SpectrogramUnavailable
+from ui.spectrogram.state.spectrogram_state import (
+    FrequencyScale,
+    SpectrogramUnavailable,
+)
 from ui.spectrogram.state.spectrogram_window_state import SpectrogramWindowState
 
 SPECTROGRAM = Spectrogram(
