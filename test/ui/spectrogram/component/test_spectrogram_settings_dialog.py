@@ -138,37 +138,55 @@ def test_the_returned_order_follows_the_new_window(
     assert result.order == 9  # the default again
 
 
-def test_choosing_mel_fixes_the_window_and_rules_out_low_top_frequencies(
-    qtbot: QtBot,
-):
-    dialog = SpectrogramSettingsDialog(
-        SpectrogramSettingsState(fs=8000)  # a top frequency of 4000
-    )
-    qtbot.addWidget(dialog)
-    dropdown = dialog.top_frequency_dropdown
-    assert dropdown.currentData() == 4000
-    assert dialog.window_spin.isEnabled()
+def shown(dialog: SpectrogramSettingsDialog) -> set[str]:
+    """The names of the type-specific settings the dialog offers"""
+    dialog.show()
+    widgets = {
+        "top_frequency": dialog.top_frequency_dropdown,
+        "nw": dialog.nw_spin,
+        "bandwidth": dialog.bandwidth_label,
+        "lift": dialog.lift_spin,
+        "slow_warning": dialog.slow_warning,
+    }
+    return {name for name, widget in widgets.items() if widget.isVisible()}
 
-    dialog.type_dropdown.setCurrentIndex(
-        dialog.type_dropdown.findData(SpectrogramTypeState.MEL)
-    )
+
+def choose(dialog: SpectrogramSettingsDialog, type: SpectrogramTypeState):
+    dialog.type_dropdown.setCurrentIndex(dialog.type_dropdown.findData(type))
+
+
+def test_choosing_mel_fixes_the_window_and_removes_the_top_frequency(qtbot: QtBot):
+    dialog = SpectrogramSettingsDialog(SpectrogramSettingsState())
+    qtbot.addWidget(dialog)
+    assert dialog.window_spin.isEnabled()
+    assert "top_frequency" in shown(dialog)
+
+    choose(dialog, SpectrogramTypeState.MEL)
 
     assert dialog.window_spin.value() == 64
     assert not dialog.window_spin.isEnabled()
-    assert dropdown.currentData() == 8000
-    enabled = [
-        dropdown.itemData(i)
-        for i in range(dropdown.count())
-        if dropdown.model().item(i).isEnabled()
-    ]
-    assert enabled == [8000, 12000, 16000]
+    assert "top_frequency" not in shown(dialog)
 
-    dialog.type_dropdown.setCurrentIndex(
-        dialog.type_dropdown.findData(SpectrogramTypeState.FFT)
-    )
+    choose(dialog, SpectrogramTypeState.FFT)
 
     assert dialog.window_spin.isEnabled()
-    assert all(dropdown.model().item(i).isEnabled() for i in range(dropdown.count()))
+    assert "top_frequency" in shown(dialog)
+
+
+def test_mel_always_returns_the_sampling_rate_its_filters_need(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    def fake_exec(self: SpectrogramSettingsDialog) -> QDialog.DialogCode:
+        choose(self, SpectrogramTypeState.MEL)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(SpectrogramSettingsDialog, "exec", fake_exec)
+
+    for fs in (8000, 16000, 32000):
+        result = SpectrogramSettingsDialog.open_spectrogram_settings(
+            SpectrogramSettingsState(fs=fs)
+        )
+        assert result.fs == 16000
 
 
 def test_a_dialog_opened_on_mel_starts_with_the_limits_in_place(qtbot: QtBot):
@@ -179,4 +197,97 @@ def test_a_dialog_opened_on_mel_starts_with_the_limits_in_place(qtbot: QtBot):
 
     assert not dialog.window_spin.isEnabled()
     assert dialog.window_spin.value() == 64
-    assert not dialog.top_frequency_dropdown.model().item(0).isEnabled()
+    assert "top_frequency" not in shown(dialog)
+
+
+@pytest.mark.parametrize(
+    "type, offered",
+    [
+        (SpectrogramTypeState.FFT, {"top_frequency"}),
+        (SpectrogramTypeState.MULTITAPER, {"top_frequency", "nw", "bandwidth"}),
+        (SpectrogramTypeState.CEPSTRAL, {"top_frequency", "lift"}),
+        (SpectrogramTypeState.LPC, {"top_frequency", "slow_warning"}),
+        (SpectrogramTypeState.MEL, set()),
+    ],
+)
+def test_only_the_chosen_types_settings_are_shown(
+    qtbot: QtBot, type: SpectrogramTypeState, offered: set[str]
+):
+    dialog = SpectrogramSettingsDialog(SpectrogramSettingsState().with_type(type))
+    qtbot.addWidget(dialog)
+
+    assert shown(dialog) == offered
+
+
+def test_lpc_warns_that_it_is_slower(qtbot: QtBot):
+    dialog = SpectrogramSettingsDialog(SpectrogramSettingsState())
+    qtbot.addWidget(dialog)
+
+    assert "slower" in dialog.slow_warning.text()
+
+
+def test_multitaper_reports_its_effective_filter_bandwidth(qtbot: QtBot):
+    dialog = SpectrogramSettingsDialog(
+        SpectrogramSettingsState().with_type(SpectrogramTypeState.MULTITAPER)
+    )
+    qtbot.addWidget(dialog)
+    assert dialog.nw_spin.value() == 3.0
+    assert dialog.window_spin.value() == 20
+    assert (
+        dialog.bandwidth_label.text() == "Effective filter bandwidth: 300 Hz"
+    )  # 2 * 3 / 0.02 s
+
+    dialog.nw_spin.setValue(4.0)
+
+    assert dialog.bandwidth_label.text() == "Effective filter bandwidth: 400 Hz"
+
+    dialog.window_spin.setValue(40)
+
+    assert dialog.bandwidth_label.text() == "Effective filter bandwidth: 200 Hz"
+
+
+def test_the_settings_keep_nw_and_lift_across_types(qtbot: QtBot):
+    settings = SpectrogramSettingsState(multitaper_nw=5.0, cepstral_lift=0.004)
+    dialog = SpectrogramSettingsDialog(settings)
+    qtbot.addWidget(dialog)
+
+    assert dialog.nw_spin.value() == 5.0
+    assert dialog.lift_spin.value() == pytest.approx(4.0)
+    assert settings.with_type(SpectrogramTypeState.LPC).multitaper_nw == 5.0
+    assert settings.with_type(SpectrogramTypeState.LPC).cepstral_lift == 0.004
+
+
+def test_open_spectrogram_settings_returns_nw_and_lift(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    def fake_exec(self: SpectrogramSettingsDialog) -> QDialog.DialogCode:
+        self.nw_spin.setValue(4.5)
+        self.lift_spin.setValue(5.5)
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(SpectrogramSettingsDialog, "exec", fake_exec)
+
+    result = SpectrogramSettingsDialog.open_spectrogram_settings(
+        SpectrogramSettingsState()
+    )
+
+    assert result.multitaper_nw == 4.5
+    assert result.cepstral_lift == 0.0055
+
+
+def test_a_link_points_to_the_chosen_types_documentation(qtbot: QtBot):
+    dialog = SpectrogramSettingsDialog(SpectrogramSettingsState())
+    qtbot.addWidget(dialog)
+    assert dialog.docs_link.openExternalLinks()
+    base = "https://phonlab.readthedocs.io/en/latest/"
+
+    pages = {}
+    for type in SpectrogramTypeState:
+        choose(dialog, type)
+        pages[type] = dialog.docs_link.text()
+
+    assert f'href="{base}acoustphon.html#phonlab.compute_sgram"' in pages["fft"]
+    assert f'href="{base}acoustphon.html#phonlab.RLPC_formants"' in pages["lpc"]  # the
+    # LPC coefficients come from RLPC_formants
+    assert f'href="{base}audphon.html#phonlab.compute_mel_sgram"' in pages["mel"]
+    assert len(set(pages.values())) == len(SpectrogramTypeState)  # one each
