@@ -209,6 +209,24 @@ def test_import_error_is_reported_as_finished_state(
     assert states == [ProjectImportState(finished=True, error="boom")]
 
 
+def test_tier_display_defaults_to_nothing_hidden_and_no_order():
+    view_model = make_main_view_model()
+
+    assert view_model.hidden_tiers == []
+    assert view_model.tier_order == []
+
+
+def test_set_tier_display_updates_app_settings():
+    view_model = make_main_view_model()
+
+    view_model.set_tier_display(["phone"], ["word", "tone"])
+
+    assert settings.hidden_tiers == ["phone"]
+    assert settings.tier_order == ["word", "tone"]
+    assert view_model.hidden_tiers == ["phone"]
+    assert view_model.tier_order == ["word", "tone"]
+
+
 def test_warm_up_formant_tracking_runs_the_use_case_once(
     fake_job_manager: type[FakeJobManager],
 ):
