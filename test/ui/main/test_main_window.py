@@ -19,6 +19,7 @@ import ui.main.main_window as main_window_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
+from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.component.tier_font_dialog import TierFontDialog
 from ui.annotation.state.tier_display_state import TierDisplayState
@@ -1163,6 +1164,114 @@ def test_close_event_cleans_up_all_documents_and_accepts(main_window: MainWindow
     assert event.isAccepted() is True
 
 
+# --------------------------- Ctrl+L with several documents open ---------------------------
+
+
+def open_two_documents_with_annotation(
+    main_window: MainWindow, qtbot: QtBot
+) -> tuple[DocumentView, DocumentView]:
+    docs = []
+    for name in ("one.wav", "two.wav"):
+        doc = add_document(main_window, name)
+        load_signal(doc, np.zeros(2000), fs=1000)
+        doc.view_model.toggle_annotations()
+        QApplication.processEvents()
+        docs.append(doc)
+    main_window.show()
+    qtbot.waitExposed(main_window)
+    main_window.activateWindow()
+    QApplication.processEvents()
+    return docs[0], docs[1]
+
+
+def test_ctrl_l_is_not_ambiguous_with_two_documents_open(
+    main_window: MainWindow, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    from PyQt6.QtCore import qInstallMessageHandler
+    from PyQt6.QtTest import QTest
+
+    open_two_documents_with_annotation(main_window, qtbot)
+    messages: list[str] = []
+    previous = qInstallMessageHandler(lambda mode, ctx, msg: messages.append(msg))
+    try:
+        QTest.keyClick(main_window, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+        QApplication.processEvents()
+    finally:
+        qInstallMessageHandler(previous)
+
+    assert [m for m in messages if "mbiguous" in m] == []
+
+
+def test_ctrl_l_reaches_the_annotation_of_the_document_on_screen_only(
+    main_window: MainWindow, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    from PyQt6.QtTest import QTest
+
+    first, second = open_two_documents_with_annotation(main_window, qtbot)
+    reached: list[DocumentView] = []
+    for doc in (first, second):
+        plot = next(p for p in doc.document_plots if isinstance(p, AnnotationPlot))
+        plot.create_label_action.triggered.connect(lambda *_, d=doc: reached.append(d))
+
+    QTest.keyClick(main_window, Qt.Key.Key_L, Qt.KeyboardModifier.ControlModifier)
+    QApplication.processEvents()
+
+    assert reached == [second]  # the second tab is the one on screen
+
+
+# --------------------------- spectrogram only for the shown tab ---------------------------
+
+
+def test_only_the_current_tab_is_shown(main_window: MainWindow):
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+    third = add_document(main_window, "three.wav")
+
+    assert [d.view_model.is_shown for d in (first, second, third)] == [
+        False,
+        False,
+        True,
+    ]
+
+
+def test_switching_tabs_changes_which_document_is_shown(main_window: MainWindow):
+    first = add_document(main_window, "one.wav")
+    second = add_document(main_window, "two.wav")
+
+    main_window.tab_widget.setCurrentIndex(0)
+
+    assert first.view_model.is_shown
+    assert not second.view_model.is_shown
+
+
+def test_closing_the_current_tab_shows_the_one_that_becomes_current(
+    main_window: MainWindow,
+):
+    first = add_document(main_window, "one.wav")
+    add_document(main_window, "two.wav")
+    assert not first.view_model.is_shown
+
+    main_window.close_current_tab()
+
+    assert main_window.tab_widget.count() == 1
+    assert first.view_model.is_shown
+
+
+def test_clip_tab_opens_hidden_behind_its_source(main_window: MainWindow):
+    source = add_document(main_window, "source.wav")
+    load_signal(source, np.arange(10000), fs=1000)
+    source.view_model.start_selection(2.0)
+    source.view_model.continue_selection(3.0)
+
+    main_window.copy_selection()
+
+    assert main_window.tab_widget.count() == 2
+    clip = main_window.tab_widget.widget(1)
+    assert isinstance(clip, DocumentView)
+    assert not clip.view_model.is_shown
+    assert source.view_model.is_shown
+
+
 # --------------------------- project menu ---------------------------
 
 
@@ -1344,59 +1453,6 @@ def test_open_single_document_accepts_textgrid_with_any_case_suffix(
     main_window.open_single_document([wav, textgrid], str(tmp_path))
 
     assert opened == [([("a", wav, textgrid)], str(tmp_path))]
-
-
-# --------------------------- spectrogram only for the shown tab ---------------------------
-
-
-def test_only_the_current_tab_is_shown(main_window: MainWindow):
-    first = add_document(main_window, "one.wav")
-    second = add_document(main_window, "two.wav")
-    third = add_document(main_window, "three.wav")
-
-    assert [d.view_model.is_shown for d in (first, second, third)] == [
-        False,
-        False,
-        True,
-    ]
-
-
-def test_switching_tabs_changes_which_document_is_shown(main_window: MainWindow):
-    first = add_document(main_window, "one.wav")
-    second = add_document(main_window, "two.wav")
-
-    main_window.tab_widget.setCurrentIndex(0)
-
-    assert first.view_model.is_shown
-    assert not second.view_model.is_shown
-
-
-def test_closing_the_current_tab_shows_the_one_that_becomes_current(
-    main_window: MainWindow,
-):
-    first = add_document(main_window, "one.wav")
-    add_document(main_window, "two.wav")
-    assert not first.view_model.is_shown
-
-    main_window.close_current_tab()
-
-    assert main_window.tab_widget.count() == 1
-    assert first.view_model.is_shown
-
-
-def test_clip_tab_opens_hidden_behind_its_source(main_window: MainWindow):
-    source = add_document(main_window, "source.wav")
-    load_signal(source, np.arange(10000), fs=1000)
-    source.view_model.start_selection(2.0)
-    source.view_model.continue_selection(3.0)
-
-    main_window.copy_selection()
-
-    assert main_window.tab_widget.count() == 2
-    clip = main_window.tab_widget.widget(1)
-    assert isinstance(clip, DocumentView)
-    assert not clip.view_model.is_shown
-    assert source.view_model.is_shown
 
 
 # --------------------------- annotation menu ---------------------------

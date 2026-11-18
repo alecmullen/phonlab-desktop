@@ -15,5 +15,5 @@ class FormantTrackState(State):
     formants: np.ndarray = field(default_factory=lambda: np.zeros((0, 4)))
 
 
-def to_formant_track_state(track: FormantTrack, offset: float) -> FormantTrackState:
-    return FormantTrackState(track.sec + offset, track.formants)
+def to_formant_track_state(track: FormantTrack) -> FormantTrackState:
+    return FormantTrackState(track.sec, track.formants)

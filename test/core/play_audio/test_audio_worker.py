@@ -9,6 +9,7 @@ from pytestqt.qtbot import QtBot
 import core.play_audio.audio_worker as audio_worker_module
 from core.play_audio.audio_worker import AudioWorker
 from core.play_audio.entity.latency_info import LatencyInfo
+from core.play_audio.playback_gate import PLAYBACK_GATE
 
 
 class FakeAudioTask(QObject):
@@ -155,3 +156,38 @@ def test_stop_is_a_noop_when_no_task(qtbot: QtBot):
     worker = AudioWorker(lambda info: None)
 
     worker.stop()
+
+
+def test_the_playback_gate_is_closed_only_while_the_task_runs(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    seen = []
+
+    class GateWatchingTask(FakeAudioTask):
+        def __call__(self) -> None:
+            seen.append(PLAYBACK_GATE.is_playing())
+
+    monkeypatch.setattr(audio_worker_module, "AudioTask", GateWatchingTask)
+    worker = AudioWorker(lambda latency: None)
+
+    assert not PLAYBACK_GATE.is_playing()
+    worker.play(np.zeros(4), 1000)
+
+    assert seen == [True]
+    assert not PLAYBACK_GATE.is_playing()
+
+
+def test_the_playback_gate_opens_again_when_the_task_fails(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    class FailingTask(FakeAudioTask):
+        def __call__(self) -> None:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(audio_worker_module, "AudioTask", FailingTask)
+    worker = AudioWorker(lambda latency: None)
+
+    with pytest.raises(RuntimeError):
+        worker.play(np.zeros(4), 1000)
+
+    assert not PLAYBACK_GATE.is_playing()

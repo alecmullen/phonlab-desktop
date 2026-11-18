@@ -1,11 +1,12 @@
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer, pyqtSlot
 from PyQt6.QtGui import (
-    QAction,
     QDragEnterEvent,
     QDropEvent,
+    QHideEvent,
     QMouseEvent,
     QResizeEvent,
+    QShowEvent,
     QWheelEvent,
 )
 from PyQt6.QtWidgets import (
@@ -20,7 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from res.constants import PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
+from res.constants import DOUBLE_CLICK_INTERVAL_MS, PLOT_ROW_SPACING, PLOT_ROW_WEIGHT
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
@@ -28,6 +29,7 @@ from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.audio_info_dialog import AudioInfoDialog
+from ui.document.component.document_graphics_widget import DocumentGraphicsWidget
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.overwrite_annotation_dialog import ask_overwrite_annotation
 from ui.document.component.paste_channel_dialog import PasteChannelDialog
@@ -75,7 +77,9 @@ class DocumentView(QWidget):
         pg.setConfigOptions(antialias=True)
 
         # Create graphics layout widget
-        self.graphics_widget = pg.GraphicsLayoutWidget()
+        self.graphics_widget = DocumentGraphicsWidget()
+        self.graphics_widget.resized.connect(self.apply_row_heights)
+        self.graphics_widget.scene().sigMouseMoved.connect(self.on_mouse_moved)
 
         # Initialize plot items (will be created in plot methods)
         self.document_plots: list[DocumentPlot] = []
@@ -106,6 +110,13 @@ class DocumentView(QWidget):
         bottom_layout.addWidget(self.message_label)
         bottom_layout.addStretch(1)
 
+        # What is loading. The bar's own text is not drawn while it is busy
+        # (no percentage), on some platforms, so it is said beside the bar.
+        self.progress_label = QLabel("")
+        self.progress_label.setVisible(False)
+        bottom_layout.addWidget(self.progress_label)
+        bottom_layout.addSpacing(6)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setMaximumWidth(200)
         self.progress_bar.setTextVisible(True)
@@ -123,6 +134,7 @@ class DocumentView(QWidget):
         # mouse interaction state
         self.mouse_pressed = False
         self.is_dragging = False
+        self.press_scene_pos: QPointF | None = None
         self.pending_single_click: QPointF | None = None
         self.click_timer = None
 
@@ -166,23 +178,14 @@ class DocumentView(QWidget):
 
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
         """Add the navigation actions (Zoom to Selection, Deselect, Set Mark,
-        Remove Mark) to a plot's ViewBox menu.
-
-        Added directly to each plot's own menu (rather than via the
-        scene-wide contextMenu list) so they're present before the menu
-        is ever shown.
-        """
+        Remove Mark) to a plot's ViewBox menu, after the plot's own actions and a
+        separator."""
         menu = view_box.menu
-        first_action = menu.actions()[0] if len(menu.actions()) > 0 else None
-        menu.aboutToShow.connect(
-            lambda first=first_action: self.sync_actions_with_ui_state(menu, first)
-        )
+        menu.addSeparator()
+        menu.aboutToShow.connect(lambda: self.sync_actions_with_ui_state(menu))
 
-    def sync_actions_with_ui_state(self, menu: QMenu, first_action: QAction | None):
-        """Put Zoom to Selection at the top of `menu` only while a selection
-        exists. Adding/removing it as the menu opens (rather than toggling the
-        action's visibility) makes Qt lay the rows out afresh, so it can't be
-        drawn over its neighbour."""
+    def sync_actions_with_ui_state(self, menu: QMenu):
+        """Show the navigation actions that apply at the end of `menu`."""
         is_selected = self.view_model.select_state.is_selected
         is_marked = self.view_model.mark_state.is_set
 
@@ -195,16 +198,11 @@ class DocumentView(QWidget):
         ]
         wanted = [is_selected, is_selected, is_selected or is_marked, True, is_marked]
 
-        next_action = first_action
-        for idx in reversed(range(len(actions))):
-            if actions[idx] in menu.actions():
-                menu.removeAction(actions[idx])
-            if wanted[idx]:
-                menu.insertAction(next_action, actions[idx])
-                next_action = actions[idx]
-
-        if first_action is not None:
-            menu.insertSeparator(first_action)
+        for action, is_wanted in zip(actions, wanted):
+            if action in menu.actions():
+                menu.removeAction(action)
+            if is_wanted:
+                menu.addAction(action)
 
     @pyqtSlot(object)
     def on_state_change(self, model: State):
@@ -280,14 +278,6 @@ class DocumentView(QWidget):
                 height += axis_height
             layout.setRowFixedHeight(row_index, height)
 
-    def connect_plot_signals(self):
-        """Connect mouse signals to all plots"""
-        scene = self.graphics_widget.scene()
-        scene.sigMouseMoved.connect(self.on_mouse_moved)
-
-        for plot in self.document_plots:
-            scene.sigMouseMoved.connect(plot.on_mouse_moved)
-
     def toggle_wave(self):
         self.view_model.toggle_wave()
 
@@ -318,7 +308,6 @@ class DocumentView(QWidget):
         self.row_weights = row_weights
         self.apply_row_heights()
 
-        self.connect_plot_signals()
         self.update_selection_box(self.view_model.select_state)
         self.update_mark(self.view_model.mark_state)
         self.update_document_window(self.view_model.document_window_state)
@@ -345,6 +334,7 @@ class DocumentView(QWidget):
                 is_bottom_plot=is_bottom,
             )
             self.add_shared_context_menu_actions(annot_plot.getViewBox())
+            annot_plot.set_shortcuts_active(self.isVisible())
             self.graphics_widget.addItem(annot_plot, row=row, col=0)
             annot_plot.show()
             return [annot_plot]
@@ -484,9 +474,12 @@ class DocumentView(QWidget):
 
     def update_load_progress(self, progress: LoadProgressState):
         self.progress_bar.setVisible(progress.is_loading)
+        self.progress_label.setVisible(progress.is_loading)
         if progress.is_loading:
             self.progress_bar.setRange(0, 0)  # no known percentage, just "busy"
-            self.progress_bar.setFormat(self.tr("Loading full file…"))
+            message = progress.message or self.tr("Loading full file…")
+            self.progress_bar.setFormat(message)
+            self.progress_label.setText(message)
         else:
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setFormat(self.tr("Computing %p%"))
@@ -495,26 +488,25 @@ class DocumentView(QWidget):
         return pos - self.graphics_widget.pos().toPointF()
 
     def on_mouse_moved(self, pos: QPointF):
-        # Determine which plot the mouse is over
-
-        mouse_over_plot = False
         for plot in self.document_plots:
-            if plot.sceneBoundingRect().contains(pos):
-                mouse_over_plot = True
+            plot.on_mouse_moved(pos)
 
-                mouse_point = plot.getViewBox().mapSceneToView(pos)
-                x = mouse_point.x()
-                y = mouse_point.y()
-
-                if isinstance(plot, SpectrogramPlot):
-                    status_msg = self.tr(
-                        "Cursor time: {:.3f}s, frequency: {:.0f} Hz"
-                    ).format(x, y)
-                else:
-                    status_msg = self.tr("Cursor time: {:.3f}s").format(x)
-
-        if not mouse_over_plot:
+        if self.mouse_pressed and not self.left_button_is_down():
+            # Treat it as released
+            press_pos = pos if self.press_scene_pos is None else self.press_scene_pos
+            self.end_press(press_pos, Qt.KeyboardModifier.NoModifier)
             return
+
+        # Use nearest plot if no plot is under the cursor
+        plot_under = self._get_document_plot_at(pos)
+        plot = plot_under
+        if plot is None and self.mouse_pressed:
+            plot = self._nearest_document_plot(pos)
+        if plot is None:
+            return
+
+        mouse_point = plot.getViewBox().mapSceneToView(pos)
+        x = mouse_point.x()
 
         if self.mouse_pressed:
             if not self.is_dragging:
@@ -522,8 +514,42 @@ class DocumentView(QWidget):
             else:
                 self.view_model.continue_selection(x)
             self.is_dragging = True
-        else:
+        elif plot_under is not None:
+            y = mouse_point.y()
+            if isinstance(plot, SpectrogramPlot):
+                status_msg = self.tr(
+                    "Cursor time: {:.3f}s, frequency: {:.0f} Hz"
+                ).format(x, y)
+            else:
+                status_msg = self.tr("Cursor time: {:.3f}s").format(x)
             self.message_label.setText(status_msg)
+
+    def left_button_is_down(self) -> bool:
+        return bool(QApplication.mouseButtons() & Qt.MouseButton.LeftButton)
+
+    def _nearest_document_plot(self, scene_pos: QPointF) -> DocumentPlot | None:
+        """The plot closest to scene_pos, for positions in the margins and gaps around
+        the plots"""
+
+        def distance(plot: DocumentPlot) -> float:
+            rect = plot.sceneBoundingRect()
+            dx = max(rect.left() - scene_pos.x(), 0.0, scene_pos.x() - rect.right())
+            dy = max(rect.top() - scene_pos.y(), 0.0, scene_pos.y() - rect.bottom())
+            return dx * dx + dy * dy
+
+        return min(self.document_plots, key=distance, default=None)
+
+    def _plot_to_press_in(self, scene_pos: QPointF) -> DocumentPlot | None:
+        """The plot a press at scene_pos is on. The margins and gaps between plots
+        count as the nearest plot"""
+        clicked_plot = self._get_document_plot_at(scene_pos)
+        if clicked_plot is not None:
+            return clicked_plot
+
+        graphics_area = QRectF(self.graphics_widget.viewport().rect())
+        if graphics_area.contains(scene_pos):
+            return self._nearest_document_plot(scene_pos)
+        return None
 
     def mousePressEvent(self, a0: QMouseEvent | None):
         """Handle left mouse button press"""
@@ -533,14 +559,16 @@ class DocumentView(QWidget):
             self.context_pos = self.map_scene_to_graphics_widget(a0.position())
             return
 
+        if a0.button() != Qt.MouseButton.LeftButton:
+            return
+
         scene_pos = self.map_scene_to_graphics_widget(a0.position())
 
-        clicked_plot = self._get_document_plot_at(scene_pos)
-
-        if clicked_plot is None:
+        if self._plot_to_press_in(scene_pos) is None:
             return
 
         self.mouse_pressed = True
+        self.press_scene_pos = scene_pos
         a0.accept()
 
     def mouseDoubleClickEvent(self, a0: QMouseEvent | None):
@@ -564,6 +592,12 @@ class DocumentView(QWidget):
         if not clicked_plot:
             return
 
+        if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+            # A second Shift+click is a request to hear it again, not to zoom
+            self.play_window_or_selection(scene_pos)
+            a0.accept()
+            return
+
         mouse_point = clicked_plot.getViewBox().mapSceneToView(scene_pos)
         x = mouse_point.x()
 
@@ -578,26 +612,41 @@ class DocumentView(QWidget):
             return
 
         scene_pos = self.map_scene_to_graphics_widget(a0.position())
-
-        if self.mouse_pressed:
-            self.mouse_pressed = False
-
-            if self.is_dragging:
-                self.is_dragging = False
-                self.view_model.play_selected_audio()
-            else:
-                if a0.modifiers() == Qt.KeyboardModifier.ShiftModifier:
-                    self.play_window_or_selection(scene_pos)
-                else:
-                    self.pending_single_click = scene_pos
-                    if self.click_timer is not None:
-                        self.click_timer.stop()
-                    self.click_timer = QTimer()
-                    self.click_timer.setSingleShot(True)
-                    self.click_timer.timeout.connect(self.handle_single_click)
-                    self.click_timer.start(250)
-
+        self.end_press(scene_pos, a0.modifiers())
         a0.accept()
+
+    def end_press(self, scene_pos: QPointF, modifiers: Qt.KeyboardModifier):
+        """The left button is up: finish the selection being dragged, or treat the
+        press as a click"""
+        if not self.mouse_pressed:
+            return
+
+        self.mouse_pressed = False
+
+        if self.is_dragging:
+            self.is_dragging = False
+            self.view_model.play_selected_audio()
+        elif modifiers == Qt.KeyboardModifier.ShiftModifier:
+            self.play_for_shift_click(scene_pos)
+        else:
+            self.pending_single_click = scene_pos
+            if self.click_timer is not None:
+                self.click_timer.stop()
+            self.click_timer = QTimer()
+            self.click_timer.setSingleShot(True)
+            self.click_timer.timeout.connect(self.handle_single_click)
+            self.click_timer.start(DOUBLE_CLICK_INTERVAL_MS)
+
+    def play_for_shift_click(self, scene_pos: QPointF):
+        """Shift+click plays: the audio between the nodes of the label clicked in the
+        annotation plot, anywhere else the selection or the visible window"""
+        clicked_plot = self._get_document_plot_at(scene_pos)
+        if isinstance(clicked_plot, AnnotationPlot) and clicked_plot.handle_shift_click(
+            scene_pos
+        ):
+            return
+
+        self.play_window_or_selection(scene_pos)
 
     def handle_single_click(self):
         if self.pending_single_click is not None:
@@ -615,6 +664,19 @@ class DocumentView(QWidget):
 
         self.pending_single_click = None
         self.click_timer = None
+
+    def showEvent(self, a0: QShowEvent | None):
+        super().showEvent(a0)
+        self.set_plot_shortcuts_active(True)
+
+    def hideEvent(self, a0: QHideEvent | None):
+        super().hideEvent(a0)
+        self.set_plot_shortcuts_active(False)
+
+    def set_plot_shortcuts_active(self, active: bool):
+        for plot in self.document_plots:
+            if isinstance(plot, AnnotationPlot):
+                plot.set_shortcuts_active(active)
 
     def resizeEvent(self, a0: QResizeEvent | None):
         if a0 is None:

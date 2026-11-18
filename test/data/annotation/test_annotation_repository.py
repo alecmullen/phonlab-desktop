@@ -335,7 +335,7 @@ def test_two_resets_make_two_backups(
 def test_list_tier_names_is_empty_for_an_empty_database(
     repository: DataAnnotationRepository,
 ):
-    assert repository.list_tier_names() == []
+    assert repository.list_type_names() == []
 
 
 def test_list_tier_names_has_each_name_once_across_annotations_sorted(
@@ -349,7 +349,7 @@ def test_list_tier_names_has_each_name_once_across_annotations_sorted(
         second, [AnnotationType("word", []), AnnotationType("phone", [])]
     )
 
-    assert repository.list_tier_names() == ["Break", "phone", "word"]
+    assert repository.list_type_names() == ["Break", "phone", "word"]
 
 
 def test_list_tier_names_includes_tiers_that_have_labels(
@@ -357,4 +357,4 @@ def test_list_tier_names_includes_tiers_that_have_labels(
 ):
     seeded_annotation(repository)  # a "word" tier with labels
 
-    assert repository.list_tier_names() == ["word"]
+    assert repository.list_type_names() == ["word"]

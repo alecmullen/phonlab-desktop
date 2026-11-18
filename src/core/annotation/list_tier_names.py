@@ -9,4 +9,4 @@ class ListTierNames(UseCaseSync[list[str]]):
         self.annotation_repository = annotation_repository
 
     def __call__(self) -> list[str]:
-        return self.annotation_repository.list_tier_names()
+        return self.annotation_repository.list_type_names()

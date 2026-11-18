@@ -22,7 +22,7 @@ class SaveAudio(UseCaseSync):
                 channel.fs,
                 target_fs=target_fs,
                 scale=scale,
-                pre=0,
+                preemph=0,
                 add_tiny_noise=False,
             )
             prepped.append(x)
