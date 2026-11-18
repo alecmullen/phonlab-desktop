@@ -126,7 +126,7 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_sgram_state_change(self, model: State):
-        if isinstance(model, (LoadProgressState, AudioPrepped)):
+        if isinstance(model, (LoadProgressState, AudioPrepped, StatusMessageState)):
             self.state_changed.emit(model)
         if (
             isinstance(model, AudioPrepped)
@@ -391,10 +391,7 @@ class DocumentViewModel(ViewModel):
         self.spectrogram_view_model.prep_audio(x, fs)
 
     def set_shown(self, shown: bool):
-        """Tell the document whether its tab is the one on screen. The spectrogram
-        is only computed for a shown document, so opening many files at once
-        computes one spectrogram, and each of the others when its tab is first
-        looked at"""
+        """Set if document is being shown. Only run spectrogram once document is showing."""
         if shown == self.is_shown:
             return
         self.is_shown = shown

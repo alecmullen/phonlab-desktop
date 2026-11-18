@@ -10,6 +10,7 @@ from support.view_models import make_main_view_model
 from core.settings.app_settings import settings
 from core.settings.load_display_plan import LoadDisplayPlan
 from core.settings.save_display_plan import SaveDisplayPlan
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from ui.document.state.plot_layout_state import PlotType
 from ui.main.main_view_model import MainViewModel
 from ui.main.state.project_import_state import ProjectImportState
@@ -224,3 +225,27 @@ def test_set_tier_display_updates_app_settings():
     assert settings.tier_order == ["word", "tone"]
     assert view_model.hidden_tiers == ["phone"]
     assert view_model.tier_order == ["word", "tone"]
+
+
+def test_warm_up_formant_tracking_runs_the_use_case_once(
+    fake_job_manager: type[FakeJobManager],
+):
+    warm_up = mock_use_case(WarmUpFormantTracking)
+    warm_up.return_value = iter([None])
+    view_model = make_main_view_model(warm_up_formants=warm_up)
+
+    view_model.warm_up_formant_tracking()
+    view_model.warm_up_formant_tracking()
+
+    assert len(view_model.job_managers["warm_up_formants"].jobs) == 1
+
+
+def test_warm_up_formant_tracking_logs_a_failure_without_raising(
+    fake_job_manager: type[FakeJobManager], caplog: pytest.LogCaptureFixture
+):
+    view_model = make_main_view_model()
+    view_model.warm_up_formant_tracking()
+
+    view_model.job_managers["warm_up_formants"].jobs[0].on_error(RuntimeError("boom"))
+
+    assert any("warm-up failed" in record.getMessage() for record in caplog.records)

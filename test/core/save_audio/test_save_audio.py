@@ -18,7 +18,7 @@ def test_invoke_preps_audio_and_writes_with_pcm16(monkeypatch: pytest.MonkeyPatc
         raw_fs: int,
         target_fs: int,
         scale: bool,
-        pre: float,
+        preemph: float,
         add_tiny_noise: bool,
     ) -> tuple[np.ndarray, int]:
         prep_calls.append(
@@ -27,7 +27,7 @@ def test_invoke_preps_audio_and_writes_with_pcm16(monkeypatch: pytest.MonkeyPatc
                 "raw_fs": raw_fs,
                 "target_fs": target_fs,
                 "scale": scale,
-                "pre": pre,
+                "preemph": preemph,
                 "add_tiny_noise": add_tiny_noise,
             }
         )
@@ -50,7 +50,7 @@ def test_invoke_preps_audio_and_writes_with_pcm16(monkeypatch: pytest.MonkeyPatc
     assert call["raw_fs"] == 44100
     assert call["target_fs"] == 16000
     assert call["scale"] is True
-    assert call["pre"] == 0
+    assert call["preemph"] == 0
     assert call["add_tiny_noise"] is False
 
     assert len(write_calls) == 1
@@ -70,7 +70,7 @@ def test_invoke_passes_scale_false_through(monkeypatch: pytest.MonkeyPatch):
         raw_fs: int,
         target_fs: int,
         scale: bool,
-        pre: float,
+        preemph: float,
         add_tiny_noise: bool,
     ) -> tuple[np.ndarray, int]:
         scale_values.append(scale)
@@ -96,7 +96,7 @@ def test_invoke_writes_prepped_audio_to_a_real_file(
         raw_fs: int,
         target_fs: int,
         scale: bool,
-        pre: float,
+        preemph: float,
         add_tiny_noise: bool,
     ) -> tuple[np.ndarray, int]:
         return prepped_x, target_fs
@@ -125,7 +125,7 @@ def test_invoke_writes_stereo_as_two_column_array(monkeypatch: pytest.MonkeyPatc
         raw_fs: int,
         target_fs: int,
         scale: bool,
-        pre: float,
+        preemph: float,
         add_tiny_noise: bool,
     ) -> tuple[np.ndarray, int]:
         prepped_by_fs.setdefault(raw_fs, np.asarray(raw_x) * 2)
@@ -165,7 +165,7 @@ def test_invoke_calls_prep_audio_once_per_channel_independently(
         raw_fs: int,
         target_fs: int,
         scale: bool,
-        pre: float,
+        preemph: float,
         add_tiny_noise: bool,
     ) -> tuple[np.ndarray, int]:
         calls.append({"raw_x": raw_x, "raw_fs": raw_fs, "target_fs": target_fs})
@@ -196,7 +196,7 @@ def test_invoke_writes_real_two_channel_wav_file(
         raw_fs: int,
         target_fs: int,
         scale: bool,
-        pre: float,
+        preemph: float,
         add_tiny_noise: bool,
     ) -> tuple[np.ndarray, int]:
         return np.asarray(raw_x, dtype=np.float64), target_fs
