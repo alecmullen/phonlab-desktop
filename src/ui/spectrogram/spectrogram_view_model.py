@@ -223,6 +223,8 @@ class SpectrogramViewModel(ViewModel):
             settings.step_size,
             settings.order,
             SpectrogramType(settings.type.value),
+            settings.multitaper_nw,
+            settings.cepstral_lift,
         )
 
         generation = self._buffer_generation
@@ -289,6 +291,8 @@ class SpectrogramViewModel(ViewModel):
             settings.step_size,
             settings.order,
             SpectrogramType(settings.type.value),
+            nw=settings.multitaper_nw,
+            lift=settings.cepstral_lift,
         )
         self.launch_task("sgram_mmap", task, on_success, self.on_error, only_once=True)
 
