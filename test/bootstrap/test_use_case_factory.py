@@ -17,6 +17,7 @@ from core.save_audio.save_audio import SaveAudio
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 
@@ -27,6 +28,7 @@ USE_CASE_TYPES = [
     FilterAudio,
     SaveAudio,
     TrackFormants,
+    WarmUpFormantTracking,
     ComputeSpectrogram,
     ComputeSpectrogramMmap,
     ClearInterval,

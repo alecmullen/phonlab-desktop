@@ -14,6 +14,13 @@ class FrequencyScale(StrEnum):
     MEL = "mel"  # evenly on the mel scale (closer together in Hz at the top)
 
 
+class SpectrogramUnavailable(StrEnum):
+    """Why there is no spectrogram for the window being looked at"""
+
+    TOO_LONG = "too_long"
+    TOO_SHORT = "too_short"
+
+
 @dataclass(frozen=True)
 class SpectrogramState(State):
     # The frequency of each row of the spectrogram: in Hz, or in mels when the
@@ -32,6 +39,7 @@ class SpectrogramState(State):
 
     is_showing: bool = False
     is_loading: bool = True
+    unavailable: SpectrogramUnavailable | None = None
 
     gray_cutoff: float = DEFAULT_GRAY_CUTOFF
     low_sxx: float = float("inf")

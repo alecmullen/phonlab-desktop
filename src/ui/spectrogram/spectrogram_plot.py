@@ -14,7 +14,11 @@ from ui.spectrogram.component.spectrogram_settings_dialog import (
 )
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.formant_track_state import FormantTrackState
-from ui.spectrogram.state.spectrogram_state import FrequencyScale, SpectrogramState
+from ui.spectrogram.state.spectrogram_state import (
+    FrequencyScale,
+    SpectrogramState,
+    SpectrogramUnavailable,
+)
 
 
 class SpectrogramPlot(DocumentPlot):
@@ -53,9 +57,7 @@ class SpectrogramPlot(DocumentPlot):
         self.addItem(self.formant_dots, ignoreBounds=True)
 
         self.center_label = pg.LabelItem(
-            self.tr(
-                "Zoom to a chunk of {} seconds or shorter to see spectrogram"
-            ).format(MAX_SGRAM_LENGTH),
+            self.unavailable_message(SpectrogramUnavailable.TOO_LONG),
             size="32pt",
             color="#A0A0A0",
         )
@@ -117,7 +119,7 @@ class SpectrogramPlot(DocumentPlot):
     def plot_spectrogram(self, sgram: SpectrogramState):
         self.track_formants_action.setEnabled(sgram.is_showing)
         if not sgram.is_showing and not sgram.is_loading:
-            self.display_window_too_big()
+            self.display_spectrogram_unavailable(sgram.unavailable)
         elif sgram.is_showing:
             self.populate_spectrogram(sgram)
 
@@ -166,10 +168,17 @@ class SpectrogramPlot(DocumentPlot):
 
         return True
 
-    def display_window_too_big(self):
+    def unavailable_message(self, reason: SpectrogramUnavailable | None) -> str:
+        """Tell the user which way to zoom to get a spectrogram"""
+        if reason == SpectrogramUnavailable.TOO_SHORT:
+            return self.tr("Zoom out to a larger chunk to see a spectrogram")
+        return self.tr("Zoom in to a smaller chunk to see a spectrogram")
+
+    def display_spectrogram_unavailable(self, reason: SpectrogramUnavailable | None):
         if self.spec_img:
             self.spec_img.clear()
 
+        self.center_label.setText(self.unavailable_message(reason))
         self.center_label.setVisible(True)
 
     def adjust_gray_scale(self, is_trackpad: bool, delta: float):
