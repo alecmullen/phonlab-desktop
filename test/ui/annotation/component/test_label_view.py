@@ -1,4 +1,7 @@
+from dataclasses import replace
+
 import pyqtgraph as pg
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter, QPixmap
 from pytestqt.qtbot import QtBot
 
@@ -171,3 +174,42 @@ def test_label_view_paint_draws_picture(qtbot: QtBot):
     label_view.paint(painter, None, None)
     label_view.paint(None, None, None)
     painter.end()
+
+
+def make_label_view(qtbot: QtBot, labels: list[AnnotationLabelState]) -> LabelView:
+    plot = pg.PlotItem()
+    layout = show_plot_in_layout(plot)
+    qtbot.addWidget(layout)
+    qtbot.waitExposed(layout)
+    return LabelView(plot, labels, lambda: None)
+
+
+def test_edit_label_starts_editing_only_the_text_of_that_label(qtbot: QtBot):
+    hello = AnnotationLabelState(id=1, pos=(1.0, 0.5), size=(0.5, 0.25), label="hello")
+    world = AnnotationLabelState(id=2, pos=(2.0, 0.5), size=(2.0, 0.25), label="world")
+    label_view = make_label_view(qtbot, [hello, world])
+
+    assert label_view.edit_label(world) is True
+
+    editing = [
+        item.label.label
+        for item in label_view.label_items
+        if item.textItem.textInteractionFlags()
+        == Qt.TextInteractionFlag.TextEditorInteraction
+    ]
+    assert editing == ["world"]
+
+
+def test_edit_label_finds_the_label_by_id_when_given_another_copy(qtbot: QtBot):
+    label = AnnotationLabelState(id=7, pos=(1.0, 0.5), size=(0.5, 0.25), label="hello")
+    label_view = make_label_view(qtbot, [label])
+
+    assert label_view.edit_label(replace(label, label="renamed")) is True
+
+
+def test_edit_label_returns_false_for_a_label_that_is_not_shown(qtbot: QtBot):
+    shown = AnnotationLabelState(id=1, pos=(1.0, 0.5), size=(0.5, 0.25), label="hello")
+    other = AnnotationLabelState(id=2, pos=(3.0, 0.5), size=(0.5, 0.25), label="gone")
+    label_view = make_label_view(qtbot, [shown])
+
+    assert label_view.edit_label(other) is False

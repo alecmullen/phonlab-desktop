@@ -21,6 +21,7 @@ from core.settings.save_display_plan import SaveDisplayPlan
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
@@ -137,6 +138,7 @@ class ViewModelFactoryImpl(ViewModelFactory):
         return MainViewModel(
             use_case_factory.provide(LoadDisplayPlan),
             use_case_factory.provide(SaveDisplayPlan),
+            use_case_factory.provide(WarmUpFormantTracking),
             lambda dir_path: self.get_use_case_factory(dir_path).provide(
                 AddProjectFiles
             ),

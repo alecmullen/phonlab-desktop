@@ -21,15 +21,15 @@ def compute_typed_sgram(
     nw: float = SPECTROGRAM_MULTITAPER_NW,
     lift: float = SPECTROGRAM_CEPSTRAL_LIFT_SEC,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """A spectrogram of `x`, as (times, frequency of each row, sxx), in decibels
-    (the mel type is on a log scale of its own). The frequencies are in Hz, except
-    for the mel type's, which are in mels, as phonlab gives them.
+    """A spectrogram of `x`, as (times, frequency of each row, sxx). For all types
+    except mel, the spectrogram is in decibels, and the frequencies are in Hz.
+    The mel type is on a log scale of its own, and the the frequencies are in mels.
 
     `x` must already be resampled and preemphasized (as `sgram()` would do it).
-    `order` sets the FFT size, 2**order, so the number of frequency rows is the
-    same for all the types but the mel one: it has 80 rows, evenly spaced on the
-    mel scale from 80 to 7600 Hz, and a fixed 64 ms window, so `window_size`
-    does not apply to it.
+    `order` sets the FFT size, 2**order, which determines the number of frequency rows
+    for all but the mel type. The mel type has 80 rows, evenly spaced on the mel scale
+    from 80 to 7600 Hz, and a fixed 64 ms window, so `window_size` and `order`
+    do not apply to it.
 
     `nw` is the multitaper type's time-bandwidth product, and `lift` (seconds)
     is how much the cepstral type smooths; the other types ignore them."""
@@ -61,11 +61,9 @@ def _cepstral_sgram(
     lift: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """The cepstrally smoothed spectrogram has a fixed 8192 frequency rows, which
-    needs ~66 KB per frame: gigabytes for a long recording. So analyze a few
-    seconds at a time, thin the (smooth) frequency axis to the FFT size that
-    `order` asks for, and join the pieces without a seam: pieces start on the
-    step grid, and each is analyzed with a window's length of audio on both sides
-    so that every frame is computed from the audio around it."""
+    needs ~66 KB per frame. This function analyzes a few seconds at a time, thins
+    the (smooth) frequency axis to the FFT size that `order` asks for, and joins
+    the pieces without a seam"""
     step = max(1, round(step_size * fs))
     segment = max(1, int(CEPSTRAL_SEGMENT_SEC * fs) // step) * step
     pad = -(-int(window_size * fs) // step) * step  # a whole number of steps
@@ -103,9 +101,8 @@ def _cepstral_sgram(
 
 def _restore_level(sxx: np.ndarray, x: np.ndarray) -> np.ndarray:
     """The cepstral and LPC analyses scale their input to a fixed peak level, so
-    each call is on a level of its own: the window being looked at, and the
-    whole file, would not agree. Put the decibels back on the level of `x`, the
-    way the FFT and multitaper types already are."""
+    each call is on a level of its own. Put the decibels back on the level of `x`,
+    the way the FFT and multitaper types already are."""
     peak = np.max(np.abs(x))
     if peak == 0:
         return sxx

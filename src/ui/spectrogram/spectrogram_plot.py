@@ -4,7 +4,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import QWidget
 
-from res.constants import MAX_SGRAM_LENGTH, MEL_AXIS_TICKS_HZ
+from res.constants import MEL_AXIS_TICKS_HZ
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
@@ -14,7 +14,11 @@ from ui.spectrogram.component.spectrogram_settings_dialog import (
 )
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.spectrogram.state.formant_track_state import FormantTrackState
-from ui.spectrogram.state.spectrogram_state import FrequencyScale, SpectrogramState
+from ui.spectrogram.state.spectrogram_state import (
+    FrequencyScale,
+    SpectrogramState,
+    SpectrogramUnavailable,
+)
 
 
 class SpectrogramPlot(DocumentPlot):
@@ -40,9 +44,7 @@ class SpectrogramPlot(DocumentPlot):
         lut = pg.colormap.get("CET-L1").getLookupTable(nPts=256)[::-1]
         self.spec_img.setLookupTable(lut)
 
-        # Where the rows of the spectrogram are on the vertical axis. It is in Hz,
-        # unless the rows are evenly spaced in mels: then it is in mels, with the
-        # frequencies written on it in Hz
+        # Where the rows of the spectrogram are on the vertical axis, in Hz or mels
         self.row_positions = np.zeros(0)
         self.is_mel = False
         self.formant_track = FormantTrackState()
@@ -53,9 +55,7 @@ class SpectrogramPlot(DocumentPlot):
         self.addItem(self.formant_dots, ignoreBounds=True)
 
         self.center_label = pg.LabelItem(
-            self.tr(
-                "Zoom to a chunk of {} seconds or shorter to see spectrogram"
-            ).format(MAX_SGRAM_LENGTH),
+            self.unavailable_message(SpectrogramUnavailable.TOO_LONG),
             size="32pt",
             color="#A0A0A0",
         )
@@ -117,7 +117,7 @@ class SpectrogramPlot(DocumentPlot):
     def plot_spectrogram(self, sgram: SpectrogramState):
         self.track_formants_action.setEnabled(sgram.is_showing)
         if not sgram.is_showing and not sgram.is_loading:
-            self.display_window_too_big()
+            self.display_spectrogram_unavailable(sgram.unavailable)
         elif sgram.is_showing:
             self.populate_spectrogram(sgram)
 
@@ -166,10 +166,17 @@ class SpectrogramPlot(DocumentPlot):
 
         return True
 
-    def display_window_too_big(self):
+    def unavailable_message(self, reason: SpectrogramUnavailable | None) -> str:
+        """Tell the user which way to zoom to get a spectrogram"""
+        if reason == SpectrogramUnavailable.TOO_SHORT:
+            return self.tr("Zoom out to a larger chunk to see a spectrogram")
+        return self.tr("Zoom in to a smaller chunk to see a spectrogram")
+
+    def display_spectrogram_unavailable(self, reason: SpectrogramUnavailable | None):
         if self.spec_img:
             self.spec_img.clear()
 
+        self.center_label.setText(self.unavailable_message(reason))
         self.center_label.setVisible(True)
 
     def adjust_gray_scale(self, is_trackpad: bool, delta: float):
