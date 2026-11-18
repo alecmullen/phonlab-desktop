@@ -23,7 +23,13 @@ class ViewModel(QObject):
         on_success: Callable,
         on_error: Callable,
         only_once: bool = False,
+        on_finished: Callable | None = None,
     ):
+        """Run `task` on a job manager of its own for `key`, passing each
+        result to `on_success`. `on_finished` is called when the task is over,
+        whether it ran out, failed or was stopped. It is only heard if this
+        call starts the manager: a task queued behind a running one (same key)
+        has no separate end."""
         if key in self.job_managers:
             if only_once:
                 return
@@ -33,13 +39,15 @@ class ViewModel(QObject):
             self.job_managers[key] = manager
 
             @pyqtSlot()
-            def on_finished():
+            def on_manager_finished():
                 if self.job_managers.get(key) is manager:
                     del self.job_managers[key]
 
             # Connect before starting: a fast job can finish before
             # manager() returns, and its `finished` would go unheard.
-            manager.signals.finished.connect(on_finished)
+            manager.signals.finished.connect(on_manager_finished)
+            if on_finished is not None:
+                manager.signals.finished.connect(on_finished)
             manager(Job(task, on_success, on_error))
 
     def close_threads(self):

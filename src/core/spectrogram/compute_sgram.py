@@ -1,8 +1,10 @@
 import numpy as np
-import phonlab as phon
 
 from core.base.use_case import UseCase
 from core.spectrogram.entity.spectrogram import Spectrogram
+from core.spectrogram.entity.spectrogram_type import SpectrogramType
+from core.spectrogram.typed_sgram import compute_typed_sgram
+from res.constants import SPECTROGRAM_CEPSTRAL_LIFT_SEC, SPECTROGRAM_MULTITAPER_NW
 
 
 class ComputeSpectrogram(UseCase[Spectrogram]):
@@ -13,6 +15,11 @@ class ComputeSpectrogram(UseCase[Spectrogram]):
         window_size: float = 0.008,
         step_size: float = 0.001,
         order: int = 9,
+        sgram_type: SpectrogramType = SpectrogramType.FFT,
+        nw: float = SPECTROGRAM_MULTITAPER_NW,
+        lift: float = SPECTROGRAM_CEPSTRAL_LIFT_SEC,
     ):
-        t, f, sxx = phon.compute_sgram(x, fs, window_size, step_size, order)
+        t, f, sxx = compute_typed_sgram(
+            x, fs, sgram_type, window_size, step_size, order, nw, lift
+        )
         yield Spectrogram(t, f, sxx)

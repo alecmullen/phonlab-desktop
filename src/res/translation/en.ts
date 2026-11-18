@@ -1204,9 +1204,14 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../../ui/spectrogram/spectrogram_plot.py" line="56" />
-        <source>Zoom to a chunk of {} seconds or shorter to see spectrogram</source>
-        <translation type="unfinished" />
+        <location filename="../../ui/spectrogram/spectrogram_plot.py" line="42"/>
+        <source>Zoom out to a larger chunk to see a spectrogram</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../../ui/spectrogram/spectrogram_plot.py" line="42"/>
+        <source>Zoom in to a smaller chunk to see a spectrogram</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../../ui/spectrogram/spectrogram_plot.py" line="74" />
