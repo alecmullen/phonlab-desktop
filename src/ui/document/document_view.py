@@ -180,21 +180,13 @@ class DocumentView(QWidget):
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
         """Add the navigation actions (Zoom to Selection, Deselect, Set Mark,
         Remove Mark) to a plot's ViewBox menu, after the plot's own actions and a
-        separator.
-
-        Added directly to each plot's own menu (rather than via the
-        scene-wide contextMenu list) so they're present before the menu
-        is ever shown.
-        """
+        separator."""
         menu = view_box.menu
         menu.addSeparator()
         menu.aboutToShow.connect(lambda: self.sync_actions_with_ui_state(menu))
 
     def sync_actions_with_ui_state(self, menu: QMenu):
-        """Show the navigation actions that apply at the end of `menu`. Adding and
-        removing them as the menu opens (rather than toggling the action's
-        visibility) makes Qt lay the rows out afresh, so one can't be drawn over its
-        neighbour."""
+        """Show the navigation actions that apply at the end of `menu`."""
         is_selected = self.view_model.select_state.is_selected
         is_marked = self.view_model.mark_state.is_set
 
