@@ -284,6 +284,40 @@ def test_set_tier_display_updates_app_settings():
     assert view_model.tier_order == ["word", "tone"]
 
 
+def test_set_tier_fonts_updates_app_settings():
+    view_model = make_main_view_model()
+
+    view_model.set_tier_fonts({"word": "Charis SIL"})
+
+    assert settings.tier_fonts == {"word": "Charis SIL"}
+    assert view_model.tier_fonts == {"word": "Charis SIL"}
+
+
+def test_opening_project_uses_its_saved_tier_fonts():
+    load = mock_use_case(LoadTierLayout)
+    load.return_value = TierLayout(tier_fonts={"word": "Charis SIL"})
+    view_model = make_main_view_model(load_tier_layout=load)
+    view_model.set_tier_fonts({"tier from another project": "Arial Black"})
+
+    view_model.set_dir_path("/some/dir")
+
+    assert view_model.tier_fonts == {"word": "Charis SIL"}
+
+
+def test_save_window_layout_saves_tier_fonts_to_project():
+    save = mock_use_case(SaveTierLayout)
+    view_model = make_main_view_model(save_tier_layout=save)
+    view_model.set_dir_path("/some/dir")
+    view_model.set_tier_fonts({"word": "Charis SIL"})
+
+    view_model.save_window_layout()
+
+    assert save.call_args.args == (
+        TierLayout(tier_fonts={"word": "Charis SIL"}),
+        "/some/dir",
+    )
+
+
 def test_warm_up_formant_tracking_runs_the_use_case_once(
     fake_job_manager: type[FakeJobManager],
 ):

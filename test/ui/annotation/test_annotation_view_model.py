@@ -766,3 +766,13 @@ def test_create_label_from_selection_uses_row_of_the_displayed_tiers():
     assert len(label_spans(view_model, 0)) == 1
     assert label_spans(view_model, 1) == []
     assert label_spans(view_model, 2) == []
+
+
+def test_set_tier_fonts_announces_the_annotation_state(qtbot: QtBot):
+    view_model = make_view_model({}, 0.0, 1.0)
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.set_tier_fonts({"word": "Charis SIL"})
+
+    assert view_model.tier_fonts == {"word": "Charis SIL"}
+    assert isinstance(blocker.args[0], AnnotationState)

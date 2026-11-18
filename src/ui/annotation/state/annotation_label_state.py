@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field, replace
 
 from core.annotation.entity.annotation import AnnotationLabel
-from res.constants import LABEL_HEIGHT_RATIO
+from res.constants import LABEL_FONT_FAMILY, LABEL_HEIGHT_RATIO
 from ui.base.state import State
 
 
@@ -17,6 +17,8 @@ class AnnotationLabelState(State):
     pos: tuple[float, float] = field(default_factory=tuple)
     size: tuple[float, float] = field(default_factory=tuple)
 
+    font: str = LABEL_FONT_FAMILY
+
 
 def to_label(label_state: AnnotationLabelState) -> AnnotationLabel:
     return AnnotationLabel(
@@ -31,6 +33,7 @@ def update_label_state(
     start: float,
     end: float,
     tier: int,
+    font: str = LABEL_FONT_FAMILY,
 ) -> AnnotationLabelState:
     if end <= win_start or start >= win_end:
         return replace(label, is_visible=False)
@@ -47,4 +50,5 @@ def update_label_state(
         is_visible=True,
         pos=(center_x, center_y),
         size=(width, LABEL_HEIGHT_RATIO),
+        font=font,
     )

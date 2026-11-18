@@ -6,6 +6,7 @@ from res.constants import (
     HIDDEN_TIERS_KEY,
     PLAN_KEY,
     PROJECT_FILE_NAME,
+    TIER_FONTS_KEY,
     TIER_ORDER_KEY,
 )
 
@@ -32,8 +33,20 @@ def tier_layout_from_toml(contents: dict) -> TierLayout:
     if not isinstance(section, dict):
         return TierLayout()
     return TierLayout(
-        _names(section.get(HIDDEN_TIERS_KEY)), _names(section.get(TIER_ORDER_KEY))
+        _names(section.get(HIDDEN_TIERS_KEY)),
+        _names(section.get(TIER_ORDER_KEY)),
+        _fonts(section.get(TIER_FONTS_KEY)),
     )
+
+
+def _fonts(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        tier: font
+        for tier, font in value.items()
+        if isinstance(font, str) and font != ""
+    }
 
 
 def _names(value: object) -> list[str]:
