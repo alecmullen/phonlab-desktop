@@ -1,4 +1,5 @@
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QStandardItemModel
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -7,6 +8,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
 )
 
+from res.constants import MEL_MIN_TOP_FREQUENCY
 from ui.common.sample_rate_dropdown import SampleRateDropdown
 from ui.spectrogram.state.spectrogram_settings import (
     SpectrogramSettingsState,
@@ -41,7 +43,7 @@ class SpectrogramSettingsDialog(QDialog):
         layout.addRow(self.tr("Top frequency:"), self.top_frequency_dropdown)
 
         self.window_spin = QSpinBox()
-        self.window_spin.setRange(5, 60)
+        self.window_spin.setRange(5, 70)  # the mel type's fixed window is 64
         self.window_spin.setSingleStep(1)
         self.window_spin.setValue(round(settings.window_size * 1000))
         self.window_spin.setSuffix(self.tr(" ms"))
@@ -62,6 +64,7 @@ class SpectrogramSettingsDialog(QDialog):
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
 
+        self.limit_to_type()
         self.type_dropdown.currentIndexChanged.connect(self.on_type_changed)
 
     def type_labels(self) -> dict[SpectrogramTypeState, str]:
@@ -70,6 +73,7 @@ class SpectrogramSettingsDialog(QDialog):
             SpectrogramTypeState.MULTITAPER: self.tr("Multitaper"),
             SpectrogramTypeState.CEPSTRAL: self.tr("Cepstral (smoothed)"),
             SpectrogramTypeState.LPC: self.tr("LPC"),
+            SpectrogramTypeState.MEL: self.tr("Mel"),
         }
 
     def on_type_changed(self):
@@ -79,6 +83,24 @@ class SpectrogramSettingsDialog(QDialog):
         )
         self.window_spin.setValue(round(defaults.window_size * 1000))
         self.step_spin.setValue(round(defaults.step_size * 1000))
+        self.limit_to_type()
+
+    def limit_to_type(self):
+        """The mel type has a window of its own (fixed), and its filters reach
+        higher than the lower top frequencies"""
+        is_mel = self.type_dropdown.currentData() == SpectrogramTypeState.MEL
+        self.window_spin.setEnabled(not is_mel)
+
+        dropdown = self.top_frequency_dropdown
+        model = dropdown.model()
+        if isinstance(model, QStandardItemModel):
+            for i in range(dropdown.count()):
+                too_low = dropdown.itemData(i) < MEL_MIN_TOP_FREQUENCY
+                item = model.item(i)
+                if item is not None:
+                    item.setEnabled(not (is_mel and too_low))
+        if is_mel and dropdown.currentData() < MEL_MIN_TOP_FREQUENCY:
+            dropdown.setCurrentIndex(dropdown.findData(MEL_MIN_TOP_FREQUENCY))
 
     @staticmethod
     def open_spectrogram_settings(

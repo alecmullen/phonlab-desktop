@@ -46,13 +46,31 @@ SPECTROGRAM_WINDOW_SEC = {
     "multitaper": 0.02,
     "cepstral": 0.04,
     "lpc": 0.03,
+    "mel": 0.064,  # fixed by phonlab
 }
 SPECTROGRAM_STEP_SEC = {
     "fft": 0.001,
     "multitaper": 0.004,
     "cepstral": 0.004,
     "lpc": 0.004,
+    "mel": 0.001,
 }
+MEL_MIN_TOP_FREQUENCY = 8000
+MEL_AXIS_TICKS_HZ = (
+    100,
+    200,
+    300,
+    500,
+    700,
+    1000,
+    1500,
+    2000,
+    3000,
+    4000,
+    5000,
+    6000,
+    7000,
+)
 CEPSTRAL_SEGMENT_SEC = 5
 
 # -- Formant Tracking --
