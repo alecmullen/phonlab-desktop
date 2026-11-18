@@ -7,6 +7,8 @@ DOUBLE_CLICK_INTERVAL_MS = 250
 PROJECT_FILE_NAME = "phonlab.toml"
 DISPLAY_SECTION = "display"
 PLAN_KEY = "plan"
+HIDDEN_TIERS_KEY = "hidden_tiers"
+TIER_ORDER_KEY = "tier_order"
 
 # -- Files --
 AUDIO_FILE_SUFFIXES = (".wav",)
