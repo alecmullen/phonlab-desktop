@@ -19,9 +19,9 @@ import ui.main.main_window as main_window_module
 from core.load_audio.entity.audio_signal import AudioSignal
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
+from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.state.tier_display_state import TierDisplayState
-from ui.annotation.annotation_plot import AnnotationPlot
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
