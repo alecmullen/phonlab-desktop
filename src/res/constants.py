@@ -55,6 +55,16 @@ SPECTROGRAM_STEP_SEC = {
     "lpc": 0.004,
     "mel": 0.001,
 }
+SPECTROGRAM_MULTITAPER_NW = 3.0
+SPECTROGRAM_CEPSTRAL_LIFT_SEC = 0.003
+PHONLAB_DOCS_URL = "https://phonlab.readthedocs.io/en/latest/"
+SPECTROGRAM_DOCS = {
+    "fft": "acoustphon.html#phonlab.compute_sgram",
+    "multitaper": "acoustphon.html#phonlab.compute_mt_sgram",
+    "cepstral": "acoustphon.html#phonlab.cepstral_smooth",
+    "lpc": "acoustphon.html#phonlab.sgram",
+    "mel": "audphon.html#phonlab.compute_mel_sgram",
+}
 MEL_MIN_TOP_FREQUENCY = 8000
 MEL_AXIS_TICKS_HZ = (
     100,
