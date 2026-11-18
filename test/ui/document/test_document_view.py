@@ -16,6 +16,7 @@ from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
+from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_special_dialog import (
@@ -1146,20 +1147,40 @@ def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
     actions = menu.actions()
 
     ordered = [
-        loaded_view.zoom_to_selection_action,
-        loaded_view.deselect_action,
-        loaded_view.recenter_action,
-        loaded_view.set_mark_action,
-        loaded_view.remove_mark_action,
         loaded_view.wave_plots[0].audio_info_action,
         loaded_view.wave_plots[0].resample_action,
         loaded_view.wave_plots[0].scale_action,
         loaded_view.wave_plots[0].reverse_action,
         loaded_view.wave_plots[0].filter_action,
         loaded_view.wave_plots[0].revert_action,
+        loaded_view.zoom_to_selection_action,
+        loaded_view.deselect_action,
+        loaded_view.recenter_action,
+        loaded_view.set_mark_action,
+        loaded_view.remove_mark_action,
     ]
     positions = [actions.index(a) for a in ordered]
     assert positions == sorted(positions)
+
+
+def test_annotation_menu_has_its_own_actions_then_a_separator_then_navigation(
+    all_plots_view: DocumentView,
+):
+    all_plots_view.view_model.set_mark(4.0)
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    menu = plot.getViewBox().menu
+    menu.aboutToShow.emit()
+    menu.aboutToShow.emit()  # opening it again changes nothing
+    actions = menu.actions()
+
+    assert isinstance(actions[0], ContextMenuHintAction)
+    assert actions[0].action_text == "Create Label"
+    assert actions[-4].isSeparator()
+    assert actions[-3:] == [
+        all_plots_view.recenter_action,
+        all_plots_view.set_mark_action,
+        all_plots_view.remove_mark_action,
+    ]
 
 
 def test_deselect_action_clears_selection(loaded_view: DocumentView):
