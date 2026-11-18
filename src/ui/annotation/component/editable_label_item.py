@@ -11,7 +11,7 @@ from PyQt6.QtGui import (
     QTextOption,
 )
 
-from res.constants import POINT_LABEL_WIDTH
+from res.constants import LABEL_FONT_SIZE, POINT_LABEL_WIDTH
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 
 
@@ -40,7 +40,7 @@ class EditableLabelItem(pg.TextItem):
 
         text = " ".join(label.label.splitlines())
 
-        font = QFont("Arial", 16)
+        font = QFont(label.font, LABEL_FONT_SIZE)
         metrics = QFontMetrics(font)
         num_lines = int(label_height / (metrics.lineSpacing() * 1.5))
         clipped_text = metrics.elidedText(

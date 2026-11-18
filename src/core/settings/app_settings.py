@@ -17,6 +17,10 @@ class AppSettings:
     # Tiers not named here come after them.
     tier_order: list[str] = field(default_factory=list)
 
+    # The font family of the labels of each annotation tier, by tier name. A tier not
+    # named here uses the default font.
+    tier_fonts: dict[str, str] = field(default_factory=dict)
+
     enable_annotation = True
 
 

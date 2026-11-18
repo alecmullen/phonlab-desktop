@@ -28,6 +28,14 @@ def tier_display_from(
     ]
 
 
+def listed_as_plotted(tiers: list[TierDisplayState]) -> list[TierDisplayState]:
+    """`tiers` as a list shows them: the tier at the top of the plot first, and the
+    hidden ones last"""
+    shown = [tier for tier in tiers if tier.position != HIDDEN_POSITION]
+    hidden = [tier for tier in tiers if tier.position == HIDDEN_POSITION]
+    return [*reversed(shown), *hidden]
+
+
 def hidden_and_order_from(
     tiers: list[TierDisplayState],
 ) -> tuple[list[str], list[str]]:

@@ -3,6 +3,7 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
+from res.constants import LABEL_FONT_FAMILY
 from ui.annotation.state.annotation_node_state import AnnotationNodeState
 from ui.annotation.state.annotation_state import (
     AnnotationLabelState,
@@ -194,3 +195,12 @@ def test_update_from_window_with_every_tier_hidden_is_empty():
 
     assert state.types == []
     assert state.nodes == {}
+
+
+def test_update_from_window_puts_labels_in_the_font_of_their_tier():
+    state = update_annotation_state_from_window(
+        _two_tier_state(), 0.0, 1.0, tier_fonts={"phone": "Charis SIL"}
+    )
+
+    fonts = {t.type: {label.font for label in t.labels} for t in state.types}
+    assert fonts == {"word": {LABEL_FONT_FAMILY}, "phone": {"Charis SIL"}}
