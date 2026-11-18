@@ -10,6 +10,7 @@ from res.constants import (
     FORMANT_PREEMPHASIS,
     FORMANT_STEP_SEC,
     FORMANT_TOP_FREQUENCY,
+    FORMANT_VOICING_THRESHOLD,
 )
 
 
@@ -32,7 +33,7 @@ class FormantOptions:
 
     An `order` below 1 means phonlab picks the LPC order. `step` and `length`
     are in seconds. With `voiced_only`, the formants of frames that phon.VAD()
-    does not find voiced are NaN."""
+    does not find voiced (a probability above `voicing_threshold`) are NaN."""
 
     method: FormantMethod = FormantMethod.IFC
     preemphasis: float = FORMANT_PREEMPHASIS["ifc"]
@@ -44,3 +45,4 @@ class FormantOptions:
     step: float = FORMANT_STEP_SEC
     length: float = FORMANT_LENGTH_SEC["ifc"]
     voiced_only: bool = False
+    voicing_threshold: float = FORMANT_VOICING_THRESHOLD

@@ -26,11 +26,11 @@ def test_method_states_mirror_core_methods():
 
 def test_to_formant_options_maps_every_field():
     settings = FormantSettingsState(
-        FormantMethodState.RLPC, 0.9, 2, 12, 7000, 150, 1000, 0.005, 0.04, True
+        FormantMethodState.RLPC, 0.9, 2, 12, 7000, 150, 1000, 0.005, 0.04, True, 0.6
     )
 
     assert to_formant_options(settings) == FormantOptions(
-        FormantMethod.RLPC, 0.9, 2, 12, 7000, 150, 1000, 0.005, 0.04, True
+        FormantMethod.RLPC, 0.9, 2, 12, 7000, 150, 1000, 0.005, 0.04, True, 0.6
     )
 
 
