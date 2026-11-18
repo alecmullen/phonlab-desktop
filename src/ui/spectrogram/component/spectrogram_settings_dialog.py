@@ -110,9 +110,7 @@ class SpectrogramSettingsDialog(QDialog):
         }
 
     def on_type_changed(self):
-        """Each type has its own usual window and step (the slower types take a
-        longer step). They are only a starting point, so the user can still
-        change them"""
+        """Update to default window and step for the sgram type"""
         defaults = SpectrogramSettingsState().with_type(
             self.type_dropdown.currentData()
         )
@@ -160,7 +158,6 @@ class SpectrogramSettingsDialog(QDialog):
     ) -> SpectrogramSettingsState | None:
         dialog = SpectrogramSettingsDialog(settings)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            # A new state, not a copy: the FFT order is worked out from the window
             type = dialog.type_dropdown.currentData()
             top_frequency = (
                 MEL_MIN_TOP_FREQUENCY

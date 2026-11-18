@@ -11,6 +11,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
 from bootstrap.view_model_factory_impl import ViewModelFactoryImpl
+from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.main.component.open_project_dialog import OpenProjectDialog, icon_path
 from ui.main.main_window import MainWindow
 
@@ -54,6 +55,7 @@ if __name__ == "__main__":
     def run_app():
         app = QApplication(sys.argv)
         app.setWindowIcon(QIcon(str(icon_path())))
+        app.setDoubleClickInterval(DOUBLE_CLICK_INTERVAL_MS)
 
         mainWin = MainWindow(ViewModelFactoryImpl())
 
@@ -63,6 +65,9 @@ if __name__ == "__main__":
 
         mainWin.show()
         splash.show()
+
+        # Load phonlab's formant tracking code in the background
+        mainWin.view_model.warm_up_formant_tracking()
 
         # Optionally open a file if provided as command line argument
         if len(sys.argv) > 1:
