@@ -15,7 +15,6 @@ from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
-from ui.annotation.state.save_to_textgrid_state import SaveToTextGridAction
 from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
