@@ -154,8 +154,6 @@ class AnnotationPlot(DocumentPlot):
 
         font = self.getAxis("left").style.get("tickFont") or QFont()
         metrics = QFontMetrics(font)
-        # A tier occupies y in [i, i + 1], so its name goes at the middle of that band,
-        # level with the labels
         ticks = [
             (
                 i + 0.5,
