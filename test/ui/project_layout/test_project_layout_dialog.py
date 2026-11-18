@@ -1,11 +1,13 @@
 from pathlib import Path
 
+import pytest
 from PyQt6.QtWidgets import QDialog
 from pytestqt.qtbot import QtBot
 from support.audio_files import textgrid_with_tiers
 from support.project_tree import make_tree, talker_tree
 from support.view_models import make_project_layout_view_model
 
+from ui.project_layout.component.annotation_table_dialog import AnnotationTableDialog
 from ui.project_layout.project_layout_dialog import ProjectLayoutDialog
 
 
@@ -151,3 +153,33 @@ def test_projects_without_channel_sets_hide_the_channels_group(
     dialog = make_dialog(qtbot, tmp_path)
 
     assert dialog.channels_group.isHidden() is True
+
+
+def test_extra_files_can_be_made_tiers_in_the_dialog(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    asked: list[int] = []
+    monkeypatch.setattr(
+        AnnotationTableDialog,
+        "edit",
+        staticmethod(
+            lambda view_model, index, parent=None: asked.append(index) or True
+        ),
+    )
+    make_tree(tmp_path, ["s1.wav", "s1_phn.txt", "s2.wav", "s2_phn.txt"])
+    dialog = make_dialog(qtbot, tmp_path)
+    kind, tier, columns = dialog.role_widgets[0]
+    assert (tier.isEnabled(), columns.isEnabled()) == (False, False)
+
+    kind.setCurrentIndex(kind.findData("annotation"))
+    tier.setText("Phone")
+    tier.editingFinished.emit()
+
+    assert asked == [0]  # asked how the file is read as soon as it is an annotation
+    assert (tier.isEnabled(), columns.isEnabled()) == (True, True)
+    assert dialog.view_model.resolved.report.n_annotated == 2
+    assert dialog.view_model.layout.data_files[0].tier == "Phone"
+
+    columns.click()
+
+    assert asked == [0, 0]  # and again when the user asks

@@ -183,6 +183,27 @@ class MainViewModel(ViewModel):
         add_project_files = self.provide_add_project_files(dir_path)
         self._launch_import(self._import_steps(dir_path, add_project_files))
 
+    def replace_annotations(self, textgrid_paths: list[str]):
+        """Read the given TextGrids into the project database again, replacing the
+        annotations it has for their recordings. A TextGrid that no recording of the
+        project has as its annotation is left out"""
+        dir_path = self._project_dir()
+        add_project_files = self.provide_add_project_files(dir_path)
+        chosen = {Path(path).resolve() for path in textgrid_paths}
+
+        def update(
+            files: list[ProjectFile],
+        ) -> Generator[ProjectImportResult, None, None]:
+            selected = [
+                file
+                for file in files
+                if file.textgrid_path is not None
+                and Path(file.textgrid_path).resolve() in chosen
+            ]
+            return add_project_files(selected, replace=True)
+
+        self._launch_import(self._import_steps(dir_path, update))
+
     def rebuild_project(self):
         """Read all TextGrids into a new project database, backing up the old one, and
         add again the information from the CSV files the project remembers"""

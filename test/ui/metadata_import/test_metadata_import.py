@@ -257,3 +257,42 @@ def test_nothing_is_remembered_when_the_information_could_not_be_added(
         view_model.import_information()
 
     assert LoadInformationSources()(str(tmp_path)) == []
+
+
+# --------------------------- when the rows are known to be about talkers ---------------------------
+
+
+def test_a_fixed_target_is_not_asked_about(tmp_path: Path):
+    csv = tmp_path / "info.csv"
+    csv.write_text("talker,age\nt1,31\n")
+    repository = InMemAnnotationRepository()
+    repository.upsert_recordings([Recording("a", talkers=["t1"])])
+    view_model = make_metadata_import_view_model(
+        str(tmp_path), str(csv), repository, MetadataTarget.TALKER
+    )
+    states: list = []
+    view_model.subscribe(states.append)
+
+    view_model.prepare()
+
+    assert states[-1].target == "talker" and states[-1].target_locked is True
+    assert states[-1].key_column == "talker"
+
+
+def test_the_dialog_does_not_offer_the_choice_when_the_target_is_fixed(
+    qtbot: QtBot, tmp_path: Path
+):
+    csv = tmp_path / "info.csv"
+    csv.write_text("talker,age\nt1,31\n")
+    repository = InMemAnnotationRepository()
+    repository.upsert_recordings([Recording("a", talkers=["t1"])])
+    view_model = make_metadata_import_view_model(
+        str(tmp_path), str(csv), repository, MetadataTarget.TALKER
+    )
+    view_model.prepare()
+
+    dialog = MetadataImportDialog(view_model)
+    qtbot.addWidget(dialog)
+
+    assert dialog.about_group.isHidden()
+    assert dialog.windowTitle() == "Add Talkers"

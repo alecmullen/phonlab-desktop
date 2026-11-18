@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QTableWidget,
     QTableWidgetItem,
@@ -19,11 +20,14 @@ from PyQt6.QtWidgets import (
 )
 
 from res.constants import ANNOTATION_FORMATS
+from ui.project_layout.component.annotation_table_dialog import AnnotationTableDialog
 from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.project_layout.state.project_layout_state import (
     FolderChoiceState,
     ProjectLayoutState,
 )
+
+ANNOTATION_KIND = "annotation"  # the kind of file that holds a tier of an annotation
 
 TEMPLATE_HELP = (
     "{name} is a field; {name:3} takes exactly 3 characters; {name:d} digits; "
@@ -85,6 +89,8 @@ class ProjectLayoutDialog(QDialog):
         self.channels_layout = QVBoxLayout(self.channels_group)
         self.content_layout.addWidget(self.channels_group)
         self.talker_combos: list[QComboBox] = []
+        # for each kind of extra file: its kind list, tier name box and Columns button
+        self.role_widgets: list[tuple[QComboBox, QLineEdit, QPushButton]] = []
         self.levels_group = QGroupBox(self.tr("Folders"))
         self.levels_layout = QVBoxLayout(self.levels_group)
         self.content_layout.addWidget(self.levels_group)
@@ -327,17 +333,21 @@ class ProjectLayoutDialog(QDialog):
         intro = QLabel(
             self.tr(
                 "Files that share a recording's name, such as time series data that "
-                "belongs to the audio. Tick the kinds to keep with each recording."
+                "belongs to the audio. Tick the kinds to keep with each recording, "
+                "and say what they are: a file that holds a tier of the annotation "
+                "is an annotation, and the tier needs a name."
             )
         )
         intro.setWordWrap(True)
         self.roles_layout.addWidget(intro)
 
-        table = QTableWidget(len(state.roles), 5)
+        table = QTableWidget(len(state.roles), 7)
         table.setHorizontalHeaderLabels(
             [
                 self.tr("Keep"),
                 self.tr("Name"),
+                self.tr("Kind"),
+                self.tr("Tier name"),
                 self.tr("Files like"),
                 self.tr("Files"),
                 self.tr("Of recordings"),
@@ -361,12 +371,46 @@ class ProjectLayoutDialog(QDialog):
                 )
             )
             table.setCellWidget(row, 1, edit)
-            table.setItem(row, 2, QTableWidgetItem(role.pattern))
-            table.setItem(row, 3, QTableWidgetItem(str(role.n_files)))
-            table.setItem(row, 4, QTableWidgetItem(f"{role.coverage_percent}%"))
+
+            tier_edit = QLineEdit(role.tier)
+            tier_edit.setPlaceholderText(role.name)
+            tier_edit.setEnabled(role.kind == ANNOTATION_KIND)
+            tier_edit.editingFinished.connect(
+                lambda index=row, edit=tier_edit: self.view_model.set_role_tier(
+                    index, edit.text()
+                )
+            )
+            format_button = QPushButton(self.tr("Columns…"))
+            format_button.setEnabled(role.kind == ANNOTATION_KIND)
+            format_button.clicked.connect(
+                lambda _=False, index=row: self.edit_annotation_table(index)
+            )
+            tier_cell = QWidget()
+            tier_layout = QHBoxLayout(tier_cell)
+            tier_layout.setContentsMargins(0, 0, 0, 0)
+            tier_layout.addWidget(tier_edit, 1)
+            tier_layout.addWidget(format_button)
+
+            kind_combo = QComboBox()
+            kind_combo.addItem(self.tr("Annotation"), ANNOTATION_KIND)
+            kind_combo.addItem(self.tr("Time series data"), "time_series")
+            kind_combo.addItem(self.tr("Other"), "other")
+            kind_combo.setCurrentIndex(max(kind_combo.findData(role.kind), 0))
+            kind_combo.currentIndexChanged.connect(
+                lambda _, index=row, combo=kind_combo, tier=tier_edit, button=format_button: (
+                    self.on_kind_chosen(index, combo.currentData(), tier, button)
+                )
+            )
+            table.setCellWidget(row, 2, kind_combo)
+            table.setCellWidget(row, 3, tier_cell)
+            self.role_widgets.append((kind_combo, tier_edit, format_button))
+            table.setItem(row, 4, QTableWidgetItem(role.pattern))
+            table.setItem(row, 5, QTableWidgetItem(str(role.n_files)))
+            table.setItem(row, 6, QTableWidgetItem(f"{role.coverage_percent}%"))
         header = table.horizontalHeader()
         if header is not None:
             header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         table.setFixedHeight(40 + 32 * min(len(state.roles), 8))
         self.roles_layout.addWidget(table)
 
@@ -545,6 +589,25 @@ class ProjectLayoutDialog(QDialog):
     @pyqtSlot(int)
     def on_annotation_changed(self, index: int):
         self.view_model.set_annotation_ext(self.annotation_combo.itemData(index) or "")
+
+    def on_kind_chosen(
+        self, index: int, kind: str, tier: QLineEdit, button: QPushButton
+    ):
+        """What a kind of extra file is. For an annotation, the user is asked how its
+        files are read as a table, as soon as it is chosen."""
+        annotation = kind == ANNOTATION_KIND
+        tier.setEnabled(annotation)
+        button.setEnabled(annotation)
+        self.view_model.set_role_kind(index, kind)
+        if annotation:
+            self.edit_annotation_table(index)
+
+    def edit_annotation_table(self, index: int):
+        """Asks how the files are read; the tier box then shows the name of the tier,
+        which the user may have changed (it is the heading of the label column)"""
+        if AnnotationTableDialog.edit(self.view_model, index, self):
+            tier = self.view_model.candidates[index].role.tier
+            self.role_widgets[index][1].setText(tier)
 
     @pyqtSlot(int)
     def on_annotation_folder_changed(self, index: int):

@@ -7,6 +7,7 @@ from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
+from core.read_tiers.entity.table_format import TierFile
 from res.constants import SAME_NODE_THRESHOLD
 
 SIMPLE_TEXTGRID = """File type = "ooTextFile"
@@ -279,3 +280,80 @@ def test_invoke_reads_a_buckeye_file(tmp_path: Path):
     )
 
     assert [type.type for type in result.types] == ["word", "phone"]
+
+
+# --------------------------- tiers in files of their own ---------------------------
+
+
+def test_tiers_can_come_from_text_tables_without_a_textgrid(tmp_path: Path):
+    phones = tmp_path / "a_phn.txt"
+    phones.write_text("0 400 h\n400 1000 ay\n")
+    words = tmp_path / "a_wrd.txt"
+    words.write_text("0 1000 hi\n")
+
+    result = next(
+        ParseTextGrid(InMemAnnotationRepository())(
+            None,
+            "a",
+            tier_files={"Phone": TierFile(str(phones)), "Word": TierFile(str(words))},
+        )
+    )
+
+    assert [t.type for t in result.types] == ["Phone", "Word"]
+    assert label_times(result, 0) == [(0.0, 400.0, "h"), (400.0, 1000.0, "ay")]
+
+
+def test_tiers_from_text_tables_are_added_to_those_of_a_textgrid(tmp_path: Path):
+    grid = write_textgrid(tmp_path, SIMPLE_TEXTGRID)
+    sentence = tmp_path / "a_snt.txt"
+    sentence.write_text("0 1 hello world\n")
+
+    result = next(
+        ParseTextGrid(InMemAnnotationRepository())(
+            grid, "a", tier_files={"Sentence": TierFile(str(sentence))}
+        )
+    )
+
+    assert [t.type for t in result.types] == ["word", "Sentence"]
+
+
+def test_an_unreadable_tier_table_leaves_the_database_alone(tmp_path: Path):
+    bad = tmp_path / "a_phn.txt"
+    bad.write_text("0 1 x\nnot an interval\n")
+    repository = InMemAnnotationRepository()
+
+    with pytest.raises(ParseTextGridError):
+        next(
+            ParseTextGrid(repository)(
+                None, "a", tier_files={"Phone": TierFile(str(bad))}
+            )
+        )
+
+    assert repository.find_annotation_by_file_stem("a") is None
+
+
+def test_labels_take_the_node_nearest_their_time_when_tiers_nearly_agree(
+    tmp_path: Path,
+):
+    # the sentence begins and ends a hair after the phones do, which is the same node
+    phones = tmp_path / "a_phn.txt"
+    phones.write_text(
+        "0 59.491978 sil\n59.491978 2647.727295 x\n2647.727295 2733.9 sil\n"
+    )
+    sentence = tmp_path / "a_snt.txt"
+    sentence.write_text("59.492 2647.7273 hello there\n")
+
+    result = next(
+        ParseTextGrid(InMemAnnotationRepository())(
+            None,
+            "a",
+            tier_files={
+                "Phone": TierFile(str(phones)),
+                "Sentence": TierFile(str(sentence)),
+            },
+        )
+    )
+
+    [label] = result.types[1].labels
+    assert result.nodes[label.s_node] == pytest.approx(59.491978, abs=1e-3)
+    assert result.nodes[label.e_node] == pytest.approx(2647.727295, abs=1e-3)

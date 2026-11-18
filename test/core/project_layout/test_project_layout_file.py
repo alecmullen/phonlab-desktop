@@ -4,6 +4,7 @@ import pytest
 
 from core.project_layout.entity.project_layout import (
     ChannelRole,
+    DataFileKind,
     DataFileRole,
     FolderLevel,
     ProjectLayout,
@@ -14,6 +15,7 @@ from core.project_layout.project_layout_file import (
     layout_from_dict,
     layout_to_dict,
 )
+from core.read_tiers.entity.table_format import ColumnRole, TableFormat, TimeUnit
 
 FULL_LAYOUT = ProjectLayout(
     annotation_ext=".words",
@@ -22,7 +24,20 @@ FULL_LAYOUT = ProjectLayout(
     levels=(FolderLevel(1, "dialect"), FolderLevel(2, "talker")),
     filename_template="{talker:3}{n:d}",
     data_files=(
-        DataFileRole("pitch", "_f0", ".txt"),
+        DataFileRole("pitch", "_f0", ".txt", DataFileKind.TIME_SERIES),
+        DataFileRole(
+            "phones",
+            "_phn",
+            ".txt",
+            DataFileKind.ANNOTATION,
+            "Phone",
+            TableFormat(
+                "\t",
+                2,
+                (ColumnRole.END, ColumnRole.START, ColumnRole.LABEL),
+                TimeUnit.MILLISECONDS,
+            ),
+        ),
         DataFileRole("track", "", ".trk"),
     ),
     channels=(ChannelRole("L", "_L", "Ann"), ChannelRole("R", "_R")),

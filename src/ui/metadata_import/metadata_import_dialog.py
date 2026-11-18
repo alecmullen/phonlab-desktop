@@ -60,7 +60,7 @@ class MetadataImportDialog(QDialog):
         self.file_label = QLabel()
         layout.addWidget(self.file_label)
 
-        about = QGroupBox(self.tr("What is each row about?"))
+        about = self.about_group = QGroupBox(self.tr("What is each row about?"))
         about_layout = QHBoxLayout(about)
         self.talkers_radio = QRadioButton(self.tr("Information about talkers"))
         self.recordings_radio = QRadioButton(self.tr("Information about recordings"))
@@ -132,6 +132,13 @@ class MetadataImportDialog(QDialog):
             return
         self.state = state
         self.file_label.setText(self.tr("File: {}").format(state.file_name))
+        self.about_group.setVisible(not state.target_locked)
+        if state.target_locked:
+            self.setWindowTitle(
+                self.tr("Add Talkers")
+                if state.target == MetadataTarget.TALKER.value
+                else self.tr("Add Information about Recordings")
+            )
 
         for radio, checked in (
             (self.talkers_radio, state.target == MetadataTarget.TALKER.value),

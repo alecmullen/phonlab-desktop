@@ -176,9 +176,15 @@ LAYOUT_VERSION = 1
 
 # -- Legacy Annotation Formats --
 TIMIT_DEFAULT_SAMPLE_RATE = 16000
+# a text table of intervals fits its audio file if it ends within this factor of its length
+TIER_TABLE_DURATION_SLACK = 1.1
+TABLE_MAX_HEADER_LINES = 20  # lines to look through for where a table's data begins
+TABLE_PREVIEW_ROWS = 12
 
 # -- Database Inspection --
 DATABASE_VIEW_ROW_LIMIT = 5000
+WORD_EXAMPLE_UNMATCHED = 8  # unmatched words shown in the word table dialog
 
 # -- Added Information (CSV files) --
 INFORMATION_TOML_KEY = "information"
+WORDS_TOML_KEY = "words"

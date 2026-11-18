@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from enum import Enum
 
+from core.read_tiers.entity.table_format import TableFormat
 from res.constants import (
     LAYOUT_VERSION,
     PROJECT_AUDIO_EXTENSIONS,
@@ -20,14 +22,31 @@ class FolderLevel:
     field: str = ""
 
 
+class DataFileKind(Enum):
+    """What a kind of file that goes with each recording is for"""
+
+    OTHER = "other"
+    TIME_SERIES = "time_series"
+    ANNOTATION = "annotation"  # a tier of the recording's annotation
+
+
 @dataclass(frozen=True)
 class DataFileRole:
     """A kind of file that goes with each recording: the file named like the audio
-    file plus `suffix`, with extension `ext` (casefolded, with the dot)"""
+    file plus `suffix`, with extension `ext` (casefolded, with the dot). If it is
+    an annotation, `tier` is the name of the tier it holds."""
 
     name: str
     suffix: str = ""
     ext: str = ""
+    kind: DataFileKind = DataFileKind.OTHER
+    tier: str = ""
+    # how to read the files of an annotation kind as a table (None: work it out)
+    table: TableFormat | None = None
+
+    @property
+    def tier_name(self) -> str:
+        return self.tier or self.name
 
     @property
     def key(self) -> tuple[str, str]:

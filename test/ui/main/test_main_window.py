@@ -3,9 +3,16 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtCore import QCoreApplication, QEvent, Qt
 from PyQt6.QtGui import QAction, QKeyEvent, QKeySequence
-from PyQt6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox, QWidget
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QFileDialog,
+    QMenu,
+    QMessageBox,
+    QWidget,
+)
 from pytestqt.qtbot import QtBot
 from support.annotation_repository import SeedableAnnotationRepository
 from support.audio_player import FakeAudioPlayer
@@ -16,10 +23,12 @@ from support.view_models import (
     StubViewModelFactory,
     make_database_view_model,
     make_main_view_model,
+    make_word_import_view_model,
 )
 
 import ui.document.document_view as doc_view_module
 import ui.main.main_window as main_window_module
+from core.annotation.entity.annotation import AnnotationLabel, AnnotationType
 from core.annotation.entity.metadata import MetadataTarget
 from core.import_metadata.entity.information_source import InformationSource
 from core.import_metadata.information_sources_file import SaveInformationSource
@@ -35,6 +44,7 @@ from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.component.tier_font_dialog import TierFontDialog
 from ui.annotation.component.tier_search_dialog import TierSearchDialog
+from ui.annotation.state.arrange_tiers_state import ArrangeTiersAction
 from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.annotation.state.tier_search_state import (
     TierLabelsChangedState,
@@ -45,6 +55,13 @@ from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioChannelState, AudioState
 from ui.document.state.plot_layout_state import PlotType
+from ui.main.component.add_to_project_dialog import (
+    NEW_ANNOTATIONS,
+    REPLACEMENT_ANNOTATIONS,
+    TALKERS,
+    WORDS,
+    AddToProjectDialog,
+)
 from ui.main.component.open_audio_dialog import OpenAudioDialog
 from ui.main.component.open_path_dialog import OpenPathDialog
 from ui.main.component.save_audio_dialog import SaveOptions
@@ -54,6 +71,7 @@ from ui.main.state.audio_open_options import AudioOpenOptionsState
 from ui.main.state.openable_file import OpenableFile
 from ui.metadata_import.metadata_import_dialog import MetadataImportDialog
 from ui.project_layout.project_layout_dialog import ProjectLayoutDialog
+from ui.word_import.word_import_dialog import WordImportDialog
 
 
 @pytest.fixture(autouse=True)
@@ -1514,9 +1532,22 @@ def test_project_menu_lists_the_project_actions(main_window: MainWindow):
         main_window.add_files_action,
         main_window.rebuild_action,
         main_window.project_layout_action,
-        main_window.add_information_action,
         main_window.inspect_database_action,
+        main_window.save_layout_action,
     ]
+
+
+def test_save_window_layout_is_in_the_project_menu_not_the_file_menu(
+    main_window: MainWindow,
+):
+    def menu_named(name: str) -> QMenu:
+        return next(
+            action.menu()
+            for action in main_window.menuBar().actions()
+            if action.text().replace("&", "") == name
+        )
+
+    assert main_window.save_layout_action not in menu_named("File").actions()
 
 
 def capture_information(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -1527,6 +1558,141 @@ def capture_information(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         staticmethod(lambda parent, title, text, *a: messages.append(text)),
     )
     return messages
+
+
+def test_add_new_files_asks_what_to_add_and_does_that(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    done: list[str] = []
+    for name in (
+        "add_new_annotations",
+        "replace_annotations",
+        "add_talkers",
+        "add_words",
+    ):
+        monkeypatch.setattr(main_window, name, lambda name=name: done.append(name))
+    answers = iter([NEW_ANNOTATIONS, REPLACEMENT_ANNOTATIONS, TALKERS, WORDS, None])
+    monkeypatch.setattr(
+        AddToProjectDialog, "get_choice", staticmethod(lambda parent: next(answers))
+    )
+
+    for _ in range(5):
+        main_window.add_new_files()
+
+    assert done == [
+        "add_new_annotations",
+        "replace_annotations",
+        "add_talkers",
+        "add_words",
+    ]  # and nothing when the dialog is cancelled
+
+
+def test_add_new_annotations_says_when_there_is_nothing_new(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", database=True)
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = capture_information(monkeypatch)
+    main_window.add_new_annotations()
+    run_import_job(main_window)
+    messages.clear()
+    main_window.view_model.job_managers.clear()
+
+    main_window.add_new_annotations()
+    run_import_job(main_window)
+
+    assert messages == ["There are no new annotations to add."]
+
+
+def choose_textgrids(monkeypatch: pytest.MonkeyPatch, paths: list[Path]) -> list[str]:
+    """Answers the dialog for TextGrids with `paths`, and the question with Yes"""
+    questions: list[str] = []
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileNames",
+        staticmethod(lambda *a, **k: ([str(p) for p in paths], "")),
+    )
+
+    def question(parent: object, title: str, text: str, *a: object):  # noqa: ANN202
+        questions.append(text)
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return questions
+
+
+def test_replacement_annotations_overwrite_the_ones_in_the_database(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav", "b.TextGrid")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = capture_information(monkeypatch)
+    main_window.add_new_annotations()
+    run_import_job(main_window)
+    for stem in ("a", "b"):
+        repository_id = project_repository.find_annotation_by_file_stem(stem).get_id()  # type: ignore[union-attr]
+        project_repository.clear_annotation(repository_id)
+        project_repository.create_types(repository_id, [AnnotationType("edited", [])])
+    messages.clear()
+    main_window.view_model.job_managers.clear()
+    questions = choose_textgrids(monkeypatch, [tmp_path / "a.TextGrid"])
+
+    main_window.replace_annotations()
+    run_import_job(main_window)
+
+    a = project_repository.find_annotation_by_file_stem("a")
+    b = project_repository.find_annotation_by_file_stem("b")
+    assert a is not None and [t.type for t in a.types] == ["word"]  # replaced
+    assert b is not None and [t.type for t in b.types] == ["edited"]  # not chosen
+    assert "1 TextGrids" in questions[0]
+    assert messages == ["Replaced the annotations for 1 TextGrids."]
+
+
+def test_replacement_says_which_chosen_textgrids_belong_to_no_recording(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "orphan.TextGrid")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    messages = capture_information(monkeypatch)
+    choose_textgrids(
+        monkeypatch, [tmp_path / "a.TextGrid", tmp_path / "orphan.TextGrid"]
+    )
+
+    main_window.replace_annotations()
+    run_import_job(main_window)
+
+    assert messages[0].splitlines()[0] == "Replaced the annotations for 1 TextGrids."
+    assert "1 of the TextGrids chosen are not the annotation" in messages[0]
+
+
+def test_replacement_does_nothing_when_no_textgrid_is_chosen_or_it_is_not_confirmed(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    main_window.view_model.set_dir_path(str(tmp_path))
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileNames", staticmethod(lambda *a, **k: ([], ""))
+    )
+
+    main_window.replace_annotations()
+
+    assert "project_import" not in main_window.view_model.job_managers
+
+    choose_textgrids(monkeypatch, [tmp_path / "a.TextGrid"])
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.No),
+    )
+
+    main_window.replace_annotations()
+
+    assert "project_import" not in main_window.view_model.job_managers
 
 
 def test_add_new_files_registers_new_stems_and_reads_textgrids_for_empty_ones(
@@ -1540,7 +1706,7 @@ def test_add_new_files_registers_new_stems_and_reads_textgrids_for_empty_ones(
     main_window.view_model.set_dir_path(str(tmp_path))
     messages = capture_information(monkeypatch)
 
-    main_window.add_new_files()
+    main_window.add_new_annotations()
     run_import_job(main_window)
 
     assert sorted(project_repository.filenames.values()) == ["new", "old"]
@@ -1559,12 +1725,12 @@ def test_add_new_files_leaves_existing_annotations_alone(
     make_project(tmp_path, "a.wav", "a.TextGrid")
     main_window.view_model.set_dir_path(str(tmp_path))
     capture_information(monkeypatch)
-    main_window.add_new_files()
+    main_window.add_new_annotations()
     run_import_job(main_window)
     before = project_repository.find_annotation_by_file_stem("a")
     main_window.view_model.job_managers.clear()
 
-    main_window.add_new_files()
+    main_window.add_new_annotations()
     run_import_job(main_window)
 
     assert project_repository.find_annotation_by_file_stem("a") == before
@@ -1582,7 +1748,7 @@ def test_add_new_files_reloads_annotations_of_open_documents(
     )
     first, second = add_document(main_window), add_document(main_window, "two.wav")
 
-    main_window.add_new_files()
+    main_window.add_new_annotations()
     run_import_job(main_window)
 
     assert reloaded == [first.view_model, second.view_model]
@@ -1596,7 +1762,7 @@ def test_add_new_files_reports_unreadable_textgrids(
     main_window.view_model.set_dir_path(str(tmp_path))
     messages = capture_information(monkeypatch)
 
-    main_window.add_new_files()
+    main_window.add_new_annotations()
     run_import_job(main_window)
 
     [message] = messages
@@ -1654,7 +1820,7 @@ def test_rebuild_project_rereads_textgrids_into_a_new_database(
 
     assert str(tmp_path) in questions[0]
     assert list(project_repository.filenames.values()) == ["a"]
-    assert messages == ["Rebuilt the project database from 1 TextGrids."]
+    assert messages == ["The project database has been rebuilt."]
     assert reloaded == [doc.view_model]
 
 
@@ -1706,7 +1872,7 @@ def test_rebuilding_adds_the_remembered_csv_information_to_the_new_database(
         "t1": {"age": 31},
         "t2": {"age": 45},
     }
-    assert "Added the information from talkers.csv again." in messages[0]
+    assert messages == ["The project database has been rebuilt."]
 
 
 def test_rebuilding_reports_remembered_information_that_cannot_be_added(
@@ -1721,7 +1887,7 @@ def test_rebuilding_reports_remembered_information_that_cannot_be_added(
 
     assert project_repository.read_metadata(MetadataTarget.TALKER) == {}
     assert "Could not add the information from talkers.csv" in messages[0]
-    assert "Rebuilt the project database from 2 TextGrids." in messages[0]
+    assert messages[0].startswith("The project database has been rebuilt.\n")
 
 
 def add_project_document(
@@ -2330,6 +2496,22 @@ def test_tier_search_action_opens_dialog_for_tier(main_window: MainWindow):
     assert dialog.view_model.cursor[:2] == ("a", 1.5)
 
 
+def test_the_context_menu_can_ask_for_the_tiers_to_be_shown_and_ordered(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch
+):
+    add_stemmed_document(main_window, "a")
+    asked: list = []
+    monkeypatch.setattr(
+        TierDisplayDialog,
+        "get_tiers",
+        staticmethod(lambda tiers, parent=None: asked.append(tiers)),
+    )
+
+    main_window.on_doc_state_change(ArrangeTiersAction())
+
+    assert len(asked) == 1
+
+
 def test_tier_search_reuses_dialog_and_retargets_it(main_window: MainWindow):
     main_window.on_doc_state_change(TierSearchAction("word", "a"))
     dialog = main_window.tier_search_dialog
@@ -2496,7 +2678,6 @@ def test_cancelling_the_layout_dialog_opens_no_project(
     assert opened == []
     assert "project_import" not in main_window.view_model.job_managers
     assert main_window.view_model.dir_path is None
-    assert main_window.add_information_action.isEnabled() is False
 
 
 def test_project_with_a_database_is_opened_without_asking_about_its_layout(
@@ -2544,15 +2725,14 @@ def test_project_menu_items_about_layout_and_data_need_a_project(
 ):
     actions = (
         main_window.project_layout_action,
-        main_window.add_information_action,
         main_window.inspect_database_action,
     )
-    assert [action.isEnabled() for action in actions] == [False] * 3
+    assert [action.isEnabled() for action in actions] == [False] * 2
 
     main_window.view_model.set_dir_path(str(tmp_path))
     main_window.update_project_actions()
 
-    assert [action.isEnabled() for action in actions] == [True] * 3
+    assert [action.isEnabled() for action in actions] == [True] * 2
 
 
 def test_reviewing_the_layout_updates_the_project_database(
@@ -2569,7 +2749,7 @@ def test_reviewing_the_layout_updates_the_project_database(
 
     assert len(accept_layout_dialog) == 1  # asked although nothing needed deciding
     run_import_job(main_window)
-    assert messages == ["Added 1 new files and read 1 TextGrids."]
+    assert messages == ["The project layout has been applied."]
 
 
 def test_cancelling_the_layout_review_changes_nothing(
@@ -2587,7 +2767,7 @@ def test_cancelling_the_layout_review_changes_nothing(
     assert "[import]" not in (tmp_path / "phonlab.toml").read_text()
 
 
-def test_adding_information_reports_a_file_that_cannot_be_used(
+def test_adding_talkers_reports_a_file_that_cannot_be_used(
     main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     (tmp_path / "info.csv").write_text("only,a,header\n")
@@ -2602,12 +2782,12 @@ def test_adding_information_reports_a_file_that_cannot_be_used(
         QMessageBox, "critical", staticmethod(lambda *args: errors.append(args))
     )
 
-    main_window.add_information_from_csv()
+    main_window.add_talkers()
 
     assert len(errors) == 1
 
 
-def test_adding_information_shows_the_dialog_for_the_chosen_file(
+def test_adding_talkers_shows_the_dialog_for_the_chosen_file(
     main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     (tmp_path / "info.csv").write_text("talker,age\nAnn,31\n")
@@ -2624,13 +2804,13 @@ def test_adding_information_shows_the_dialog_for_the_chosen_file(
         lambda self: shown.append(self) or QDialog.DialogCode.Rejected,
     )
 
-    main_window.add_information_from_csv()
+    main_window.add_talkers()
 
     [dialog] = shown
     assert dialog.state.file_name == "info.csv"
 
 
-def test_adding_information_does_nothing_when_no_file_is_chosen(
+def test_adding_talkers_does_nothing_when_no_file_is_chosen(
     main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     main_window.view_model.set_dir_path(str(tmp_path))
@@ -2640,7 +2820,7 @@ def test_adding_information_does_nothing_when_no_file_is_chosen(
         staticmethod(lambda *args, **kwargs: ("", "")),
     )
 
-    main_window.add_information_from_csv()  # would raise if it went on
+    main_window.add_talkers()  # would raise if it went on
 
 
 def test_inspecting_the_database_opens_a_window_that_closes_with_the_project(
@@ -2665,6 +2845,30 @@ def test_inspecting_the_database_opens_a_window_that_closes_with_the_project(
     main_window.close_project()
 
     assert main_window.database_dialog is None
+    database.engine.dispose()
+
+
+def test_the_project_can_be_closed_after_the_database_window_was_closed(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+    database = SQLiteDatabase()
+    database.connect(str(tmp_path))
+    view_model = make_database_view_model(
+        str(tmp_path), DataAnnotationRepository(AnnotationDataSource(database))
+    )
+    monkeypatch.setattr(
+        main_window.view_model_factory, "create", lambda *args, **kwargs: view_model
+    )
+    main_window.inspect_database()
+    dialog = main_window.database_dialog
+    assert dialog is not None
+
+    dialog.close()  # the window deletes itself
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    assert main_window.database_dialog is None
+    main_window.close_project()  # used to raise: the window was already deleted
     database.engine.dispose()
 
 
@@ -2716,3 +2920,89 @@ def test_a_tier_match_in_a_channel_recording_opens_its_channel_files(
     [[file]] = opened
     assert file.file_stem == "a"
     assert file.channel_files == (str(tmp_path / "a_L.wav"), str(tmp_path / "a_R.wav"))
+
+
+def test_adding_talkers_reads_a_table_without_asking_what_its_rows_are_about(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+    table = tmp_path / "talkers.csv"
+    table.write_text("talker,age\nt1,31\n")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(table), "")),
+    )
+    shown: list[MetadataImportDialog] = []
+    monkeypatch.setattr(
+        MetadataImportDialog,
+        "exec",
+        lambda self: shown.append(self) or QDialog.DialogCode.Rejected,
+    )
+
+    main_window.add_talkers()
+
+    [dialog] = shown
+    assert dialog.about_group.isHidden()
+    assert dialog.state.target == "talker"
+
+
+def test_adding_words_reads_a_table_of_words_and_reports_what_it_made(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    project_repository: SeedableAnnotationRepository,
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+    id = project_repository.create_annotation("a")
+    project_repository.create_types(
+        id, [AnnotationType("word", [AnnotationLabel(0, 0, "the", id=0)])]
+    )
+    table = tmp_path / "words.csv"
+    table.write_text("word,freq\nthe,5\ncat,2\n")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(table), "")),
+    )
+    messages = capture_information(monkeypatch)
+    monkeypatch.setattr(
+        main_window.view_model_factory,
+        "create",
+        lambda *args, **kwargs: make_word_import_view_model(
+            str(tmp_path), str(table), project_repository
+        ),
+    )
+    monkeypatch.setattr(
+        WordImportDialog,
+        "exec",
+        lambda self: self.accept_import() or QDialog.DialogCode.Accepted,
+    )
+
+    main_window.add_words()
+
+    assert project_repository.words["the"] == {"freq": 5}
+    assert "2 words and 1 columns" in messages[0]
+
+
+def test_adding_words_to_a_project_without_tiers_says_so(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+    table = tmp_path / "words.csv"
+    table.write_text("word,freq\nthe,5\n")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(table), "")),
+    )
+    errors: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "critical",
+        staticmethod(lambda parent, title, text, *a: errors.append(text)),
+    )
+
+    main_window.add_words()
+
+    assert "no annotation tiers" in errors[0]

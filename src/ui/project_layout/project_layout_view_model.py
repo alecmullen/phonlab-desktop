@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 
 from core.project_layout.entity.import_report import (
     DataFileCandidate,
@@ -8,6 +9,7 @@ from core.project_layout.entity.import_report import (
 )
 from core.project_layout.entity.project_layout import (
     ChannelRole,
+    DataFileKind,
     DataFileRole,
     FolderLevel,
     ProjectLayout,
@@ -22,6 +24,8 @@ from core.project_layout.project_layout_file import (
 from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
 from core.project_layout.suggest_talker_names import SuggestTalkerNames
+from core.read_tiers.entity.table_format import ColumnRole, TableFormat, TimeUnit
+from core.read_tiers.preview_annotation_table import PreviewAnnotationTable
 from res.constants import (
     ANNOTATION_FORMATS,
     DATA_FILE_MIN_COVERAGE,
@@ -30,6 +34,7 @@ from res.constants import (
     TALKER_FIELD_NAMES,
 )
 from ui.base.view_model import ViewModel
+from ui.project_layout.state.annotation_table_state import AnnotationTableState
 from ui.project_layout.state.project_layout_state import (
     ChannelCandidateState,
     ChannelRoleState,
@@ -54,6 +59,7 @@ class ProjectLayoutViewModel(ViewModel):
         load_layout: LoadProjectLayout,
         save_layout: SaveProjectLayout,
         suggest_talker_names: SuggestTalkerNames,
+        preview_annotation_table: PreviewAnnotationTable,
     ):
         super().__init__()
         self.dir_path = dir_path
@@ -63,6 +69,7 @@ class ProjectLayoutViewModel(ViewModel):
         self.load_layout = load_layout
         self.save_layout = save_layout
         self.suggest_talker_names = suggest_talker_names
+        self.preview_annotation_table = preview_annotation_table
 
         self.scan: ProjectScan | None = None
         self.suggestion = LayoutSuggestion(ProjectLayout())
@@ -276,6 +283,117 @@ class ProjectLayoutViewModel(ViewModel):
         )
         self._set_layout(replace(self.layout, data_files=self._selected_roles()))
 
+    def set_role_kind(self, index: int, kind: str):
+        """What the files of a kind are for: "annotation", "time_series" or "other" """
+        role = self.candidates[index].role
+        self.candidates[index] = replace(
+            self.candidates[index], role=replace(role, kind=DataFileKind(kind))
+        )
+        self._set_layout(replace(self.layout, data_files=self._selected_roles()))
+
+    def set_role_tier(self, index: int, tier: str):
+        """The name of the tier that files of an annotation kind hold"""
+        role = self.candidates[index].role
+        self.candidates[index] = replace(
+            self.candidates[index], role=replace(role, tier=tier.strip())
+        )
+        self._set_layout(replace(self.layout, data_files=self._selected_roles()))
+
+    def annotation_table(
+        self,
+        index: int,
+        delimiter: str | None = None,
+        skip: int | None = None,
+        unit: str | None = None,
+        columns: list[str] | None = None,
+    ) -> AnnotationTableState:
+        """How a file of a kind of extra file reads as a table of labelled intervals,
+        for the user to check: the first such file in the project, as the layout has it,
+        with the delimiter, number of lines to skip and unit of time given taking the
+        place of what the layout (or else the file) says. With `columns` (the roles the
+        user gave them) as well, the format is just that, to be checked."""
+        role = self.candidates[index].role
+        sample = next(
+            (
+                (r.tier_files[role.tier_name], r.audio_file)
+                for r in self.resolved.recordings
+                if role.tier_name in r.tier_files
+            ),
+            None,
+        )
+        if sample is None:
+            return AnnotationTableState(
+                problem=self.tr("There is no file of this kind to look at.")
+            )
+
+        file, audio = sample
+        root = Path(self.dir_path)
+        try:
+            preview = self.preview_annotation_table(
+                str(root / file),
+                str(root / audio) if audio else None,
+                TableFormat(
+                    delimiter or "",
+                    skip or 0,
+                    tuple(ColumnRole(column) for column in columns),
+                    TimeUnit(unit or "auto"),
+                )
+                if columns
+                else role.table,
+                delimiter,
+                skip,
+                TimeUnit(unit) if unit else None,
+            )
+        except (ValueError, OSError) as err:
+            return AnnotationTableState(file_name=Path(file).name, problem=str(err))
+        label = (
+            preview.format.columns.index(ColumnRole.LABEL)
+            if ColumnRole.LABEL in preview.format.columns
+            else None
+        )
+        # the tier is called what the user said, else what the file calls the column
+        # of labels, else the name of the kind of file
+        named = preview.names[label] if label is not None and preview.names else ""
+        return AnnotationTableState(
+            file_name=Path(file).name,
+            tier=role.tier or named or role.name,
+            delimiter=preview.format.delimiter,
+            skip=preview.format.skip,
+            unit=preview.format.unit.value,
+            unit_used=preview.unit.value,
+            columns=[column.value for column in preview.format.columns],
+            names=list(preview.names),
+            rows=preview.rows,
+            n_rows=preview.n_rows,
+            problem=preview.problem,
+        )
+
+    def set_role_table(
+        self,
+        index: int,
+        delimiter: str,
+        skip: int,
+        columns: list[str],
+        unit: str,
+        tier: str | None = None,
+    ):
+        """How files of a kind of extra file are read as tables of labelled intervals,
+        and the name of the tier they hold if it is given"""
+        role = self.candidates[index].role
+        table = TableFormat(
+            delimiter,
+            skip,
+            tuple(ColumnRole(column) for column in columns),
+            TimeUnit(unit),
+        )
+        self.candidates[index] = replace(
+            self.candidates[index],
+            role=replace(
+                role, table=table, tier=role.tier if tier is None else tier.strip()
+            ),
+        )
+        self._set_layout(replace(self.layout, data_files=self._selected_roles()))
+
     def _selected_roles(self) -> tuple[DataFileRole, ...]:
         roles: list[DataFileRole] = []
         used: set[str] = set()
@@ -351,6 +469,8 @@ class ProjectLayoutViewModel(ViewModel):
                 candidate.n_files,
                 round(candidate.coverage * 100),
                 selected,
+                candidate.role.kind.value,
+                candidate.role.tier,
             )
             for candidate, selected in zip(self.candidates, self.selected_roles)
         ]
@@ -440,7 +560,12 @@ class ProjectLayoutViewModel(ViewModel):
                 if recording.channel_files
                 else recording.audio_file or "—",
                 recording.annotation_file or "—",
-                *[recording.data_files.get(name, "—") for name in role_names],
+                *[
+                    recording.data_files.get(role.name)
+                    or recording.tier_files.get(role.tier_name)
+                    or "—"
+                    for role in self.layout.data_files
+                ],
             ]
             for recording in recordings
         ]

@@ -16,6 +16,9 @@ from core.import_metadata.information_sources_file import (
 )
 from core.import_metadata.match_metadata import MatchMetadata
 from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.import_words.entity.word_table import WordSource
+from core.import_words.import_words import ImportWords
+from core.import_words.word_source_file import LoadWordSource, SaveWordSource
 from core.project_layout.entity.project_layout import FolderLevel, ProjectLayout
 from core.project_layout.project_layout_file import (
     LoadProjectLayout,
@@ -208,3 +211,47 @@ def test_columns_the_file_no_longer_has_are_skipped(tmp_path: Path):
 
     assert "talkers.csv" in result.applied
     assert repository.read_metadata(MetadataTarget.TALKER)["Ann"] == {"age": 31}
+
+
+# --------------------------- the table of words ---------------------------
+
+
+def make_use_case_with_words() -> tuple[
+    ApplyInformationSources, InMemAnnotationRepository
+]:
+    repository = InMemAnnotationRepository()
+    return (
+        ApplyInformationSources(
+            LoadInformationSources(),
+            ReadMetadataCsv(),
+            MatchMetadata(repository),
+            ImportMetadata(repository),
+            LoadWordSource(),
+            ImportWords(repository),
+        ),
+        repository,
+    )
+
+
+def test_the_table_of_words_is_made_again_with_the_columns_chosen_before(
+    tmp_path: Path,
+):
+    use_case, repository = make_use_case_with_words()
+    (tmp_path / "words.csv").write_text("word,freq,pos\nthe,5,det\ncat,2,noun\n")
+    SaveWordSource()(str(tmp_path), WordSource("words.csv", "word", {"freq": "count"}))
+
+    result = use_case(str(tmp_path))
+
+    assert result.applied == ["words.csv"] and result.failed == []
+    assert repository.words == {"the": {"count": 5}, "cat": {"count": 2}}
+
+
+def test_a_table_of_words_that_is_gone_is_reported_and_the_rest_still_added(
+    tmp_path: Path,
+):
+    use_case, repository = make_use_case_with_words()
+    SaveWordSource()(str(tmp_path), WordSource("missing.csv", "word", {}))
+
+    result = use_case(str(tmp_path))
+
+    assert result.failed == ["missing.csv"] and repository.words == {}

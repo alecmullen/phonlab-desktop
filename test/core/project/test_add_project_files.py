@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from support.audio_files import write_wavs
 from support.textgrid import write_simple_textgrid
 
 from core.annotation.entity.annotation import AnnotationType
@@ -14,6 +15,7 @@ from core.project.entity.project_import_result import (
     ImportStage,
     ProjectImportResult,
 )
+from core.read_tiers.entity.table_format import TierFile
 
 
 def make_use_case(
@@ -177,3 +179,84 @@ def test_files_without_layout_information_only_register_their_stems():
 
     assert sorted(repository.filenames.values()) == ["a", "old"]
     assert repository.list_recordings() == []
+
+
+# --------------------------- tiers kept in files of their own ---------------------------
+
+
+def tier_file_project(tmp_path: Path) -> ProjectFile:
+    write_wavs(tmp_path, ["s1.wav"], frames=22050, fs=8000)
+    (tmp_path / "s1_phn.txt").write_text(HEADER + "0.0 400.0 h\n400.0 1000.0 ay\n")
+    (tmp_path / "s1_wrd.txt").write_text(HEADER + "0.0 1000.0 hi\n")
+    return ProjectFile(
+        "s1",
+        str(tmp_path / "s1.wav"),
+        None,
+        tier_files={
+            "Phone": TierFile(str(tmp_path / "s1_phn.txt")),
+            "Word": TierFile(str(tmp_path / "s1_wrd.txt")),
+        },
+    )
+
+
+HEADER = "MillisecondsPerFrame: 1.0\nEND OF HEADER\n"
+
+
+def test_a_recording_with_tier_files_and_no_textgrid_is_read(tmp_path: Path):
+    use_case, repository = make_use_case()
+
+    results = run(use_case, [tier_file_project(tmp_path)])
+
+    annotation = repository.find_annotation_by_file_stem("s1")
+    assert annotation is not None
+    assert [type.type for type in annotation.types] == ["Phone", "Word"]
+    assert results[-1].imported == ["s1"] and results[-1].finished
+
+
+def test_the_progress_names_the_first_tier_file_being_read(tmp_path: Path):
+    use_case, _ = make_use_case()
+
+    results = run(use_case, [tier_file_project(tmp_path)])
+
+    assert [r.current for r in results if r.current] == ["s1_phn.txt"]
+
+
+def test_the_times_of_tier_files_in_milliseconds_are_in_seconds_in_the_database(
+    tmp_path: Path,
+):
+    use_case, repository = make_use_case()
+
+    run(use_case, [tier_file_project(tmp_path)])
+
+    annotation = repository.find_annotation_by_file_stem("s1")
+    assert annotation is not None
+    assert sorted(annotation.nodes.values()) == [0.0, 0.4, 1.0]
+
+
+# --------------------------- reading annotations again ---------------------------
+
+
+def test_replace_reads_the_textgrids_again_over_what_the_database_has(tmp_path: Path):
+    use_case, repository = make_use_case()
+    id = repository.create_annotation("a")
+    repository.create_types(id, [AnnotationType("mine", [])])
+
+    results = list(use_case([textgrid_file(tmp_path, "a")], replace=True))
+
+    annotation = repository.find_annotation_by_file_stem("a")
+    assert annotation is not None
+    assert [type.type for type in annotation.types] == ["word"]
+    assert results[-1].imported == ["a"] and results[-1].finished
+
+
+def test_replace_leaves_the_rest_of_the_database_alone(tmp_path: Path):
+    use_case, repository = make_use_case()
+    other = repository.create_annotation("other")
+    repository.create_types(other, [AnnotationType("mine", [])])
+    repository.upsert_recordings([Recording("other"), Recording("gone")])
+
+    list(use_case([textgrid_file(tmp_path, "a")], replace=True))
+
+    assert repository.find_annotation_by_file_stem("gone") is not None
+    kept = repository.find_annotation_by_file_stem("other")
+    assert kept is not None and [t.type for t in kept.types] == ["mine"]

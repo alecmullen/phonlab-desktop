@@ -27,6 +27,7 @@ from ui.annotation.state.annotation_state import (
     AnnotationState,
     AnnotationTypeState,
 )
+from ui.annotation.state.arrange_tiers_state import ArrangeTiersAction
 from ui.base.state import State
 from ui.common.context_menu_hint import ContextMenuHintAction
 
@@ -866,6 +867,18 @@ def test_search_action_is_in_context_menu(qtbot: QtBot):
     plot = AnnotationPlot(make_annotation_view_model())
 
     assert plot.search_tier_action in plot.getViewBox().menu.actions()
+
+
+def test_arrange_tiers_action_is_in_context_menu_and_asks_for_it(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    plot = AnnotationPlot(view_model)
+    received: list = []
+    view_model.state_changed.connect(received.append)
+
+    assert plot.arrange_tiers_action in plot.getViewBox().menu.actions()
+    plot.arrange_tiers_action.trigger()
+
+    assert received == [ArrangeTiersAction()]
 
 
 def test_search_action_searches_tier_under_context_pos(qtbot: QtBot):

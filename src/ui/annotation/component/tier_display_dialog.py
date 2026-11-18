@@ -35,8 +35,10 @@ class TierDisplayDialog(QDialog):
         self.listed_names = [tier.name for tier in tiers]
         rows = listed_as_plotted(tiers)
 
-        self.table = QTableWidget(len(rows), 2)
-        self.table.setHorizontalHeaderLabels([self.tr("Tier"), self.tr("Position")])
+        self.table = QTableWidget(len(rows), 3)
+        self.table.setHorizontalHeaderLabels(
+            [self.tr("Tier"), self.tr("Labels"), self.tr("Position")]
+        )
         row_header = self.table.verticalHeader()
         if row_header is not None:
             row_header.setVisible(False)
@@ -56,11 +58,16 @@ class TierDisplayDialog(QDialog):
             name_item.setTextAlignment(_RIGHT)
             self.table.setItem(row, 0, name_item)
 
+            count_item = QTableWidgetItem(str(tier.n_labels))
+            count_item.setFlags(count_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            count_item.setTextAlignment(_RIGHT)
+            self.table.setItem(row, 1, count_item)
+
             spin_box = QSpinBox()
             spin_box.setRange(HIDDEN_POSITION, len(rows))
             spin_box.setSpecialValueText(self.tr("Hidden"))
             spin_box.setValue(tier.position)
-            self.table.setCellWidget(row, 1, spin_box)
+            self.table.setCellWidget(row, 2, spin_box)
             self.spin_boxes.append(spin_box)
 
         buttons = QDialogButtonBox(
@@ -71,8 +78,9 @@ class TierDisplayDialog(QDialog):
 
         intro = QLabel(
             self.tr(
-                "Tiers are listed as they appear in the plot, top to bottom. "
-                "Number them from the bottom up; tiers shown as Hidden are left out."
+                "Tiers are listed as they appear in the plot, top to bottom, with "
+                "the number of labels each has in this file. Number them from the "
+                "bottom up; tiers shown as Hidden are left out."
             )
         )
         intro.setWordWrap(True)

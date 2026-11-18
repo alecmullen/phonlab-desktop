@@ -18,6 +18,7 @@ class MetadataImportState(State):
 
     file_name: str = ""
     target: str = "talker"  # "talker" or "recording"
+    target_locked: bool = False  # the user is not asked what the rows are about
     key_column: str = ""
     key_columns: list[str] = field(default_factory=list)
 

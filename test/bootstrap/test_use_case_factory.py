@@ -18,6 +18,10 @@ from core.edit_audio.edit_audio import EditAudio
 from core.import_metadata.import_metadata import ImportMetadata
 from core.import_metadata.match_metadata import MatchMetadata
 from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.import_words.import_words import ImportWords
+from core.import_words.match_words import MatchWords
+from core.import_words.save_unmatched_words import SaveUnmatchedWords
+from core.import_words.word_source_file import LoadWordSource, SaveWordSource
 from core.inspect_database.inspect_database import ListTables, ReadTable
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
@@ -73,6 +77,11 @@ USE_CASE_TYPES = [
     ReadMetadataCsv,
     MatchMetadata,
     ImportMetadata,
+    MatchWords,
+    ImportWords,
+    SaveUnmatchedWords,
+    LoadWordSource,
+    SaveWordSource,
     ListTables,
     ReadTable,
 ]

@@ -3,7 +3,7 @@ import time
 from collections import Counter
 from typing import Any
 
-from sqlalchemy import Row, delete, exists, inspect, or_, select, text
+from sqlalchemy import Row, delete, exists, func, inspect, or_, select, text
 from sqlalchemy.orm import Session, aliased, selectinload
 
 from core.annotation.entity.metadata import MetadataColumn, MetadataTarget
@@ -16,6 +16,7 @@ from data.annotation.entity.annotation_type import AnnotationTypeEntity
 from data.annotation.entity.recording_channel import RecordingChannelEntity
 from data.annotation.entity.recording_talker import RecordingTalkerEntity
 from data.annotation.entity.talker import TalkerEntity
+from data.annotation.entity.word import WordEntity
 from data.annotation.mapping.annotation_mapping import set_recording_columns
 from data.base.base_entity import BaseEntity
 from data.base.datasource import DataSource
@@ -513,6 +514,54 @@ class AnnotationDataSource(DataSource):
                 f'SELECT "{key_column}", {selected} FROM "{table}"'
             )
             return {row[0]: dict(zip(extra, row[1:])) for row in rows}
+
+    def tier_label_counts(self, tier_name: str) -> dict[str, int]:
+        with self.database.open_session() as session:
+            stmt = (
+                select(AnnotationLabelEntity.label_text, func.count())
+                .join(
+                    AnnotationTypeEntity,
+                    AnnotationLabelEntity.annotation_type_id == AnnotationTypeEntity.id,
+                )
+                .where(AnnotationTypeEntity.name == tier_name)
+                .group_by(AnnotationLabelEntity.label_text)
+            )
+            return {text: count for text, count in session.execute(stmt)}
+
+    def replace_words(
+        self, columns: list[MetadataColumn], rows: list[tuple[str, dict[str, Any]]]
+    ) -> int:
+        """Makes the word table again, with `columns` added to the word column, and a
+        row for each of `rows` (word -> column -> value)"""
+        for column in columns:
+            if not SAFE_NAME.fullmatch(column.name):
+                raise ValueError(f"Not a usable column name: {column.name!r}")
+
+        table = BaseEntity.metadata.tables[WordEntity.__tablename__]
+        with self.database.engine.begin() as connection:
+            table.drop(connection, checkfirst=True)
+            table.create(connection)
+            for column in columns:
+                connection.exec_driver_sql(
+                    f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" '
+                    f"{column.sql_type.value}"
+                )
+            names = ["word", *(column.name for column in columns)]
+            statement = text(
+                f'INSERT INTO "{table.name}" ({", ".join(f'"{n}"' for n in names)}) '
+                f"VALUES ({', '.join(f':v{i}' for i in range(len(names)))})"
+            )
+            connection.execute(
+                statement,
+                [
+                    {
+                        "v0": word,
+                        **{f"v{i}": row.get(c.name) for i, c in enumerate(columns, 1)},
+                    }
+                    for word, row in rows
+                ],
+            )
+        return len(rows)
 
     def list_tables(self) -> list[str]:
         with self.database.engine.connect() as connection:

@@ -4,6 +4,7 @@ from bootstrap.use_case_factory_impl import UseCaseFactory
 from core.annotation.add_tiers import AddTiers
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.entity.metadata import MetadataTarget
 from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.replace_in_tier import ReplaceInTier
@@ -18,6 +19,10 @@ from core.import_metadata.import_metadata import ImportMetadata
 from core.import_metadata.information_sources_file import SaveInformationSource
 from core.import_metadata.match_metadata import MatchMetadata
 from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.import_words.import_words import ImportWords
+from core.import_words.match_words import MatchWords
+from core.import_words.save_unmatched_words import SaveUnmatchedWords
+from core.import_words.word_source_file import SaveWordSource
 from core.inspect_database.inspect_database import ListTables, ReadTable
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
@@ -33,6 +38,7 @@ from core.project_layout.project_layout_file import (
 from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
 from core.project_layout.suggest_talker_names import SuggestTalkerNames
+from core.read_tiers.preview_annotation_table import PreviewAnnotationTable
 from core.save_audio.save_audio import SaveAudio
 from core.settings.load_display_plan import LoadDisplayPlan
 from core.settings.load_tier_layout import LoadTierLayout
@@ -58,6 +64,7 @@ from ui.metadata_import.metadata_import_view_model import MetadataImportViewMode
 from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
+from ui.word_import.word_import_view_model import WordImportViewModel
 
 
 class ViewModelFactoryImpl(ViewModelFactory):
@@ -94,6 +101,8 @@ class ViewModelFactoryImpl(ViewModelFactory):
             view_model = self.create_project_layout_view_model(*args, **kwargs)
         elif view_model_type is MetadataImportViewModel:
             view_model = self.create_metadata_import_view_model(*args, **kwargs)
+        elif view_model_type is WordImportViewModel:
+            view_model = self.create_word_import_view_model(*args, **kwargs)
         elif view_model_type is DatabaseViewModel:
             view_model = self.create_database_view_model(*args, **kwargs)
 
@@ -215,10 +224,11 @@ class ViewModelFactoryImpl(ViewModelFactory):
             use_case_factory.provide(LoadProjectLayout),
             use_case_factory.provide(SaveProjectLayout),
             use_case_factory.provide(SuggestTalkerNames),
+            use_case_factory.provide(PreviewAnnotationTable),
         )
 
     def create_metadata_import_view_model(
-        self, dir_path: str, csv_path: str
+        self, dir_path: str, csv_path: str, target: MetadataTarget | None = None
     ) -> MetadataImportViewModel:
         use_case_factory = self.get_use_case_factory(dir_path)
 
@@ -229,6 +239,23 @@ class ViewModelFactoryImpl(ViewModelFactory):
             use_case_factory.provide(MatchMetadata),
             use_case_factory.provide(ImportMetadata),
             use_case_factory.provide(SaveInformationSource),
+            target,
+        )
+
+    def create_word_import_view_model(
+        self, dir_path: str, csv_path: str
+    ) -> WordImportViewModel:
+        use_case_factory = self.get_use_case_factory(dir_path)
+
+        return WordImportViewModel(
+            dir_path,
+            csv_path,
+            use_case_factory.provide(ReadMetadataCsv),
+            use_case_factory.provide(MatchWords),
+            use_case_factory.provide(ImportWords),
+            use_case_factory.provide(ListTierNames),
+            use_case_factory.provide(SaveUnmatchedWords),
+            use_case_factory.provide(SaveWordSource),
         )
 
     def create_database_view_model(self, dir_path: str) -> DatabaseViewModel:

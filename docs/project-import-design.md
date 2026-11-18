@@ -400,8 +400,8 @@ What was built, and where it differs from the sketch above:
   (channel label, audio file, and the talker on it), so recordings stored as one file
   have no channel columns. The table itself is only created when a recording with
   channel files is first added; a project without any does not have it.
-- **File > Add Information from CSV…** adds columns to the talker table (one row per
-  talker) or to the recording table (one row per recording). SQLite adds a column to a
+- **Project > Add New Files… > talkers** adds columns to the talker table (one row per
+  talker). SQLite adds a column to a
   table that already has rows, so nothing has to be known at import time. The key
   column is found by trying every column; rows that link to nothing are listed, and the
   user is asked before the rest are added. Adding the same column names again updates
@@ -461,3 +461,50 @@ importing on its own:
   shape, shows the most common shapes, or offers a "Use suggestion" template; the
   template is typed by the user. The sections above that describe shape clustering
   are the original design, not what is built.
+- **Extra files that hold tiers.** Each kind of extra file in the wizard has a Kind
+  (Annotation, Time series data, Other; the default is Other) and, for an annotation, a
+  tier name (the kind's name if left empty). The choice is saved with the data file
+  kinds in `[import]`. Files of annotation kind are put in `Recording.tier_files`, not in
+  `data_files`, and a recording that has one counts as annotated. Reading those files
+  into tiers is a later step: until then they are only found and counted.
+- **Reading tier files.** Files of annotation kind are read when the project database is
+  built or rebuilt: each becomes a tier named by the wizard, next to the tiers of the
+  TextGrid if the recording has one. How a file is read as a table is worked out from it,
+  not from any one corpus's format, and the user can correct it in a popup that opens when
+  Annotation is chosen (and from the Columns button): the delimiter (tab, comma or spaces),
+  the lines before the data (a header, a row of column names), what each column is (start
+  time, end time, label, unknown) and the unit of the times. The choice is saved with the
+  kind of file in `[import]`.
+  - A column is a time if it is all non-negative numbers within the length of the audio
+    file, in seconds or in milliseconds (the unit is whichever fits; seconds if both do).
+    The time column with the smallest values is the start, and the one with the largest is
+    the end if it is never below the start; others are unknown.
+  - With only a start column, each label ends where the next begins and the last at the
+    end of the audio. The label is the first column that is not a time (a text one if
+    there is one); with spaces as the delimiter the label may have spaces, being the rest
+    of the line. Sample numbers (TIMIT) and labels made of sub-columns (Buckeye) are not
+    supported in tables.
+  - The heading of the label column in the popup is the name of the tier: what the user
+    typed in the wizard's Tier name box, else what the file calls the column (when its
+    first line names the columns), else the name of the kind of file. Double-clicking the
+    heading changes it. Times are always stored in seconds, whatever the file's unit.
+  - A label is attached to the node nearest its time, so a tier whose times differ by a
+    hair from another's (a sentence beginning where a word does) shares its node.
+- **Project > Add New Files…** opens a dialog with four choices.
+  - *New annotations*: reads the TextGrids that are not in the database yet, and adds the
+    audio files they belong to (as laid out in the project's import description).
+  - *Replacement annotations*: the user chooses TextGrids in a file dialog (all of them is
+    like a rebuild that keeps the rest of the database), and the database's annotations
+    for them are replaced. A chosen file that is no recording's TextGrid is reported and
+    left out.
+  - *Talkers*: the table import for talkers, without asking what the rows are about; its
+    columns become columns of the talker table, and the match with the project's talkers
+    is reported.
+  - *Words*: a table with the words in its first column and a row of column names. The
+    user says which tier has the words (`word` is chosen if there is one); the table is
+    compared with the label text of that tier, letter for letter. The dialog says how many
+    of the tier's words the table has and offers to save the others (word, count). The
+    table becomes the `word` table of the database (replacing one it has, and made only
+    when words are first added), with a column for each other column of the file, as
+    numbers when all its values are. The file is remembered in `[words]` of the project
+    file and the table is made again when the database is rebuilt.

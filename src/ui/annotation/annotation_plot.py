@@ -91,6 +91,17 @@ class AnnotationPlot(DocumentPlot):
         self.addAction(self.search_tier_action)
         self.getViewBox().menu.addAction(self.search_tier_action)
 
+        self.arrange_tiers_action = ContextMenuHintAction(
+            self.tr("Show and Order Tiers..."),
+            parent=self,
+        )
+        self.arrange_tiers_action.triggered.connect(
+            self.view_model.trigger_arrange_tiers
+        )
+
+        self.addAction(self.arrange_tiers_action)
+        self.getViewBox().menu.addAction(self.arrange_tiers_action)
+
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
 
     def set_shortcuts_active(self, active: bool):

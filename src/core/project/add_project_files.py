@@ -32,8 +32,11 @@ class AddProjectFiles(UseCase[ProjectImportResult]):
         self.parse_textgrid = parse_textgrid
 
     def __call__(
-        self, files: list[ProjectFile]
+        self, files: list[ProjectFile], replace: bool = False
     ) -> Generator[ProjectImportResult, None, None]:
+        """With `replace`, the annotations of `files` are read again even if the
+        database has them, and replace what it has; nothing else in the database is
+        touched, so `files` may be some of the project's files."""
         yield ProjectImportResult(stage=ImportStage.REGISTERING)
 
         stems = [file.file_stem for file in files]
@@ -51,13 +54,15 @@ class AddProjectFiles(UseCase[ProjectImportResult]):
         recordings = [file.recording for file in files if file.recording is not None]
         if recordings:
             self.annotation_repository.upsert_recordings(
-                recordings, remove_others=len(recordings) == len(files)
+                recordings,
+                remove_others=not replace and len(recordings) == len(files),
             )
 
         to_read = [
             file
             for file in files
-            if file.textgrid_path is not None and self._is_empty(file.file_stem)
+            if (file.textgrid_path is not None or file.tier_files)
+            and (replace or self._is_empty(file.file_stem))
         ]
         result = ProjectImportResult(
             total=len(to_read), registered=len(set(stems) - known)
@@ -65,12 +70,18 @@ class AddProjectFiles(UseCase[ProjectImportResult]):
         yield result
 
         for file in to_read:
-            assert file.textgrid_path is not None
-            yield dataclasses.replace(result, current=Path(file.textgrid_path).name)
+            current = file.textgrid_path or next(iter(file.tier_files.values())).path
+            yield dataclasses.replace(result, current=Path(current).name)
 
             imported, failed = list(result.imported), list(result.failed)
             try:
-                self.parse_textgrid.run_sync(file.textgrid_path, file.file_stem)
+                self.parse_textgrid.run_sync(
+                    file.textgrid_path,
+                    file.file_stem,
+                    overwrite=replace,
+                    tier_files=file.tier_files,
+                    audio_path=file.audio_path,
+                )
                 imported.append(file.file_stem)
             except ValueError:
                 # One unreadable TextGrid should not stop the others
