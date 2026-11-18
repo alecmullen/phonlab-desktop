@@ -708,8 +708,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def arrange_tiers(self):
-        """Ask which tiers to show and in what order, for every document: the tiers
-        belong to the project, not to a file"""
+        """Ask which tiers to show and in what order, for every document"""
         doc = self.get_current_document()
         if doc is None:
             return
