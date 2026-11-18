@@ -845,16 +845,106 @@ def test_track_formants_emits_dots_in_the_window_as_chunks_arrive(
 
     job.on_success(piece(0.5, 1.5, 2.5))
 
-    assert received[0] == LoadProgressState(False)
-    dots = received[1]
+    dots = received[0]
     assert isinstance(dots, FormantTrackState)
     np.testing.assert_allclose(dots.sec, [1.5, 2.5])  # 0.5 s is out of view
 
     received.clear()
     job.on_success(piece(3.5, 2.0))
 
-    assert LoadProgressState(False) not in received  # only the first chunk
     np.testing.assert_allclose(received[-1].sec, [1.5, 2.0, 2.5])
+
+
+def formant_progress(received: list) -> list[LoadProgressState]:
+    return [s for s in received if isinstance(s, LoadProgressState)]
+
+
+def test_the_busy_bar_stays_on_until_all_the_formants_are_tracked(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    received = []
+    view_model.subscribe(received.append)
+
+    view_model.track_formants(FormantSettingsState())
+
+    assert formant_progress(received)[-1] == LoadProgressState(
+        True, "Tracking formants…"
+    )
+    job = view_model.job_managers["formants"].jobs[0]
+    received.clear()
+
+    job.on_success(piece(0.5, 1.5))
+    job.on_success(piece(2.5, 3.5))
+
+    assert formant_progress(received) == []  # still busy
+
+
+def test_the_busy_bar_goes_off_when_the_formant_job_finishes(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    received = []
+    view_model.subscribe(received.append)
+    view_model.track_formants(FormantSettingsState())
+    job = view_model.job_managers["formants"].jobs[0]
+    received.clear()
+
+    job.on_success(piece(1.5))
+    view_model.job_managers["formants"].signals.finished.emit()
+
+    assert formant_progress(received) == [LoadProgressState(False)]
+
+
+def test_a_stopped_formant_job_does_not_turn_off_a_newer_ones_busy_bar(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    view_model.track_formants(FormantSettingsState())
+    old_manager = view_model.job_managers["formants"]
+    view_model.track_formants(FormantSettingsState())  # replaces it
+    received = []
+    view_model.subscribe(received.append)
+
+    old_manager.signals.finished.emit()
+
+    assert formant_progress(received) == []
+
+
+def test_the_busy_bar_goes_off_when_formant_tracking_fails(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    received = []
+    view_model.subscribe(received.append)
+    view_model.track_formants(FormantSettingsState())
+    job = view_model.job_managers["formants"].jobs[0]
+    received.clear()
+
+    job.on_error(ValueError("boom"))
+
+    assert LoadProgressState(False) in received
+
+
+def test_resampling_leaves_the_busy_bar_on_while_formants_are_tracking(
+    qtbot: QtBot,
+    fake_job_manager: type[FakeJobManager],
+):
+    view_model = make_formant_view_model()
+    view_model.track_formants(FormantSettingsState())
+    received = []
+    view_model.subscribe(received.append)
+    view_model.prep_audio(np.zeros(4000), 1000, keep_formants=True)
+
+    view_model.job_managers["prep_audio"].jobs[0].on_success(
+        {0: AudioSignal(np.zeros(8000), 2000)}
+    )
+
+    assert formant_progress(received)[-1].is_loading
 
 
 def test_automatic_lpc_order_is_reported_when_the_first_chunk_arrives(
