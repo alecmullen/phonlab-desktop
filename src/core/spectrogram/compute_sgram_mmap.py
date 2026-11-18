@@ -34,10 +34,6 @@ class ComputeSpectrogramMmap(UseCase[SpectrogramMmap]):
             # Estimate total frames needed (with buffer)
             estimated_frames = int(frames_per_sec * (len(x) / fs) * 1.2)
 
-            # Every computation needs files of its own: this use case is shared by
-            # all documents, and a file recreated or deleted by one computation
-            # would pull the pages out from under another one still mapped to it
-            # (a bus error, SIGBUS, when it next touches them)
             temp_dir = tempfile.gettempdir()
             mmap_file = self.new_temp_file(temp_dir, "spectrogram_")
             ts_file = self.new_temp_file(temp_dir, "spectrogram_ts_")
