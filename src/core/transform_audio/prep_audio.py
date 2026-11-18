@@ -22,7 +22,7 @@ class PrepAudio(UseCase[dict[int, AudioSignal]]):
                 raw.fs,
                 target_fs=target_fs,
                 scale=scale,
-                pre=pre,
+                preemph=pre,
                 add_tiny_noise=add_tiny_noise,
             )
             channels[idx] = AudioSignal(x, prepped_fs)

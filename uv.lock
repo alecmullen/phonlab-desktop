@@ -380,25 +380,6 @@ wheels = [
 ]
 
 [[package]]
-name = "nitime"
-version = "0.12.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "scipy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/94/50/66149902758d3175e6243baa04cb864333a4a1cf91685b3016e0a16d4797/nitime-0.12.1.tar.gz", hash = "sha256:12cbf488b0655dc05aa18a0ca5982de970302604e461fc92e87ebd9b7539b6ff", size = 6240292, upload-time = "2025-11-06T19:38:51.1Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ec/0b/cfdfe0377f1f3358ce1a856d077ec01321469181d9e4b9d75a2c26fb8bbc/nitime-0.12.1-cp311-abi3-macosx_10_9_x86_64.whl", hash = "sha256:5eca85c522c270b52ec664b6a82c10b1a2799379c86f9095987cd9f3974f2365", size = 4062457, upload-time = "2025-11-06T19:38:41.456Z" },
-    { url = "https://files.pythonhosted.org/packages/70/1c/c7d22397e927c52b2a92c16f0f21abe19f7c9d5f5fba7dcc3c80918c4fdf/nitime-0.12.1-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:ed4f45daa97a9476fc3fb2db55ba86a758f9d896f0f8386d0026a38d49181987", size = 4063991, upload-time = "2025-11-06T19:38:42.648Z" },
-    { url = "https://files.pythonhosted.org/packages/88/5d/ae275feedaa6590cf6e185cfeb7c4d28b5e1a10fcb492fd5340b07921675/nitime-0.12.1-cp311-abi3-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:19442111829b94fa9aa9849bdfb6aa92bc5467ba74194b18450728e432086882", size = 4136941, upload-time = "2025-11-06T19:38:45.739Z" },
-    { url = "https://files.pythonhosted.org/packages/04/ef/9db6224bea5d984e6a454bba599c05f7e2b8582bda1b127a1a9e65c9c934/nitime-0.12.1-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e056996455faf667ff251fc654b1d2e4963442273edb06b3d72b2b9beaf3d64a", size = 4136895, upload-time = "2025-11-06T19:38:47.277Z" },
-    { url = "https://files.pythonhosted.org/packages/d1/c0/3ca98f86ebd98b023a25d92dea076e8b055c19d5b5f9affb7136b607f723/nitime-0.12.1-cp311-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:43bf5b400939b0b940240b1d48a863d25541c28860bf1f07ce655c95577d1f67", size = 4136159, upload-time = "2025-11-06T19:38:48.468Z" },
-    { url = "https://files.pythonhosted.org/packages/21/72/526b8a1a64f26ae9171b51587d3691f13afeb344942c28e371b0878d173a/nitime-0.12.1-cp311-abi3-win_amd64.whl", hash = "sha256:3b54531c0de10860dedcfba0dee2dd4e99d4cf70021ad0a38110e60a5be60552", size = 4062999, upload-time = "2025-11-06T19:38:49.904Z" },
-]
-
-[[package]]
 name = "numba"
 version = "0.67.0"
 source = { registry = "https://pypi.org/simple" }
@@ -475,13 +456,13 @@ wheels = [
 
 [[package]]
 name = "phonlab"
-version = "0.0.65"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorednoise" },
+    { name = "lazy-loader" },
     { name = "librosa" },
     { name = "matplotlib" },
-    { name = "nitime" },
     { name = "numba" },
     { name = "numpy" },
     { name = "pandas" },
@@ -489,9 +470,9 @@ dependencies = [
     { name = "scipy" },
     { name = "srt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b4/5a/0ff9187a641d22ec8eda1259848c0667850fe6d8d1af334f3aa32456ab50/phonlab-0.0.65.tar.gz", hash = "sha256:a6b4fb53d84cb1b3367c2e92970a7a43a963d8adee696368d7d9ab6b0d8260a7", size = 9579207, upload-time = "2026-10-07T23:12:40.008Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/1d/1bcdd1f06f02f46d50dd5bb75fb4fde28874ff0ca3137c94901e6458e452/phonlab-0.2.0.tar.gz", hash = "sha256:42753393d9acf9ad9ecf263fdbc55b4e4400c251c91e5fbf74b18e3456983e1a", size = 6328661, upload-time = "2026-11-10T21:24:23.983Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/7f/dea217c08148df2838c4e61e4a976ddefa3caca30f6f48333cb3f4e764e4/phonlab-0.0.65-py3-none-any.whl", hash = "sha256:7f24df1767b9a99803140e728ac7004eded7e32411a55323f6daf2fc78943405", size = 9569228, upload-time = "2026-10-07T23:12:37.381Z" },
+    { url = "https://files.pythonhosted.org/packages/31/98/056aba04254a93b841b26c12d7b03c054a43497acaff85021a7ade8abb5a/phonlab-0.2.0-py3-none-any.whl", hash = "sha256:211b48bfaab9a9150e10993661b222de5b473d3cffe6685f9cd1a87e75143868", size = 6294934, upload-time = "2026-11-10T21:24:22.22Z" },
 ]
 
 [[package]]
@@ -531,7 +512,7 @@ requires-dist = [
     { name = "librosa", specifier = "==0.11" },
     { name = "numba", specifier = ">=0.67.0" },
     { name = "numpy", specifier = "==2.4" },
-    { name = "phonlab", specifier = "==0.0.65" },
+    { name = "phonlab", specifier = "==0.2.0" },
     { name = "platformdirs", specifier = ">=4.11.11" },
     { name = "pyqt6", specifier = "==6.11" },
     { name = "pyqt6-sip", specifier = "==13.12" },

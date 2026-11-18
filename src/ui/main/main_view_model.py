@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Callable, Generator, Iterable
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from core.project.scan_project_files import scan_project_files
 from core.settings.app_settings import settings
 from core.settings.load_display_plan import LoadDisplayPlan
 from core.settings.save_display_plan import SaveDisplayPlan
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from res.constants import PROJECT_DATABASE_FILENAME
 from ui.base.view_model import ViewModel
 from ui.document.state.plot_layout_state import (
@@ -23,18 +25,22 @@ from ui.main.state.project_import_state import (
     to_project_import_state,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class MainViewModel(ViewModel):
     def __init__(
         self,
         load_display_plan: LoadDisplayPlan,
         save_display_plan: SaveDisplayPlan,
+        warm_up_formants: WarmUpFormantTracking,
         provide_add_project_files: Callable[[str], AddProjectFiles],
         provide_rebuild_project: Callable[[str], RebuildProject],
     ):
         super().__init__()
         self.load_display_plan_use_case = load_display_plan
         self.save_display_plan_use_case = save_display_plan
+        self.warm_up_formants_use_case = warm_up_formants
 
         self.dir_path: str | None = None
         self.provide_add_project_files = provide_add_project_files
@@ -58,7 +64,7 @@ class MainViewModel(ViewModel):
 
     def set_display_plan(self, plots: Iterable[PlotType]):
         """Make `plots` the display plan for the rest of the session"""
-        settings.display_plan = plot_names(plots_from_names(plot_names(plots)))
+        settings.display_plan = plot_names(plots)
 
     def save_window_layout(self):
         """Save the display plan in the project file, so the project opens
@@ -106,6 +112,27 @@ class MainViewModel(ViewModel):
         if self.dir_path is None:
             raise ValueError("Cannot update project because directory path is not set")
         return self.dir_path
+
+    def warm_up_formant_tracking(self):
+        """Prepare formant tracking in the background, so the first time the
+        user asks for formants does not wait on it"""
+
+        @pyqtSlot(object)
+        def on_success(_result: None):
+            pass
+
+        @pyqtSlot(object)
+        def on_error(error: Exception):
+            # Harmless: formant tracking just warms up when it is first used
+            logger.warning("Formant tracking warm-up failed: %s", error)
+
+        self.launch_task(
+            "warm_up_formants",
+            self.warm_up_formants_use_case(),
+            on_success,
+            on_error,
+            only_once=True,
+        )
 
     def _launch_import(self, task: Generator[ProjectImportResult, None, None]):
         @pyqtSlot(object)
