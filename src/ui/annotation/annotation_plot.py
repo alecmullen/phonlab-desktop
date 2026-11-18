@@ -156,7 +156,7 @@ class AnnotationPlot(DocumentPlot):
         metrics = QFontMetrics(font)
         ticks = [
             (
-                i,
+                i + 0.5,
                 metrics.elidedText(
                     type.type, Qt.TextElideMode.ElideRight, LEFT_AXIS_WIDTH
                 ),
