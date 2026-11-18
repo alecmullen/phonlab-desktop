@@ -4,6 +4,7 @@ from support.project_tree import make_tree, talker_tree, write_audio_like
 
 from core.project_layout.entity.import_report import ResolvedProject
 from core.project_layout.entity.project_layout import (
+    DataFileKind,
     DataFileRole,
     FolderLevel,
     ProjectLayout,
@@ -289,3 +290,44 @@ def test_empty_files_are_not_reported_as_copies(tmp_path: Path):
     make_tree(tmp_path, ["t1/a.wav", "t2/a.wav"])
 
     assert resolve(tmp_path, ProjectLayout()).report.duplicate_audio == []
+
+
+# --------------------------- extra files that hold tiers of the annotation ---------------------------
+
+
+def tier_roles() -> tuple[DataFileRole, ...]:
+    return (
+        DataFileRole("phn", "_phn", ".txt", DataFileKind.ANNOTATION, "Phone"),
+        DataFileRole("wrd", "_wrd", ".txt", DataFileKind.ANNOTATION),
+        DataFileRole("pitch", "_f0", ".txt", DataFileKind.TIME_SERIES),
+    )
+
+
+def test_files_of_annotation_kind_are_tiers_not_data_files(tmp_path: Path):
+    make_tree(tmp_path, ["a.wav", "a_phn.txt", "a_wrd.txt", "a_f0.txt"])
+
+    [recording] = resolve(tmp_path, ProjectLayout(data_files=tier_roles())).recordings
+
+    assert recording.tier_files == {"Phone": "a_phn.txt", "wrd": "a_wrd.txt"}
+    assert recording.data_files == {"pitch": "a_f0.txt"}
+
+
+def test_audio_with_tier_files_has_an_annotation(tmp_path: Path):
+    make_tree(tmp_path, ["a.wav", "a_phn.txt", "b.wav"])
+
+    result = resolve(tmp_path, ProjectLayout(data_files=tier_roles()))
+
+    assert result.report.n_annotated == 1
+    assert result.report.unpaired_audio == ["b.wav"]
+
+
+def test_tiers_can_be_the_only_annotation_for_unpaired_audio_to_be_left_out(
+    tmp_path: Path,
+):
+    make_tree(tmp_path, ["a.wav", "a_phn.txt", "b.wav"])
+
+    result = resolve(
+        tmp_path, ProjectLayout(data_files=tier_roles(), include_unpaired_audio=False)
+    )
+
+    assert [r.file_stem for r in result.recordings] == ["a"]

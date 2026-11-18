@@ -49,8 +49,11 @@ class MetadataImportViewModel(ViewModel):
         match_metadata: MatchMetadata,
         import_metadata: ImportMetadata,
         save_source: SaveInformationSource,
+        fixed_target: MetadataTarget | None = None,
     ):
         super().__init__()
+        # when it is set the rows are about this, and the user is not asked
+        self.fixed_target = fixed_target
         self.dir_path = dir_path
         self.save_source = save_source
         self.csv_path = csv_path
@@ -70,7 +73,7 @@ class MetadataImportViewModel(ViewModel):
         self.table = self.read_csv(self.csv_path)
 
         best: tuple[tuple[int, int], MetadataTarget, str] | None = None
-        for target in MetadataTarget:
+        for target in [self.fixed_target] if self.fixed_target else MetadataTarget:
             key = self._best_key_column(target)
             score = self._score(target, key)
             if best is None or score > best[0]:
@@ -195,6 +198,7 @@ class MetadataImportViewModel(ViewModel):
         return MetadataImportState(
             file_name=Path(self.csv_path).name,
             target=self.target.value,
+            target_locked=self.fixed_target is not None,
             key_column=self.key_column,
             key_columns=list(self.table.headers),
             n_rows=match.n_rows if match else 0,

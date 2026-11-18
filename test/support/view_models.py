@@ -20,6 +20,7 @@ from core.annotation.add_tiers import AddTiers
 from core.annotation.clear_interval import ClearInterval
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
+from core.annotation.entity.metadata import MetadataTarget
 from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.replace_in_tier import ReplaceInTier
@@ -38,6 +39,10 @@ from core.import_metadata.information_sources_file import (
 )
 from core.import_metadata.match_metadata import MatchMetadata
 from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.import_words.import_words import ImportWords
+from core.import_words.match_words import MatchWords
+from core.import_words.save_unmatched_words import SaveUnmatchedWords
+from core.import_words.word_source_file import SaveWordSource
 from core.inspect_database.inspect_database import ListTables, ReadTable
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
@@ -52,6 +57,7 @@ from core.project_layout.project_layout_file import (
 from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
 from core.project_layout.suggest_talker_names import SuggestTalkerNames
+from core.read_tiers.preview_annotation_table import PreviewAnnotationTable
 from core.save_audio.save_audio import SaveAudio
 from core.settings.entity.tier_layout import TierLayout
 from core.settings.load_display_plan import LoadDisplayPlan
@@ -75,6 +81,7 @@ from ui.metadata_import.metadata_import_view_model import MetadataImportViewMode
 from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.spectrogram.spectrogram_view_model import SpectrogramViewModel
 from ui.waveform.audio_wave_view_model import AudioWaveViewModel
+from ui.word_import.word_import_view_model import WordImportViewModel
 
 
 class StubViewModelFactory(ViewModelFactory):
@@ -127,6 +134,8 @@ class StubViewModelFactory(ViewModelFactory):
             view_model = make_project_layout_view_model(*args, **kwargs)
         elif view_model_type is MetadataImportViewModel:
             view_model = make_metadata_import_view_model(*args, **kwargs)
+        elif view_model_type is WordImportViewModel:
+            view_model = make_word_import_view_model(*args, **kwargs)
         elif view_model_type is DatabaseViewModel:
             view_model = make_database_view_model(*args, **kwargs)
         else:
@@ -225,6 +234,7 @@ def make_project_layout_view_model(dir_path: str) -> ProjectLayoutViewModel:
         LoadProjectLayout(),
         SaveProjectLayout(),
         SuggestTalkerNames(),
+        PreviewAnnotationTable(),
     )
 
 
@@ -239,6 +249,7 @@ def make_metadata_import_view_model(
     dir_path: str,
     csv_path: str,
     repository: InMemAnnotationRepository | None = None,
+    target: MetadataTarget | None = None,
 ) -> MetadataImportViewModel:
     repository = repository or InMemAnnotationRepository()
     return MetadataImportViewModel(
@@ -248,6 +259,25 @@ def make_metadata_import_view_model(
         MatchMetadata(repository),
         ImportMetadata(repository),
         SaveInformationSource(),
+        target,
+    )
+
+
+def make_word_import_view_model(
+    dir_path: str,
+    csv_path: str,
+    repository: InMemAnnotationRepository | None = None,
+) -> WordImportViewModel:
+    repository = repository or InMemAnnotationRepository()
+    return WordImportViewModel(
+        dir_path,
+        csv_path,
+        ReadMetadataCsv(),
+        MatchWords(repository),
+        ImportWords(repository),
+        ListTierNames(repository),
+        SaveUnmatchedWords(),
+        SaveWordSource(),
     )
 
 

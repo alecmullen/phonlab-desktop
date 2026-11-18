@@ -85,3 +85,14 @@ def test_get_tiers_returns_none_when_cancelled(
     monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
 
     assert TierDisplayDialog.get_tiers(TIERS) is None
+
+
+def test_each_row_shows_how_many_labels_its_tier_has(qtbot: QtBot):
+    dialog = TierDisplayDialog(
+        [TierDisplayState("phone", 1, 43), TierDisplayState("word", 2, 10)]
+    )
+    qtbot.addWidget(dialog)
+
+    assert [dialog.table.item(row, 1).text() for row in range(2)] == ["10", "43"]
+    assert dialog.table.horizontalHeaderItem(1).text() == "Labels"
+    assert [box.value() for box in dialog.spin_boxes] == [2, 1]

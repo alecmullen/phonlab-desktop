@@ -25,6 +25,7 @@ class InMemAnnotationRepository(AnnotationRepository):
         self.types: dict[int, list[AnnotationType]] = {}
         self.recordings: dict[int, Recording] = {}
         self.talkers: set[str] = set()
+        self.words: dict[str, dict[str, Any]] = {}
         self.metadata: dict[MetadataTarget, dict[str, dict[str, Any]]] = {
             target: {} for target in MetadataTarget
         }
@@ -292,6 +293,21 @@ class InMemAnnotationRepository(AnnotationRepository):
 
     def read_metadata(self, target: MetadataTarget) -> dict[str, dict[str, Any]]:
         return {key: dict(row) for key, row in self.metadata[target].items()}
+
+    def tier_label_counts(self, tier_name: str) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for types in self.types.values():
+            for type in types:
+                if type.type == tier_name:
+                    for label in type.labels:
+                        counts[label.label] = counts.get(label.label, 0) + 1
+        return counts
+
+    def replace_words(
+        self, columns: list[MetadataColumn], rows: list[tuple[str, dict[str, Any]]]
+    ) -> int:
+        self.words = dict(rows)
+        return len(rows)
 
     def list_tables(self) -> list[str]:
         raise NotImplementedError("Tables are only kept in a project database")

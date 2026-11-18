@@ -16,11 +16,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.annotation.entity.metadata import MetadataTarget
 from core.project.scan_project_files import is_audio_file, is_textgrid_file
 from core.settings.app_settings import settings
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.component.tier_font_dialog import TierFontDialog
 from ui.annotation.component.tier_search_dialog import TierSearchDialog
+from ui.annotation.state.arrange_tiers_state import ArrangeTiersAction
 from ui.annotation.state.tier_display_state import (
     hidden_and_order_from,
     listed_as_plotted,
@@ -39,6 +41,13 @@ from ui.document.component.overwrite_annotation_dialog import ask_overwrite_anno
 from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
+from ui.main.component.add_to_project_dialog import (
+    NEW_ANNOTATIONS,
+    REPLACEMENT_ANNOTATIONS,
+    TALKERS,
+    WORDS,
+    AddToProjectDialog,
+)
 from ui.main.component.open_audio_dialog import DEFAULT_SAMPLE_RATE, OpenAudioDialog
 from ui.main.component.open_path_dialog import OpenPathDialog
 from ui.main.component.save_audio_dialog import SaveAudioDialog
@@ -51,6 +60,8 @@ from ui.metadata_import.metadata_import_view_model import MetadataImportViewMode
 from ui.project_layout.project_layout_dialog import ProjectLayoutDialog
 from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.spectrogram.state.audio_prepped import AudioPrepped
+from ui.word_import.word_import_dialog import WordImportDialog
+from ui.word_import.word_import_view_model import WordImportViewModel
 
 
 class MainWindow(QMainWindow):
@@ -139,17 +150,6 @@ class MainWindow(QMainWindow):
         )
         self.project_layout_action.triggered.connect(self.edit_project_layout)
 
-        self.add_information_action = QAction(
-            self.tr("Add Information from &CSV…"), self
-        )
-        self.add_information_action.setStatusTip(
-            self.tr(
-                "Add columns about the talkers or the recordings of the project "
-                "from a CSV file"
-            )
-        )
-        self.add_information_action.triggered.connect(self.add_information_from_csv)
-
         self.inspect_database_action = QAction(
             self.tr("Inspect Project &Database…"), self
         )
@@ -179,8 +179,6 @@ class MainWindow(QMainWindow):
             fileMenu.addAction(self.close_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.save_audio_action)
-            fileMenu.addSeparator()
-            fileMenu.addAction(self.save_layout_action)
             fileMenu.addSeparator()
             fileMenu.addAction(self.audio_info_action)
             fileMenu.addSeparator()
@@ -272,11 +270,11 @@ class MainWindow(QMainWindow):
         )
         self.recenter_action.triggered.connect(self.recenter_on_selection)
 
-        self.add_files_action = QAction(self.tr("&Add New Files"), self)
+        self.add_files_action = QAction(self.tr("&Add New Files…"), self)
         self.add_files_action.setStatusTip(
             self.tr(
-                "Add files that are not in the project database yet, and read TextGrids "
-                "for files that have no annotation"
+                "Read new annotations, replacement annotations, talkers or words "
+                "into the project database"
             )
         )
         self.add_files_action.triggered.connect(self.add_new_files)
@@ -306,8 +304,9 @@ class MainWindow(QMainWindow):
             projectMenu.addAction(self.rebuild_action)
             projectMenu.addSeparator()
             projectMenu.addAction(self.project_layout_action)
-            projectMenu.addAction(self.add_information_action)
             projectMenu.addAction(self.inspect_database_action)
+            projectMenu.addSeparator()
+            projectMenu.addAction(self.save_layout_action)
         self.update_project_actions()
 
         self.add_tiers_action = QAction(self.tr("&Add Tiers…"), self)
@@ -400,6 +399,8 @@ class MainWindow(QMainWindow):
             self.sgramview_action.setEnabled(True)
         elif isinstance(state, TierSearchAction):
             self.open_tier_search(state)
+        elif isinstance(state, ArrangeTiersAction):
+            self.arrange_tiers()
 
     def open_tier_search(self, action: TierSearchAction):
         """Show the search window for the tier, which stays open as the user moves
@@ -567,7 +568,6 @@ class MainWindow(QMainWindow):
         self.add_files_action.setEnabled(has_project)
         self.rebuild_action.setEnabled(has_project)
         self.project_layout_action.setEnabled(has_project)
-        self.add_information_action.setEnabled(has_project)
         self.inspect_database_action.setEnabled(has_project)
         doc = self.get_current_document()
         self.rebuild_annotation_action.setEnabled(
@@ -576,10 +576,113 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def add_new_files(self):
+        """Ask what to read into the project database, and do it"""
+        choice = AddToProjectDialog.get_choice(self)
+        if choice == NEW_ANNOTATIONS:
+            self.add_new_annotations()
+        elif choice == REPLACEMENT_ANNOTATIONS:
+            self.replace_annotations()
+        elif choice == TALKERS:
+            self.add_talkers()
+        elif choice == WORDS:
+            self.add_words()
+
+    def add_new_annotations(self):
+        """Read the TextGrids that are not in the database yet, with the audio files
+        they belong to"""
+
+        def headline(state: ProjectImportState) -> str:
+            if state.registered == 0 and len(state.imported) == 0:
+                return self.tr("There are no new annotations to add.")
+            return self.tr("Added {} new files and read {} TextGrids.").format(
+                state.registered, len(state.imported)
+            )
+
         self.run_project_import(
             self.view_model.add_project_files,
-            lambda state: self.finish_project_update(state, rebuilt=False),
+            lambda state: self.finish_project_update(state, headline(state)),
         )
+
+    def replace_annotations(self):
+        """Read TextGrids the user chooses again, replacing the database's annotations
+        for them"""
+        dir_path = self.view_model.dir_path
+        if dir_path is None:
+            return
+
+        paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            self.tr("Choose the TextGrids to read again"),
+            dir_path,
+            self.tr("TextGrids (*.TextGrid *.textgrid);;All files (*)"),
+        )
+        if len(paths) == 0:
+            return
+
+        answer = QMessageBox.question(
+            self,
+            self.tr("Replacement Annotations"),
+            self.tr(
+                "Replace the annotations the project database has for {} TextGrids? "
+                "Changes made to them that were not saved to a TextGrid will be left "
+                "out."
+            ).format(len(paths)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        def headline(state: ProjectImportState) -> str:
+            lines = [
+                self.tr("Replaced the annotations for {} TextGrids.").format(
+                    len(state.imported)
+                )
+            ]
+            skipped = len(paths) - state.total
+            if skipped > 0:
+                lines.append(
+                    self.tr(
+                        "{} of the TextGrids chosen are not the annotation of a "
+                        "recording in the project, and were left out."
+                    ).format(skipped)
+                )
+            return "\n".join(lines)
+
+        self.run_project_import(
+            lambda: self.view_model.replace_annotations(paths),
+            lambda state: self.finish_project_update(state, headline(state)),
+            self.tr("Replacing annotations"),
+        )
+
+    def add_words(self):
+        """Make the word table of the project database from a table with a row for each
+        word, and say how many of the words of a tier it has"""
+        dir_path = self.view_model.dir_path
+        if dir_path is None:
+            return
+
+        csv_path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Choose a table of words"),
+            dir_path,
+            self.tr("CSV files (*.csv *.tsv *.txt);;All files (*)"),
+        )
+        if csv_path == "":
+            return
+
+        view_model = self.view_model_factory.create(
+            WordImportViewModel, dir_path, csv_path
+        )
+        try:
+            view_model.prepare()
+        except (ValueError, OSError) as err:
+            QMessageBox.critical(self, self.tr("Add Words"), str(err))
+            return
+
+        dialog = WordImportDialog(view_model, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            QMessageBox.information(self, self.tr("Add Words"), dialog.result_text)
 
     @pyqtSlot()
     def rebuild_project(self):
@@ -599,7 +702,9 @@ class MainWindow(QMainWindow):
 
         self.run_project_import(
             self.view_model.rebuild_project,
-            lambda state: self.finish_project_update(state, rebuilt=True),
+            lambda state: self.finish_project_update(
+                state, self.tr("The project database has been rebuilt.")
+            ),
             self.tr("Rebuilding the project database"),
         )
 
@@ -640,8 +745,9 @@ class MainWindow(QMainWindow):
         self.import_title = title or self.tr("Updating the project database")
         start()
 
-    def finish_project_update(self, state: ProjectImportState, rebuilt: bool):
-        """Show the database's current annotations in the open tabs, and report"""
+    def finish_project_update(self, state: ProjectImportState, headline: str):
+        """Show the database's current annotations in the open tabs, and report: the
+        headline, and what went wrong, if anything"""
         for index in range(self.tab_widget.count()):
             doc = self.tab_widget.widget(index)
             if isinstance(doc, DocumentView):
@@ -650,50 +756,26 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             self.tr("Project"),
-            self.describe_import(state, rebuilt),
-        )
-
-    def describe_import(self, state: ProjectImportState, rebuilt: bool) -> str:
-        if rebuilt:
-            lines = [
-                self.tr("Rebuilt the project database from {} TextGrids.").format(
-                    len(state.imported)
-                )
-            ]
-            if state.backup is not None:
-                lines.append(
-                    self.tr("The previous database was saved as {}.").format(
-                        Path(state.backup).name
-                    )
-                )
-        else:
-            lines = [
-                self.tr("Added {} new files and read {} TextGrids.").format(
-                    state.registered, len(state.imported)
-                )
-            ]
-        return "\n".join(
-            lines + self.describe_information(state) + self.describe_failures(state)
+            "\n".join(
+                [
+                    headline,
+                    *self.describe_information(state),
+                    *self.describe_failures(state),
+                ]
+            ),
         )
 
     def describe_information(self, state: ProjectImportState) -> list[str]:
-        """What happened to the information from CSV files a rebuild adds again"""
-        lines = []
-        if len(state.information_applied) > 0:
-            lines.append(
-                self.tr("Added the information from {} again.").format(
-                    ", ".join(state.information_applied)
-                )
-            )
-        if len(state.information_failed) > 0:
-            lines.append(
-                self.tr(
-                    "Could not add the information from {}: the file is missing or no "
-                    "longer fits the project. Add it again from Project > Add "
-                    "Information from CSV."
-                ).format(", ".join(state.information_failed))
-            )
-        return lines
+        """What went wrong when a rebuild added the information from CSV files again"""
+        if len(state.information_failed) == 0:
+            return []
+        return [
+            self.tr(
+                "Could not add the information from {}: the file is missing or no "
+                "longer fits the project. Add it again from Project > Add "
+                "Information from CSV."
+            ).format(", ".join(state.information_failed))
+        ]
 
     def describe_new_project(self, state: ProjectImportState) -> str:
         lines = [
@@ -814,11 +896,14 @@ class MainWindow(QMainWindow):
 
         self.run_project_import(
             self.view_model.add_project_files,
-            lambda state: self.finish_project_update(state, rebuilt=False),
+            lambda state: self.finish_project_update(
+                state, self.tr("The project layout has been applied.")
+            ),
+            self.tr("Applying the project layout"),
         )
 
-    @pyqtSlot()
-    def add_information_from_csv(self):
+    def add_talkers(self):
+        """Add the columns of a table with a line for each talker to the talker table"""
         dir_path = self.view_model.dir_path
         if dir_path is None:
             return
@@ -833,7 +918,10 @@ class MainWindow(QMainWindow):
             return
 
         view_model = self.view_model_factory.create(
-            MetadataImportViewModel, dir_path, csv_path
+            MetadataImportViewModel,
+            dir_path,
+            csv_path,
+            target=MetadataTarget.TALKER,
         )
         try:
             view_model.prepare()
@@ -860,8 +948,19 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, self.tr("Project Database"), str(err))
             return
 
-        self.database_dialog = DatabaseDialog(view_model, self)
-        self.database_dialog.show()
+        if self.database_dialog is not None:
+            self.database_dialog.close()  # one window for the database at a time
+        dialog = DatabaseDialog(view_model, self)
+        # the window deletes itself when it is closed, so it must not be used after
+        dialog.destroyed.connect(
+            lambda _=None, closed=dialog: self.forget_database_dialog(closed)
+        )
+        self.database_dialog = dialog
+        dialog.show()
+
+    def forget_database_dialog(self, dialog: DatabaseDialog):
+        if self.database_dialog is dialog:
+            self.database_dialog = None
 
     def open_paths(self, paths: list[str]):
         """Open what the user chose: a lone directory is a project, anything else is

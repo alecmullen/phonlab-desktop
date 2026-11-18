@@ -23,6 +23,7 @@ from ui.annotation.state.annotation_node_state import (
 )
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.annotation_state import AnnotationState
+from ui.annotation.state.arrange_tiers_state import ArrangeTiersAction
 from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.document.state.status_message_state import StatusMessageState
@@ -689,6 +690,30 @@ def test_tier_display_numbers_the_project_tiers_from_the_bottom_by_default():
         TierDisplayState("tier1", 2),
         TierDisplayState("tier2", 3),
     ]
+
+
+def test_tier_display_counts_the_labels_of_each_tier_in_the_current_file():
+    view_model = make_annotated_view_model(
+        {0: 0.0, 1: 1.0, 2: 2.0},
+        [[(0, 1, "a"), (1, 2, "b")], [], [(0, 2, "c")]],
+    )
+    view_model.set_tier_display(["tier2"], [])
+
+    assert [(t.name, t.n_labels) for t in view_model.tier_display()] == [
+        ("tier0", 2),
+        ("tier1", 0),
+        ("tier2", 1),  # a hidden tier is counted too
+    ]
+
+
+def test_trigger_arrange_tiers_asks_the_window_to_show_and_order_the_tiers():
+    view_model = make_annotated_view_model({0: 0.0}, [[]])
+    received: list = []
+    view_model.state_changed.connect(received.append)
+
+    view_model.trigger_arrange_tiers()
+
+    assert received == [ArrangeTiersAction()]
 
 
 def test_tier_display_follows_the_order_and_lists_hidden_tiers_last():

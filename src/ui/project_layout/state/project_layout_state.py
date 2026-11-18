@@ -19,6 +19,8 @@ class DataFileRoleState(State):
     n_files: int
     coverage_percent: int
     selected: bool
+    kind: str  # "annotation", "time_series" or "other"
+    tier: str  # the tier name, for an annotation
 
 
 @dataclass

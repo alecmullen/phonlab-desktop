@@ -1,4 +1,4 @@
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
 from ui.annotation.state.annotation_state import tier_order_key
@@ -14,17 +14,30 @@ class TierDisplayState(State):
 
     name: str
     position: int = HIDDEN_POSITION
+    n_labels: int = 0  # how many labels the tier has in the current file
 
 
 def tier_display_from(
-    names: list[str], hidden_tiers: Collection[str], tier_order: Collection[str]
+    names: list[str],
+    hidden_tiers: Collection[str],
+    tier_order: Collection[str],
+    label_counts: Mapping[str, int] | None = None,
 ) -> list[TierDisplayState]:
-    """Every tier in the order it is shown, bottom to top, then the hidden ones"""
+    """Every tier in the order it is shown, bottom to top, then the hidden ones, with
+    the number of labels each has (in `label_counts`; none if it is not named)"""
+    counts = label_counts or {}
     order_key = tier_order_key(tier_order)
     shown = sorted((name for name in names if name not in hidden_tiers), key=order_key)
     return [
-        *(TierDisplayState(name, position) for position, name in enumerate(shown, 1)),
-        *(TierDisplayState(name) for name in names if name in hidden_tiers),
+        *(
+            TierDisplayState(name, position, counts.get(name, 0))
+            for position, name in enumerate(shown, 1)
+        ),
+        *(
+            TierDisplayState(name, HIDDEN_POSITION, counts.get(name, 0))
+            for name in names
+            if name in hidden_tiers
+        ),
     ]
 
 

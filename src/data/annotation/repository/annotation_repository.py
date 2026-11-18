@@ -164,6 +164,14 @@ class DataAnnotationRepository(AnnotationRepository):
     def read_metadata(self, target: MetadataTarget) -> dict[str, dict[str, Any]]:
         return self.local_datasource.read_metadata(target)
 
+    def tier_label_counts(self, tier_name: str) -> dict[str, int]:
+        return self.local_datasource.tier_label_counts(tier_name)
+
+    def replace_words(
+        self, columns: list[MetadataColumn], rows: list[tuple[str, dict[str, Any]]]
+    ) -> int:
+        return self.local_datasource.replace_words(columns, rows)
+
     def list_tables(self) -> list[str]:
         return self.local_datasource.list_tables()
 

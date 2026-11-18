@@ -89,3 +89,13 @@ def test_listed_as_plotted_runs_from_the_top_of_the_plot_then_the_hidden_tiers()
     ]
 
     assert listed_as_plotted(tiers) == [tiers[1], tiers[0], tiers[2]]
+
+
+def test_tier_display_has_the_number_of_labels_of_each_tier():
+    tiers = tier_display_from(["a", "b", "c"], ["c"], [], {"a": 3, "c": 5})
+
+    assert tiers == [
+        TierDisplayState("a", 1, 3),
+        TierDisplayState("b", 2, 0),
+        TierDisplayState("c", 0, 5),
+    ]

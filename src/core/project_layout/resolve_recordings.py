@@ -3,7 +3,7 @@ from core.base.use_case_sync import UseCaseSync
 from core.project_layout.channels import group_audio
 from core.project_layout.duplicate_audio import find_duplicate_audio
 from core.project_layout.entity.import_report import ImportReport, ResolvedProject
-from core.project_layout.entity.project_layout import ProjectLayout
+from core.project_layout.entity.project_layout import DataFileKind, ProjectLayout
 from core.project_layout.entity.project_scan import ProjectScan, ScannedFile
 from core.project_layout.filename_template import compile_template
 from core.project_layout.pairing import AudioIndex, reroot
@@ -62,6 +62,8 @@ class ResolveRecordings(UseCaseSync[ResolvedProject]):
             if name is not None:
                 data_for.setdefault(owner.path, {}).setdefault(name, file.path)
 
+        roles = {role.name: role for role in layout.data_files}
+
         recordings: list[Recording] = []
         unpaired_audio: list[str] = []
         mismatches: list[str] = []
@@ -71,7 +73,15 @@ class ResolveRecordings(UseCaseSync[ResolvedProject]):
         for file in audio:
             unit = unit_for[file.path]
             annotation = annotation_for.get(file.path)
-            if annotation is None:
+            data_files: dict[str, str] = {}
+            tier_files: dict[str, str] = {}
+            for name, path in data_for.get(file.path, {}).items():
+                if roles[name].kind is DataFileKind.ANNOTATION:
+                    tier_files[roles[name].tier_name] = path
+                else:
+                    data_files[name] = path
+
+            if annotation is None and not tier_files:
                 unpaired_audio.append(unit.first_file.path)
                 if not layout.include_unpaired_audio:
                     continue
@@ -106,8 +116,7 @@ class ResolveRecordings(UseCaseSync[ResolvedProject]):
             for talker in channel_talkers.values():
                 _add_variable(talkers, fields, "talker", talker)
 
-            data_files = data_for.get(file.path, {})
-            for name in data_files:
+            for name in data_for.get(file.path, {}):
                 counts[name] += 1
 
             recordings.append(
@@ -117,7 +126,8 @@ class ResolveRecordings(UseCaseSync[ResolvedProject]):
                     channel_files=channel_files,
                     channel_talkers=channel_talkers,
                     annotation_file=annotation.path if annotation else None,
-                    data_files=dict(data_files),
+                    tier_files=tier_files,
+                    data_files=data_files,
                     talkers=talkers,
                     fields=fields,
                 )
@@ -127,7 +137,7 @@ class ResolveRecordings(UseCaseSync[ResolvedProject]):
             n_audio=len(audio),
             n_audio_files=len(audio_files),
             n_recordings=len(recordings),
-            n_annotated=sum(1 for r in recordings if r.annotation_file is not None),
+            n_annotated=sum(1 for r in recordings if r.annotation_file or r.tier_files),
             unpaired_audio=unpaired_audio,
             unpaired_annotations=unpaired_annotations,
             duplicate_audio=find_duplicate_audio(audio_files, scan.root),

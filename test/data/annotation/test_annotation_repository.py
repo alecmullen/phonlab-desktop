@@ -2,10 +2,13 @@ import shutil
 from pathlib import Path
 
 import pytest
+from support.audio_files import write_wavs
 
 from core.annotation.entity.annotation import AnnotationLabel, AnnotationType
 from core.annotation.entity.metadata import MetadataColumn, MetadataTarget, SqlType
 from core.annotation.entity.recording import Recording
+from core.parse_textgrid.parse_textgrid import ParseTextGrid
+from core.read_tiers.entity.table_format import TierFile
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
@@ -822,3 +825,86 @@ def test_a_row_of_the_table_itself_keeps_its_own_id(
     seeded_annotation(repository)
 
     assert [r["id"] for r in table_rows(repository, "annotation_label")] == [1, 2]
+
+
+# --------------------------- tiers read from text tables ---------------------------
+
+
+def test_times_of_a_table_in_milliseconds_are_stored_in_seconds(
+    repository: DataAnnotationRepository, tmp_path: Path
+):
+    write_wavs(tmp_path, ["a.wav"], frames=20000, fs=8000)  # 2.5 s
+    table = tmp_path / "a_phn.txt"
+    table.write_text("0 400 h\n400 2500 ay\n")
+    ParseTextGrid(repository).run_sync(
+        None,
+        "a",
+        tier_files={"Phone": TierFile(str(table))},
+        audio_path=str(tmp_path / "a.wav"),
+    )
+
+    annotation = repository.find_annotation_by_file_stem("a")
+
+    assert annotation is not None
+    assert sorted(annotation.nodes.values()) == [0.0, 0.4, 2.5]
+
+
+# --------------------------- the word table ---------------------------
+
+
+def test_the_labels_of_a_tier_are_counted_by_their_text(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)  # tier "word" with the labels a and b
+
+    counts = repository.tier_label_counts("word")
+
+    assert counts == {"a": 1, "b": 1}
+    assert repository.tier_label_counts("nothing") == {}
+
+
+def test_a_database_has_no_word_table_until_words_are_added(
+    repository: DataAnnotationRepository,
+):
+    assert "word" not in repository.list_tables()
+
+    repository.replace_words([], [("the", {})])
+
+    assert "word" in repository.list_tables()
+
+
+def test_the_word_table_has_the_columns_and_rows_of_the_table(
+    repository: DataAnnotationRepository,
+):
+    columns = [MetadataColumn("freq", SqlType.REAL), MetadataColumn("pos")]
+
+    written = repository.replace_words(
+        columns, [("the", {"freq": 61.3, "pos": "det"}), ("cat", {"freq": None})]
+    )
+
+    data = repository.read_table("word", 10)
+    assert written == 2
+    assert data.columns == ["id", "word", "freq", "pos"]
+    assert [row[1:] for row in data.rows] == [
+        ["the", 61.3, "det"],
+        ["cat", None, None],
+    ]
+
+
+def test_adding_words_again_replaces_the_word_table(
+    repository: DataAnnotationRepository,
+):
+    repository.replace_words([MetadataColumn("old")], [("a", {"old": "1"})])
+
+    repository.replace_words([MetadataColumn("new")], [("b", {"new": "2"})])
+
+    data = repository.read_table("word", 10)
+    assert data.columns == ["id", "word", "new"]
+    assert [row[1:] for row in data.rows] == [["b", "2"]]
+
+
+def test_a_column_name_that_is_not_safe_is_refused(
+    repository: DataAnnotationRepository,
+):
+    with pytest.raises(ValueError):
+        repository.replace_words([MetadataColumn('x"; DROP TABLE talker; --')], [])

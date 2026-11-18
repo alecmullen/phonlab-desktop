@@ -22,6 +22,7 @@ from res.constants import (
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
+from ui.annotation.state.arrange_tiers_state import ArrangeTiersAction
 from ui.annotation.state.tier_display_state import TierDisplayState
 from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.base.dependency_factory import ViewModelFactory
@@ -142,7 +143,10 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
-        if isinstance(model, (StatusMessageState, AddTiersAction, TierSearchAction)):
+        if isinstance(
+            model,
+            (StatusMessageState, AddTiersAction, TierSearchAction, ArrangeTiersAction),
+        ):
             self.state_changed.emit(model)
         elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)

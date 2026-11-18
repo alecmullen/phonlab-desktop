@@ -7,6 +7,7 @@ from core.project_layout.infer_layout import InferLayout
 from core.project_layout.project_layout_file import LoadProjectLayout
 from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
+from core.read_tiers.entity.table_format import TierFile
 from res.constants import AUDIO_FILE_SUFFIXES, TEXTGRID_FILE_SUFFIXES
 
 
@@ -36,6 +37,7 @@ def scan_project_files(dir_path: str) -> list[ProjectFile]:
         recordings = ResolveRecordings()(scan, layout).recordings
 
     root = Path(dir_path)
+    tables = {role.tier_name: role.table for role in layout.data_files}
     return [
         ProjectFile(
             recording.file_stem,
@@ -44,6 +46,10 @@ def scan_project_files(dir_path: str) -> list[ProjectFile]:
             if recording.annotation_file
             else None,
             recording,
+            {
+                name: TierFile(str(root / path), tables.get(name))
+                for name, path in recording.tier_files.items()
+            },
         )
         for recording in recordings
         if recording.audio_file

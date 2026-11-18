@@ -7,13 +7,33 @@ import tomli_w
 from core.base.use_case_sync import UseCaseSync
 from core.project_layout.entity.project_layout import (
     ChannelRole,
+    DataFileKind,
     DataFileRole,
     FolderLevel,
     ProjectLayout,
 )
+from core.read_tiers.entity.table_format import ColumnRole, TableFormat, TimeUnit
 from res.constants import LAYOUT_TOML_KEY, LAYOUT_VERSION
 
 TOML_NAME = "phonlab.toml"
+
+
+def _table_to_dict(table: TableFormat) -> dict[str, Any]:
+    return {
+        "delimiter": table.delimiter,
+        "skip": table.skip,
+        "columns": [role.value for role in table.columns],
+        "unit": table.unit.value,
+    }
+
+
+def _table_from_dict(data: dict[str, Any]) -> TableFormat:
+    return TableFormat(
+        str(data["delimiter"]),
+        int(data["skip"]),
+        tuple(ColumnRole(role) for role in data["columns"]),
+        TimeUnit(data.get("unit", TimeUnit.AUTO.value)),
+    )
 
 
 def layout_to_dict(layout: ProjectLayout) -> dict[str, Any]:
@@ -34,7 +54,14 @@ def layout_to_dict(layout: ProjectLayout) -> dict[str, Any]:
         data["filename"] = {"template": layout.filename_template}
     if layout.data_files:
         data["data_files"] = [
-            {"name": role.name, "suffix": role.suffix, "ext": role.ext}
+            {
+                "name": role.name,
+                "suffix": role.suffix,
+                "ext": role.ext,
+                "kind": role.kind.value,
+                "tier": role.tier,
+                **({"table": _table_to_dict(role.table)} if role.table else {}),
+            }
             for role in layout.data_files
         ]
     if layout.channels:
@@ -72,6 +99,9 @@ def layout_from_dict(data: dict[str, Any]) -> ProjectLayout:
                     str(role["name"]),
                     str(role.get("suffix", "")),
                     str(role.get("ext", "")).casefold(),
+                    DataFileKind(role.get("kind", DataFileKind.OTHER.value)),
+                    str(role.get("tier", "")),
+                    _table_from_dict(role["table"]) if "table" in role else None,
                 )
                 for role in data.get("data_files", ())
             ),

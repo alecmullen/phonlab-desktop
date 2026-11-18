@@ -440,3 +440,46 @@ def test_audio_that_looks_like_a_copy_is_warned_about_and_reviewed(tmp_path: Pat
     assert view_model.needs_review is True
     assert states[-1].n_duplicate_audio == 1
     assert states[-1].duplicate_audio_examples == ["work/a.wav (same as 0_audio/a.wav)"]
+
+
+# --------------------------- extra files that hold tiers of the annotation ---------------------------
+
+
+def tier_file_project(root: Path) -> Path:
+    return make_tree(
+        root,
+        ["s1.wav", "s1_phn.txt", "s1_wrd.txt", "s2.wav", "s2_phn.txt", "s2_wrd.txt"],
+    )
+
+
+def test_the_user_can_say_an_extra_file_is_a_tier_and_name_it(tmp_path: Path):
+    tier_file_project(tmp_path)
+    view_model, states = prepared(tmp_path)
+    index = [r.name for r in states[-1].roles].index("phn_txt")
+    assert states[-1].roles[index].kind == "other"
+    assert states[-1].n_annotated == 0
+
+    view_model.set_role_kind(index, "annotation")
+    view_model.set_role_tier(index, "Phone")
+
+    state = states[-1]
+    assert (state.roles[index].kind, state.roles[index].tier) == ("annotation", "Phone")
+    assert state.n_annotated == 2
+    column = state.preview_headers.index("phn_txt")
+    assert state.preview_rows[0][column].endswith("_phn.txt")
+
+
+def test_the_kind_and_tier_of_extra_files_are_saved(tmp_path: Path):
+    tier_file_project(tmp_path)
+    first, states = prepared(tmp_path)
+    index = [r.name for r in states[-1].roles].index("phn_txt")
+    first.set_role_kind(index, "annotation")
+    first.set_role_tier(index, "Phone")
+    first.save_project_layout()
+
+    second, states = prepared(tmp_path)
+
+    role = next(r for r in states[-1].roles if r.name == "phn_txt")
+    assert (role.kind, role.tier) == ("annotation", "Phone")
+    assert second.needs_review is False
+    assert states[-1].n_annotated == 2

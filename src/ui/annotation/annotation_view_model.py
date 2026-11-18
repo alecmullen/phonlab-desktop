@@ -29,6 +29,7 @@ from ui.annotation.state.annotation_state import (
     to_annotation_state,
     update_annotation_state_from_window,
 )
+from ui.annotation.state.arrange_tiers_state import ArrangeTiersAction
 from ui.annotation.state.tier_display_state import (
     TierDisplayState,
     tier_display_from,
@@ -134,9 +135,13 @@ class AnnotationViewModel(ViewModel):
         return [type.type for type in self.annotation_state.types]
 
     def tier_display(self) -> list[TierDisplayState]:
-        """Every tier name in the project database, and where it is shown"""
+        """Every tier name in the project database, where it is shown, and how many
+        labels it has in the current file"""
         return tier_display_from(
-            self.list_tier_names_use_case(), self.hidden_tiers, self.tier_order
+            self.list_tier_names_use_case(),
+            self.hidden_tiers,
+            self.tier_order,
+            {type.type: len(type.labels) for type in self.annotation_state.types},
         )
 
     def set_tier_display(
@@ -252,6 +257,10 @@ class AnnotationViewModel(ViewModel):
         self.state_changed.emit(
             StatusMessageState(self.tr("Added {} tier(s)").format(len(names)))
         )
+
+    def trigger_arrange_tiers(self):
+        """Ask the window to let the user show and order the tiers"""
+        self.state_changed.emit(ArrangeTiersAction())
 
     def trigger_tier_search(self, tier_idx: int):
         """`tier_idx` is a row of the plot, which shows only some of the tiers"""

@@ -20,6 +20,10 @@ from core.import_metadata.information_sources_file import (
 )
 from core.import_metadata.match_metadata import MatchMetadata
 from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from core.import_words.import_words import ImportWords
+from core.import_words.match_words import MatchWords
+from core.import_words.save_unmatched_words import SaveUnmatchedWords
+from core.import_words.word_source_file import LoadWordSource, SaveWordSource
 from core.inspect_database.inspect_database import ListTables, ReadTable
 from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
@@ -35,6 +39,7 @@ from core.project_layout.project_layout_file import (
 from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
 from core.project_layout.suggest_talker_names import SuggestTalkerNames
+from core.read_tiers.preview_annotation_table import PreviewAnnotationTable
 from core.save_audio.save_audio import SaveAudio
 from core.settings.load_display_plan import LoadDisplayPlan
 from core.settings.load_tier_layout import LoadTierLayout
@@ -85,11 +90,18 @@ class UseCaseFactory:
         self.import_metadata = ImportMetadata(self.annotation_repository)
         self.load_information_sources = LoadInformationSources()
         self.save_information_source = SaveInformationSource()
+        self.match_words = MatchWords(self.annotation_repository)
+        self.import_words = ImportWords(self.annotation_repository)
+        self.save_unmatched_words = SaveUnmatchedWords()
+        self.load_word_source = LoadWordSource()
+        self.save_word_source = SaveWordSource()
         self.apply_information_sources = ApplyInformationSources(
             self.load_information_sources,
             self.read_metadata_csv,
             self.match_metadata,
             self.import_metadata,
+            self.load_word_source,
+            self.import_words,
         )
         self.rebuild_project = RebuildProject(
             self.annotation_repository,
@@ -103,6 +115,7 @@ class UseCaseFactory:
         self.load_project_layout = LoadProjectLayout()
         self.save_project_layout = SaveProjectLayout()
         self.suggest_talker_names = SuggestTalkerNames()
+        self.preview_annotation_table = PreviewAnnotationTable()
         self.list_tables = ListTables(self.annotation_repository)
         self.read_table = ReadTable(self.annotation_repository)
 
@@ -171,6 +184,8 @@ class UseCaseFactory:
             use_case = self.save_project_layout
         if use_case_type is SuggestTalkerNames:
             use_case = self.suggest_talker_names
+        if use_case_type is PreviewAnnotationTable:
+            use_case = self.preview_annotation_table
         if use_case_type is ReadMetadataCsv:
             use_case = self.read_metadata_csv
         if use_case_type is MatchMetadata:
@@ -183,6 +198,16 @@ class UseCaseFactory:
             use_case = self.save_information_source
         if use_case_type is ApplyInformationSources:
             use_case = self.apply_information_sources
+        if use_case_type is MatchWords:
+            use_case = self.match_words
+        if use_case_type is ImportWords:
+            use_case = self.import_words
+        if use_case_type is SaveUnmatchedWords:
+            use_case = self.save_unmatched_words
+        if use_case_type is LoadWordSource:
+            use_case = self.load_word_source
+        if use_case_type is SaveWordSource:
+            use_case = self.save_word_source
 
         if use_case_type is ListTables:
             use_case = self.list_tables

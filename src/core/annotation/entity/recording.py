@@ -11,6 +11,8 @@ class Recording:
     # for a recording stored as one file per channel, the first channel's file
     audio_file: str | None = None
     annotation_file: str | None = None
+    # tier name -> path, for tiers of the annotation kept in files of their own
+    tier_files: dict[str, str] = field(default_factory=dict)
     # channel label -> path, for recordings stored as one file per channel
     channel_files: dict[str, str] = field(default_factory=dict)
     # channel label -> talker on that channel
