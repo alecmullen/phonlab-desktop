@@ -41,6 +41,19 @@ SPECTROGRAM_PRE_EMPHASIS = 0.94
 SPECTROGRAM_LOW_PERCENTILE = 20
 SPECTROGRAM_HIGH_PERCENTILE = 80
 SPECTROGRAM_PERCENTILE_SAMPLE_SIZE = 100_000
+SPECTROGRAM_WINDOW_SEC = {
+    "fft": 0.008,
+    "multitaper": 0.02,
+    "cepstral": 0.04,
+    "lpc": 0.03,
+}
+SPECTROGRAM_STEP_SEC = {
+    "fft": 0.001,
+    "multitaper": 0.004,
+    "cepstral": 0.004,
+    "lpc": 0.004,
+}
+CEPSTRAL_SEGMENT_SEC = 5
 
 # -- Formant Tracking --
 FORMANT_PREEMPHASIS = {

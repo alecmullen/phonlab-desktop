@@ -2,7 +2,9 @@ import numpy as np
 import pytest
 
 import core.spectrogram.compute_sgram as compute_sgram_module
+import core.spectrogram.typed_sgram as typed_sgram_module
 from core.spectrogram.compute_sgram import ComputeSpectrogram
+from core.spectrogram.entity.spectrogram_type import SpectrogramType
 
 
 def test_invoke_yields_spectrogram_built_from_phon_compute_sgram(
@@ -24,7 +26,7 @@ def test_invoke_yields_spectrogram_built_from_phon_compute_sgram(
         )
         return np.array([0.0, 1.0]), np.array([0.0, 100.0]), np.array([[1.0, 2.0]])
 
-    monkeypatch.setattr(compute_sgram_module.phon, "compute_sgram", fake_compute_sgram)
+    monkeypatch.setattr(typed_sgram_module.phon, "compute_sgram", fake_compute_sgram)
     x = np.arange(10, dtype=np.float64)
     use_case = ComputeSpectrogram()
 
@@ -51,9 +53,33 @@ def test_invoke_uses_default_settings(monkeypatch: pytest.MonkeyPatch):
         calls.append((window_size, step_size, order))
         return np.zeros(1), np.zeros(1), np.zeros((1, 1))
 
-    monkeypatch.setattr(compute_sgram_module.phon, "compute_sgram", fake_compute_sgram)
+    monkeypatch.setattr(typed_sgram_module.phon, "compute_sgram", fake_compute_sgram)
     use_case = ComputeSpectrogram()
 
     use_case.run_sync(np.zeros(4), fs=1000)
 
     assert calls == [(0.008, 0.001, 9)]
+
+
+def test_invoke_passes_the_spectrogram_type_on(monkeypatch: pytest.MonkeyPatch):
+    types = []
+
+    def fake_compute_typed_sgram(
+        x: np.ndarray,
+        fs: int,
+        sgram_type: SpectrogramType,
+        window_size: float,
+        step_size: float,
+        order: int,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        types.append(sgram_type)
+        return np.zeros(1), np.zeros(1), np.zeros((1, 1))
+
+    monkeypatch.setattr(
+        compute_sgram_module, "compute_typed_sgram", fake_compute_typed_sgram
+    )
+
+    ComputeSpectrogram().run_sync(np.zeros(4), 1000, sgram_type=SpectrogramType.LPC)
+    ComputeSpectrogram().run_sync(np.zeros(4), 1000)
+
+    assert types == [SpectrogramType.LPC, SpectrogramType.FFT]
