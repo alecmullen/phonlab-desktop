@@ -38,6 +38,7 @@ from core.settings.save_tier_layout import SaveTierLayout
 from core.spectrogram.compute_sgram import ComputeSpectrogram
 from core.spectrogram.compute_sgram_mmap import ComputeSpectrogramMmap
 from core.track_formants.track_formants import TrackFormants
+from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from ui.annotation.annotation_view_model import AnnotationViewModel
@@ -136,6 +137,7 @@ def make_main_view_model(
     save_display_plan: SaveDisplayPlan | None = None,
     load_tier_layout: LoadTierLayout | None = None,
     save_tier_layout: SaveTierLayout | None = None,
+    warm_up_formants: WarmUpFormantTracking | None = None,
 ) -> MainViewModel:
     if load_display_plan is None:
         load_display_plan = mock_use_case(LoadDisplayPlan)
@@ -150,6 +152,7 @@ def make_main_view_model(
         save_display_plan or mock_use_case(SaveDisplayPlan),
         load_tier_layout,
         save_tier_layout or mock_use_case(SaveTierLayout),
+        warm_up_formants or mock_use_case(WarmUpFormantTracking),
         lambda _dir_path: add_project_files,
         lambda _dir_path: RebuildProject(repository, add_project_files),
     )

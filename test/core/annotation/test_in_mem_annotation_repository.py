@@ -139,8 +139,8 @@ def test_list_tier_names_covers_every_annotation_once_sorted():
         other, [AnnotationType("word", []), AnnotationType("Break", [])]
     )
 
-    assert repository.list_tier_names() == ["Break", "phone", "word"]
+    assert repository.list_type_names() == ["Break", "phone", "word"]
 
 
 def test_list_tier_names_is_empty_when_there_are_no_tiers():
-    assert InMemAnnotationRepository().list_tier_names() == []
+    assert InMemAnnotationRepository().list_type_names() == []
