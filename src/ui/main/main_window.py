@@ -662,7 +662,7 @@ class MainWindow(QMainWindow):
     ):
         """Open as audio file in separate tabs. paired_files is a list of tuples in the format
         (file_stem, audio_file, annotation_file), where file_stem is the path to the audio file,
-        minus the suffix (relative path for project, absolute for ad-hoc singal document
+        minus the suffix (relative path for project, absolute for ad-hoc single document
         editing). audio_file and annotation_file are the absolute paths to the respective .wav
         and .TextGrid files"""
 
