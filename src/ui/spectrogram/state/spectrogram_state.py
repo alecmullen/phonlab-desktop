@@ -7,18 +7,18 @@ from res.constants import DEFAULT_GRAY_CUTOFF
 from ui.base.state import State
 
 
+class FrequencyScale(StrEnum):
+    """How the rows of the spectrogram are spaced in frequency"""
+
+    HZ = "hz"
+    MEL = "mel"
+
+
 class SpectrogramUnavailable(StrEnum):
     """Why there is no spectrogram for the window being looked at"""
 
     TOO_LONG = "too_long"
     TOO_SHORT = "too_short"
-
-
-class FrequencyScale(StrEnum):
-    """How the rows of the spectrogram are spaced in frequency"""
-
-    HZ = "hz"  # evenly in Hz
-    MEL = "mel"  # evenly on the mel scale (closer together in Hz at the top)
 
 
 @dataclass(frozen=True)

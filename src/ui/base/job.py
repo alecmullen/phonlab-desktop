@@ -6,9 +6,8 @@ from dataclasses import dataclass
 class Job[T]:
     """A task with the callbacks that receive its results.
 
-    A job queued behind a running one waits its turn, unless `replace_pending`
-    is set: then it takes the place of any jobs still waiting (the running one
-    is not stopped), for work where only the latest request matters."""
+    Jobs are added to the end of a queue, unless `replace_pending`
+    is set: then it replaces the pending job (but not the running one)"""
 
     task: Generator[T, None, None]
     on_success: Callable

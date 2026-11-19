@@ -112,7 +112,7 @@ class InMemAnnotationRepository(AnnotationRepository):
             raise ValueError("Annotation with that id does not exist in database")
         return Annotation(dict(self.nodes[id]), list(self.types[id]), id)
 
-    def list_tier_names(self) -> list[str]:
+    def list_type_names(self) -> list[str]:
         names = {type.type for types in self.types.values() for type in types}
         return sorted(names, key=lambda name: (name.casefold(), name))
 
