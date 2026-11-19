@@ -94,10 +94,7 @@ class AnnotationPlot(DocumentPlot):
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
 
     def set_shortcuts_active(self, active: bool):
-        """Every document has an annotation plot with the same shortcut, and Qt counts
-        the plots of tabs that are not on screen too, so the shortcut is ambiguous
-        (and does nothing) as soon as a second document is open. Only the plot of the
-        document on screen should have its shortcut active"""
+        """Prevent ambiguous shortcuts when multible tabs open"""
         self.create_label_action.setEnabled(active)
 
     @pyqtSlot()

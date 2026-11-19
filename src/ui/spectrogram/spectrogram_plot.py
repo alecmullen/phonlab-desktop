@@ -44,9 +44,7 @@ class SpectrogramPlot(DocumentPlot):
         lut = pg.colormap.get("CET-L1").getLookupTable(nPts=256)[::-1]
         self.spec_img.setLookupTable(lut)
 
-        # Where the rows of the spectrogram are on the vertical axis. It is in Hz,
-        # unless the rows are evenly spaced in mels: then it is in mels, with the
-        # frequencies written on it in Hz
+        # Where the rows of the spectrogram are on the vertical axis, in Hz or mels
         self.row_positions = np.zeros(0)
         self.is_mel = False
         self.formant_track = FormantTrackState()

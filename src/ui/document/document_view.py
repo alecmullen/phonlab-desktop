@@ -79,8 +79,6 @@ class DocumentView(QWidget):
         # Create graphics layout widget
         self.graphics_widget = DocumentGraphicsWidget()
         self.graphics_widget.resized.connect(self.apply_row_heights)
-        # Connected once: the scene outlives the plots, which are rebuilt
-        # whenever the layout changes. on_mouse_moved tells the plots
         self.graphics_widget.scene().sigMouseMoved.connect(self.on_mouse_moved)
 
         # Initialize plot items (will be created in plot methods)
@@ -181,21 +179,13 @@ class DocumentView(QWidget):
     def add_shared_context_menu_actions(self, view_box: pg.ViewBox):
         """Add the navigation actions (Zoom to Selection, Deselect, Set Mark,
         Remove Mark) to a plot's ViewBox menu, after the plot's own actions and a
-        separator.
-
-        Added directly to each plot's own menu (rather than via the
-        scene-wide contextMenu list) so they're present before the menu
-        is ever shown.
-        """
+        separator."""
         menu = view_box.menu
         menu.addSeparator()
         menu.aboutToShow.connect(lambda: self.sync_actions_with_ui_state(menu))
 
     def sync_actions_with_ui_state(self, menu: QMenu):
-        """Show the navigation actions that apply at the end of `menu`. Adding and
-        removing them as the menu opens (rather than toggling the action's
-        visibility) makes Qt lay the rows out afresh, so one can't be drawn over its
-        neighbour."""
+        """Show the navigation actions that apply at the end of `menu`."""
         is_selected = self.view_model.select_state.is_selected
         is_marked = self.view_model.mark_state.is_set
 
@@ -503,15 +493,12 @@ class DocumentView(QWidget):
             plot.on_mouse_moved(pos)
 
         if self.mouse_pressed and not self.left_button_is_down():
-            # The release was never delivered (it can go missing, e.g. with a
-            # touch-surface mouse), so the selection would follow the pointer for
-            # ever. Treat it as released
+            # Treat it as released
             press_pos = pos if self.press_scene_pos is None else self.press_scene_pos
             self.end_press(press_pos, Qt.KeyboardModifier.NoModifier)
             return
 
-        # While dragging, the nearest plot stands in when the pointer leaves the
-        # plots: over the margins and gaps, or outside the window
+        # Use nearest plot if no plot is under the cursor
         plot_under = self._get_document_plot_at(pos)
         plot = plot_under
         if plot is None and self.mouse_pressed:
@@ -555,8 +542,7 @@ class DocumentView(QWidget):
 
     def _plot_to_press_in(self, scene_pos: QPointF) -> DocumentPlot | None:
         """The plot a press at scene_pos is on. The margins and gaps between plots
-        count as the nearest plot, so a drag started a few pixels off the edge of
-        a plot still selects"""
+        count as the nearest plot"""
         clicked_plot = self._get_document_plot_at(scene_pos)
         if clicked_plot is not None:
             return clicked_plot
@@ -575,8 +561,6 @@ class DocumentView(QWidget):
             return
 
         if a0.button() != Qt.MouseButton.LeftButton:
-            # Only the left button makes selections, and only its release ends
-            # them. A press by another button would never be ended
             return
 
         scene_pos = self.map_scene_to_graphics_widget(a0.position())

@@ -368,8 +368,7 @@ class SpectrogramViewModel(ViewModel):
         self.state_changed.emit(FormantTrackState())
 
     def emit_formants(self):
-        """Emit the formants in the current window. Like the spectrogram, they
-        show only for a window short enough to read."""
+        """Emit the formants in the current window."""
         start, end = self._window_seconds()
         visible = FormantTrack()
         if end - start <= MAX_SGRAM_LENGTH:
