@@ -212,20 +212,6 @@ def test_open_formant_settings_returns_step_length_and_voiced_only(
     assert (result.step, result.length, result.voiced_only) == (0.0025, 0.025, True)
 
 
-def test_a_link_points_to_the_chosen_methods_documentation(qtbot: QtBot):
-    dialog = FormantSettingsDialog(FormantSettingsState())
-    qtbot.addWidget(dialog)
-    assert dialog.docs_link.openExternalLinks()
-
-    for method in FormantMethodState:
-        dialog.method_combo.setCurrentIndex(dialog.method_combo.findData(method.value))
-
-        assert (
-            f'href="https://phonlab.readthedocs.io/en/latest/acoustphon.html'
-            f'#phonlab.{method.value.upper()}_formants"'
-        ) in dialog.docs_link.text()
-
-
 def test_voicing_threshold_starts_at_0_5_and_needs_voiced_only(
     qtbot: QtBot,
 ):
@@ -269,3 +255,17 @@ def test_voiced_only_enables_the_voicing_threshold_it_opens_with(qtbot: QtBot):
 
     assert dialog.threshold_spin.isEnabled()
     assert dialog.threshold_spin.value() == pytest.approx(0.6)
+
+
+def test_a_link_points_to_the_chosen_methods_documentation(qtbot: QtBot):
+    dialog = FormantSettingsDialog(FormantSettingsState())
+    qtbot.addWidget(dialog)
+    assert dialog.docs_link.openExternalLinks()
+
+    for method in FormantMethodState:
+        dialog.method_combo.setCurrentIndex(dialog.method_combo.findData(method.value))
+
+        assert (
+            f'href="https://phonlab.readthedocs.io/en/latest/acoustphon.html'
+            f'#phonlab.{method.value.upper()}_formants"'
+        ) in dialog.docs_link.text()

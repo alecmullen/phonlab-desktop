@@ -23,6 +23,7 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.tier_display_state import TierDisplayState
+from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.base.dependency_factory import ViewModelFactory
 from ui.base.state import State
 from ui.base.view_model import ViewModel
@@ -91,6 +92,9 @@ class DocumentViewModel(ViewModel):
         self.mark_state: MarkState = MarkState()
         self.audio_loaded_state: AudioLoaded = AudioLoaded()
 
+        # A span (s) to bring into view once audio finishes loading
+        self.pending_reveal: tuple[float, float] | None = None
+
         self.audio_options: AudioOpenOptionsState = AudioOpenOptionsState()
 
         self.undo_stack: list[EditCommandState] = []
@@ -137,7 +141,7 @@ class DocumentViewModel(ViewModel):
 
     @pyqtSlot(object)
     def on_annot_state_changed(self, model: State):
-        if isinstance(model, (StatusMessageState, AddTiersAction)):
+        if isinstance(model, (StatusMessageState, AddTiersAction, TierSearchAction)):
             self.state_changed.emit(model)
         elif isinstance(model, AnnotationSelectedState):
             self.select_and_play(model.sel_start, model.sel_end)
@@ -598,6 +602,24 @@ class DocumentViewModel(ViewModel):
         self.update_document_window(document_window_state)
 
         self.remove_selection()
+
+    def reveal_span(self, start: float, end: float):
+        """Select the span (start and end in seconds) and center the window on it, with
+        the annotation plot showing. If the audio is still loading, waits for it"""
+        if self.primary_channel() is None:
+            self.pending_reveal = (start, end)
+            return
+
+        self.pending_reveal = None
+        if not self.plot_layout_state.has_annotation():
+            self.toggle_annotations()
+        self.start_selection(start)
+        self.continue_selection(end)
+        self.center_on_selection()
+
+    def reveal_pending_span(self):
+        if self.pending_reveal is not None:
+            self.reveal_span(*self.pending_reveal)
 
     def center_on_selection(self):
         """Center the window on the selection's midpoint, or on the mark when

@@ -23,6 +23,8 @@ class SpectrogramUnavailable(StrEnum):
 
 @dataclass(frozen=True)
 class SpectrogramState(State):
+    # The frequency of each row of the spectrogram: in Hz, or in mels when the
+    # frequency scale is mel
     f: np.ndarray = field(default_factory=lambda: np.zeros(0))
     frequency_scale: FrequencyScale = FrequencyScale.HZ
 

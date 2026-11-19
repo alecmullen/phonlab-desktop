@@ -17,6 +17,7 @@ from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_selected_state import AnnotationSelectedState
 from ui.annotation.state.tier_display_state import TierDisplayState
+from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.base.state import State
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import (
@@ -1202,6 +1203,77 @@ def test_set_tier_display_delegates_to_annotation_view_model(
     view_model.set_tier_display(["phone"], ["word"])
 
     annotation_view_model.set_tier_display.assert_called_once_with(["phone"], ["word"])
+
+
+def test_on_annot_state_changed_forwards_tier_search_action(
+    view_model: DocumentViewModel, qtbot: QtBot
+):
+    action = TierSearchAction("word", "stem", 1.0)
+
+    with qtbot.waitSignal(view_model.state_changed, timeout=1000) as blocker:
+        view_model.on_annot_state_changed(action)
+
+    assert blocker.args[0] is action
+
+
+def test_reveal_span_shows_annotations_selects_and_centers(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.reveal_span(20.0, 30.0)
+
+    assert view_model.plot_layout_state.has_annotation()
+    assert (view_model.select_state.sel_start, view_model.select_state.sel_end) == (
+        20.0,
+        30.0,
+    )
+    window = view_model.document_window_state
+    assert (window.start + window.end) / 2 == pytest.approx(25000, abs=1)
+
+
+def test_reveal_span_does_not_play_audio(
+    view_model: DocumentViewModel, fake_audio_player: type[FakeAudioPlayer]
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.reveal_span(20.0, 30.0)
+
+    assert not view_model.playback_state.is_playing
+
+
+def test_reveal_span_keeps_annotations_visible_when_already_shown(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.toggle_annotations()
+
+    view_model.reveal_span(20.0, 30.0)
+
+    assert view_model.plot_layout_state.has_annotation()
+
+
+def test_reveal_span_waits_for_audio_to_load(view_model: DocumentViewModel):
+    view_model.reveal_span(20.0, 30.0)
+
+    assert view_model.pending_reveal == (20.0, 30.0)
+    assert not view_model.select_state.is_selected
+
+    load_signal(view_model, np.arange(50000), fs=1000)
+    view_model.reveal_pending_span()
+
+    assert view_model.pending_reveal is None
+    assert view_model.select_state.sel_start == 20.0
+
+
+def test_reveal_pending_span_without_pending_does_nothing(
+    view_model: DocumentViewModel,
+):
+    load_signal(view_model, np.arange(50000), fs=1000)
+
+    view_model.reveal_pending_span()
+
+    assert not view_model.select_state.is_selected
 
 
 def test_save_textgrid_delegates_to_annotation_view_model(

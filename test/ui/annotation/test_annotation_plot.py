@@ -860,3 +860,45 @@ def test_create_label_shortcut_can_be_switched_off_and_on(qtbot: QtBot):
 
     plot.set_shortcuts_active(True)
     assert plot.create_label_action.isEnabled()
+
+
+def test_search_action_is_in_context_menu(qtbot: QtBot):
+    plot = AnnotationPlot(make_annotation_view_model())
+
+    assert plot.search_tier_action in plot.getViewBox().menu.actions()
+
+
+def test_search_action_searches_tier_under_context_pos(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    searched = []
+    view_model.trigger_tier_search = searched.append  # type: ignore[method-assign]
+    plot = AnnotationPlot(view_model)
+    plot.context_pos = QPointF(0.5, 1.5)
+    plot.selected_type = 0
+
+    plot.search_tier_action.trigger()
+
+    assert searched == [1]
+
+
+def test_search_action_falls_back_to_tier_under_mouse(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    searched = []
+    view_model.trigger_tier_search = searched.append  # type: ignore[method-assign]
+    plot = AnnotationPlot(view_model)
+    plot.selected_type = 2
+
+    plot.search_tier_action.trigger()
+
+    assert searched == [2]
+
+
+def test_search_action_without_a_tier_passes_invalid_index(qtbot: QtBot):
+    view_model = make_annotation_view_model()
+    searched = []
+    view_model.trigger_tier_search = searched.append  # type: ignore[method-assign]
+    plot = AnnotationPlot(view_model)
+
+    plot.search_tier_action.trigger()
+
+    assert searched == [-1]

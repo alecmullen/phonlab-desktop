@@ -266,6 +266,30 @@ def test_import_error_is_reported_as_finished_state(
     assert states == [ProjectImportState(finished=True, error="boom")]
 
 
+def test_warm_up_formant_tracking_runs_the_use_case_once(
+    fake_job_manager: type[FakeJobManager],
+):
+    warm_up = mock_use_case(WarmUpFormantTracking)
+    warm_up.return_value = iter([None])
+    view_model = make_main_view_model(warm_up_formants=warm_up)
+
+    view_model.warm_up_formant_tracking()
+    view_model.warm_up_formant_tracking()
+
+    assert len(view_model.job_managers["warm_up_formants"].jobs) == 1
+
+
+def test_warm_up_formant_tracking_logs_a_failure_without_raising(
+    fake_job_manager: type[FakeJobManager], caplog: pytest.LogCaptureFixture
+):
+    view_model = make_main_view_model()
+    view_model.warm_up_formant_tracking()
+
+    view_model.job_managers["warm_up_formants"].jobs[0].on_error(RuntimeError("boom"))
+
+    assert any("warm-up failed" in record.getMessage() for record in caplog.records)
+
+
 def test_tier_display_defaults_to_nothing_hidden_and_no_order():
     view_model = make_main_view_model()
 
@@ -316,27 +340,3 @@ def test_save_window_layout_saves_tier_fonts_to_project():
         TierLayout(tier_fonts={"word": "Charis SIL"}),
         "/some/dir",
     )
-
-
-def test_warm_up_formant_tracking_runs_the_use_case_once(
-    fake_job_manager: type[FakeJobManager],
-):
-    warm_up = mock_use_case(WarmUpFormantTracking)
-    warm_up.return_value = iter([None])
-    view_model = make_main_view_model(warm_up_formants=warm_up)
-
-    view_model.warm_up_formant_tracking()
-    view_model.warm_up_formant_tracking()
-
-    assert len(view_model.job_managers["warm_up_formants"].jobs) == 1
-
-
-def test_warm_up_formant_tracking_logs_a_failure_without_raising(
-    fake_job_manager: type[FakeJobManager], caplog: pytest.LogCaptureFixture
-):
-    view_model = make_main_view_model()
-    view_model.warm_up_formant_tracking()
-
-    view_model.job_managers["warm_up_formants"].jobs[0].on_error(RuntimeError("boom"))
-
-    assert any("warm-up failed" in record.getMessage() for record in caplog.records)

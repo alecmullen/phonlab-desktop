@@ -17,10 +17,7 @@ from res.constants import LABEL_FONT_FAMILY
 
 
 def remove_bitmap_fonts(combo_box: QFontComboBox):
-    """Qt lists macOS's bitmap fonts (such as "GB18030 Bitmap") as scalable, but
-    fails to draw them: the drop-down, which draws each family in its own font,
-    logs "Failed to compute left/right minimum bearings" for each one it shows.
-    Call it after `setCurrentFont`, which fills the list again"""
+    """Remove macOS's bitmap fonts, because Qt fails to draw them"""
     for row in reversed(range(combo_box.count())):
         if "bitmap" in combo_box.itemText(row).lower():
             combo_box.removeItem(row)

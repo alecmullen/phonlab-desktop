@@ -15,7 +15,6 @@ from res.constants import DOUBLE_CLICK_INTERVAL_MS
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.add_tiers_dialog import AddTiersDialog
 from ui.annotation.state.add_tiers_state import AddTiersAction
-from ui.common.context_menu_hint import ContextMenuHintAction
 from ui.common.document_plot import DocumentPlot
 from ui.document.component.filter_dialog import FilterAudioDialog
 from ui.document.component.paste_special_dialog import (
@@ -125,6 +124,20 @@ def test_load_from_samples_builds_wave_plot_and_sets_up_slider(
 
 
 # --------------------------- state dispatch ---------------------------
+
+
+def test_span_revealed_while_audio_loads_is_shown_once_loaded(
+    view: DocumentView, document_view_model: DocumentViewModel
+):
+    document_view_model.reveal_span(5.0, 7.0)
+
+    document_view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
+    )
+
+    assert document_view_model.plot_layout_state.has_annotation()
+    assert document_view_model.select_state.sel_start == 5.0
+    assert any(isinstance(plot, AnnotationPlot) for plot in view.document_plots)
 
 
 def test_on_state_change_routes_each_state_type_to_its_handler(view: DocumentView):
@@ -1162,20 +1175,20 @@ def test_waveform_menu_actions_in_requested_order(loaded_view: DocumentView):
     assert positions == sorted(positions)
 
 
-def test_annotation_menu_has_its_own_actions_then_a_separator_then_navigation(
+def test_annotation_menu_has_its_own_actions_first_then_a_separator_then_navigation(
     all_plots_view: DocumentView,
 ):
     all_plots_view.view_model.set_mark(4.0)
     plot = plot_of(all_plots_view, AnnotationPlot)
+    assert isinstance(plot, AnnotationPlot)
     menu = plot.getViewBox().menu
     menu.aboutToShow.emit()
     menu.aboutToShow.emit()  # opening it again changes nothing
     actions = menu.actions()
 
-    assert isinstance(actions[0], ContextMenuHintAction)
-    assert actions[0].action_text == "Create Label"
-    assert actions[-4].isSeparator()
-    assert actions[-3:] == [
+    assert actions[:2] == [plot.create_label_action, plot.search_tier_action]
+    assert actions[2].isSeparator()
+    assert actions[3:] == [
         all_plots_view.recenter_action,
         all_plots_view.set_mark_action,
         all_plots_view.remove_mark_action,
@@ -1498,6 +1511,95 @@ def test_open_save_textgrid_reports_runtime_error(
     assert "overlapping intervals" in errors[0][2]
 
 
+# --------------------------- annotation shortcut follows visibility ---------------------------
+
+
+def test_annotation_shortcut_is_active_while_the_document_is_shown(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+
+    assert all_plots_view.isVisible()
+    assert plot.create_label_action.isEnabled()
+
+
+def test_annotation_shortcut_is_switched_off_when_the_document_is_hidden(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+
+    all_plots_view.hide()
+
+    assert not plot.create_label_action.isEnabled()
+
+
+def test_annotation_shortcut_comes_back_when_the_document_is_shown_again(
+    all_plots_view: DocumentView,
+):
+    plot = plot_of(all_plots_view, AnnotationPlot)
+    all_plots_view.hide()
+
+    all_plots_view.show()
+
+    assert plot.create_label_action.isEnabled()
+
+
+def test_annotation_plot_added_to_a_hidden_document_starts_with_its_shortcut_off(
+    loaded_view: DocumentView,
+):
+    loaded_view.hide()
+
+    loaded_view.view_model.toggle_annotations()
+    QApplication.processEvents()
+
+    assert not plot_of(loaded_view, AnnotationPlot).create_label_action.isEnabled()
+
+
+# --------------------------- row heights follow the graphics widget ---------------------------
+
+
+def test_resizing_the_graphics_widget_resizes_the_plot_rows(
+    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
+):
+    calls = []
+    monkeypatch.setattr(loaded_view, "apply_row_heights", lambda: calls.append(True))
+    loaded_view.graphics_widget.resized.disconnect()
+    loaded_view.graphics_widget.resized.connect(loaded_view.apply_row_heights)
+
+    loaded_view.graphics_widget.resized.emit()
+
+    assert calls == [True]
+
+
+def plots_bottom(view: DocumentView) -> float:
+    return max(plot.sceneBoundingRect().bottom() for plot in view.document_plots)
+
+
+def test_a_document_built_while_hidden_fills_the_space_it_is_later_shown_in(
+    qtbot: QtBot, document_view_model: DocumentViewModel
+):
+    """A tab opened in the background has its plots laid out while its page is still
+    at the default size, and is only resized when first shown, after the window
+    may have been made bigger"""
+    view = DocumentView(document_view_model)
+    qtbot.addWidget(view)
+    view.resize(640, 480)
+    document_view_model.load_from_samples(
+        to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
+    )
+    document_view_model.toggle_annotations()
+    QApplication.processEvents()
+    assert not view.isVisible()
+
+    view.resize(1000, 900)
+    view.show()
+    qtbot.waitExposed(view)
+    QApplication.processEvents()
+
+    space = view.graphics_widget.viewport().height()
+    assert plots_bottom(view) > space - 40
+
+
 # --------------------------- selections that start or end off the plots ---------------------------
 
 
@@ -1731,92 +1833,3 @@ def test_a_mouse_move_reaches_each_plot_once(
     all_plots_view.on_mouse_moved(QPointF(300, 100))
 
     assert sorted(calls) == [0, 1, 2]
-
-
-# --------------------------- row heights follow the graphics widget ---------------------------
-
-
-def test_resizing_the_graphics_widget_resizes_the_plot_rows(
-    loaded_view: DocumentView, monkeypatch: pytest.MonkeyPatch
-):
-    calls = []
-    monkeypatch.setattr(loaded_view, "apply_row_heights", lambda: calls.append(True))
-    loaded_view.graphics_widget.resized.disconnect()
-    loaded_view.graphics_widget.resized.connect(loaded_view.apply_row_heights)
-
-    loaded_view.graphics_widget.resized.emit()
-
-    assert calls == [True]
-
-
-def plots_bottom(view: DocumentView) -> float:
-    return max(plot.sceneBoundingRect().bottom() for plot in view.document_plots)
-
-
-def test_a_document_built_while_hidden_fills_the_space_it_is_later_shown_in(
-    qtbot: QtBot, document_view_model: DocumentViewModel
-):
-    """A tab opened in the background has its plots laid out while its page is still
-    at the default size, and is only resized when first shown, after the window
-    may have been made bigger"""
-    view = DocumentView(document_view_model)
-    qtbot.addWidget(view)
-    view.resize(640, 480)
-    document_view_model.load_from_samples(
-        to_audio_state({0: AudioSignal(np.arange(20000, dtype=np.float64), 1000)})
-    )
-    document_view_model.toggle_annotations()
-    QApplication.processEvents()
-    assert not view.isVisible()
-
-    view.resize(1000, 900)
-    view.show()
-    qtbot.waitExposed(view)
-    QApplication.processEvents()
-
-    space = view.graphics_widget.viewport().height()
-    assert plots_bottom(view) > space - 40
-
-
-# --------------------------- annotation shortcut follows visibility ---------------------------
-
-
-def test_annotation_shortcut_is_active_while_the_document_is_shown(
-    all_plots_view: DocumentView,
-):
-    plot = plot_of(all_plots_view, AnnotationPlot)
-
-    assert all_plots_view.isVisible()
-    assert plot.create_label_action.isEnabled()
-
-
-def test_annotation_shortcut_is_switched_off_when_the_document_is_hidden(
-    all_plots_view: DocumentView,
-):
-    plot = plot_of(all_plots_view, AnnotationPlot)
-
-    all_plots_view.hide()
-
-    assert not plot.create_label_action.isEnabled()
-
-
-def test_annotation_shortcut_comes_back_when_the_document_is_shown_again(
-    all_plots_view: DocumentView,
-):
-    plot = plot_of(all_plots_view, AnnotationPlot)
-    all_plots_view.hide()
-
-    all_plots_view.show()
-
-    assert plot.create_label_action.isEnabled()
-
-
-def test_annotation_plot_added_to_a_hidden_document_starts_with_its_shortcut_off(
-    loaded_view: DocumentView,
-):
-    loaded_view.hide()
-
-    loaded_view.view_model.toggle_annotations()
-    QApplication.processEvents()
-
-    assert not plot_of(loaded_view, AnnotationPlot).create_label_action.isEnabled()

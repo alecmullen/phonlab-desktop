@@ -358,3 +358,46 @@ def test_list_tier_names_includes_tiers_that_have_labels(
     seeded_annotation(repository)  # a "word" tier with labels
 
     assert repository.list_type_names() == ["word"]
+
+
+# --------------------------- tier label search ---------------------------
+
+
+def test_find_labels_by_tier_name_returns_labels_with_file_and_times(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)
+
+    found = repository.find_labels_by_tier_name("word")
+
+    assert sorted((l.file_stem, l.label.label, l.start, l.end) for l in found) == [
+        ("sample", "a", 0.0, 0.5),
+        ("sample", "b", 0.5, 1.0),
+    ]
+    assert all(l.tier_name == "word" and l.label.id is not None for l in found)
+
+
+def test_find_labels_by_tier_name_spans_files_and_can_be_limited_to_one(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)
+    other = repository.create_annotation("other")
+    nodes = repository.create_nodes(other, [0.0, 2.0])
+    start, end = sorted(nodes, key=nodes.get)
+    repository.create_types(
+        other, [AnnotationType("word", [AnnotationLabel(start, end, "c")])]
+    )
+
+    everywhere = repository.find_labels_by_tier_name("word")
+    one_file = repository.find_labels_by_tier_name("word", "other")
+
+    assert sorted(l.label.label for l in everywhere) == ["a", "b", "c"]
+    assert [(l.file_stem, l.label.label) for l in one_file] == [("other", "c")]
+
+
+def test_find_labels_by_tier_name_ignores_other_tiers(
+    repository: DataAnnotationRepository,
+):
+    seeded_annotation(repository)
+
+    assert repository.find_labels_by_tier_name("phone") == []

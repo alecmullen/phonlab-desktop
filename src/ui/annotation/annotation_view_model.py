@@ -33,6 +33,7 @@ from ui.annotation.state.tier_display_state import (
     TierDisplayState,
     tier_display_from,
 )
+from ui.annotation.state.tier_search_state import TierSearchAction
 from ui.base.view_model import ViewModel
 from ui.document.state.load_progress_state import LoadProgressState
 from ui.document.state.status_message_state import StatusMessageState
@@ -250,6 +251,18 @@ class AnnotationViewModel(ViewModel):
         self.set_annotation_state(annotation)
         self.state_changed.emit(
             StatusMessageState(self.tr("Added {} tier(s)").format(len(names)))
+        )
+
+    def trigger_tier_search(self, tier_idx: int):
+        """`tier_idx` is a row of the plot, which shows only some of the tiers"""
+        tiers = self.annotation_view_state.types
+        if self.filestem is None or not 0 <= tier_idx < len(tiers):
+            self.state_changed.emit(
+                StatusMessageState(self.tr("Right-click a tier to search it"))
+            )
+            return
+        self.state_changed.emit(
+            TierSearchAction(tiers[tier_idx].type, self.filestem, self.window_state[0])
         )
 
     def write_textgrid(self, file_path: str, tg_type: str):

@@ -1,8 +1,5 @@
 from ui.document.state.plot_layout_state import PlotType
 
-# -- Mouse --
-DOUBLE_CLICK_INTERVAL_MS = 250
-
 # -- Settings files --
 PROJECT_FILE_NAME = "phonlab.toml"
 DISPLAY_SECTION = "display"
@@ -15,6 +12,9 @@ TIER_FONTS_KEY = "tier_fonts"
 AUDIO_FILE_SUFFIXES = (".wav",)
 TEXTGRID_FILE_SUFFIXES = (".textgrid",)
 PROJECT_DATABASE_FILENAME = "phonlab.db"
+
+# -- Mouse --
+DOUBLE_CLICK_INTERVAL_MS = 250
 
 # -- Document Window --
 DEFAULT_WINDOW_LENGTH = 10
@@ -103,7 +103,6 @@ FORMANT_LENGTH_SEC = {
     "dppt": 0.03,
 }
 FORMANT_VOICING_THRESHOLD = 0.5
-PHONLAB_DOCS_URL = "https://phonlab.readthedocs.io/en/latest/"
 FORMANT_DOCS = {
     "ifc": "acoustphon.html#phonlab.IFC_formants",
     "lpc": "acoustphon.html#phonlab.LPC_formants",
