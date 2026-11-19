@@ -143,8 +143,6 @@ class AnnotationPlot(DocumentPlot):
 
         font = self.getAxis("left").style.get("tickFont") or QFont()
         metrics = QFontMetrics(font)
-        # A tier occupies y in [i, i + 1], so its name goes at the middle of that band,
-        # level with the labels
         ticks = [
             (
                 i + 0.5,
@@ -188,9 +186,6 @@ class AnnotationPlot(DocumentPlot):
         pos = self.getViewBox().mapSceneToView(a0.scenePos())
 
         if a0.button() == Qt.MouseButton.RightButton:
-            # The context menu, which the view box raises on this click as it does
-            # in the other plots (a one-button mouse makes a right click with
-            # Control+click)
             self.context_pos = pos
             a0.ignore()
             return
