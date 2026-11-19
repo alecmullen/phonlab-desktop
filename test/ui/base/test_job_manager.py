@@ -1,10 +1,15 @@
+import gc
 import threading
+import time
+import weakref
 from collections.abc import Generator
 
+from PyQt6.QtCore import QCoreApplication, QThreadPool
 from pytestqt.qtbot import QtBot
 
 from ui.base.job import Job
 from ui.base.job_manager import JobManager
+from ui.base.view_model import ViewModel
 
 
 def fake_task(values: list[int]) -> Generator[int, None, None]:
@@ -117,3 +122,37 @@ def test_callbacks_run_on_the_main_thread(qtbot: QtBot):
     qtbot.waitUntil(lambda: len(threads) == 1, timeout=2000)
 
     assert threads[0] is threading.main_thread()
+
+
+def test_result_of_a_dropped_job_still_arrives_after_gc_ran(qtbot: QtBot):
+    """The garbage collector frees a worker nothing refers to any more, along with the
+    slots that receive its results. Results it emitted are still waiting in the event
+    queue then, and calling a slot that has been freed is a segmentation fault (or
+    the result is lost)."""
+    results: list[int] = []
+    started = threading.Event()
+    proceed = threading.Event()
+
+    def slow_task() -> Generator[int, None, None]:
+        started.set()
+        proceed.wait(5)
+        yield 1
+
+    def on_success(result: int):
+        results.append(result)
+
+    view_model = ViewModel()
+    view_model.launch_task("task", slow_task(), on_success, lambda e: None)
+    assert started.wait(5)
+    view_model.close_thread("task")  # drops the manager while the job still runs
+    on_success_ref = weakref.ref(on_success)
+    del on_success
+
+    proceed.set()
+    assert QThreadPool.globalInstance().waitForDone(5000)
+    time.sleep(0.1)  # the pool lets go of the finished worker
+    gc.collect()
+    assert on_success_ref() is not None  # the result still has to be delivered
+    QCoreApplication.processEvents()
+
+    assert results == [1]
