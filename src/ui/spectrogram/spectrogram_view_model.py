@@ -123,7 +123,9 @@ class SpectrogramViewModel(ViewModel):
             )
             self.state_changed.emit(AudioPrepped())
 
-        self.launch_task("prep_audio", task, on_success, self.on_error)
+        self.launch_task(
+            "prep_audio", task, on_success, self.on_error, replace_pending=True
+        )
 
     def _rescale_window(self, old: AudioChannelState | None, new: AudioChannelState):
         """Window indices are prepped-audio samples, so a change of the
@@ -242,7 +244,9 @@ class SpectrogramViewModel(ViewModel):
                 frequency_scale_of(settings.type),
             )
 
-        self.launch_task("sgram_window", task, on_success, self.on_error)
+        self.launch_task(
+            "sgram_window", task, on_success, self.on_error, replace_pending=True
+        )
 
     def update_sgram_window_state(
         self,

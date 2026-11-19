@@ -35,7 +35,7 @@ def test_call_creates_a_worker_for_the_job(qtbot: QtBot):
 
     manager(job)
 
-    assert manager.worker.job is None or manager.worker.job is job
+    assert manager.worker is not None
 
 
 def test_queue_job_emits_job_signal(qtbot: QtBot):
@@ -71,7 +71,7 @@ def test_call_wires_job_signal_to_worker_queue(qtbot: QtBot):
 
     manager.signals.job.emit(job2)
 
-    assert worker.job is job2
+    assert worker.pending[-1] is job2
 
 
 def test_call_wires_should_stop_signal_to_worker(qtbot: QtBot):
@@ -122,6 +122,49 @@ def test_callbacks_run_on_the_main_thread(qtbot: QtBot):
     qtbot.waitUntil(lambda: len(threads) == 1, timeout=2000)
 
     assert threads[0] is threading.main_thread()
+
+
+def test_jobs_queued_under_one_manager_each_get_only_their_own_results(
+    qtbot: QtBot,
+):
+    # Queued before the thread has picked anything up: every job still runs,
+    # in order, and results never reach another job's callbacks.
+    manager = JobManager()
+    seen: dict[str, list[int]] = {"a": [], "b": [], "c": []}
+
+    def job(name: str, values: list[int]) -> Job:
+        return Job(fake_task(values), seen[name].append, lambda e: None)
+
+    with qtbot.waitSignal(manager.signals.finished, timeout=2000):
+        manager(job("a", [1]))
+        manager.queue_job(job("b", [2, 3]))
+        manager.queue_job(job("c", [4]))
+
+    qtbot.waitUntil(lambda: seen == {"a": [1], "b": [2, 3], "c": [4]}, timeout=2000)
+
+
+def test_results_of_a_replaced_job_still_arrive(qtbot: QtBot):
+    # A job's results are emitted from the worker thread and delivered later
+    # on the main thread; a newer job that replaces it must not drop them.
+    manager = JobManager()
+    first_started = threading.Event()
+    release_first = threading.Event()
+    seen: dict[str, list[int]] = {"a": [], "b": []}
+
+    def slow_task() -> Generator[int, None, None]:
+        yield 1
+        first_started.set()
+        release_first.wait(2)
+        yield 2
+
+    manager(Job(slow_task(), seen["a"].append, lambda e: None))
+    assert first_started.wait(2)
+    manager.queue_job(
+        Job(fake_task([7]), seen["b"].append, lambda e: None, replace_pending=True)
+    )
+    release_first.set()
+
+    qtbot.waitUntil(lambda: seen == {"a": [1, 2], "b": [7]}, timeout=2000)
 
 
 def test_result_of_a_dropped_job_still_arrives_after_gc_ran(qtbot: QtBot):

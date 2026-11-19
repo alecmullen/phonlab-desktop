@@ -848,6 +848,8 @@ class DocumentViewModel(ViewModel):
                 StatusMessageState(self.tr("At least one channel must stay active"))
             )
             return
+        if new_active == active:
+            return
 
         primary = (
             next(iter(new_active))
