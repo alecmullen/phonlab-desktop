@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 
 from core.track_formants.entity.formant_method import FormantMethod
 from res.constants import (
@@ -7,11 +8,16 @@ from res.constants import (
     FORMANT_LENGTH_SEC,
     FORMANT_MEDIAN_F0,
     FORMANT_PREEMPHASIS,
-    FORMANT_SPEAKER,
     FORMANT_STEP_SEC,
     FORMANT_TOP_FREQUENCY,
     FORMANT_VOICING_THRESHOLD,
 )
+
+
+class FormantSpeakerType(Enum):
+    LONG = 0
+    MEDIUM = 1
+    SHORT = 2
 
 
 @dataclass(frozen=True)
@@ -31,7 +37,7 @@ class FormantOptions:
 
     method: FormantMethod = FormantMethod.IFC
     preemphasis: float = FORMANT_PREEMPHASIS["ifc"]
-    speaker: int = FORMANT_SPEAKER
+    speaker: FormantSpeakerType = FormantSpeakerType.MEDIUM
     order: int = FORMANT_AUTO_ORDER
     top_frequency: int = FORMANT_TOP_FREQUENCY
     median_f0: float = FORMANT_MEDIAN_F0

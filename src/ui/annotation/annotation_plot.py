@@ -94,10 +94,7 @@ class AnnotationPlot(DocumentPlot):
         self.getViewBox().menu.aboutToHide.connect(self.on_context_menu_about_to_close)
 
     def set_shortcuts_active(self, active: bool):
-        """Every document has an annotation plot with the same shortcut, and Qt counts
-        the plots of tabs that are not on screen too, so the shortcut is ambiguous
-        (and does nothing) as soon as a second document is open. Only the plot of the
-        document on screen should have its shortcut active"""
+        """Prevent ambiguous shortcuts when multible tabs open"""
         self.create_label_action.setEnabled(active)
 
     @pyqtSlot()
@@ -146,8 +143,6 @@ class AnnotationPlot(DocumentPlot):
 
         font = self.getAxis("left").style.get("tickFont") or QFont()
         metrics = QFontMetrics(font)
-        # A tier occupies y in [i, i + 1], so its name goes at the middle of that band,
-        # level with the labels
         ticks = [
             (
                 i + 0.5,
@@ -191,9 +186,6 @@ class AnnotationPlot(DocumentPlot):
         pos = self.getViewBox().mapSceneToView(a0.scenePos())
 
         if a0.button() == Qt.MouseButton.RightButton:
-            # The context menu, which the view box raises on this click as it does
-            # in the other plots (a one-button mouse makes a right click with
-            # Control+click)
             self.context_pos = pos
             a0.ignore()
             return
