@@ -24,7 +24,6 @@ class JobManager:
 
         self.worker.signals.finished.connect(self.signals.finished)
 
-
         token = object()
         JobManager._live_workers[token] = self.worker
         self.worker.signals.finished.connect(lambda: JobManager._release(token))
@@ -35,7 +34,7 @@ class JobManager:
         self.thread_pool.start(self.worker)
 
     @staticmethod
-    def _release(token: object):\
+    def _release(token: object):
         QTimer.singleShot(0, lambda: JobManager._live_workers.pop(token, None))
 
     def queue_job(self, job: Job):
