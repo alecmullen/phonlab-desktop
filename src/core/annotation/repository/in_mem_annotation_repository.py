@@ -39,6 +39,9 @@ class InMemAnnotationRepository(AnnotationRepository):
         self.types.clear()
         return None
 
+    def close(self) -> None:
+        pass
+
     def clear_annotation(self, annotation_id: int) -> None:
         self.nodes[annotation_id] = {}
         self.types[annotation_id] = []

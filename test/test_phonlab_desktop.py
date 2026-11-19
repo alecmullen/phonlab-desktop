@@ -111,7 +111,7 @@ def fake_run_app_dependencies(
         def show(self) -> None:
             self.shown = True
 
-        def open_single_document(self, files: list[str]) -> None:
+        def open_paths(self, files: list[str]) -> None:
             self.opened_files = files
 
     class FakeSplash:

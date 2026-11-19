@@ -75,3 +75,37 @@ def test_use_case_factory_for_dir_path_is_database_backed_and_cached(tmp_path: P
     assert first is not factory.in_mem_use_case_factory
     assert (tmp_path / "phonlab.db").exists()
     assert factory.get_use_case_factory(str(tmp_path)) is first
+
+
+def test_close_project_closes_the_database_and_forgets_it(tmp_path: Path):
+    factory = ViewModelFactoryImpl()
+    first = factory.get_use_case_factory(str(tmp_path))
+    engine = first.annotation_repository.local_datasource.database.engine
+    first.annotation_repository.create_annotation("sample")
+
+    factory.close_project(str(tmp_path))
+
+    reopened = factory.get_use_case_factory(str(tmp_path))
+    assert reopened is not first
+    assert reopened.annotation_repository.local_datasource.database.engine is not engine
+    assert reopened.annotation_repository.find_annotation_by_file_stem("sample")
+
+
+def test_close_project_ignores_a_directory_that_is_not_open(tmp_path: Path):
+    ViewModelFactoryImpl().close_project(str(tmp_path))
+
+    assert not (tmp_path / "phonlab.db").exists()
+
+
+def test_main_view_model_closes_projects_through_the_factory(
+    tmp_path: Path, qtbot: QtBot
+):
+    factory = ViewModelFactoryImpl()
+    view_model = factory.create(MainViewModel)
+    view_model.set_dir_path(str(tmp_path))
+    first = factory.get_use_case_factory(str(tmp_path))
+
+    view_model.close_project()
+
+    assert view_model.dir_path is None
+    assert factory.get_use_case_factory(str(tmp_path)) is not first

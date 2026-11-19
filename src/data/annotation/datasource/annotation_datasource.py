@@ -112,6 +112,9 @@ class AnnotationDataSource(DataSource):
     def reset(self) -> str | None:
         return self.database.reset()
 
+    def close(self):
+        self.database.close()
+
     def clear_annotation(self, annotation_id: int):
         with self.database.open_session() as session:
             annotation = session.get(AnnotationEntity, annotation_id)

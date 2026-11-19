@@ -143,4 +143,12 @@ def test_list_tier_names_covers_every_annotation_once_sorted():
 
 
 def test_list_tier_names_is_empty_when_there_are_no_tiers():
-    assert InMemAnnotationRepository().list_type_names() == []
+    assert InMemAnnotationRepository().list_tier_names() == []
+
+
+def test_close_keeps_the_annotations():
+    repository, id = two_tier_repository()
+
+    repository.close()
+
+    assert repository.get_annotation_by_id(id) is not None
