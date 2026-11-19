@@ -78,6 +78,7 @@ class DocumentViewModel(ViewModel):
         super().__init__()
 
         self.file_stem = file_stem
+        self.dir_path = dir_path
 
         self.raw_audio_state: AudioState = AudioState()
         self.audio_state: AudioState = AudioState()

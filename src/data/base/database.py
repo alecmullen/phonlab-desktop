@@ -19,6 +19,10 @@ class Database:
         backup of the old one"""
         raise NotImplementedError
 
+    def close(self) -> None:
+        """Release the connections to the database"""
+        raise NotImplementedError
+
 
 class SQLiteDatabase(Database):
     def connect(self, dir_path: str):
@@ -27,6 +31,11 @@ class SQLiteDatabase(Database):
             f"sqlite:///{Path(dir_path) / PROJECT_DATABASE_FILENAME}", echo=True
         )
         BaseEntity.metadata.create_all(self.engine)
+
+    def close(self):
+        """Close every connection to the database file. The engine reconnects if it is
+        used again"""
+        self.engine.dispose()
 
     def reset(self) -> str | None:
         """Move the database file aside as a timestamped backup and start a new one.

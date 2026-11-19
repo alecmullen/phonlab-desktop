@@ -5,7 +5,6 @@ from PyQt6.QtCore import QSize, Qt, pyqtSlot
 from PyQt6.QtGui import QAction, QCloseEvent, QIcon, QKeyEvent, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
-    QFileDialog,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -37,6 +36,7 @@ from ui.document.document_view import DocumentView
 from ui.document.document_view_model import DocumentViewModel
 from ui.document.state.audio_channel_state import AudioState
 from ui.main.component.open_audio_dialog import OpenAudioDialog
+from ui.main.component.open_path_dialog import OpenPathDialog
 from ui.main.component.save_audio_dialog import SaveAudioDialog
 from ui.main.main_view_model import MainViewModel
 from ui.main.state.project_import_state import ProjectImportState
@@ -88,9 +88,11 @@ class MainWindow(QMainWindow):
         self.open_action = QAction(
             QIcon.fromTheme("document-open"), self.tr("&Open"), self
         )
-        self.open_action.setStatusTip(self.tr("Open a sound file"))
+        self.open_action.setStatusTip(
+            self.tr("Open a sound file, or a directory as a project")
+        )
         self.open_action.setShortcut("Ctrl+O")
-        self.open_action.triggered.connect(self.select_new_tab_files)
+        self.open_action.triggered.connect(self.select_path_to_open)
 
         self.close_action = QAction(
             QIcon.fromTheme("window-close"), self.tr("&Close"), self
@@ -410,18 +412,10 @@ class MainWindow(QMainWindow):
         self.open_files([(file_stem, str(audio_file), None)], dir_path)
         return self.find_document(file_stem)
 
-    @pyqtSlot()
-    def select_project_to_open(self):
-        dir_path = QFileDialog.getExistingDirectory(
-            self, self.tr("Open Phonlab Directory")
-        )
-        if dir_path == "":
-            return
-
-        dir = Path(dir_path)
-
-        config_file = next(dir.glob("phonlab.toml"), None)
-        if config_file is None:
+    def open_project(self, dir_path: str):
+        """Open a directory as a project, closing the project that is open"""
+        has_config = (Path(dir_path) / "phonlab.toml").exists()
+        if not has_config:
             answer = QMessageBox.question(
                 self,
                 self.tr("Initialize Project"),
@@ -430,13 +424,16 @@ class MainWindow(QMainWindow):
                 ).format(dir_path),
             )
             if answer != QMessageBox.StandardButton.Yes:
-                self.select_project_to_open()
+                self.select_path_to_open()
                 return
-            else:
-                self.view_model.set_dir_path(dir_path)
-                self.view_model.init_toml()
 
+        # A project replaces whatever is open: only one project database is open at
+        # a time, and files opened on their own do not belong beside its files
+        self.close_project()
+        self.close_all_tabs()
         self.view_model.set_dir_path(dir_path)
+        if not has_config:
+            self.view_model.init_toml()
 
         if self.view_model.is_new_project():
             # First time here: build the project database from every TextGrid
@@ -446,6 +443,31 @@ class MainWindow(QMainWindow):
             )
         else:
             self.open_project_files(dir_path)
+
+    def close_all_tabs(self):
+        for index in reversed(range(self.tab_widget.count())):
+            self.close_tab(index)
+
+    def close_project(self):
+        """Close the project's tabs and its database. Documents that do not belong to
+        the project stay open"""
+        dir_path = self.view_model.dir_path
+        if dir_path is None:
+            return
+
+        for index in reversed(range(self.tab_widget.count())):
+            doc = self.tab_widget.widget(index)
+            if isinstance(doc, DocumentView) and doc.view_model.dir_path == dir_path:
+                self.close_tab(index)
+
+        if self.tier_search_dialog is not None:
+            self.tier_search_dialog.close()
+            self.tier_search_dialog = None
+            self.tier_search_dir_path = None
+
+        self.view_model.close_project()
+        self.save_layout_action.setEnabled(False)
+        self.update_project_actions()
 
     def open_project_files(self, dir_path: str):
         """Open the project's audio files. TextGrids are not read: once a project has
@@ -580,7 +602,18 @@ class MainWindow(QMainWindow):
             self.progress_dialog.setMinimumDuration(500)
         self.progress_dialog.setValue(state.done)
 
+    def open_paths(self, paths: list[str]):
+        """Open what the user chose: a lone directory is a project, anything else is
+        the sound file (and its TextGrid) of a document"""
+        if len(paths) == 1 and Path(paths[0]).is_dir():
+            self.open_project(paths[0])
+        else:
+            self.open_single_document(paths, self.view_model.dir_path)
+
     def open_single_document(self, filenames: list[str], dir: str | None = None):
+        """Open a sound file, with its TextGrid if given. A file in the project
+        directory `dir` is part of the project; one anywhere else is opened on its
+        own, which closes the project"""
         audio_files = [name for name in filenames if is_audio_file(name)]
         annotation_files = [name for name in filenames if is_textgrid_file(name)]
         if len(audio_files) == 0:
@@ -591,6 +624,10 @@ class MainWindow(QMainWindow):
             )
 
         audio_file = audio_files[0]
+        if dir is not None and not Path(audio_file).is_relative_to(dir):
+            self.close_project()
+            dir = None
+
         if dir is None:
             file_stem = Path(audio_file).with_suffix("").as_posix()
         else:
@@ -603,29 +640,29 @@ class MainWindow(QMainWindow):
         self.open_files([(file_stem, audio_file, annotation_file)], dir)
 
     @pyqtSlot()
-    def select_files_to_open(self, dir: str | None = None):
-        filenames, _ = QFileDialog.getOpenFileNames(
-            self, directory=dir, filter=self.filters
+    def select_path_to_open(self):
+        """Ask for a project directory or sound files, starting in the open project"""
+        paths = OpenPathDialog.get_paths(
+            self,
+            self.tr("Open a project directory or sound file"),
+            self.view_model.dir_path,
+            self.filters,
         )
-        if len(filenames) == 0:
+        if len(paths) == 0:
             return
 
         try:
-            self.open_single_document(filenames, dir)
+            self.open_paths(paths)
         except ValueError as err:
             QMessageBox.information(None, self.tr("Error"), str(err))
-            self.select_files_to_open(dir)
-
-    @pyqtSlot()
-    def select_new_tab_files(self):
-        self.select_files_to_open(dir=self.view_model.dir_path)
+            self.select_path_to_open()
 
     def open_files(
         self, paired_files: list[tuple[str, str, str | None]], dir_path: str | None
     ):
         """Open as audio file in separate tabs. paired_files is a list of tuples in the format
         (file_stem, audio_file, annotation_file), where file_stem is the path to the audio file,
-        minus the suffix (relative path for project, absolute for ad-hoc singal document
+        minus the suffix (relative path for project, absolute for ad-hoc single document
         editing). audio_file and annotation_file are the absolute paths to the respective .wav
         and .TextGrid files"""
 

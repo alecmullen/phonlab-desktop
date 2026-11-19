@@ -18,6 +18,7 @@ from core.load_audio.load_audio import LoadAudio
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.parse_textgrid.write_textgrid import WriteTextGrid
 from core.project.add_project_files import AddProjectFiles
+from core.project.close_project import CloseProject
 from core.project.rebuild_project import RebuildProject
 from core.save_audio.save_audio import SaveAudio
 from core.settings.load_display_plan import LoadDisplayPlan
@@ -96,6 +97,13 @@ class ViewModelFactoryImpl(ViewModelFactory):
 
         return use_case_factory
 
+    def close_project(self, dir_path: str) -> None:
+        """Close the database of a project directory and forget it, so that opening
+        the directory again connects to it anew"""
+        use_case_factory = self.dir_use_case_factories.pop(dir_path, None)
+        if use_case_factory is not None:
+            use_case_factory.provide(CloseProject).run_sync()
+
     def create_document_view_model(
         self, file_stem: str | None = None, dir_path: str | None = None
     ) -> DocumentViewModel:
@@ -169,4 +177,5 @@ class ViewModelFactoryImpl(ViewModelFactory):
             lambda dir_path: self.get_use_case_factory(dir_path).provide(
                 RebuildProject
             ),
+            self.close_project,
         )
