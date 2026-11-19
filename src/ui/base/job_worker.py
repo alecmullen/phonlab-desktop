@@ -7,13 +7,10 @@ from ui.base.job import Job
 
 
 class JobWorker(QRunnable):
-    """Runs jobs one after another on a pool thread.
+    """Runs jobs one after another on a pool thread, from a queue.
 
-    Jobs queued while one runs are kept in order. Each result and error is
-    emitted together with the job that produced it, and handed to that job's
-    own callbacks only, on the thread that created the worker (the main
-    thread). Nothing is connected per job, so a job that is replaced or
-    finished never loses results it already emitted."""
+    Each result and error is emitted together with the job that produced it, and handed
+    to that job's own callbacks only, on the thread that created the worker."""
 
     def __init__(self, job: Job):
         super().__init__()
@@ -22,8 +19,7 @@ class JobWorker(QRunnable):
         self._lock = threading.Lock()
         self._pending: deque[Job] = deque([job])
         self.should_stop = False
-        # Must be connected on the thread that owns the callbacks (the main
-        # thread), so that the delivery is queued onto it:
+
         self.signals.result.connect(self.slots.deliver_result)
         self.signals.error.connect(self.slots.deliver_error)
 
