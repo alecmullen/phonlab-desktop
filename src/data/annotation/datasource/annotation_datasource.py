@@ -1,5 +1,4 @@
 import re
-import time
 from collections import Counter
 from typing import Any
 
@@ -104,7 +103,6 @@ class AnnotationDataSource(DataSource):
 
     def get_annotation_by_id(self, id: int) -> AnnotationEntity:
         with self.database.open_session() as session:
-            start_time = time.perf_counter()
             stmt = (
                 select(AnnotationEntity)
                 .where(AnnotationEntity.id == id)
@@ -116,7 +114,6 @@ class AnnotationDataSource(DataSource):
                 )
             )
             annotation = session.scalar(stmt)
-            print("GET ANNOT:", time.perf_counter() - start_time)
 
         if annotation is None:
             raise ValueError("Annotation with that id does not exist in database")
