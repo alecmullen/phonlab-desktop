@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.project.find_project_dir import find_project_dir
 from core.project.scan_project_files import is_audio_file, is_textgrid_file
 from core.settings.app_settings import settings
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
@@ -612,8 +613,9 @@ class MainWindow(QMainWindow):
 
     def open_single_document(self, filenames: list[str], dir: str | None = None):
         """Open a sound file, with its TextGrid if given. A file in the project
-        directory `dir` is part of the project; one anywhere else is opened on its
-        own, which closes the project"""
+        directory `dir` is part of the project; if it is not in dir, the project
+        is closed. If it is in another project, that project is opened, and if
+        not, then the document if opened on its own"""
         audio_files = [name for name in filenames if is_audio_file(name)]
         annotation_files = [name for name in filenames if is_textgrid_file(name)]
         if len(audio_files) == 0:
@@ -627,6 +629,9 @@ class MainWindow(QMainWindow):
         if dir is not None and not Path(audio_file).is_relative_to(dir):
             self.close_project()
             dir = None
+
+        if dir is None:
+            dir = find_project_dir(audio_file)
 
         if dir is None:
             file_stem = Path(audio_file).with_suffix("").as_posix()
