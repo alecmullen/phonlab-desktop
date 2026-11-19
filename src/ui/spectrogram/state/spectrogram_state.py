@@ -21,13 +21,6 @@ class SpectrogramUnavailable(StrEnum):
     TOO_SHORT = "too_short"
 
 
-class FrequencyScale(StrEnum):
-    """How the rows of the spectrogram are spaced in frequency"""
-
-    HZ = "hz"  # evenly in Hz
-    MEL = "mel"  # evenly on the mel scale (closer together in Hz at the top)
-
-
 @dataclass(frozen=True)
 class SpectrogramState(State):
     # The frequency of each row of the spectrogram: in Hz, or in mels when the
