@@ -123,6 +123,32 @@ def test_load_from_samples_builds_wave_plot_and_sets_up_slider(
     assert loaded_view.slider.pageStep() == 10000
 
 
+def test_loading_a_stereo_document_preps_the_spectrogram_audio_once(
+    view: DocumentView,
+    document_view_model: DocumentViewModel,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # The two waveform plots draw their "Active" checkboxes while the file
+    # loads; that must not ask for the audio to be prepped again
+    calls = []
+    monkeypatch.setattr(
+        document_view_model, "prep_audio_spectrogram", lambda: calls.append(True)
+    )
+
+    document_view_model.load_from_samples(
+        AudioState(
+            {
+                0: AudioChannelState(np.arange(20000, dtype=np.float64), 1000),
+                1: AudioChannelState(np.arange(20000, dtype=np.float64) * -1, 1000),
+            }
+        )
+    )
+    QApplication.processEvents()
+
+    assert len(view.wave_plots) == 2
+    assert calls == [True]
+
+
 # --------------------------- state dispatch ---------------------------
 
 

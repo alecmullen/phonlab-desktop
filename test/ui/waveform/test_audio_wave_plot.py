@@ -245,6 +245,37 @@ def test_toggling_checkbox_forwards_to_view_model(
     assert calls == [False, True]
 
 
+def test_showing_the_active_state_does_not_report_a_toggle(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    # Only a click on the checkbox is a toggle; drawing the state is not
+    view_model = AudioWaveViewModel()
+    view_model.audio_wave_state = make_wave_state()
+    view_model.channel_active_state = ChannelActiveState(is_active=False)
+    calls = []
+    monkeypatch.setattr(view_model, "toggle_active", lambda a: calls.append(a))
+    plot = AudioWavePlot(view_model, show_active_checkbox=True)
+
+    plot.on_state_change(ChannelActiveState(is_active=True))
+    plot.on_state_change(ChannelActiveState(is_active=False))
+
+    assert plot.active_checkbox.isChecked() is False
+    assert calls == []
+
+
+def test_building_a_plot_for_an_active_channel_does_not_report_a_toggle(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+):
+    view_model = AudioWaveViewModel()
+    view_model.audio_wave_state = make_wave_state()
+    states = []
+    view_model.subscribe(states.append)
+
+    AudioWavePlot(view_model, show_active_checkbox=True)
+
+    assert states == []
+
+
 def test_channel_active_state_updates_checkbox_and_pen(qtbot: QtBot):
     view_model = AudioWaveViewModel()
     view_model.audio_wave_state = make_wave_state()
