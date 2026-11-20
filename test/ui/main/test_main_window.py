@@ -417,11 +417,13 @@ def test_select_project_builds_database_from_textgrids_before_opening_files(
 ):
     make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav")
     patch_directory_dialog(monkeypatch, str(tmp_path))
+    messages = capture_information(monkeypatch)
 
     main_window.select_path_to_open()
 
     assert opened == []  # still importing
     run_import_job(main_window)
+    assert messages == ["Found 1 TextGrids and built the project database."]
     [(files, dir_path)] = opened
     assert dir_path == str(tmp_path)
     # Annotations come from the database, so no TextGrid is passed on to be read
@@ -482,6 +484,7 @@ def test_select_project_reads_textgrid_with_any_case_suffix_on_first_open(
 ):
     make_project(tmp_path, "a.wav", "a.textgrid")
     patch_directory_dialog(monkeypatch, str(tmp_path))
+    capture_information(monkeypatch)
 
     main_window.select_path_to_open()
     run_import_job(main_window)
@@ -509,7 +512,52 @@ def test_select_project_reports_unreadable_textgrid_and_still_opens(
     main_window.select_path_to_open()
     run_import_job(main_window)
 
-    assert len(warnings) == 1 and "a" in warnings[0]
+    [warning] = warnings
+    assert warning.splitlines() == [
+        "Found 1 TextGrids and built the project database.",
+        "Could not read the TextGrid for: a",
+    ]
+    assert len(opened) == 1
+
+
+def test_select_project_shows_reading_progress_while_building_the_database(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav", "b.TextGrid")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    capture_information(monkeypatch)
+    main_window.select_path_to_open()
+    job = main_window.view_model.job_managers["project_import"].jobs[0]
+    results = iter(job.task)
+
+    job.on_success(next(results))  # the TextGrids have been counted
+
+    dialog = main_window.progress_dialog
+    assert dialog is not None
+    assert dialog.labelText() == "Reading TextGrids…" and dialog.maximum() == 2
+    for result in results:
+        job.on_success(result)
+    assert main_window.progress_dialog is None
+    assert len(opened) == 1
+
+
+def test_select_project_reports_nothing_when_it_has_no_textgrids(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    make_project(tmp_path, "a.wav")
+    patch_directory_dialog(monkeypatch, str(tmp_path))
+    messages = capture_information(monkeypatch)
+
+    main_window.select_path_to_open()
+    run_import_job(main_window)
+
+    assert messages == []
     assert len(opened) == 1
 
 
@@ -543,15 +591,20 @@ def test_select_project_initializes_toml_when_user_agrees(
     opened: list,
 ):
     patch_directory_dialog(monkeypatch, str(tmp_path))
-    monkeypatch.setattr(
-        QMessageBox,
-        "question",
-        staticmethod(lambda *args, **kwargs: QMessageBox.StandardButton.Yes),
-    )
+    questions: list[str] = []
+
+    def question(
+        parent: object, title: str, text: str, *args: object
+    ) -> QMessageBox.StandardButton:
+        questions.append(text)
+        return QMessageBox.StandardButton.Yes
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
 
     main_window.select_path_to_open()
     run_import_job(main_window)
 
+    assert questions == ["Make a project out of this folder?"]
     assert (tmp_path / "phonlab.toml").is_file()
     assert opened == [([], str(tmp_path))]
 
@@ -1624,6 +1677,100 @@ def test_rebuild_project_rereads_textgrids_into_a_new_database(
     assert reloaded == [doc.view_model]
 
 
+def add_project_document(
+    main_window: MainWindow, tmp_path: Path, file_stem: str = "a"
+) -> DocumentView:
+    """A tab for a file of the project in tmp_path, as `open_files` creates it"""
+    main_window.view_model.set_dir_path(str(tmp_path))
+    vm = main_window.view_model_factory.create(
+        DocumentViewModel, file_stem, str(tmp_path)
+    )
+    doc = DocumentView(vm)
+    main_window.tab_widget.addTab(doc, f"{file_stem}.wav")
+    main_window.tab_widget.setCurrentIndex(main_window.tab_widget.count() - 1)
+    return doc
+
+
+def test_rebuild_annotation_action_needs_a_project_file_in_the_current_tab(
+    main_window: MainWindow, tmp_path: Path
+):
+    assert not main_window.rebuild_annotation_action.isEnabled()
+
+    add_document(main_window)  # a tab that is not a project file
+    assert not main_window.rebuild_annotation_action.isEnabled()
+
+    add_project_document(main_window, tmp_path)
+    assert main_window.rebuild_annotation_action.isEnabled()
+
+    main_window.tab_widget.setCurrentIndex(0)
+    assert not main_window.rebuild_annotation_action.isEnabled()
+
+
+def test_rebuild_annotation_replaces_the_annotation_with_the_textgrid_when_user_says_yes(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid", "b.wav", "b.TextGrid")
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.Yes
+    )
+    add_project_document(main_window, tmp_path, "b")
+
+    main_window.rebuild_annotation()
+
+    assert loaded == [("b.TextGrid", True)]
+    assert asked == ["Overwrite the existing database with annotation from b.TextGrid?"]
+
+
+def test_rebuild_annotation_does_nothing_when_user_says_no(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    loaded, asked = stub_overwrite_scenario(
+        monkeypatch, True, QMessageBox.StandardButton.No
+    )
+    add_project_document(main_window, tmp_path)
+
+    main_window.rebuild_annotation()
+
+    assert loaded == []
+    assert len(asked) == 1
+
+
+def test_rebuild_annotation_does_not_ask_when_the_annotation_is_empty(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav", "a.TextGrid")
+    loaded, asked = stub_overwrite_scenario(monkeypatch, False)
+    add_project_document(main_window, tmp_path)
+
+    main_window.rebuild_annotation()
+
+    assert loaded == [("a.TextGrid", False)]
+    assert asked == []
+
+
+def test_rebuild_annotation_reports_a_file_without_a_textgrid(
+    main_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    make_project(tmp_path, "a.wav")
+    loaded, asked = stub_overwrite_scenario(monkeypatch, True)
+    messages = capture_information(monkeypatch)
+    add_project_document(main_window, tmp_path)
+
+    main_window.rebuild_annotation()
+
+    assert loaded == [] and asked == []
+    assert messages == ["There is no TextGrid for a in the project directory."]
+
+
+def test_rebuild_annotation_does_nothing_without_a_current_document(
+    main_window: MainWindow, tmp_path: Path
+):
+    main_window.view_model.set_dir_path(str(tmp_path))
+
+    main_window.rebuild_annotation()  # does not raise
+
+
 def test_open_single_document_accepts_textgrid_with_any_case_suffix(
     main_window: MainWindow, tmp_path: Path, opened: list
 ):
@@ -1637,7 +1784,9 @@ def test_open_single_document_accepts_textgrid_with_any_case_suffix(
 # --------------------------- annotation menu ---------------------------
 
 
-def test_annotation_menu_offers_tier_and_export_actions(main_window: MainWindow):
+def test_annotation_menu_offers_tier_rebuild_and_export_actions(
+    main_window: MainWindow,
+):
     menu = next(
         action.menu()
         for action in main_window.menuBar().actions()
@@ -1648,6 +1797,7 @@ def test_annotation_menu_offers_tier_and_export_actions(main_window: MainWindow)
         main_window.add_tiers_action,
         main_window.arrange_tiers_action,
         main_window.choose_fonts_action,
+        main_window.rebuild_annotation_action,
         main_window.export_annotation_action,
     ]
 

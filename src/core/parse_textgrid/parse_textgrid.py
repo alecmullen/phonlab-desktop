@@ -22,8 +22,12 @@ class ParseTextGrid(UseCase[Annotation]):
         self.annotation_repository = annotation_repository
 
     def __call__(self, file_path: str, file_stem: str, overwrite: bool = False):
-        """Replaces any existing content for file_stem only if overwrite is True"""
+        """Replaces any existing content for file_stem only if overwrite is True. The
+        file is read before anything in the database is touched, so an unreadable
+        TextGrid leaves the existing annotation as it was"""
         try:
+            tiers = phon.read_textgrid_with(file_path)
+
             existing = self.annotation_repository.find_annotation_by_file_stem(
                 file_stem
             )
@@ -40,8 +44,6 @@ class ParseTextGrid(UseCase[Annotation]):
                 # Otherwise the annotation has no content yet (a stem that was added
                 # without a TextGrid, or left behind by a parse that failed part-way),
                 # so fill it in
-
-            tiers = phon.read_textgrid_with(file_path)
 
             node_times: list[float] = []
             for tier in tiers:
