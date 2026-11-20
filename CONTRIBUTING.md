@@ -20,4 +20,6 @@ Tests are located in `test`. The file structure mirrors `src`. We strive to main
 
 ## Translation/Localization
 
-All user-facing text should be passed through `self.tr()` from within a Qt component. This extracts all strings so the app can be translated to other languages. Ex: `TextItem(self.tr("example"))`
+All user-facing text should be passed through `self.tr()` from within a Qt component. This extracts all strings so the app can be translated to other languages. Ex: `TextItem(self.tr("example"))`. 
+
+If Qt is installed, you can run `lupdate -extensions py . -ts src/res/translation/en.ts` to update the English translation file
