@@ -71,12 +71,14 @@ Audio can be edited by copy and paste. Select a chunk of audio to copy or cut it
 
  - #### Annotations
     - **Click**: 
-        - Select label interval
-        - Select node
+      - Select label interval
+      - Select node
     - **Right-click**:
-        - Edit label text
+      - Edit label text
     - **Delete/Backspace**:
-        - Delete selected node
+      - Delete selected node
+    - **Cmd + L**:
+      - Create interval label (when interval of time is selected and cursor hovering over tier)
 
  ### Context Menu
   - Over any Plot:
@@ -91,6 +93,11 @@ Audio can be edited by copy and paste. Select a chunk of audio to copy or cut it
     - **Reverse**: Reverse Audio
     - **Filter**: Apply filter to audio
     - **Revert to Original**: Undo all changes (edits, resamples, filters)
-    - **Resample**: open menu for resampling audio
+    - **Resample**: Open menu for resampling audio
   - Spectrogram
-    - **Spectrogram settings**: set sample rate, window size and step size for the spectrogram 
+    - **Spectrogram settings**: Open pectrogram settings
+    - **Track formants...**: Open settings to mark formant dots on spectrogram
+    - **Clear formants**
+  - Annotation
+    - **Create Label**: Create label on tier over selected time interval
+    - **Search in tier...**: Search text across label tier
