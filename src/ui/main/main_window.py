@@ -139,7 +139,7 @@ class MainWindow(QMainWindow):
 
         self.save_layout_action = QAction(self.tr("Save Window &Layout"), self)
         self.save_layout_action.setStatusTip(
-            self.tr("Save which plots are shown in the project file")
+            self.tr("Save which plots are shown in this project")
         )
         self.save_layout_action.setEnabled(False)
         self.save_layout_action.triggered.connect(self.save_window_layout)
@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):
             self.tr("Inspect Project &Database…"), self
         )
         self.inspect_database_action.setStatusTip(
-            self.tr("Look at the tables of the project database")
+            self.tr("Look at the tables in the project database")
         )
         self.inspect_database_action.triggered.connect(self.inspect_database)
 
@@ -240,7 +240,7 @@ class MainWindow(QMainWindow):
         self.sgramview_action = QAction(
             QIcon.fromTheme("view-media-visualization"), self.tr("&Spectrogram"), self
         )
-        self.sgramview_action.setStatusTip(self.tr("View waveform and spectrogram"))
+        self.sgramview_action.setStatusTip(self.tr("View spectrogram"))
         self.sgramview_action.setShortcut("Ctrl+2")
         self.sgramview_action.triggered.connect(self.plot_wave_sgram)
         self.sgramview_action.setEnabled(False)
@@ -266,7 +266,7 @@ class MainWindow(QMainWindow):
             QIcon.fromTheme("mail-send"), self.tr("Re-center"), self
         )
         self.recenter_action.setStatusTip(
-            self.tr("Center view on the selection, or the mark if nothing is selected")
+            self.tr("Center view on the selection, or the mark")
         )
         self.recenter_action.triggered.connect(self.recenter_on_selection)
 
@@ -281,16 +281,16 @@ class MainWindow(QMainWindow):
 
         self.rebuild_action = QAction(self.tr("&Rebuild Project…"), self)
         self.rebuild_action.setStatusTip(
-            self.tr("Read all TextGrids into a new project database")
+            self.tr("Read all annotation files into a new project database")
         )
         self.rebuild_action.triggered.connect(self.rebuild_project)
 
         self.rebuild_annotation_action = QAction(
-            self.tr("&Rebuild from TextGrid…"), self
+            self.tr("&Reread an annotation file"), self
         )
         self.rebuild_annotation_action.setStatusTip(
             self.tr(
-                "Replace the current file's annotation with its TextGrid. Other "
+                "Reread the current file's annotation. Other "
                 "files' annotations are left as they are"
             )
         )
@@ -325,7 +325,7 @@ class MainWindow(QMainWindow):
 
         self.choose_fonts_action = QAction(self.tr("Choose &Fonts…"), self)
         self.choose_fonts_action.setStatusTip(
-            self.tr("Choose the font of the labels of each annotation tier")
+            self.tr("Choose the fonts for the annotation tiers")
         )
         self.choose_fonts_action.setEnabled(False)
         self.choose_fonts_action.triggered.connect(self.choose_fonts)
@@ -542,7 +542,7 @@ class MainWindow(QMainWindow):
         self.update_project_actions()
 
     def open_project_files(self, dir_path: str):
-        """Open the project's audio files. TextGrids are not read: once a project has
+        """Open the project's audio files. Annotation files are not read: once a project has
         a database it holds the annotations, and Project > Rebuild re-reads them"""
         files = [
             file._replace(annotation_file=None)
@@ -551,7 +551,7 @@ class MainWindow(QMainWindow):
         self.open_files(files, dir_path)
 
     def open_new_project(self, dir_path: str, state: ProjectImportState):
-        """Report what was found in the new project's TextGrids, then open its files"""
+        """Report what was found in the new project's annotation files, then open its files"""
         if len(state.failed) > 0:
             QMessageBox.warning(
                 self, self.tr("Project"), self.describe_new_project(state)
@@ -594,7 +594,7 @@ class MainWindow(QMainWindow):
         def headline(state: ProjectImportState) -> str:
             if state.registered == 0 and len(state.imported) == 0:
                 return self.tr("There are no new annotations to add.")
-            return self.tr("Added {} new files and read {} TextGrids.").format(
+            return self.tr("Added {} new files and read {} annotation files.").format(
                 state.registered, len(state.imported)
             )
 
@@ -612,7 +612,7 @@ class MainWindow(QMainWindow):
 
         paths, _ = QFileDialog.getOpenFileNames(
             self,
-            self.tr("Choose the TextGrids to read again"),
+            self.tr("Choose the annotation files to read again"),
             dir_path,
             self.tr("TextGrids (*.TextGrid *.textgrid);;All files (*)"),
         )
@@ -623,8 +623,8 @@ class MainWindow(QMainWindow):
             self,
             self.tr("Replacement Annotations"),
             self.tr(
-                "Replace the annotations the project database has for {} TextGrids? "
-                "Changes made to them that were not saved to a TextGrid will be left "
+                "Replace the annotations the project database has for {} annotation files? "
+                "Changes made in the database that were not saved to a file will be left "
                 "out."
             ).format(len(paths)),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -635,7 +635,7 @@ class MainWindow(QMainWindow):
 
         def headline(state: ProjectImportState) -> str:
             lines = [
-                self.tr("Replaced the annotations for {} TextGrids.").format(
+                self.tr("Replaced the annotations for {} annotation files.").format(
                     len(state.imported)
                 )
             ]
@@ -643,7 +643,7 @@ class MainWindow(QMainWindow):
             if skipped > 0:
                 lines.append(
                     self.tr(
-                        "{} of the TextGrids chosen are not the annotation of a "
+                        "{} of the files chosen are not matched with a "
                         "recording in the project, and were left out."
                     ).format(skipped)
                 )
@@ -772,14 +772,13 @@ class MainWindow(QMainWindow):
         return [
             self.tr(
                 "Could not add the information from {}: the file is missing or no "
-                "longer fits the project. Add it again from Project > Add "
-                "Information from CSV."
+                "longer fits the project."
             ).format(", ".join(state.information_failed))
         ]
 
     def describe_new_project(self, state: ProjectImportState) -> str:
         lines = [
-            self.tr("Found {} TextGrids and built the project database.").format(
+            self.tr("Found {} annotation files and built the project database.").format(
                 state.total
             )
         ]
@@ -789,7 +788,7 @@ class MainWindow(QMainWindow):
         if len(state.failed) == 0:
             return []
         return [
-            self.tr("Could not read the TextGrid for: {}").format(
+            self.tr("Could not read the annotation file for: {}").format(
                 ", ".join(state.failed)
             )
         ]
@@ -980,7 +979,7 @@ class MainWindow(QMainWindow):
             raise ValueError(self.tr("Please include a .wav file"))
         if len(audio_files) > 1 or len(annotation_files) > 1:
             raise ValueError(
-                self.tr("Cannot select more than one .wav file and one .TextGrid file")
+                self.tr("Cannot select more than one .wav file and one annotation file")
             )
 
         audio_file = audio_files[0]

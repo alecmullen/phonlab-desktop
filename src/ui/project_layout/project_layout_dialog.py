@@ -244,7 +244,7 @@ class ProjectLayoutDialog(QDialog):
             combo.setEditable(True)
             line_edit = combo.lineEdit()
             if line_edit is not None:
-                line_edit.setPlaceholderText(self.tr("who is on this channel"))
+                line_edit.setPlaceholderText(self.tr("describe this channel"))
                 line_edit.editingFinished.connect(
                     lambda index=row, combo=combo: self.view_model.set_channel_talker(
                         index, combo.currentText()
@@ -333,7 +333,7 @@ class ProjectLayoutDialog(QDialog):
         intro = QLabel(
             self.tr(
                 "Files that share a recording's name, such as time series data that "
-                "belongs to the audio. Tick the kinds to keep with each recording, "
+                "belongs to the audio. Choose to keep with each recording, "
                 "and say what they are: a file that holds a tier of the annotation "
                 "is an annotation, and the tier needs a name."
             )
@@ -545,8 +545,8 @@ class ProjectLayoutDialog(QDialog):
         self.duplicate_audio_label.setText(
             self.tr(
                 "Warning: {} audio files look like copies of others (same name and "
-                "size in another folder). Each is imported as a recording of its "
-                "own; delete the copies, or move them out of the project, if that "
+                "size in another folder). Each is imported as a unique recording; "
+                "delete the copies, or move them out of the project, if that "
                 "is not what you want. For example:\n{}{}"
             ).format(
                 state.n_duplicate_audio,

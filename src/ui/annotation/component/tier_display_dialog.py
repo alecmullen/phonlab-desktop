@@ -79,9 +79,9 @@ class TierDisplayDialog(QDialog):
         intro = QLabel(
             self.tr(
                 "Tiers are listed as they appear in the plot, top to bottom, with "
-                "the number of labels each has in this file. Number them from the "
-                "bottom up; tiers shown as Hidden are left out."
-            )
+                "the number of labels each has in this file. The tier with the lowest "
+                "number is shown at the bottom of the display."
+                )
         )
         intro.setWordWrap(True)
 

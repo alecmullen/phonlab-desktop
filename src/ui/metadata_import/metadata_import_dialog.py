@@ -33,7 +33,7 @@ that column.</p>
 the talker information inferred from the file names and/or folders of the project,
 and then columns for 'age', 'race', 'gender', etc.</p>
 <p>A recording CSV needs a column that names each recording, by its file name or by
-its path in the project, and then columns for what is true of each recording, such
+its path in the project, and then columns for information about each recording, such
 as 'speech_rate' or 'condition'.</p>
 <p>Upper and lower case do not matter when matching. Rows that match nothing are
 listed and left out. Adding a file again with the same column names updates the

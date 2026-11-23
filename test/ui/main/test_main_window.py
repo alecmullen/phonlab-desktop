@@ -510,7 +510,7 @@ def test_select_project_builds_database_from_textgrids_before_opening_files(
 
     assert opened == []  # still importing
     run_import_job(main_window)
-    assert messages == ["Found 1 TextGrids and built the project database."]
+    assert messages == ["Found 1 annotation files and built the project database."]
     [(files, dir_path)] = opened
     assert dir_path == str(tmp_path)
     # Annotations come from the database, so no TextGrid is passed on to be read
@@ -603,8 +603,8 @@ def test_select_project_reports_unreadable_textgrid_and_still_opens(
 
     [warning] = warnings
     assert warning.splitlines() == [
-        "Found 1 TextGrids and built the project database.",
-        "Could not read the TextGrid for: a",
+        "Found 1 annotation files and built the project database.",
+        "Could not read the annotation file for: a",
     ]
     assert len(opened) == 1
 
@@ -1649,8 +1649,8 @@ def test_replacement_annotations_overwrite_the_ones_in_the_database(
     b = project_repository.find_annotation_by_file_stem("b")
     assert a is not None and [t.type for t in a.types] == ["word"]  # replaced
     assert b is not None and [t.type for t in b.types] == ["edited"]  # not chosen
-    assert "1 TextGrids" in questions[0]
-    assert messages == ["Replaced the annotations for 1 TextGrids."]
+    assert "1 annotation files" in questions[0]
+    assert messages == ["Replaced the annotations for 1 annotation files."]
 
 
 def test_replacement_says_which_chosen_textgrids_belong_to_no_recording(
@@ -1666,8 +1666,11 @@ def test_replacement_says_which_chosen_textgrids_belong_to_no_recording(
     main_window.replace_annotations()
     run_import_job(main_window)
 
-    assert messages[0].splitlines()[0] == "Replaced the annotations for 1 TextGrids."
-    assert "1 of the TextGrids chosen are not the annotation" in messages[0]
+    assert (
+        messages[0].splitlines()[0]
+        == "Replaced the annotations for 1 annotation files."
+    )
+    assert "1 of the files chosen are not matched with a recording" in messages[0]
 
 
 def test_replacement_does_nothing_when_no_textgrid_is_chosen_or_it_is_not_confirmed(
@@ -1713,7 +1716,7 @@ def test_add_new_files_registers_new_stems_and_reads_textgrids_for_empty_ones(
     for stem in ("new", "old"):
         annotation = project_repository.find_annotation_by_file_stem(stem)
         assert annotation is not None and len(annotation.types) == 1
-    assert messages == ["Added 1 new files and read 2 TextGrids."]
+    assert messages == ["Added 1 new files and read 2 annotation files."]
 
 
 def test_add_new_files_leaves_existing_annotations_alone(
@@ -1766,7 +1769,7 @@ def test_add_new_files_reports_unreadable_textgrids(
     run_import_job(main_window)
 
     [message] = messages
-    assert "Could not read the TextGrid for: a" in message
+    assert "Could not read the annotation file for: a" in message
 
 
 def test_rebuild_project_does_nothing_when_user_declines(
@@ -3005,4 +3008,4 @@ def test_adding_words_to_a_project_without_tiers_says_so(
 
     main_window.add_words()
 
-    assert "no annotation tiers" in errors[0]
+    assert "The project database has no annotation." in errors[0]
