@@ -41,7 +41,7 @@ class AddToProjectDialog(QDialog):
                 NEW_ANNOTATIONS,
                 self.tr("New annotations"),
                 self.tr(
-                    "TextGrids in the project folder that are not in the database yet. "
+                    "Annotation files in the project folder that are not in the database yet. "
                     "Each needs an audio file, which may be new too."
                 ),
             ),
@@ -49,7 +49,7 @@ class AddToProjectDialog(QDialog):
                 REPLACEMENT_ANNOTATIONS,
                 self.tr("Replacement annotations"),
                 self.tr(
-                    "Choose TextGrids to read again, replacing the annotations the "
+                    "Choose files to read again, replacing the annotations the "
                     "database has for them. Choosing them all is like rebuilding."
                 ),
             ),

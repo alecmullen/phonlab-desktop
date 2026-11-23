@@ -60,8 +60,8 @@ class WordImportViewModel(ViewModel):
         if not self.tiers:
             raise ValueError(
                 self.tr(
-                    "The project database has no annotation tiers yet. Read the "
-                    "annotations first, then add the words."
+                    "The project database has no annotation. Read the "
+                    "annotation files first, then add the words."
                 )
             )
         self.tier = next(

@@ -579,6 +579,6 @@ class ProjectLayoutViewModel(ViewModel):
     def _channel_evidence(self, looks_like_channels: bool | None) -> str:
         if looks_like_channels is True:
             return self.tr(
-                "The files are mono and equally long, as channels of one recording are."
+                "The files are mono and equally long, like channels of one recording."
             )
         return self.tr("The files could not be read to check.")
