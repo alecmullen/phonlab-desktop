@@ -429,6 +429,8 @@ def test_upsert_recordings_stores_files_talkers_and_fields(
         "t1/a",
         audio_file="t1/a.wav",
         annotation_file="t1/a.TextGrid",
+        video_file="t1/a.mp4",
+        media_offset=0.25,
         data_files={"track": "t1/a.trk"},
         talkers=["t1", "t2"],
         fields={"dialect": "north"},
@@ -438,6 +440,44 @@ def test_upsert_recordings_stores_files_talkers_and_fields(
 
     assert (result.created, result.updated, result.removed) == (1, 0, 0)
     assert repository.list_recordings() == [recording]
+
+
+def test_the_media_columns_are_added_only_when_a_recording_has_a_value(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", audio_file="a.wav")])
+    assert "video_file" not in repository.read_table("recording", 10).columns
+    assert "media_offset" not in repository.read_table("recording", 10).columns
+
+    repository.upsert_recordings(
+        [Recording("a", audio_file="a.wav", media_offset=0.5), Recording("b")]
+    )
+
+    columns = repository.read_table("recording", 10).columns
+    assert "media_offset" in columns
+    assert "video_file" not in columns  # nothing had a video
+    assert [r.media_offset for r in repository.list_recordings()] == [0.5, None]
+
+
+def test_media_values_are_replaced_and_cleared_when_the_recording_is_imported_again(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", video_file="a.mp4")])
+
+    repository.upsert_recordings([Recording("a", video_file="b.mp4")])
+    assert repository.list_recordings()[0].video_file == "b.mp4"
+
+    repository.upsert_recordings([Recording("a")])
+    assert repository.list_recordings()[0].video_file is None
+
+
+def test_media_columns_are_not_taken_for_columns_the_user_added(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", video_file="a.mp4")])
+
+    assert "video_file" in repository.builtin_columns(MetadataTarget.RECORDING)
+    assert repository.read_metadata(MetadataTarget.RECORDING) == {}
 
 
 def test_upsert_recordings_updates_existing_rows_and_keeps_their_annotation(
@@ -908,3 +948,52 @@ def test_a_column_name_that_is_not_safe_is_refused(
 ):
     with pytest.raises(ValueError):
         repository.replace_words([MetadataColumn('x"; DROP TABLE talker; --')], [])
+
+
+# --------------------------- the talker of a tier ---------------------------
+
+
+def test_a_tier_remembers_its_talker_and_the_talker_is_in_the_talker_table(
+    repository: DataAnnotationRepository,
+):
+    id = repository.create_annotation("a")
+    repository.create_types(
+        id,
+        [
+            AnnotationType("a-words", [], talker="ann"),
+            AnnotationType("b-words", [], talker="bob"),
+            AnnotationType("notes", []),
+        ],
+    )
+
+    annotation = repository.get_annotation_by_id(id)
+
+    assert [type.talker for type in annotation.types] == ["ann", "bob", None]
+    assert repository.list_talkers() == ["ann", "bob"]
+    found = repository.find_annotation_by_file_stem("a")
+    assert found is not None and [t.talker for t in found.types] == ["ann", "bob", None]
+
+
+def test_the_talker_column_of_tiers_is_only_added_when_a_tier_has_a_talker(
+    repository: DataAnnotationRepository,
+):
+    id = repository.create_annotation("a")
+    repository.create_types(id, [AnnotationType("words", [])])
+    assert "talker" not in repository.read_table("annotation_type", 10).columns
+
+    other = repository.create_annotation("b")
+    repository.create_types(other, [AnnotationType("words", [], talker="ann")])
+
+    assert "talker" in repository.read_table("annotation_type", 10).columns
+    assert repository.get_annotation_by_id(id).types[0].talker is None
+
+
+def test_the_talker_of_a_tier_is_shown_by_name_when_the_table_is_read(
+    repository: DataAnnotationRepository,
+):
+    id = repository.create_annotation("a")
+    repository.create_types(id, [AnnotationType("words", [], talker="ann")])
+
+    data = repository.read_table("annotation_type", 10)
+
+    assert data.rows[0][data.columns.index("talker")] == "ann"

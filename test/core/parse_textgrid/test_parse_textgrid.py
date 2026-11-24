@@ -357,3 +357,28 @@ def test_labels_take_the_node_nearest_their_time_when_tiers_nearly_agree(
     [label] = result.types[1].labels
     assert result.nodes[label.s_node] == pytest.approx(59.491978, abs=1e-3)
     assert result.nodes[label.e_node] == pytest.approx(2647.727295, abs=1e-3)
+
+
+def test_a_tier_that_says_who_produced_it_keeps_its_talker(tmp_path: Path):
+    eaf = tmp_path / "a.eaf"
+    eaf.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<ANNOTATION_DOCUMENT FORMAT="3.0" VERSION="3.0">
+<HEADER TIME_UNITS="milliseconds"/>
+<TIME_ORDER><TIME_SLOT TIME_SLOT_ID="t1" TIME_VALUE="0"/>
+<TIME_SLOT TIME_SLOT_ID="t2" TIME_VALUE="1000"/></TIME_ORDER>
+<TIER LINGUISTIC_TYPE_REF="lt" TIER_ID="a-words" PARTICIPANT="ann"><ANNOTATION>
+<ALIGNABLE_ANNOTATION ANNOTATION_ID="a1" TIME_SLOT_REF1="t1" TIME_SLOT_REF2="t2">
+<ANNOTATION_VALUE>hello</ANNOTATION_VALUE></ALIGNABLE_ANNOTATION></ANNOTATION></TIER>
+<TIER LINGUISTIC_TYPE_REF="lt" TIER_ID="notes"/>
+<LINGUISTIC_TYPE LINGUISTIC_TYPE_ID="lt" TIME_ALIGNABLE="true"/>
+</ANNOTATION_DOCUMENT>
+"""
+    )
+
+    result = next(ParseTextGrid(InMemAnnotationRepository())(str(eaf), "a"))
+
+    assert [(t.type, t.talker) for t in result.types] == [
+        ("a-words", "ann"),
+        ("notes", None),
+    ]

@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QHeaderView,
     QLabel,
+    QPushButton,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -15,6 +16,7 @@ from PyQt6.QtWidgets import (
 from ui.annotation.state.tier_display_state import (
     HIDDEN_POSITION,
     TierDisplayState,
+    grouped_by_talker,
     listed_as_plotted,
 )
 
@@ -33,11 +35,17 @@ class TierDisplayDialog(QDialog):
         self.setMinimumWidth(340)
 
         self.listed_names = [tier.name for tier in tiers]
+        self.talkers = {tier.name: tier.talker for tier in tiers}
         rows = listed_as_plotted(tiers)
 
-        self.table = QTableWidget(len(rows), 3)
+        self.table = QTableWidget(len(rows), 4)
         self.table.setHorizontalHeaderLabels(
-            [self.tr("Tier"), self.tr("Labels"), self.tr("Position")]
+            [
+                self.tr("Tier"),
+                self.tr("Talker"),
+                self.tr("Labels"),
+                self.tr("Position"),
+            ]
         )
         row_header = self.table.verticalHeader()
         if row_header is not None:
@@ -58,17 +66,27 @@ class TierDisplayDialog(QDialog):
             name_item.setTextAlignment(_RIGHT)
             self.table.setItem(row, 0, name_item)
 
+            talker_item = QTableWidgetItem(tier.talker or "")
+            talker_item.setFlags(talker_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            self.table.setItem(row, 1, talker_item)
+
             count_item = QTableWidgetItem(str(tier.n_labels))
             count_item.setFlags(count_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
             count_item.setTextAlignment(_RIGHT)
-            self.table.setItem(row, 1, count_item)
+            self.table.setItem(row, 2, count_item)
 
             spin_box = QSpinBox()
             spin_box.setRange(HIDDEN_POSITION, len(rows))
             spin_box.setSpecialValueText(self.tr("Hidden"))
             spin_box.setValue(tier.position)
-            self.table.setCellWidget(row, 2, spin_box)
+            self.table.setCellWidget(row, 3, spin_box)
             self.spin_boxes.append(spin_box)
+
+        # Only a file whose tiers say who produced them has talkers to group by
+        self.table.setColumnHidden(1, not any(self.talkers.values()))
+        self.group_button = QPushButton(self.tr("Group Tiers by Talker"))
+        self.group_button.setVisible(any(self.talkers.values()))
+        self.group_button.clicked.connect(self.group_by_talker)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -81,14 +99,31 @@ class TierDisplayDialog(QDialog):
                 "Tiers are listed as they appear in the plot, top to bottom, with "
                 "the number of labels each has in this file. The tier with the lowest "
                 "number is shown at the bottom of the display."
-                )
+            )
         )
         intro.setWordWrap(True)
 
         layout = QVBoxLayout(self)
         layout.addWidget(intro)
         layout.addWidget(self.table)
+        layout.addWidget(self.group_button)
         layout.addWidget(buttons)
+
+    def group_by_talker(self):
+        """Number the shown tiers again so that the tiers of one talker are together"""
+        grouped = grouped_by_talker(
+            [
+                TierDisplayState(
+                    tier.name, tier.position, talker=self.talkers[tier.name]
+                )
+                for tier in self.tiers()
+            ]
+        )
+        positions = {tier.name: tier.position for tier in grouped}
+        for row, spin_box in enumerate(self.spin_boxes):
+            item = self.table.item(row, 0)
+            if item is not None:
+                spin_box.setValue(positions[item.text()])
 
     def tiers(self) -> list[TierDisplayState]:
         """The tiers with the positions now chosen, in the order they were given"""

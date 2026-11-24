@@ -22,6 +22,10 @@ from data.base.datasource import DataSource
 
 SAFE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
+# Columns of the recording table that are only added when a recording has a value for
+# them, as most projects have none: name -> SQL type
+RECORDING_MEDIA_COLUMNS = {"video_file": "TEXT", "media_offset": "REAL"}
+
 # what added information is about -> (table entity, column that identifies a row)
 METADATA_TABLES: dict[MetadataTarget, tuple[type[BaseEntity], str, str]] = {
     MetadataTarget.RECORDING: (AnnotationEntity, "recording", "file_stem"),
@@ -254,6 +258,60 @@ class AnnotationDataSource(DataSource):
             session.add_all(types)
             session.commit()
 
+    def set_tier_talkers(self, annotation_id: int, talkers: dict[str, str]):
+        """Says who produced each tier of an annotation (tier name -> talker name),
+        adding the talker column to the table of tiers the first time any is known
+        and the talker to the table of talkers if it is not there"""
+        with self.database.engine.begin() as connection:
+            present = {
+                row[1]
+                for row in connection.exec_driver_sql(
+                    'PRAGMA table_info("annotation_type")'
+                )
+            }
+            if "talker_id" not in present:
+                connection.exec_driver_sql(
+                    'ALTER TABLE "annotation_type" ADD COLUMN "talker_id" '
+                    'INTEGER REFERENCES "talker" ("id")'
+                )
+            for tier, talker in talkers.items():
+                connection.execute(
+                    text(
+                        'INSERT INTO "talker" ("name") SELECT :talker WHERE NOT EXISTS '
+                        '(SELECT 1 FROM "talker" WHERE "name" = :talker)'
+                    ),
+                    {"talker": talker},
+                )
+                connection.execute(
+                    text(
+                        'UPDATE "annotation_type" SET "talker_id" = '
+                        '(SELECT "id" FROM "talker" WHERE "name" = :talker) '
+                        'WHERE "annotation_id" = :annotation AND "name" = :tier'
+                    ),
+                    {"talker": talker, "annotation": annotation_id, "tier": tier},
+                )
+
+    def read_tier_talkers(self, annotation_id: int) -> dict[int, str]:
+        """The talker of each tier of an annotation that has one (tier id -> talker
+        name); empty for a project in which no tier has a talker"""
+        with self.database.engine.connect() as connection:
+            if "talker_id" not in {
+                row[1]
+                for row in connection.exec_driver_sql(
+                    'PRAGMA table_info("annotation_type")'
+                )
+            }:
+                return {}
+            rows = connection.execute(
+                text(
+                    'SELECT t."id", k."name" FROM "annotation_type" t '
+                    'JOIN "talker" k ON k."id" = t."talker_id" '
+                    'WHERE t."annotation_id" = :annotation'
+                ),
+                {"annotation": annotation_id},
+            )
+            return {row[0]: row[1] for row in rows}
+
     def add_label(self, label: AnnotationLabelEntity) -> AnnotationLabelEntity:
         with self.database.open_session() as session:
             session.add(label)
@@ -380,7 +438,61 @@ class AnnotationDataSource(DataSource):
                     removed += 1
 
             session.commit()
+        self._set_media(recordings)
         return RecordingUpsertResult(created, updated, removed)
+
+    def _set_media(self, recordings: list[Recording]):
+        """Set the video and media offset of the recordings, adding the column to the
+        table first if some recording has a value for it and the table lacks it"""
+        with self.database.engine.begin() as connection:
+            present = {
+                row[1]
+                for row in connection.exec_driver_sql('PRAGMA table_info("recording")')
+            }
+            columns = [
+                name
+                for name in RECORDING_MEDIA_COLUMNS
+                if name in present
+                or any(getattr(r, name) is not None for r in recordings)
+            ]
+            for name in columns:
+                if name not in present:
+                    connection.exec_driver_sql(
+                        f'ALTER TABLE "recording" ADD COLUMN "{name}" '
+                        f"{RECORDING_MEDIA_COLUMNS[name]}"
+                    )
+            if columns:
+                assignments = ", ".join(f'"{name}" = :{name}' for name in columns)
+                connection.execute(
+                    text(
+                        f'UPDATE "recording" SET {assignments} '
+                        "WHERE file_stem = :file_stem"
+                    ),
+                    [
+                        {
+                            "file_stem": recording.file_stem,
+                            **{name: getattr(recording, name) for name in columns},
+                        }
+                        for recording in recordings
+                    ],
+                )
+
+    def read_recording_media(self) -> dict[str, dict[str, Any]]:
+        """The video and media offset of each recording that the table has columns
+        for, by file stem; empty for a project that never had a value for either"""
+        with self.database.engine.connect() as connection:
+            present = {
+                row[1]
+                for row in connection.exec_driver_sql('PRAGMA table_info("recording")')
+            }
+            columns = [name for name in RECORDING_MEDIA_COLUMNS if name in present]
+            if not columns:
+                return {}
+            selected = ", ".join(f'"{name}"' for name in columns)
+            rows = connection.exec_driver_sql(
+                f'SELECT file_stem, {selected} FROM "recording"'
+            )
+            return {row[0]: dict(zip(columns, row[1:])) for row in rows}
 
     def _set_links(
         self,
@@ -449,7 +561,10 @@ class AnnotationDataSource(DataSource):
 
     def builtin_columns(self, target: MetadataTarget) -> list[str]:
         entity, _, _ = METADATA_TABLES[target]
-        return [column.name for column in entity.__table__.columns]
+        names = [column.name for column in entity.__table__.columns]
+        if target is MetadataTarget.RECORDING:
+            names += list(RECORDING_MEDIA_COLUMNS)
+        return names
 
     def add_metadata(
         self,

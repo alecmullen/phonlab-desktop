@@ -1,4 +1,5 @@
 import bisect
+from dataclasses import replace
 from typing import Any
 
 from core.annotation.entity.annotation import (
@@ -53,7 +54,20 @@ class DataAnnotationRepository(AnnotationRepository):
 
     def get_annotation_by_id(self, id: int) -> Annotation:
         entity = self.local_datasource.get_annotation_by_id(id)
-        return entity_to_annotation(entity)
+        return self._with_talkers(entity_to_annotation(entity))
+
+    def _with_talkers(self, annotation: Annotation) -> Annotation:
+        """The annotation with the talker of each tier that has one"""
+        talkers = self.local_datasource.read_tier_talkers(annotation.get_id())
+        if not talkers:
+            return annotation
+        return replace(
+            annotation,
+            types=[
+                replace(type, talker=talkers.get(type.get_id()))
+                for type in annotation.types
+            ],
+        )
 
     def list_tier_names(self) -> list[str]:
         return self.local_datasource.list_tier_names()
@@ -61,7 +75,7 @@ class DataAnnotationRepository(AnnotationRepository):
     def find_annotation_by_file_stem(self, file_stem: str) -> Annotation | None:
         entity = self.local_datasource.find_annotation_by_file_stem(file_stem)
         if entity is not None:
-            return entity_to_annotation(entity)
+            return self._with_talkers(entity_to_annotation(entity))
         else:
             return None
 
@@ -114,6 +128,9 @@ class DataAnnotationRepository(AnnotationRepository):
         for entity in type_entities:
             entity.annotation_id = annotation_id
         self.local_datasource.add_types(type_entities)
+        talkers = {type.type: type.talker for type in types if type.talker}
+        if talkers:
+            self.local_datasource.set_tier_talkers(annotation_id, talkers)
 
     def create_label(self, label: AnnotationLabel, type_id: int) -> AnnotationLabel:
         entity = label_to_entity(label)
@@ -142,8 +159,11 @@ class DataAnnotationRepository(AnnotationRepository):
 
     def list_recordings(self) -> list[Recording]:
         channels = self.local_datasource.list_channels()
+        media = self.local_datasource.read_recording_media()
         return [
-            entity_to_recording(entity, channels.get(entity.id, []))
+            entity_to_recording(
+                entity, channels.get(entity.id, []), media.get(entity.file_stem)
+            )
             for entity in self.local_datasource.list_recordings()
         ]
 

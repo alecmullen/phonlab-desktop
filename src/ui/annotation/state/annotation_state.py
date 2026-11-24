@@ -25,6 +25,7 @@ class AnnotationTypeState(State):
     labels: list[AnnotationLabelState]
 
     id: int | None = None
+    talker: str | None = None
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,7 @@ def to_annotation(annotation_state: AnnotationState) -> Annotation:
                 type.type,
                 [to_label(label) for label in type.labels],
                 type.id,
+                type.talker,
             )
             for type in annotation_state.types
         ],
@@ -69,6 +71,7 @@ def to_annotation_state(annotation: Annotation) -> AnnotationState:
                     for label in type.labels
                 ],
                 type.id,
+                type.talker,
             )
             for type in annotation.types
         ],
@@ -107,11 +110,13 @@ def update_annotation_state_from_window(
 
     types = []
     node_extents: dict[int, set[AnnotationNodeExtentState]] = {}
+    talkers = sorted({type.talker for type in annotation.types if type.talker})
 
     for tier, type in enumerate(
         displayed_types(annotation.types, hidden_tiers, tier_order)
     ):
         font = (tier_fonts or {}).get(type.type, LABEL_FONT_FAMILY)
+        talker_index = talkers.index(type.talker) if type.talker else None
         labels = []
         for label in type.labels:
             label_state = update_label_state(
@@ -122,6 +127,7 @@ def update_annotation_state_from_window(
                 annotation.nodes[label.e_node].x,
                 tier,
                 font,
+                talker_index,
             )
 
             if label_state.is_visible:
@@ -136,7 +142,7 @@ def update_annotation_state_from_window(
                     node_extents, label.e_node, tier, is_point
                 )
 
-        types.append(AnnotationTypeState(type.type, labels, type.id))
+        types.append(AnnotationTypeState(type.type, labels, type.id, type.talker))
 
     nodes = {}
     for node in annotation.nodes.values():

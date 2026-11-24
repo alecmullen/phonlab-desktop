@@ -392,8 +392,17 @@ What was built, and where it differs from the sketch above:
   talkers). The annotation and data files pair with the base name (`a`). Such a
   recording opens as one document with a channel per file.
 - **Database tables.** The table of recordings is called `recording` (one row per
-  recording: `file_stem`, `audio_file`, `annotation_file`, `data_files`, `fields`, plus
-  any columns added from CSV files). Who is in a recording is not a column: it is in
+  recording: `file_stem`, `audio_file`, `annotation_file`, `data_files`, `fields`, plus any columns added from CSV files, and
+  `video_file` and `media_offset` when some recording has a value for them: a project
+  with neither does not have the columns). `video_file` is a video
+  named like the sound file or, for an ELAN annotation, the one it names; `media_offset`
+  is the offset in seconds that an ELAN file gives its sound (TIME_ORIGIN), kept as it is
+  written: the times of the annotation are not shifted by it. The participants an ELAN file
+  names on its tiers become the talkers of the recording (and rows of `talker`), unless
+  the layout already gave the recording talkers. Each tier that names a participant also has that talker: the table of tiers
+  (`annotation_type`) gets a `talker` column pointing at `talker`, but only when some tier
+  has a talker. The Show and Order Tiers dialog lists each tier's talker and can number the
+  tiers so that those of a talker are together, and the plot tints labels by talker. Who is in a recording is not a column: it is in
   `recording_talker`, a link table with a row for each recording and talker, pointing at
   the `talker` table (one row per talker, plus the information added about talkers). The
   channels of a recording stored as one file per channel are rows of `recording_channel`

@@ -862,3 +862,14 @@ def test_trigger_tier_search_uses_row_of_the_displayed_tiers(qtbot: QtBot):
         view_model.trigger_tier_search(0)
 
     assert blocker.args[0] == TierSearchAction("phone", repository.filenames[0], 2.5)
+
+
+def test_tier_display_names_the_talker_of_tiers_that_have_one():
+    view_model = make_annotated_view_model({0: 0.0, 1: 1.0}, [[], []])
+    types = view_model.annotation_state.types
+    view_model.annotation_state = replace(
+        view_model.annotation_state,
+        types=[replace(types[0], talker="ann"), types[1]],
+    )
+
+    assert [t.talker for t in view_model.tier_display()] == ["ann", None]

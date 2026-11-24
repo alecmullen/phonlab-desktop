@@ -18,6 +18,8 @@ class AnnotationLabelState(State):
     size: tuple[float, float] = field(default_factory=tuple)
 
     font: str = LABEL_FONT_FAMILY
+    # which of the talkers of the file produced it, by number; None if not known
+    talker_index: int | None = None
 
 
 def to_label(label_state: AnnotationLabelState) -> AnnotationLabel:
@@ -34,6 +36,7 @@ def update_label_state(
     end: float,
     tier: int,
     font: str = LABEL_FONT_FAMILY,
+    talker_index: int | None = None,
 ) -> AnnotationLabelState:
     if end <= win_start or start >= win_end:
         return replace(label, is_visible=False)
@@ -51,4 +54,5 @@ def update_label_state(
         pos=(center_x, center_y),
         size=(width, LABEL_HEIGHT_RATIO),
         font=font,
+        talker_index=talker_index,
     )

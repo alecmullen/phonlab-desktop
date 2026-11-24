@@ -150,6 +150,15 @@ NODE_V_MARGIN = 7
 NODE_H_MARGIN = 5
 POINT_LABEL_WIDTH = 100
 LABEL_HEIGHT_RATIO = 0.8
+# The tints that show whose tier a label is on, one for each talker in turn
+TALKER_TINTS = (
+    (31, 119, 180),
+    (255, 127, 14),
+    (44, 160, 44),
+    (214, 39, 40),
+    (148, 103, 189),
+    (140, 86, 75),
+)
 # The font of annotation labels, unless the user chose another for their tier
 LABEL_FONT_FAMILY = "Arial"
 LABEL_FONT_SIZE = 16
@@ -158,6 +167,7 @@ SAME_NODE_PIXEL_THRESH = 7
 
 # -- Project Import --
 PROJECT_AUDIO_EXTENSIONS = (".wav",)
+PROJECT_VIDEO_EXTENSIONS = (".mp4", ".m4v", ".mov", ".avi", ".mkv", ".webm", ".mpg")
 # Primary annotation extension (casefolded) -> format name
 ANNOTATION_FORMATS = {
     ".textgrid": "textgrid",
@@ -165,8 +175,6 @@ ANNOTATION_FORMATS = {
     ".wrd": "timit",
     ".eaf": "elan",
 }
-# The unit of time in an ELAN file -> seconds in that unit
-ELAN_TIME_UNITS = {"milliseconds": 0.001, "seconds": 1.0}
 # Extensions a format's reader reads itself, so they are not extra data files
 ANNOTATION_COMPANION_EXTENSIONS = {"buckeye": (".phones",), "timit": (".phn",)}
 PROJECT_IGNORED_NAMES = ("phonlab.db", "phonlab.toml")
