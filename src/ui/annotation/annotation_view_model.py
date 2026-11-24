@@ -15,6 +15,7 @@ from core.annotation.delete_node import DeleteNode, DeleteNodeError
 from core.annotation.entity.annotation import Annotation
 from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
+from core.annotation.split_label import NoConnectedLabelError, SplitLabel
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
@@ -46,6 +47,7 @@ class AnnotationViewModel(ViewModel):
         self,
         create_label: CreateLabel,
         update_label: UpdateLabel,
+        split_label: SplitLabel,
         update_node: UpdateNode,
         delete_node: DeleteNode,
         parse_text_grid: ParseTextGrid,
@@ -79,6 +81,7 @@ class AnnotationViewModel(ViewModel):
 
         self.create_label_use_case = create_label
         self.update_label_use_case = update_label
+        self.split_label_use_case = split_label
         self.update_node_use_case = update_node
         self.delete_node_use_case = delete_node
         self.parse_textgrid_use_case = parse_text_grid
@@ -360,6 +363,23 @@ class AnnotationViewModel(ViewModel):
         except ZeroLengthLabelError:
             self.state_changed.emit(
                 StatusMessageState(self.tr("Zoom in to create shorter labels"))
+            )
+            return
+
+        self.annotation_state = to_annotation_state(annotation)
+        self.update_annotation_change()
+
+    def split_label(self, type_idx: int, time: float):
+        annotation = to_annotation(self.annotation_state)
+        # type_idx is a row of the plot, which shows only some of the tiers
+        type_id = self.annotation_view_state.types[type_idx].id
+        if type_id is None:
+            raise ValueError("AnnotationType.id is None")
+        try:
+            annotation = self.split_label_use_case(annotation, [type_id], time)
+        except NoConnectedLabelError:
+            self.state_changed.emit(
+                StatusMessageState(self.tr("No label there to split"))
             )
             return
 
