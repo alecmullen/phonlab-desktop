@@ -159,7 +159,14 @@ SAME_NODE_PIXEL_THRESH = 7
 # -- Project Import --
 PROJECT_AUDIO_EXTENSIONS = (".wav",)
 # Primary annotation extension (casefolded) -> format name
-ANNOTATION_FORMATS = {".textgrid": "textgrid", ".words": "buckeye", ".wrd": "timit"}
+ANNOTATION_FORMATS = {
+    ".textgrid": "textgrid",
+    ".words": "buckeye",
+    ".wrd": "timit",
+    ".eaf": "elan",
+}
+# The unit of time in an ELAN file -> seconds in that unit
+ELAN_TIME_UNITS = {"milliseconds": 0.001, "seconds": 1.0}
 # Extensions a format's reader reads itself, so they are not extra data files
 ANNOTATION_COMPANION_EXTENSIONS = {"buckeye": (".phones",), "timit": (".phn",)}
 PROJECT_IGNORED_NAMES = ("phonlab.db", "phonlab.toml")

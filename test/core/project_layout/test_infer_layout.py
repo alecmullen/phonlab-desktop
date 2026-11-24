@@ -43,6 +43,15 @@ def test_annotation_format_is_the_one_paired_with_most_audio(tmp_path: Path):
     assert suggestion.annotation_sources[".textgrid"].n_paired == 1
 
 
+def test_elan_files_are_annotations(tmp_path: Path):
+    make_tree(tmp_path, ["a.wav", "a.eaf", "b.wav", "b.eaf"])
+
+    suggestion = infer(tmp_path)
+
+    assert suggestion.layout.annotation_ext == ".eaf"
+    assert suggestion.data_file_candidates == []
+
+
 def test_companions_of_the_annotation_format_are_not_data_files(tmp_path: Path):
     make_tree(tmp_path, ["a.wav", "a.wrd", "a.phn", "a.trk"])
 
