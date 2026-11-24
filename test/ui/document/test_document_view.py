@@ -1212,9 +1212,13 @@ def test_annotation_menu_has_its_own_actions_first_then_a_separator_then_navigat
     menu.aboutToShow.emit()  # opening it again changes nothing
     actions = menu.actions()
 
-    assert actions[:2] == [plot.create_label_action, plot.search_tier_action]
-    assert actions[2].isSeparator()
-    assert actions[3:] == [
+    assert actions[:3] == [
+        plot.create_label_action,
+        plot.split_label_action,
+        plot.search_tier_action,
+    ]
+    assert actions[3].isSeparator()
+    assert actions[4:] == [
         all_plots_view.recenter_action,
         all_plots_view.set_mark_action,
         all_plots_view.remove_mark_action,
