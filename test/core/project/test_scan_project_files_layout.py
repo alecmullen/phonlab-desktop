@@ -124,3 +124,93 @@ def test_the_table_format_of_a_tier_file_goes_with_it(tmp_path: Path):
     [file] = scan_project_files(str(tmp_path))
 
     assert file.tier_files["Phone"].table == table
+
+
+# --------------------------- video and media offset ---------------------------
+
+ELAN_WITH_MEDIA = """<?xml version="1.0" encoding="UTF-8"?>
+<ANNOTATION_DOCUMENT FORMAT="3.0" VERSION="3.0">
+<HEADER MEDIA_FILE="" TIME_UNITS="milliseconds">
+<MEDIA_DESCRIPTOR MEDIA_URL="file:///x/a.wav" MIME_TYPE="audio/x-wav"
+    RELATIVE_MEDIA_URL="./a.wav" TIME_ORIGIN="750"/>
+{video}
+</HEADER>
+<TIME_ORDER/>
+</ANNOTATION_DOCUMENT>
+"""
+
+VIDEO_DESCRIPTOR = (
+    '<MEDIA_DESCRIPTOR MEDIA_URL="file:///x/a.mp4" MIME_TYPE="video/mp4" '
+    'RELATIVE_MEDIA_URL="./a.mp4"/>'
+)
+
+
+def test_a_video_with_the_name_of_the_sound_file_is_kept_with_the_recording(
+    tmp_path: Path,
+):
+    write_wavs(tmp_path, ["t1/a.wav"])
+    make_tree(tmp_path, ["t1/a.mp4", "t1/b.mp4"])
+
+    [recording] = recordings_of(tmp_path)
+
+    assert recording.video_file == "t1/a.mp4"
+    assert recording.media_offset is None
+
+
+def test_an_elan_file_gives_the_offset_of_the_media_and_names_its_video(
+    tmp_path: Path,
+):
+    write_wavs(tmp_path, ["a.wav"])
+    (tmp_path / "a.eaf").write_text(ELAN_WITH_MEDIA.format(video=VIDEO_DESCRIPTOR))
+    make_tree(tmp_path, ["videos/a.mp4"])
+
+    [recording] = recordings_of(tmp_path)
+
+    assert recording.media_offset == 0.75
+    assert recording.video_file == "videos/a.mp4"  # found by its name
+
+
+def test_a_video_the_project_does_not_have_is_kept_by_the_name_elan_gives(
+    tmp_path: Path,
+):
+    write_wavs(tmp_path, ["a.wav"])
+    (tmp_path / "a.eaf").write_text(ELAN_WITH_MEDIA.format(video=VIDEO_DESCRIPTOR))
+
+    [recording] = recordings_of(tmp_path)
+
+    assert recording.video_file == "a.mp4"
+
+
+def test_the_participants_of_an_elan_file_are_the_talkers_of_its_recording(
+    tmp_path: Path,
+):
+    write_wavs(tmp_path, ["a.wav"])
+    (tmp_path / "a.eaf").write_text(
+        ELAN_WITH_MEDIA.format(video="").replace(
+            "<TIME_ORDER/>",
+            '<TIME_ORDER/><TIER TIER_ID="x" PARTICIPANT="ann" LINGUISTIC_TYPE_REF="t"/>'
+            '<TIER TIER_ID="y" PARTICIPANT="bob" LINGUISTIC_TYPE_REF="t"/>',
+        )
+    )
+
+    [recording] = recordings_of(tmp_path)
+
+    assert recording.talkers == ["ann", "bob"]
+
+
+def test_talkers_the_layout_names_are_kept_over_the_participants(tmp_path: Path):
+    write_wavs(tmp_path, ["aa1/a.wav"])
+    (tmp_path / "aa1" / "a.eaf").write_text(
+        ELAN_WITH_MEDIA.format(video="").replace(
+            "<TIME_ORDER/>",
+            '<TIME_ORDER/><TIER TIER_ID="x" PARTICIPANT="ann" LINGUISTIC_TYPE_REF="t"/>',
+        )
+    )
+    SaveProjectLayout()(
+        str(tmp_path),
+        ProjectLayout(annotation_ext=".eaf", levels=(FolderLevel(1, "talker"),)),
+    )
+
+    [recording] = recordings_of(tmp_path)
+
+    assert recording.talkers == ["aa1"]

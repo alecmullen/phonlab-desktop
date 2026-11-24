@@ -1,5 +1,6 @@
 from ui.annotation.state.tier_display_state import (
     TierDisplayState,
+    grouped_by_talker,
     hidden_and_order_from,
     listed_as_plotted,
     tier_display_from,
@@ -98,4 +99,30 @@ def test_tier_display_has_the_number_of_labels_of_each_tier():
         TierDisplayState("a", 1, 3),
         TierDisplayState("b", 2, 0),
         TierDisplayState("c", 0, 5),
+    ]
+
+
+def test_tier_display_names_the_talker_of_each_tier_that_has_one():
+    assert tier_display_from(
+        ["a", "b"], ["b"], [], {"a": 3}, {"a": "ann", "b": "bob"}
+    ) == [TierDisplayState("a", 1, 3, "ann"), TierDisplayState("b", 0, 0, "bob")]
+
+
+def test_grouping_by_talker_keeps_the_order_within_each_talker():
+    tiers = [
+        TierDisplayState("a-words", 1, talker="ann"),
+        TierDisplayState("b-words", 2, talker="bob"),
+        TierDisplayState("a-phones", 3, talker="ann"),
+        TierDisplayState("notes", 4),
+        TierDisplayState("hidden-b", 0, talker="bob"),
+    ]
+
+    grouped = grouped_by_talker(tiers)
+
+    assert [(t.name, t.position) for t in grouped] == [
+        ("a-words", 1),
+        ("b-words", 3),
+        ("a-phones", 2),
+        ("notes", 4),
+        ("hidden-b", 0),
     ]

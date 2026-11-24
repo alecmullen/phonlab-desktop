@@ -19,6 +19,8 @@ class AnnotationType:
     labels: list[AnnotationLabel]
 
     id: int | None = None
+    # who produced the labels of this tier (the name of a talker), if it is known
+    talker: str | None = None
 
     def get_id(self) -> int:
         if self.id is None:

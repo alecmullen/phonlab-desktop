@@ -204,3 +204,25 @@ def test_update_from_window_puts_labels_in_the_font_of_their_tier():
 
     fonts = {t.type: {label.font for label in t.labels} for t in state.types}
     assert fonts == {"word": {LABEL_FONT_FAMILY}, "phone": {"Charis SIL"}}
+
+
+def test_the_talker_of_a_type_is_kept_and_tints_its_labels_by_talker_number():
+    annotation = Annotation(
+        nodes={0: 0.0, 1: 1.0},
+        types=[
+            AnnotationType(
+                "b-words", [AnnotationLabel(0, 1, "hi", id=1)], talker="bob"
+            ),
+            AnnotationType(
+                "a-words", [AnnotationLabel(0, 1, "yo", id=2)], talker="ann"
+            ),
+            AnnotationType("notes", [AnnotationLabel(0, 1, "x", id=3)]),
+        ],
+    )
+
+    state = to_annotation_state(annotation)
+    shown = update_annotation_state_from_window(state, 0.0, 1.0)
+
+    assert [t.talker for t in state.types] == ["bob", "ann", None]
+    assert to_annotation(state) == annotation
+    assert [t.labels[0].talker_index for t in shown.types] == [1, 0, None]

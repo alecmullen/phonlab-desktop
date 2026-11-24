@@ -19,6 +19,11 @@ class Recording:
     channel_talkers: dict[str, str] = field(default_factory=dict)
     # kind of data file (e.g. a time series that goes with the audio) -> path
     data_files: dict[str, str] = field(default_factory=dict)
+    # a video of the recording, if the project has one
+    video_file: str | None = None
+    # how far, in seconds, the media is offset from the times of the annotation, as
+    # the annotation file (ELAN's) says; the times in the database are not changed
+    media_offset: float | None = None
     talkers: list[str] = field(default_factory=list)
     # any other variable taken from the folder or file names (dialect, session...)
     fields: dict[str, str] = field(default_factory=dict)

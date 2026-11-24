@@ -37,7 +37,8 @@ class ParseTextGrid(UseCase[Annotation]):
 
         The annotation is the tiers of the TextGrid (if there is one) and a tier for
         each of `tier_files` (tier name -> a text table of intervals and how to read it),
-        read with the help of the length of the audio file `audio_path`."""
+        read with the help of the length of the audio file `audio_path`. A tier that
+        says who produced it keeps that as its talker."""
         try:
             tiers = read_tiers(file_path) if file_path else []
             tiers += [
@@ -80,6 +81,7 @@ class ParseTextGrid(UseCase[Annotation]):
                 AnnotationType(
                     tier["name"],
                     [to_label(times, ids, label) for label in tier["labels"]],
+                    talker=tier.get("talker"),
                 )
                 for tier in tiers
             ]

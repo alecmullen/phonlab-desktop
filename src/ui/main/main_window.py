@@ -614,7 +614,7 @@ class MainWindow(QMainWindow):
             self,
             self.tr("Choose the annotation files to read again"),
             dir_path,
-            self.tr("TextGrids (*.TextGrid *.textgrid);;All files (*)"),
+            self.tr("Annotation files (*.TextGrid *.textgrid *.eaf);;All files (*)"),
         )
         if len(paths) == 0:
             return

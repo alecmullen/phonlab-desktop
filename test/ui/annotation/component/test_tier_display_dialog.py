@@ -93,6 +93,54 @@ def test_each_row_shows_how_many_labels_its_tier_has(qtbot: QtBot):
     )
     qtbot.addWidget(dialog)
 
-    assert [dialog.table.item(row, 1).text() for row in range(2)] == ["10", "43"]
-    assert dialog.table.horizontalHeaderItem(1).text() == "Labels"
+    assert [dialog.table.item(row, 2).text() for row in range(2)] == ["10", "43"]
+    assert dialog.table.horizontalHeaderItem(2).text() == "Labels"
     assert [box.value() for box in dialog.spin_boxes] == [2, 1]
+
+
+TALKER_TIERS = [
+    TierDisplayState("a-words", 1, talker="ann"),
+    TierDisplayState("b-words", 2, talker="bob"),
+    TierDisplayState("a-phones", 3, talker="ann"),
+    TierDisplayState("b-phones", 4, talker="bob"),
+    TierDisplayState("notes", 5),
+]
+
+
+def test_the_talker_column_and_button_are_there_only_when_tiers_have_talkers(
+    qtbot: QtBot,
+):
+    plain = make_dialog(qtbot)
+    plain.show()
+    assert plain.table.isColumnHidden(1)
+    assert not plain.group_button.isVisible()
+
+    dialog = TierDisplayDialog(TALKER_TIERS)
+    qtbot.addWidget(dialog)
+    dialog.show()
+
+    assert not dialog.table.isColumnHidden(1)
+    assert dialog.group_button.isVisible()
+    assert [dialog.table.item(row, 1).text() for row in range(5)] == [
+        "",
+        "bob",
+        "ann",
+        "bob",
+        "ann",
+    ]
+
+
+def test_grouping_by_talker_numbers_the_tiers_of_each_talker_together(qtbot: QtBot):
+    dialog = TierDisplayDialog(TALKER_TIERS)
+    qtbot.addWidget(dialog)
+
+    dialog.group_button.click()
+
+    chosen = {tier.name: tier.position for tier in dialog.tiers()}
+    assert chosen == {
+        "a-words": 1,
+        "a-phones": 2,
+        "b-words": 3,
+        "b-phones": 4,
+        "notes": 5,
+    }

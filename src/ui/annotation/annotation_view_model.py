@@ -142,6 +142,11 @@ class AnnotationViewModel(ViewModel):
             self.hidden_tiers,
             self.tier_order,
             {type.type: len(type.labels) for type in self.annotation_state.types},
+            {
+                type.type: type.talker
+                for type in self.annotation_state.types
+                if type.talker
+            },
         )
 
     def set_tier_display(

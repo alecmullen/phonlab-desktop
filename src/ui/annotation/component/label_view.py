@@ -5,6 +5,7 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter, QPicture
 from PyQt6.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
+from res.constants import TALKER_TINTS
 from ui.annotation.component.editable_label_item import EditableLabelItem
 from ui.annotation.state.annotation_label_state import AnnotationLabelState
 
@@ -46,8 +47,12 @@ class LabelView(pg.GraphicsObject):
     def _generate_picture(self):
         painter = QPainter(self.pic)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(pg.mkBrush(0, 0, 0, 20))
         for label in self.labels:
+            if label.talker_index is None:
+                painter.setBrush(pg.mkBrush(0, 0, 0, 20))
+            else:
+                tint = TALKER_TINTS[label.talker_index % len(TALKER_TINTS)]
+                painter.setBrush(pg.mkBrush(*tint, 45))
             width, height = label.size
             painter.drawRect(
                 QRectF(
