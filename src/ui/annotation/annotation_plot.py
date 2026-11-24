@@ -82,6 +82,14 @@ class AnnotationPlot(DocumentPlot):
         self.addAction(self.create_label_action)
         self.getViewBox().menu.addAction(self.create_label_action)
 
+        self.split_label_action = ContextMenuHintAction(
+            self.tr("Split Label"), parent=self
+        )
+        self.split_label_action.triggered.connect(self.split_label)
+
+        self.addAction(self.split_label_action)
+        self.getViewBox().menu.addAction(self.split_label_action)
+
         self.search_tier_action = ContextMenuHintAction(
             self.tr("Search in Tier..."),
             parent=self,
@@ -309,6 +317,12 @@ class AnnotationPlot(DocumentPlot):
         self.view_model.create_label_from_selection(
             type_idx, start, end, pixel_width * SAME_NODE_PIXEL_THRESH
         )
+
+    def split_label(self):
+        if self.context_pos is None:
+            raise RuntimeError("Right click position not captured")
+        type_idx, time = int(self.context_pos.y()), self.context_pos.x()
+        self.view_model.split_label(type_idx, time)
 
     def search_in_tier(self):
         if self.context_pos is not None:

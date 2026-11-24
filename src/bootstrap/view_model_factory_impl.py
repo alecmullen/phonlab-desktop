@@ -11,6 +11,7 @@ from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
 from core.annotation.search_tier import SearchTier
+from core.annotation.split_label import SplitLabel
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
@@ -138,6 +139,7 @@ class ViewModelFactoryImpl(ViewModelFactory):
         return AnnotationViewModel(
             use_case_factory.provide(CreateLabel),
             use_case_factory.provide(UpdateLabel),
+            use_case_factory.provide(SplitLabel),
             use_case_factory.provide(UpdateNode),
             use_case_factory.provide(DeleteNode),
             use_case_factory.provide(ParseTextGrid),

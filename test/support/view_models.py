@@ -24,6 +24,7 @@ from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.replace_in_tier import ReplaceInTier
 from core.annotation.search_tier import SearchTier
+from core.annotation.split_label import SplitLabel
 from core.annotation.update_label import UpdateLabel
 from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
@@ -112,6 +113,7 @@ def make_create_label(repository: SeedableAnnotationRepository) -> CreateLabel:
 def make_annotation_view_model(
     create_label: CreateLabel | None = None,
     update_label: UpdateLabel | None = None,
+    split_label: SplitLabel | None = None,
     update_node: UpdateNode | None = None,
     delete_node: DeleteNode | None = None,
     parse_text_grid: ParseTextGrid | None = None,
@@ -126,6 +128,7 @@ def make_annotation_view_model(
     return AnnotationViewModel(
         create_label or make_create_label(repository),
         update_label or UpdateLabel(repository),
+        split_label or SplitLabel(repository),
         update_node or UpdateNode(repository),
         delete_node or DeleteNode(repository),
         parse_text_grid or ParseTextGrid(repository),
