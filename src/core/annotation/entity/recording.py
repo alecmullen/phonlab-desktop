@@ -24,6 +24,9 @@ class Recording:
     # how far, in seconds, the media is offset from the times of the annotation, as
     # the annotation file (ELAN's) says; the times in the database are not changed
     media_offset: float | None = None
+    # who the layout (folders and file names) says is the talker; kept when the
+    # annotation file names talkers of its own, which are then `talkers`
+    target_talker: str | None = None
     talkers: list[str] = field(default_factory=list)
     # any other variable taken from the folder or file names (dialect, session...)
     fields: dict[str, str] = field(default_factory=dict)

@@ -24,7 +24,11 @@ SAFE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 # Columns of the recording table that are only added when a recording has a value for
 # them, as most projects have none: name -> SQL type
-RECORDING_MEDIA_COLUMNS = {"video_file": "TEXT", "media_offset": "REAL"}
+RECORDING_OPTIONAL_COLUMNS = {
+    "video_file": "TEXT",
+    "media_offset": "REAL",
+    "target_talker": "TEXT",
+}
 
 # what added information is about -> (table entity, column that identifies a row)
 METADATA_TABLES: dict[MetadataTarget, tuple[type[BaseEntity], str, str]] = {
@@ -438,12 +442,13 @@ class AnnotationDataSource(DataSource):
                     removed += 1
 
             session.commit()
-        self._set_media(recordings)
+        self._set_optional_columns(recordings)
         return RecordingUpsertResult(created, updated, removed)
 
-    def _set_media(self, recordings: list[Recording]):
-        """Set the video and media offset of the recordings, adding the column to the
-        table first if some recording has a value for it and the table lacks it"""
+    def _set_optional_columns(self, recordings: list[Recording]):
+        """Set the video, media offset and target talker of the recordings, adding a
+        column to the table first if some recording has a value for it and the table
+        lacks it"""
         with self.database.engine.begin() as connection:
             present = {
                 row[1]
@@ -451,7 +456,7 @@ class AnnotationDataSource(DataSource):
             }
             columns = [
                 name
-                for name in RECORDING_MEDIA_COLUMNS
+                for name in RECORDING_OPTIONAL_COLUMNS
                 if name in present
                 or any(getattr(r, name) is not None for r in recordings)
             ]
@@ -459,7 +464,7 @@ class AnnotationDataSource(DataSource):
                 if name not in present:
                     connection.exec_driver_sql(
                         f'ALTER TABLE "recording" ADD COLUMN "{name}" '
-                        f"{RECORDING_MEDIA_COLUMNS[name]}"
+                        f"{RECORDING_OPTIONAL_COLUMNS[name]}"
                     )
             if columns:
                 assignments = ", ".join(f'"{name}" = :{name}' for name in columns)
@@ -477,15 +482,16 @@ class AnnotationDataSource(DataSource):
                     ],
                 )
 
-    def read_recording_media(self) -> dict[str, dict[str, Any]]:
-        """The video and media offset of each recording that the table has columns
-        for, by file stem; empty for a project that never had a value for either"""
+    def read_recording_optional_columns(self) -> dict[str, dict[str, Any]]:
+        """The video, media offset and target talker of each recording that the table
+        has columns for, by file stem; empty for a project that never had a value for
+        any of them"""
         with self.database.engine.connect() as connection:
             present = {
                 row[1]
                 for row in connection.exec_driver_sql('PRAGMA table_info("recording")')
             }
-            columns = [name for name in RECORDING_MEDIA_COLUMNS if name in present]
+            columns = [name for name in RECORDING_OPTIONAL_COLUMNS if name in present]
             if not columns:
                 return {}
             selected = ", ".join(f'"{name}"' for name in columns)
@@ -563,7 +569,7 @@ class AnnotationDataSource(DataSource):
         entity, _, _ = METADATA_TABLES[target]
         names = [column.name for column in entity.__table__.columns]
         if target is MetadataTarget.RECORDING:
-            names += list(RECORDING_MEDIA_COLUMNS)
+            names += list(RECORDING_OPTIONAL_COLUMNS)
         return names
 
     def add_metadata(

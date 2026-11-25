@@ -431,6 +431,7 @@ def test_upsert_recordings_stores_files_talkers_and_fields(
         annotation_file="t1/a.TextGrid",
         video_file="t1/a.mp4",
         media_offset=0.25,
+        target_talker="t1",
         data_files={"track": "t1/a.trk"},
         talkers=["t1", "t2"],
         fields={"dialect": "north"},
@@ -457,6 +458,22 @@ def test_the_media_columns_are_added_only_when_a_recording_has_a_value(
     assert "media_offset" in columns
     assert "video_file" not in columns  # nothing had a video
     assert [r.media_offset for r in repository.list_recordings()] == [0.5, None]
+
+
+def test_the_target_talker_column_is_added_only_when_a_recording_has_one(
+    repository: DataAnnotationRepository,
+):
+    repository.upsert_recordings([Recording("a", talkers=["Ann"])])
+    assert "target_talker" not in repository.read_table("recording", 10).columns
+
+    repository.upsert_recordings(
+        [Recording("a", talkers=["Ann"], target_talker="aa1"), Recording("b")]
+    )
+
+    assert "target_talker" in repository.read_table("recording", 10).columns
+    assert [r.target_talker for r in repository.list_recordings()] == ["aa1", None]
+    assert repository.list_recordings()[0].talkers == ["Ann"]
+    assert "target_talker" in repository.builtin_columns(MetadataTarget.RECORDING)
 
 
 def test_media_values_are_replaced_and_cleared_when_the_recording_is_imported_again(

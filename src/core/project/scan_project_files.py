@@ -12,10 +12,11 @@ from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
 from core.read_tiers.entity.table_format import TierFile
 from core.read_tiers.read_elan_info import read_elan_info
+from core.read_tiers.read_srt import read_srt_tiers
 from res.constants import (
     AUDIO_FILE_SUFFIXES,
     PROJECT_VIDEO_EXTENSIONS,
-    TEXTGRID_FILE_SUFFIXES,
+    SINGLE_FILE_ANNOTATION_SUFFIXES,
 )
 
 
@@ -23,8 +24,24 @@ def is_audio_file(path: str | Path) -> bool:
     return Path(path).suffix.lower() in AUDIO_FILE_SUFFIXES
 
 
-def is_textgrid_file(path: str | Path) -> bool:
-    return Path(path).suffix.lower() in TEXTGRID_FILE_SUFFIXES
+def is_annotation_file(path: str | Path) -> bool:
+    """Whether the file is one that can be opened with a sound file: a TextGrid, an
+    ELAN file or a subtitle file"""
+    return Path(path).suffix.lower() in SINGLE_FILE_ANNOTATION_SUFFIXES
+
+
+def matching_annotation_files(audio_file: str | Path) -> list[str]:
+    """The annotation files in the folder of a sound file that are named like it
+    (`a.TextGrid`, `a.eaf` and `a.srt` for `a.wav`), TextGrids first"""
+    audio = Path(audio_file)
+    if not audio.parent.is_dir():
+        return []
+    names = {path.name.casefold(): path for path in audio.parent.iterdir()}
+    return [
+        str(names[key])
+        for suffix in SINGLE_FILE_ANNOTATION_SUFFIXES
+        if (key := f"{audio.stem}{suffix}".casefold()) in names
+    ]
 
 
 def scan_project_files(dir_path: str) -> list[ProjectFile]:
@@ -69,8 +86,9 @@ def scan_project_files(dir_path: str) -> list[ProjectFile]:
 def _with_media_and_talkers(recording: Recording, scan: ProjectScan) -> Recording:
     """The recording with its video, the offset of its media and its talkers, where
     the project has them: a video file named like the sound file, else the video an
-    ELAN file names, and the offset the ELAN file gives the sound. The participants
-    of an ELAN file are the talkers unless the layout has already given some."""
+    ELAN file names, and the offset the ELAN file gives the sound. When an ELAN or
+    subtitle file names talkers they are the talkers of the recording; the talkers the
+    layout gave it are kept as its target talker."""
     if recording.audio_file is None:
         return recording
     videos = [f for f in scan.files if f.ext in PROJECT_VIDEO_EXTENSIONS]
@@ -78,17 +96,39 @@ def _with_media_and_talkers(recording: Recording, scan: ProjectScan) -> Recordin
     video = next((f.path for f in videos if f.path_without_ext == stem_path), None)
 
     offset = None
-    talkers = recording.talkers
+    in_file: list[str] = []
     annotation = recording.annotation_file
     if annotation is not None and annotation.casefold().endswith(".eaf"):
         info = read_elan_info(
             str(Path(scan.root) / annotation), posixpath.basename(stem_path)
         )
         offset = info.offset
-        talkers = talkers or list(info.participants)
+        in_file = list(info.participants)
         if video is None and info.video is not None:
             video = _find_video(info.video, annotation, videos)
-    return replace(recording, video_file=video, media_offset=offset, talkers=talkers)
+    elif annotation is not None and annotation.casefold().endswith(".srt"):
+        in_file = _srt_talkers(str(Path(scan.root) / annotation))
+
+    talkers, target = recording.talkers, None
+    if in_file:
+        target = ", ".join(talkers) or None
+        talkers = in_file
+    return replace(
+        recording,
+        video_file=video,
+        media_offset=offset,
+        target_talker=target,
+        talkers=talkers,
+    )
+
+
+def _srt_talkers(path: str) -> list[str]:
+    """The talkers a subtitle file names; a file that cannot be read names none"""
+    try:
+        tiers = read_srt_tiers(path)
+    except (ValueError, OSError):
+        return []
+    return [tier["talker"] for tier in tiers if "talker" in tier]
 
 
 def _find_video(name: str, annotation: str, videos: list[ScannedFile]) -> str:

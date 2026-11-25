@@ -12,6 +12,8 @@ TIER_FONTS_KEY = "tier_fonts"
 # Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
 AUDIO_FILE_SUFFIXES = (".wav",)
 TEXTGRID_FILE_SUFFIXES = (".textgrid",)
+# Annotation files that can be opened with a single sound file
+SINGLE_FILE_ANNOTATION_SUFFIXES = (*TEXTGRID_FILE_SUFFIXES, ".eaf", ".srt")
 PROJECT_DATABASE_FILENAME = "phonlab.db"
 
 # -- Mouse --
@@ -174,9 +176,14 @@ ANNOTATION_FORMATS = {
     ".words": "buckeye",
     ".wrd": "timit",
     ".eaf": "elan",
+    ".srt": "srt",
 }
 # Extensions a format's reader reads itself, so they are not extra data files
 ANNOTATION_COMPANION_EXTENSIONS = {"buckeye": (".phones",), "timit": (".phn",)}
+# Subtitles (.srt): the longest a talker's name at the start of one is taken to be, and
+# the tier for subtitles with no talker named
+SRT_TALKER_MAX_LENGTH = 40
+SRT_NO_TALKER_TIER = "subtitles"
 PROJECT_IGNORED_NAMES = ("phonlab.db", "phonlab.toml")
 TALKER_FIELD_NAMES = ("talker", "speaker")
 # In a filename template: allows any characters (or none) that are not kept

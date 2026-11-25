@@ -63,12 +63,13 @@ def row_to_tier_label(row: Row) -> TierLabel:
 def entity_to_recording(
     entity: AnnotationEntity,
     channels: list[RecordingChannelEntity],
-    media: dict[str, Any] | None = None,
+    optional: dict[str, Any] | None = None,
 ) -> Recording:
     """The recording an annotation row describes, given its channel rows and the
-    columns it has beyond those of the entity (the video and media offset, in `media`).
+    columns it has beyond those of the entity (the video, media offset and target talker,
+    in `optional`).
     The links to talkers have to be loaded"""
-    media = media or {}
+    optional = optional or {}
     return Recording(
         file_stem=entity.file_stem,
         audio_file=entity.audio_file,
@@ -78,8 +79,9 @@ def entity_to_recording(
             row.channel: row.talker.name for row in channels if row.talker is not None
         },
         data_files=dict(entity.data_files or {}),
-        video_file=media.get("video_file"),
-        media_offset=media.get("media_offset"),
+        video_file=optional.get("video_file"),
+        media_offset=optional.get("media_offset"),
+        target_talker=optional.get("target_talker"),
         talkers=[link.talker.name for link in entity.talker_links],
         fields=dict(entity.fields or {}),
     )

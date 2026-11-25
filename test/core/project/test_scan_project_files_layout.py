@@ -198,7 +198,9 @@ def test_the_participants_of_an_elan_file_are_the_talkers_of_its_recording(
     assert recording.talkers == ["ann", "bob"]
 
 
-def test_talkers_the_layout_names_are_kept_over_the_participants(tmp_path: Path):
+def test_talkers_the_layout_names_are_kept_as_the_target_talker_beside_participants(
+    tmp_path: Path,
+):
     write_wavs(tmp_path, ["aa1/a.wav"])
     (tmp_path / "aa1" / "a.eaf").write_text(
         ELAN_WITH_MEDIA.format(video="").replace(
@@ -213,4 +215,73 @@ def test_talkers_the_layout_names_are_kept_over_the_participants(tmp_path: Path)
 
     [recording] = recordings_of(tmp_path)
 
-    assert recording.talkers == ["aa1"]
+    assert recording.talkers == ["ann"]  # as the file names them
+    assert recording.target_talker == "aa1"  # as the layout does
+
+
+def test_the_talkers_a_subtitle_file_names_are_the_talkers_of_its_recording(
+    tmp_path: Path,
+):
+    write_wavs(tmp_path, ["a.wav"])
+    (tmp_path / "a.srt").write_text(
+        "1\n00:00:00,000 --> 00:00:01,000\nAnn: Hi\n\n"
+        "2\n00:00:01,000 --> 00:00:02,000\nBob: Hello\n\n"
+        "3\n00:00:02,000 --> 00:00:03,000\nAnn: Bye\n"
+    )
+
+    [recording] = recordings_of(tmp_path)
+
+    assert recording.talkers == ["Ann", "Bob"]
+    assert recording.target_talker is None  # the layout named no talker
+
+
+def test_a_subtitle_file_that_cannot_be_read_names_no_talkers(tmp_path: Path):
+    write_wavs(tmp_path, ["a.wav"])
+    (tmp_path / "a.srt").write_text("1\nnot a time\nAnn: Hi\n")
+
+    [recording] = recordings_of(tmp_path)
+
+    assert recording.talkers == []
+
+
+def srt_text(talker: str) -> str:
+    return f"1\n00:00:00,000 --> 00:00:01,000\n{talker}: Hi\n"
+
+
+def test_subtitle_files_are_found_by_folder_and_filename_like_textgrids(
+    tmp_path: Path,
+):
+    write_wavs(tmp_path, ["aa1/aa1_01.wav", "aa1/aa1_02.wav", "bb2/bb2_01.wav"])
+    for stem in ("aa1/aa1_01", "aa1/aa1_02", "bb2/bb2_01"):
+        (tmp_path / f"{stem}.srt").write_text(srt_text("Camille"))
+    SaveProjectLayout()(
+        str(tmp_path),
+        ProjectLayout(
+            annotation_ext=".srt",
+            levels=(FolderLevel(1, "group"),),
+            filename_template="{talker}_{item:d}",
+        ),
+    )
+
+    recordings = {r.file_stem: r for r in recordings_of(tmp_path)}
+
+    first = recordings["aa1/aa1_01"]
+    assert first.annotation_file == "aa1/aa1_01.srt"
+    assert first.fields["group"] == "aa1"
+    assert first.talkers == ["Camille"]  # as the subtitles name them
+    assert first.target_talker == "aa1"  # as the layout does
+    assert first.fields["item"] == "01"
+    assert recordings["bb2/bb2_01"].talkers == ["Camille"]
+    assert recordings["bb2/bb2_01"].target_talker == "bb2"
+
+
+def test_a_project_of_subtitle_files_is_read_as_it_appears(tmp_path: Path):
+    write_wavs(tmp_path, ["aa1/aa1_01.wav", "bb2/bb2_01.wav"])
+    (tmp_path / "aa1" / "aa1_01.srt").write_text(srt_text("Ann"))
+    (tmp_path / "bb2" / "bb2_01.srt").write_text(srt_text("Bob"))
+
+    recordings = {r.file_stem: r for r in recordings_of(tmp_path)}
+
+    assert recordings["aa1/aa1_01"].annotation_file == "aa1/aa1_01.srt"
+    assert recordings["aa1/aa1_01"].talkers == ["Ann"]
+    assert recordings["aa1/aa1_01"].target_talker == "aa1"
