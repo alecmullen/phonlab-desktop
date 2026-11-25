@@ -17,7 +17,8 @@ class AnnotationEntity(BaseEntity):
     # the project directory. Who is in the recording is in `talker_links`, and the
     # audio files of a recording stored as one file per channel are in the
     # recording_channel table, which a project has only if it has such recordings.
-    # The columns `video_file` and `media_offset` (see RECORDING_MEDIA_COLUMNS) are
+    # The columns `video_file`, `media_offset` and `target_talker` (see
+    # RECORDING_OPTIONAL_COLUMNS) are
     # added when a recording first has a value for them.
     audio_file: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     annotation_file: Mapped[str | None] = mapped_column(String(1024), nullable=True)

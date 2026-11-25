@@ -17,7 +17,11 @@ from PyQt6.QtWidgets import (
 )
 
 from core.annotation.entity.metadata import MetadataTarget
-from core.project.scan_project_files import is_audio_file, is_textgrid_file
+from core.project.scan_project_files import (
+    is_annotation_file,
+    is_audio_file,
+    matching_annotation_files,
+)
 from core.settings.app_settings import settings
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.component.tier_font_dialog import TierFontDialog
@@ -50,6 +54,7 @@ from ui.main.component.add_to_project_dialog import (
 )
 from ui.main.component.open_audio_dialog import DEFAULT_SAMPLE_RATE, OpenAudioDialog
 from ui.main.component.open_path_dialog import OpenPathDialog
+from ui.main.component.open_with_annotation_dialog import ask_open_with_annotation
 from ui.main.component.save_audio_dialog import SaveAudioDialog
 from ui.main.main_view_model import MainViewModel
 from ui.main.state.audio_open_options import AudioOpenOptionsState, ChannelMode
@@ -74,7 +79,8 @@ class MainWindow(QMainWindow):
         self.resize(1200, 800)
 
         self.filters = (
-            "Sound files and TextGrids (*.wav *.WAV *.TextGrid *.textgrid *.TEXTGRID)"
+            "Sound files and annotations (*.wav *.WAV *.TextGrid *.textgrid "
+            "*.TEXTGRID *.eaf *.srt)"
         )
         self.splash = None
         self.progress_dialog: QProgressDialog | None = None
@@ -614,7 +620,9 @@ class MainWindow(QMainWindow):
             self,
             self.tr("Choose the annotation files to read again"),
             dir_path,
-            self.tr("Annotation files (*.TextGrid *.textgrid *.eaf);;All files (*)"),
+            self.tr(
+                "Annotation files (*.TextGrid *.textgrid *.eaf *.srt);;All files (*)"
+            ),
         )
         if len(paths) == 0:
             return
@@ -970,11 +978,12 @@ class MainWindow(QMainWindow):
             self.open_single_document(paths, self.view_model.dir_path)
 
     def open_single_document(self, filenames: list[str], dir: str | None = None):
-        """Open a sound file, with its TextGrid if given. A file in the project
-        directory `dir` is part of the project; one anywhere else is opened on its
-        own, which closes the project"""
+        """Open a sound file, with its TextGrid, ELAN or subtitle file if given. A file
+        in the project directory `dir` is part of the project; one anywhere else is
+        opened on its own, which closes the project, and is offered the annotation
+        file named like it in its folder if none is given"""
         audio_files = [name for name in filenames if is_audio_file(name)]
-        annotation_files = [name for name in filenames if is_textgrid_file(name)]
+        annotation_files = [name for name in filenames if is_annotation_file(name)]
         if len(audio_files) == 0:
             raise ValueError(self.tr("Please include a .wav file"))
         if len(audio_files) > 1 or len(annotation_files) > 1:
@@ -995,6 +1004,12 @@ class MainWindow(QMainWindow):
         annotation_file = None
         if len(annotation_files) > 0:
             annotation_file = annotation_files[0]
+        elif dir is None:
+            # A sound file opened on its own has no project database to take its
+            # annotation from, so offer the one that is next to it
+            matches = matching_annotation_files(audio_file)
+            if matches:
+                annotation_file = ask_open_with_annotation(self, audio_file, matches)
 
         self.open_files([(file_stem, audio_file, annotation_file)], dir)
 

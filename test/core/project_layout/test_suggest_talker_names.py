@@ -43,3 +43,7 @@ def test_an_unreadable_file_suggests_nothing(tmp_path: Path):
 
     assert SuggestTalkerNames()(str(tmp_path), "a.TextGrid") == []
     assert SuggestTalkerNames()(str(tmp_path), "missing.TextGrid") == []
+
+
+def test_the_tier_for_subtitles_with_no_talker_is_not_a_talker_name():
+    assert talker_names_from_tiers(["Camille", "subtitles"]) == ["Camille"]

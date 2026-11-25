@@ -382,3 +382,19 @@ def test_a_tier_that_says_who_produced_it_keeps_its_talker(tmp_path: Path):
         ("a-words", "ann"),
         ("notes", None),
     ]
+
+
+def test_each_talker_of_a_subtitle_file_gets_a_tier(tmp_path: Path):
+    srt_file = tmp_path / "a.srt"
+    srt_file.write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\nAnn: Hi\n\n"
+        "2\n00:00:02,000 --> 00:00:03,000\nBob: Hello\n"
+    )
+
+    result = next(ParseTextGrid(InMemAnnotationRepository())(str(srt_file), "a"))
+
+    assert [(t.type, t.talker) for t in result.types] == [
+        ("Ann", "Ann"),
+        ("Bob", "Bob"),
+    ]
+    assert [label.label for label in result.types[1].labels] == ["Hello"]

@@ -159,10 +159,10 @@ class DataAnnotationRepository(AnnotationRepository):
 
     def list_recordings(self) -> list[Recording]:
         channels = self.local_datasource.list_channels()
-        media = self.local_datasource.read_recording_media()
+        optional = self.local_datasource.read_recording_optional_columns()
         return [
             entity_to_recording(
-                entity, channels.get(entity.id, []), media.get(entity.file_stem)
+                entity, channels.get(entity.id, []), optional.get(entity.file_stem)
             )
             for entity in self.local_datasource.list_recordings()
         ]

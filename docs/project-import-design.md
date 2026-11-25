@@ -391,15 +391,28 @@ What was built, and where it differs from the sketch above:
   names of a paired TextGrid (`Ann - words`, `words - Ann`, or tiers named for
   talkers). The annotation and data files pair with the base name (`a`). Such a
   recording opens as one document with a channel per file.
+- **Subtitle (.srt) annotations** become one tier per talker, named for the talker, whose
+  labels are that talker's subtitles between the times each is shown. A subtitle names its
+  talker only when the talker changes (`Camille: Okay`), so one with no name is by the
+  talker of the one before it. A name is whatever precedes the first `: ` at the start of a
+  subtitle, up to 40 characters, so a subtitle that begins like `Note: this` would be
+  taken for a talker named `Note`. Subtitles before the first named talker, or all of them
+  when none is named, go to a tier called `subtitles` with no talker. The talkers named
+  become the talkers of the recording, as ELAN participants do.
+- **Opening a sound file on its own** (File > Open, not in the project) offers the
+  TextGrid, ELAN or subtitle file in its folder that is named like it; with several the user
+  picks one. A sound file of the project takes its annotation from the project database.
 - **Database tables.** The table of recordings is called `recording` (one row per
   recording: `file_stem`, `audio_file`, `annotation_file`, `data_files`, `fields`, plus any columns added from CSV files, and
-  `video_file` and `media_offset` when some recording has a value for them: a project
-  with neither does not have the columns). `video_file` is a video
+  `video_file`, `media_offset` and `target_talker` when some recording has a value for
+  them: a project with none does not have the columns). `video_file` is a video
   named like the sound file or, for an ELAN annotation, the one it names; `media_offset`
   is the offset in seconds that an ELAN file gives its sound (TIME_ORIGIN), kept as it is
   written: the times of the annotation are not shifted by it. The participants an ELAN file
-  names on its tiers become the talkers of the recording (and rows of `talker`), unless
-  the layout already gave the recording talkers. Each tier that names a participant also has that talker: the table of tiers
+  names on its tiers, and the talkers a subtitle file names, become the talkers of the
+  recording (and rows of `talker`). When the layout (folders and file names) also names a
+  talker, it is kept as `target_talker` on the recording, a column that exists only when
+  some recording has one, so the talkers are as the annotation file has them. Each tier that names a participant also has that talker: the table of tiers
   (`annotation_type`) gets a `talker` column pointing at `talker`, but only when some tier
   has a talker. The Show and Order Tiers dialog lists each tier's talker and can number the
   tiers so that those of a talker are together, and the plot tints labels by talker. Who is in a recording is not a column: it is in

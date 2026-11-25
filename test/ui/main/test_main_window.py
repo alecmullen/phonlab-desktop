@@ -1997,6 +1997,79 @@ def test_open_single_document_accepts_textgrid_with_any_case_suffix(
     assert opened == [([("a", wav, textgrid)], str(tmp_path))]
 
 
+@pytest.mark.parametrize("name", ["a.eaf", "a.srt", "a.EAF", "a.SRT"])
+def test_open_single_document_accepts_elan_and_subtitle_files(
+    main_window: MainWindow, tmp_path: Path, opened: list, name: str
+):
+    wav, annotation = str(tmp_path / "a.wav"), str(tmp_path / name)
+
+    main_window.open_single_document([wav, annotation], str(tmp_path))
+
+    assert opened == [([("a", wav, annotation)], str(tmp_path))]
+
+
+def test_a_sound_file_on_its_own_is_offered_the_annotation_next_to_it(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    wav, srt = str(tmp_path / "a.wav"), str(tmp_path / "a.srt")
+    (tmp_path / "a.srt").write_text("")
+    offered = []
+
+    def ask(parent: object, audio_file: str, annotation_files: list[str]) -> str:
+        offered.append((audio_file, annotation_files))
+        return annotation_files[0]
+
+    monkeypatch.setattr(main_window_module, "ask_open_with_annotation", ask)
+
+    main_window.open_single_document([wav])
+
+    assert offered == [(wav, [srt])]
+    assert opened == [([(str(tmp_path / "a"), wav, srt)], None)]
+
+
+def test_a_sound_file_is_opened_alone_when_the_annotation_offered_is_declined(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    wav = str(tmp_path / "a.wav")
+    (tmp_path / "a.eaf").write_text("")
+    monkeypatch.setattr(
+        main_window_module, "ask_open_with_annotation", lambda *args: None
+    )
+
+    main_window.open_single_document([wav])
+
+    assert opened == [([(str(tmp_path / "a"), wav, None)], None)]
+
+
+def test_no_annotation_is_offered_when_one_is_chosen_or_the_file_is_in_the_project(
+    main_window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    opened: list,
+):
+    (tmp_path / "a.srt").write_text("")
+    (tmp_path / "b.srt").write_text("")
+    asked = []
+    monkeypatch.setattr(
+        main_window_module,
+        "ask_open_with_annotation",
+        lambda *args: asked.append(args),
+    )
+
+    main_window.open_single_document(
+        [str(tmp_path / "a.wav"), str(tmp_path / "a.TextGrid")]
+    )
+    main_window.open_single_document([str(tmp_path / "b.wav")], str(tmp_path))
+
+    assert asked == []
+
+
 # --------------------------- spectrogram only for the shown tab ---------------------------
 
 

@@ -492,6 +492,7 @@ dependencies = [
     { name = "sounddevice" },
     { name = "soundfile" },
     { name = "sqlalchemy" },
+    { name = "srt" },
     { name = "tomli-w" },
 ]
 
@@ -521,6 +522,7 @@ requires-dist = [
     { name = "sounddevice", specifier = "==0.5.5" },
     { name = "soundfile", specifier = "==0.13.1" },
     { name = "sqlalchemy", specifier = ">=2.1.6" },
+    { name = "srt", specifier = ">=3.5.3" },
     { name = "tomli-w", specifier = ">=1.2.0" },
 ]
 

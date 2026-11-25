@@ -52,6 +52,15 @@ def test_elan_files_are_annotations(tmp_path: Path):
     assert suggestion.data_file_candidates == []
 
 
+def test_subtitle_files_are_annotations(tmp_path: Path):
+    make_tree(tmp_path, ["a.wav", "a.srt", "b.wav", "b.srt"])
+
+    suggestion = infer(tmp_path)
+
+    assert suggestion.layout.annotation_ext == ".srt"
+    assert suggestion.data_file_candidates == []
+
+
 def test_companions_of_the_annotation_format_are_not_data_files(tmp_path: Path):
     make_tree(tmp_path, ["a.wav", "a.wrd", "a.phn", "a.trk"])
 

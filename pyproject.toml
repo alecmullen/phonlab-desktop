@@ -17,6 +17,7 @@ dependencies = [
     "sounddevice==0.5.5",
     "soundfile==0.13.1",
     "sqlalchemy>=2.1.6",
+    "srt>=3.5.3",
     "tomli-w>=1.2.0",
 ]
 
