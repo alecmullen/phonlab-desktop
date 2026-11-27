@@ -1,10 +1,10 @@
 from pathlib import PurePosixPath
 
-from core.annotation.entity.metadata import MetadataTarget
-from core.annotation.entity.recording import Recording
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case_sync import UseCaseSync
-from core.import_metadata.entity.metadata_table import MetadataMatch, MetadataTable
+from phonlab_project.metadata import MetadataTarget
+from phonlab_project.readers.metadata_table import MetadataMatch, MetadataTable
+from phonlab_project.recording import Recording
 
 MAX_UNMATCHED_EXAMPLES = 8
 

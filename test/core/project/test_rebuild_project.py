@@ -11,8 +11,8 @@ from core.import_metadata.apply_information_sources import ApplyInformationSourc
 from core.import_metadata.entity.information_source import AppliedInformation
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.project.add_project_files import AddProjectFiles
-from core.project.entity.project_file import ProjectFile
 from core.project.rebuild_project import RebuildProject
+from phonlab_project.layout.project_file import ProjectFile
 
 
 def make_use_case() -> tuple[RebuildProject, InMemAnnotationRepository]:

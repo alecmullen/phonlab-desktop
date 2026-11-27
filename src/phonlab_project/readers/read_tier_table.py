@@ -1,7 +1,11 @@
 from typing import Any
 
-from core.read_tiers.annotation_table import audio_duration, load_table, table_labels
-from core.read_tiers.entity.table_format import TableFormat
+from phonlab_project.readers.annotation_table import (
+    audio_duration,
+    load_table,
+    table_labels,
+)
+from phonlab_project.readers.table_format import TableFormat
 
 
 def read_tier_table(

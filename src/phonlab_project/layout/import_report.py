@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 
-from core.annotation.entity.recording import Recording
-from core.project_layout.entity.project_layout import (
+from phonlab_project.layout.project_layout import (
     ChannelRole,
     DataFileRole,
     ProjectLayout,
 )
+from phonlab_project.recording import Recording
 
 
 @dataclass(frozen=True)

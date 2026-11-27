@@ -9,8 +9,8 @@ import sqlite3
 from typing import Any
 
 from core.annotation.entity.annotation import add_node_time
-from core.annotation.entity.recording import Recording
 from core.parse_textgrid.parse_textgrid import to_label
+from phonlab_project.recording import Recording
 from phonlab_project.schema import (
     CHANNEL_TABLE,
     RECORDING_OPTIONAL_COLUMNS,

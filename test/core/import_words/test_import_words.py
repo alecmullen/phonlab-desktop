@@ -3,16 +3,16 @@ from pathlib import Path
 import pytest
 
 from core.annotation.entity.annotation import AnnotationLabel, AnnotationType
-from core.annotation.entity.metadata import SqlType
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
-from core.import_metadata.entity.metadata_table import MetadataTable
 from core.import_words.entity.word_table import WordSource
 from core.import_words.import_words import ImportWords
 from core.import_words.match_words import MatchWords
 from core.import_words.save_unmatched_words import SaveUnmatchedWords
 from core.import_words.word_source_file import LoadWordSource, SaveWordSource
+from phonlab_project.metadata import SqlType
+from phonlab_project.readers.metadata_table import MetadataTable
 
 
 def project_with_words(words_per_file: list[list[str]]) -> InMemAnnotationRepository:

@@ -4,7 +4,6 @@ from bootstrap.use_case_factory_impl import UseCaseFactory
 from core.annotation.add_tiers import AddTiers
 from core.annotation.create_label import CreateLabel
 from core.annotation.delete_node import DeleteNode
-from core.annotation.entity.metadata import MetadataTarget
 from core.annotation.list_tier_names import ListTierNames
 from core.annotation.load_annotation import LoadAnnotation
 from core.annotation.replace_in_tier import ReplaceInTier
@@ -18,7 +17,6 @@ from core.edit_audio.edit_audio import EditAudio
 from core.import_metadata.import_metadata import ImportMetadata
 from core.import_metadata.information_sources_file import SaveInformationSource
 from core.import_metadata.match_metadata import MatchMetadata
-from core.import_metadata.read_metadata_csv import ReadMetadataCsv
 from core.import_words.import_words import ImportWords
 from core.import_words.match_words import MatchWords
 from core.import_words.save_unmatched_words import SaveUnmatchedWords
@@ -53,6 +51,8 @@ from core.transform_audio.prep_audio import PrepAudio
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
+from phonlab_project.metadata import MetadataTarget
+from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory

@@ -2,20 +2,20 @@ from pathlib import Path
 
 import pytest
 
-from core.project_layout.entity.project_layout import (
-    ChannelRole,
-    DataFileKind,
-    DataFileRole,
-    FolderLevel,
-    ProjectLayout,
-)
 from core.project_layout.project_layout_file import (
     LoadProjectLayout,
     SaveProjectLayout,
     layout_from_dict,
     layout_to_dict,
 )
-from core.read_tiers.entity.table_format import ColumnRole, TableFormat, TimeUnit
+from phonlab_project.layout.project_layout import (
+    ChannelRole,
+    DataFileKind,
+    DataFileRole,
+    FolderLevel,
+    ProjectLayout,
+)
+from phonlab_project.readers.table_format import ColumnRole, TableFormat, TimeUnit
 
 FULL_LAYOUT = ProjectLayout(
     annotation_ext=".words",

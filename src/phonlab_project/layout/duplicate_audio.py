@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from core.project_layout.entity.project_scan import ScannedFile
+from phonlab_project.layout.project_scan import ScannedFile
 
 
 def find_duplicate_audio(audio: list[ScannedFile], root: str) -> list[str]:

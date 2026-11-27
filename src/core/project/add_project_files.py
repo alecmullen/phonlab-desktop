@@ -5,11 +5,11 @@ from pathlib import Path
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case import UseCase
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
-from core.project.entity.project_file import ProjectFile
 from core.project.entity.project_import_result import (
     ImportStage,
     ProjectImportResult,
 )
+from phonlab_project.layout.project_file import ProjectFile
 
 
 class AddProjectFiles(UseCase[ProjectImportResult]):

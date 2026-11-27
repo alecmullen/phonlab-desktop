@@ -361,6 +361,11 @@ Any file moves or renames go in their own commits.
 
 What was built, and where it differs from the sketch above:
 
+- Moved since: the readers (`read_tiers`, `read_elan`, `read_srt`, ...) are in
+  `src/phonlab_project/readers/`, and the layout's data classes, the filename template
+  compiler, the audio-to-file pairing, channel detection and the import report are in
+  `src/phonlab_project/layout/`, so that they can go into the phonlab library. The use
+  cases below stay in `core`.
 - `core/project_layout/`: `ScanProject`, `InferLayout`, `ResolveRecordings`,
   `ImportRecordings`, `LoadProjectLayout` / `SaveProjectLayout`, the filename
   template compiler and the audio-to-file pairing (`pairing.py`).

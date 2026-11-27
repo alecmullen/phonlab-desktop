@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from core.read_tiers.read_tiers import read_tiers
+from phonlab_project.readers.read_tiers import read_tiers
 
 HEADER = """<?xml version="1.0" encoding="UTF-8"?>
 <ANNOTATION_DOCUMENT FORMAT="3.0" VERSION="3.0">

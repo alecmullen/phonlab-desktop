@@ -3,17 +3,17 @@ from pathlib import Path
 from support.audio_files import write_wavs
 from support.project_tree import make_tree, talker_tree
 
-from core.annotation.entity.recording import Recording
 from core.project.scan_project_files import scan_project_files
-from core.project_layout.entity.project_layout import (
+from core.project_layout.project_layout_file import SaveProjectLayout
+from phonlab_project.layout.project_layout import (
     ChannelRole,
     DataFileKind,
     DataFileRole,
     FolderLevel,
     ProjectLayout,
 )
-from core.project_layout.project_layout_file import SaveProjectLayout
-from core.read_tiers.entity.table_format import ColumnRole, TableFormat, TierFile
+from phonlab_project.readers.table_format import ColumnRole, TableFormat, TierFile
+from phonlab_project.recording import Recording
 
 
 def recordings_of(root: Path) -> list[Recording]:

@@ -10,14 +10,14 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from core.project.entity.project_file import ProjectFile
-from core.project.entity.project_plan import ProjectPlan
 from core.project.scan_project_files import plan_project
-from core.project_layout.entity.project_layout import ProjectLayout
 from core.project_layout.project_layout_file import SaveProjectLayout
-from core.read_tiers.read_tier_table import read_tier_table
-from core.read_tiers.read_tiers import read_tiers
 from phonlab_project.errors import ProjectError
+from phonlab_project.layout.project_file import ProjectFile
+from phonlab_project.layout.project_layout import ProjectLayout
+from phonlab_project.layout.project_plan import ProjectPlan
+from phonlab_project.readers.read_tier_table import read_tier_table
+from phonlab_project.readers.read_tiers import read_tiers
 from phonlab_project.schema import writing
 from phonlab_project.writer import (
     clear_annotation,

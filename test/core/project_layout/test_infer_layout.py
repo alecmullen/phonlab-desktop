@@ -2,10 +2,10 @@ from pathlib import Path
 
 from support.project_tree import make_tree, talker_tree
 
-from core.project_layout.entity.import_report import LayoutSuggestion
-from core.project_layout.entity.project_layout import DataFileRole, FolderLevel
 from core.project_layout.infer_layout import InferLayout
 from core.project_layout.scan_project_tree import ScanProjectTree
+from phonlab_project.layout.import_report import LayoutSuggestion
+from phonlab_project.layout.project_layout import DataFileRole, FolderLevel
 
 
 def infer(root: Path) -> LayoutSuggestion:

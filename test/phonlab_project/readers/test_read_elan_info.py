@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from core.read_tiers.read_elan_info import ElanInfo, read_elan_info
+from phonlab_project.readers.read_elan_info import ElanInfo, read_elan_info
 
 EAF = """<?xml version="1.0" encoding="UTF-8"?>
 <ANNOTATION_DOCUMENT FORMAT="3.0" VERSION="3.0">

@@ -18,34 +18,6 @@ import pytest
 APP_PACKAGES = ("core", "res", "ui", "data", "bootstrap", "PyQt6", "sqlalchemy")
 
 STILL_FROM_THE_APP = {
-    # Belong in the library: the readers, the scan and layout of a project, and the
-    # data classes they pass around. They move as they are.
-    "move to phonlab": {
-        "core.annotation.entity.metadata",
-        "core.annotation.entity.recording",
-        "core.import_metadata.entity.metadata_table",
-        "core.import_metadata.read_metadata_csv",
-        "core.project.entity.project_file",
-        "core.project.entity.project_plan",
-        "core.project_layout.annotation_sources",
-        "core.project_layout.channels",
-        "core.project_layout.duplicate_audio",
-        "core.project_layout.entity.import_report",
-        "core.project_layout.entity.project_layout",
-        "core.project_layout.entity.project_scan",
-        "core.project_layout.filename_template",
-        "core.project_layout.pairing",
-        "core.read_tiers.annotation_table",
-        "core.read_tiers.entity.table_format",
-        "core.read_tiers.read_buckeye",
-        "core.read_tiers.read_elan",
-        "core.read_tiers.read_elan_info",
-        "core.read_tiers.read_srt",
-        "core.read_tiers.read_tier_table",
-        "core.read_tiers.read_tiers",
-        "core.read_tiers.read_timit",
-        "core.read_tiers.sibling_file",
-    },
     # Written as use-case classes of the app (UseCaseSync); they become plain functions
     # in the library, and the app keeps thin use cases that call them.
     "make plain functions, then move": {
@@ -88,7 +60,7 @@ def app_modules_imported() -> frozenset[str]:
     in a fresh interpreter so that nothing else has imported them"""
     source = Path(__file__).parents[2] / "src"
     code = (
-        f"import sys, json; sys.path.insert(0, {str(source)!r}); import phonlab_project; "
+        f"import sys, json; sys.path.insert(0, {str(source)!r}); import phonlab_project as p; [getattr(p, n) for n in p.__all__]; "
         f"top = {APP_PACKAGES!r}; "
         "print(json.dumps(sorted(n for n, m in sys.modules.items() "
         "if n.split('.')[0] in top and not hasattr(m, '__path__'))))"

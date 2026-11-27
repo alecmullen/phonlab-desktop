@@ -1,7 +1,7 @@
 import os
 
 from core.base.use_case_sync import UseCaseSync
-from core.project_layout.entity.project_scan import ProjectScan, ScannedFile
+from phonlab_project.layout.project_scan import ProjectScan, ScannedFile
 from res.constants import PROJECT_IGNORED_NAMES
 
 

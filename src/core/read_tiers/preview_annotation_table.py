@@ -1,12 +1,12 @@
 from core.base.use_case_sync import UseCaseSync
-from core.read_tiers.annotation_table import (
+from phonlab_project.readers.annotation_table import (
     audio_duration,
     load_table,
     number,
     resolve_unit,
     table_labels,
 )
-from core.read_tiers.entity.table_format import (
+from phonlab_project.readers.table_format import (
     ColumnRole,
     TableFormat,
     TablePreview,

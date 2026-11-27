@@ -29,17 +29,17 @@ from support.view_models import (
 import ui.document.document_view as doc_view_module
 import ui.main.main_window as main_window_module
 from core.annotation.entity.annotation import AnnotationLabel, AnnotationType
-from core.annotation.entity.metadata import MetadataTarget
 from core.import_metadata.entity.information_source import InformationSource
 from core.import_metadata.information_sources_file import SaveInformationSource
 from core.load_audio.entity.audio_signal import AudioSignal
-from core.project_layout.entity.project_layout import ChannelRole, ProjectLayout
 from core.project_layout.project_layout_file import SaveProjectLayout
 from core.save_audio.save_audio import SaveAudio
 from core.settings.app_settings import settings
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
+from phonlab_project.layout.project_layout import ChannelRole, ProjectLayout
+from phonlab_project.metadata import MetadataTarget
 from ui.annotation.annotation_plot import AnnotationPlot
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.component.tier_font_dialog import TierFontDialog

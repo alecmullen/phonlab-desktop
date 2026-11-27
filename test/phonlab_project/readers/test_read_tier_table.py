@@ -3,13 +3,13 @@ from pathlib import Path
 import pytest
 from support.audio_files import write_wavs
 
-from core.read_tiers.entity.table_format import (
+from phonlab_project.readers.read_tier_table import read_tier_table
+from phonlab_project.readers.table_format import (
     WHITESPACE,
     ColumnRole,
     TableFormat,
     TimeUnit,
 )
-from core.read_tiers.read_tier_table import read_tier_table
 
 START, END, LABEL, UNKNOWN = (
     ColumnRole.START,

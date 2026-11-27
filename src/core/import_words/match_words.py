@@ -1,7 +1,7 @@
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case_sync import UseCaseSync
-from core.import_metadata.entity.metadata_table import MetadataTable
 from core.import_words.entity.word_table import WordMatch
+from phonlab_project.readers.metadata_table import MetadataTable
 
 
 class MatchWords(UseCaseSync[WordMatch]):

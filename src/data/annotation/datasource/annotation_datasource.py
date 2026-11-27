@@ -5,8 +5,6 @@ from typing import Any
 from sqlalchemy import Row, delete, exists, func, inspect, or_, select, text
 from sqlalchemy.orm import Session, aliased, selectinload
 
-from core.annotation.entity.metadata import MetadataColumn, MetadataTarget
-from core.annotation.entity.recording import Recording, RecordingUpsertResult
 from core.inspect_database.entity.table_data import TableData
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_label import AnnotationLabelEntity
@@ -19,6 +17,8 @@ from data.annotation.entity.word import WordEntity
 from data.annotation.mapping.annotation_mapping import set_recording_columns
 from data.base.base_entity import BaseEntity
 from data.base.datasource import DataSource
+from phonlab_project.metadata import MetadataColumn, MetadataTarget
+from phonlab_project.recording import Recording, RecordingUpsertResult
 
 SAFE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 

@@ -1,10 +1,10 @@
 import re
 from typing import Any
 
-from core.annotation.entity.metadata import MetadataColumn, MetadataTarget, SqlType
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case_sync import UseCaseSync
-from core.import_metadata.entity.metadata_table import (
+from phonlab_project.metadata import MetadataColumn, MetadataTarget, SqlType
+from phonlab_project.readers.metadata_table import (
     MetadataColumnPlan,
     MetadataImportResult,
     MetadataMatch,

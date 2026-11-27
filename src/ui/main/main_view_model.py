@@ -6,7 +6,6 @@ import tomli_w
 from PyQt6.QtCore import pyqtSlot
 
 from core.project.add_project_files import AddProjectFiles
-from core.project.entity.project_file import ProjectFile
 from core.project.entity.project_import_result import (
     ImportStage,
     ProjectImportResult,
@@ -20,6 +19,7 @@ from core.settings.load_tier_layout import LoadTierLayout
 from core.settings.save_display_plan import SaveDisplayPlan
 from core.settings.save_tier_layout import SaveTierLayout
 from core.track_formants.warm_up_formants import WarmUpFormantTracking
+from phonlab_project.layout.project_file import ProjectFile
 from res.constants import PROJECT_DATABASE_FILENAME
 from ui.base.view_model import ViewModel
 from ui.document.state.plot_layout_state import (

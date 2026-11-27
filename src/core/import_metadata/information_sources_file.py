@@ -4,9 +4,9 @@ from typing import Any
 
 import tomli_w
 
-from core.annotation.entity.metadata import MetadataTarget
 from core.base.use_case_sync import UseCaseSync
 from core.import_metadata.entity.information_source import InformationSource
+from phonlab_project.metadata import MetadataTarget
 from res.constants import INFORMATION_TOML_KEY
 
 TOML_NAME = "phonlab.toml"

@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-from core.annotation.entity.recording import Recording
-from core.project.entity.project_file import ProjectFile
-from core.project_layout.entity.import_report import ImportReport, LayoutSuggestion
-from core.project_layout.entity.project_layout import ProjectLayout
+from phonlab_project.layout.import_report import ImportReport, LayoutSuggestion
+from phonlab_project.layout.project_file import ProjectFile
+from phonlab_project.layout.project_layout import ProjectLayout
+from phonlab_project.recording import Recording
 
 LayoutSource = Literal["given", "saved", "inferred"]
 

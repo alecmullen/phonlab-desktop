@@ -5,11 +5,11 @@ from core.annotation.repository.annotation_repository import AnnotationRepositor
 from core.base.use_case import UseCase
 from core.import_metadata.apply_information_sources import ApplyInformationSources
 from core.project.add_project_files import AddProjectFiles
-from core.project.entity.project_file import ProjectFile
 from core.project.entity.project_import_result import (
     ImportStage,
     ProjectImportResult,
 )
+from phonlab_project.layout.project_file import ProjectFile
 
 
 class RebuildProject(UseCase[ProjectImportResult]):

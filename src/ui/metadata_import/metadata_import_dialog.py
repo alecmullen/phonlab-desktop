@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.annotation.entity.metadata import MetadataTarget
+from phonlab_project.metadata import MetadataTarget
 from ui.metadata_import.metadata_import_view_model import MetadataImportViewModel
 from ui.metadata_import.state.metadata_import_state import MetadataImportState
 

@@ -8,7 +8,6 @@ from support.textgrid import textgrid_project, word_and_phone_textgrid
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.project.add_project_files import AddProjectFiles
 from core.project.scan_project_files import scan_project_files
-from core.project_layout.entity.project_layout import FolderLevel, ProjectLayout
 from core.project_layout.project_layout_file import LoadProjectLayout, SaveProjectLayout
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
@@ -23,6 +22,7 @@ from phonlab_project import (
     schema,
     update_annotations,
 )
+from phonlab_project.layout.project_layout import FolderLevel, ProjectLayout
 
 SRT = (
     "1\n00:00:00,000 --> 00:00:01,000\nAnn: Hi there\n\n"

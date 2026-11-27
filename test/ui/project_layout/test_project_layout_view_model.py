@@ -5,8 +5,8 @@ from support.audio_files import textgrid_with_tiers
 from support.project_tree import make_tree, talker_tree, write_audio_like
 from support.view_models import make_project_layout_view_model
 
-from core.project_layout.entity.project_layout import FolderLevel
 from core.project_layout.project_layout_file import LoadProjectLayout
+from phonlab_project.layout.project_layout import FolderLevel
 from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.project_layout.state.project_layout_state import ProjectLayoutState
 

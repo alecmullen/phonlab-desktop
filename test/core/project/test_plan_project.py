@@ -3,8 +3,8 @@ from pathlib import Path
 from support.project_tree import make_tree, talker_tree
 
 from core.project.scan_project_files import plan_project
-from core.project_layout.entity.project_layout import FolderLevel, ProjectLayout
 from core.project_layout.project_layout_file import SaveProjectLayout
+from phonlab_project.layout.project_layout import FolderLevel, ProjectLayout
 
 
 def test_a_project_that_reads_cleanly_has_no_problems(tmp_path: Path):

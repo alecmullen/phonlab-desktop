@@ -2,15 +2,15 @@ from pathlib import Path
 
 from support.project_tree import make_tree, talker_tree, write_audio_like
 
-from core.project_layout.entity.import_report import ResolvedProject
-from core.project_layout.entity.project_layout import (
+from core.project_layout.resolve_recordings import ResolveRecordings
+from core.project_layout.scan_project_tree import ScanProjectTree
+from phonlab_project.layout.import_report import ResolvedProject
+from phonlab_project.layout.project_layout import (
     DataFileKind,
     DataFileRole,
     FolderLevel,
     ProjectLayout,
 )
-from core.project_layout.resolve_recordings import ResolveRecordings
-from core.project_layout.scan_project_tree import ScanProjectTree
 
 
 def resolve(root: Path, layout: ProjectLayout) -> ResolvedProject:

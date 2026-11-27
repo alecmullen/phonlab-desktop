@@ -5,13 +5,13 @@ from PyQt6.QtWidgets import QDialog, QMessageBox
 from pytestqt.qtbot import QtBot
 from support.view_models import make_metadata_import_view_model
 
-from core.annotation.entity.metadata import MetadataTarget
-from core.annotation.entity.recording import Recording
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
 from core.import_metadata.entity.information_source import InformationSource
 from core.import_metadata.information_sources_file import LoadInformationSources
+from phonlab_project.metadata import MetadataTarget
+from phonlab_project.recording import Recording
 from ui.metadata_import.metadata_import_dialog import MetadataImportDialog
 from ui.metadata_import.metadata_import_view_model import MetadataImportViewModel
 from ui.metadata_import.state.metadata_import_state import MetadataImportState

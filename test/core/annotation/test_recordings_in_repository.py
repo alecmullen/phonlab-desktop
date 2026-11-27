@@ -1,8 +1,8 @@
 from core.annotation.entity.annotation import AnnotationLabel, AnnotationType
-from core.annotation.entity.recording import Recording
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
+from phonlab_project.recording import Recording
 
 
 def recording(stem: str, talkers: list[str] | None = None) -> Recording:

@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from core.annotation.entity.metadata import MetadataColumn, MetadataTarget, SqlType
-from core.annotation.entity.recording import Recording
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
 from phonlab_project import Project, ProjectError, open_project
+from phonlab_project.metadata import MetadataColumn, MetadataTarget, SqlType
+from phonlab_project.recording import Recording
 from phonlab_project.schema import SCHEMA_VERSION
 
 WORDS = ["run", "big", "walk", "red", "jump", "tall"]
@@ -359,7 +359,8 @@ def test_importing_the_package_loads_no_qt_or_database_layer():
     # that has to go before the readers move to phonlab)
     source = Path(__file__).parents[2] / "src"
     code = (
-        f"import sys; sys.path.insert(0, {str(source)!r}); import phonlab_project; "
+        f"import sys; sys.path.insert(0, {str(source)!r}); import phonlab_project as p; "
+        "[getattr(p, n) for n in p.__all__]; "
         "bad = [m for m in sys.modules if m.split('.')[0] in "
         "('PyQt6', 'sqlalchemy', 'data', 'bootstrap')]; "
         "print(bad)"

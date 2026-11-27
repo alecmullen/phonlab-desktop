@@ -2,7 +2,7 @@ import os
 from collections.abc import Iterable
 
 from core.base.use_case_sync import UseCaseSync
-from core.read_tiers.read_tiers import read_tiers
+from phonlab_project.readers.read_tiers import read_tiers
 from res.constants import SRT_NO_TALKER_TIER
 
 SEPARATOR = " - "

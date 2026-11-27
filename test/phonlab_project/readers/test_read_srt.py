@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from core.read_tiers.read_tiers import read_tiers
+from phonlab_project.readers.read_tiers import read_tiers
 
 TWO_TALKERS = """1
 00:00:01,000 --> 00:00:02,500

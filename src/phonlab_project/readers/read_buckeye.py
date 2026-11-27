@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from core.read_tiers.sibling_file import find_sibling
+from phonlab_project.readers.sibling_file import find_sibling
 
 HEADER_END = re.compile(r"#\r?\n")
 WORD_FIELDS = re.compile(r"; | \d{3} ")

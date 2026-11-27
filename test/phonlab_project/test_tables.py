@@ -4,7 +4,6 @@ import pandas as pd
 import pytest
 from support.textgrid import textgrid_project
 
-from core.project_layout.entity.project_layout import FolderLevel, ProjectLayout
 from phonlab_project import (
     ProjectError,
     import_project,
@@ -12,6 +11,7 @@ from phonlab_project import (
     import_words,
     open_project,
 )
+from phonlab_project.layout.project_layout import FolderLevel, ProjectLayout
 
 
 @pytest.fixture

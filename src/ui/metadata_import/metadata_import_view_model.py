@@ -1,20 +1,20 @@
 from pathlib import Path
 
-from core.annotation.entity.metadata import MetadataTarget
 from core.import_metadata.entity.information_source import InformationSource
-from core.import_metadata.entity.metadata_table import (
-    MetadataColumnPlan,
-    MetadataImportResult,
-    MetadataMatch,
-    MetadataTable,
-)
 from core.import_metadata.import_metadata import ImportMetadata
 from core.import_metadata.information_sources_file import (
     SaveInformationSource,
     stored_file_name,
 )
 from core.import_metadata.match_metadata import MatchMetadata
-from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from phonlab_project.metadata import MetadataTarget
+from phonlab_project.readers.metadata_table import (
+    MetadataColumnPlan,
+    MetadataImportResult,
+    MetadataMatch,
+    MetadataTable,
+)
+from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 from ui.base.view_model import ViewModel
 from ui.metadata_import.state.metadata_import_state import (
     MetadataColumnState,

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import soundfile as sf
 
-from core.read_tiers.entity.table_format import (
+from phonlab_project.readers.table_format import (
     WHITESPACE,
     ColumnRole,
     LoadedTable,

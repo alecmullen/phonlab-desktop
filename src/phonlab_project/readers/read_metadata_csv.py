@@ -3,7 +3,7 @@ import io
 from pathlib import Path
 
 from core.base.use_case_sync import UseCaseSync
-from core.import_metadata.entity.metadata_table import MetadataTable
+from phonlab_project.readers.metadata_table import MetadataTable
 
 DELIMITERS = ",;\t|"
 SNIFF_BYTES = 8192

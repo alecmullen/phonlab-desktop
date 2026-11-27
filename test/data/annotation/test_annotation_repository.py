@@ -5,13 +5,13 @@ import pytest
 from support.audio_files import write_wavs
 
 from core.annotation.entity.annotation import AnnotationLabel, AnnotationType
-from core.annotation.entity.metadata import MetadataColumn, MetadataTarget, SqlType
-from core.annotation.entity.recording import Recording
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
-from core.read_tiers.entity.table_format import TierFile
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
+from phonlab_project.metadata import MetadataColumn, MetadataTarget, SqlType
+from phonlab_project.readers.table_format import TierFile
+from phonlab_project.recording import Recording
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from core.read_tiers.read_tiers import read_tiers
+from phonlab_project.readers.read_tiers import read_tiers
 
 BUCKEYE_WORDS = """header line
 #

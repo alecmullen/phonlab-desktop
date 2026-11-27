@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from core.annotation.entity.metadata import SqlType
-from core.import_metadata.entity.metadata_table import MetadataTable
 from core.import_metadata.import_metadata import column_name, convert, infer_sql_type
-from core.import_metadata.read_metadata_csv import ReadMetadataCsv
 from phonlab_project.errors import ProjectError
+from phonlab_project.metadata import SqlType
+from phonlab_project.readers.metadata_table import MetadataTable
+from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 from phonlab_project.schema import WORD_TABLE, add_column, writing
 
 MAX_LISTED = 50

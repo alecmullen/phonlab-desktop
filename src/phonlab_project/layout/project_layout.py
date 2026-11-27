@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from core.read_tiers.entity.table_format import TableFormat
+from phonlab_project.readers.table_format import TableFormat
 from res.constants import (
     LAYOUT_VERSION,
     PROJECT_AUDIO_EXTENSIONS,

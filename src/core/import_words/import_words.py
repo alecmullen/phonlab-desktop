@@ -1,11 +1,11 @@
 from typing import Any
 
-from core.annotation.entity.metadata import MetadataColumn, SqlType
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case_sync import UseCaseSync
-from core.import_metadata.entity.metadata_table import MetadataTable
 from core.import_metadata.import_metadata import column_name, convert, infer_sql_type
 from core.import_words.entity.word_table import WordColumnPlan, WordImportResult
+from phonlab_project.metadata import MetadataColumn, SqlType
+from phonlab_project.readers.metadata_table import MetadataTable
 
 # what the word table has before any column of the table is added to it
 BUILTIN_WORD_COLUMNS = ("id", "word")

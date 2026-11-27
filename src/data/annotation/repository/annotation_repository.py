@@ -7,8 +7,6 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
-from core.annotation.entity.metadata import MetadataColumn, MetadataTarget
-from core.annotation.entity.recording import Recording, RecordingUpsertResult
 from core.annotation.entity.tier_label import TierLabel
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.inspect_database.entity.table_data import TableData
@@ -23,6 +21,8 @@ from data.annotation.mapping.annotation_mapping import (
     row_to_tier_label,
     type_to_entity,
 )
+from phonlab_project.metadata import MetadataColumn, MetadataTarget
+from phonlab_project.recording import Recording, RecordingUpsertResult
 
 
 class DataAnnotationRepository(AnnotationRepository):

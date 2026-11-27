@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from core.import_metadata.entity.metadata_table import MetadataTable
-from core.import_metadata.read_metadata_csv import ReadMetadataCsv
+from phonlab_project.readers.metadata_table import MetadataTable
+from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 
 
 def read(tmp_path: Path, text: str, encoding: str = "utf-8") -> MetadataTable:

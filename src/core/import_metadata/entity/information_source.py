@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from core.annotation.entity.metadata import MetadataTarget
+from phonlab_project.metadata import MetadataTarget
 
 
 @dataclass(frozen=True)

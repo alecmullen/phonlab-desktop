@@ -3,10 +3,10 @@ from typing import Any
 
 import phonlab as phon
 
-from core.read_tiers.read_buckeye import read_buckeye_tiers
-from core.read_tiers.read_elan import read_elan_tiers
-from core.read_tiers.read_srt import read_srt_tiers
-from core.read_tiers.read_timit import read_timit_tiers
+from phonlab_project.readers.read_buckeye import read_buckeye_tiers
+from phonlab_project.readers.read_elan import read_elan_tiers
+from phonlab_project.readers.read_srt import read_srt_tiers
+from phonlab_project.readers.read_timit import read_timit_tiers
 
 
 def read_tiers(file_path: str) -> list[dict[str, Any]]:

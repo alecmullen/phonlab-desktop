@@ -5,14 +5,14 @@ from typing import Any
 import tomli_w
 
 from core.base.use_case_sync import UseCaseSync
-from core.project_layout.entity.project_layout import (
+from phonlab_project.layout.project_layout import (
     ChannelRole,
     DataFileKind,
     DataFileRole,
     FolderLevel,
     ProjectLayout,
 )
-from core.read_tiers.entity.table_format import ColumnRole, TableFormat, TimeUnit
+from phonlab_project.readers.table_format import ColumnRole, TableFormat, TimeUnit
 from res.constants import LAYOUT_TOML_KEY, LAYOUT_VERSION
 
 TOML_NAME = "phonlab.toml"

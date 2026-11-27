@@ -3,16 +3,16 @@ from pathlib import Path
 from support.audio_files import write_wavs
 from support.project_tree import make_tree
 
-from core.project_layout.channels import detect_channels, group_audio
-from core.project_layout.entity.project_layout import (
+from core.project_layout.infer_layout import InferLayout
+from core.project_layout.resolve_recordings import ResolveRecordings
+from core.project_layout.scan_project_tree import ScanProjectTree
+from phonlab_project.layout.channels import detect_channels, group_audio
+from phonlab_project.layout.project_layout import (
     ChannelRole,
     DataFileRole,
     ProjectLayout,
 )
-from core.project_layout.entity.project_scan import ScannedFile
-from core.project_layout.infer_layout import InferLayout
-from core.project_layout.resolve_recordings import ResolveRecordings
-from core.project_layout.scan_project_tree import ScanProjectTree
+from phonlab_project.layout.project_scan import ScannedFile
 
 LEFT_RIGHT = (ChannelRole("L", "_L"), ChannelRole("R", "_R"))
 

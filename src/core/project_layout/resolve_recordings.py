@@ -1,12 +1,12 @@
-from core.annotation.entity.recording import Recording
 from core.base.use_case_sync import UseCaseSync
-from core.project_layout.channels import group_audio
-from core.project_layout.duplicate_audio import find_duplicate_audio
-from core.project_layout.entity.import_report import ImportReport, ResolvedProject
-from core.project_layout.entity.project_layout import DataFileKind, ProjectLayout
-from core.project_layout.entity.project_scan import ProjectScan, ScannedFile
-from core.project_layout.filename_template import compile_template
-from core.project_layout.pairing import AudioIndex, reroot
+from phonlab_project.layout.channels import group_audio
+from phonlab_project.layout.duplicate_audio import find_duplicate_audio
+from phonlab_project.layout.filename_template import compile_template
+from phonlab_project.layout.import_report import ImportReport, ResolvedProject
+from phonlab_project.layout.pairing import AudioIndex, reroot
+from phonlab_project.layout.project_layout import DataFileKind, ProjectLayout
+from phonlab_project.layout.project_scan import ProjectScan, ScannedFile
+from phonlab_project.recording import Recording
 from res.constants import TALKER_FIELD_NAMES
 
 

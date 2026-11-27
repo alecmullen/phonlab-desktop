@@ -1,6 +1,6 @@
 import pytest
 
-from core.project_layout.filename_template import TemplateError, compile_template
+from phonlab_project.layout.filename_template import TemplateError, compile_template
 
 
 def fields(template: str, stem: str) -> list[tuple[str, str]] | None:

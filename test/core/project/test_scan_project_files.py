@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from core.project.entity.project_file import ProjectFile
 from core.project.scan_project_files import (
     is_annotation_file,
     is_audio_file,
     matching_annotation_files,
     scan_project_files,
 )
+from phonlab_project.layout.project_file import ProjectFile
 
 
 @pytest.mark.parametrize("name", ["a.wav", "a.WAV", "a.Wav", "dir/a.wav"])

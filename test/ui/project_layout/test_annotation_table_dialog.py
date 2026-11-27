@@ -6,7 +6,7 @@ from support.audio_files import write_wavs
 from support.project_tree import make_tree
 from support.view_models import make_project_layout_view_model
 
-from core.read_tiers.entity.table_format import ColumnRole, TimeUnit
+from phonlab_project.readers.table_format import ColumnRole, TimeUnit
 from ui.project_layout.component.annotation_table_dialog import AnnotationTableDialog
 from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 

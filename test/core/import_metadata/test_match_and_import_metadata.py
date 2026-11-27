@@ -1,9 +1,6 @@
-from core.annotation.entity.metadata import MetadataTarget, SqlType
-from core.annotation.entity.recording import Recording
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
-from core.import_metadata.entity.metadata_table import MetadataTable
 from core.import_metadata.import_metadata import (
     ImportMetadata,
     column_name,
@@ -11,6 +8,9 @@ from core.import_metadata.import_metadata import (
     infer_sql_type,
 )
 from core.import_metadata.match_metadata import MatchMetadata
+from phonlab_project.metadata import MetadataTarget, SqlType
+from phonlab_project.readers.metadata_table import MetadataTable
+from phonlab_project.recording import Recording
 
 
 def project() -> InMemAnnotationRepository:

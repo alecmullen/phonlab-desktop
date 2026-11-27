@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from core.project_layout.entity.project_scan import ScannedFile
+from phonlab_project.layout.project_scan import ScannedFile
 
 SUFFIX_DELIMITERS = "_-."
 

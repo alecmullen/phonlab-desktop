@@ -7,11 +7,11 @@ from core.annotation.entity.annotation import (
     AnnotationType,
     get_matching_node,
 )
-from core.annotation.entity.metadata import MetadataColumn, MetadataTarget
-from core.annotation.entity.recording import Recording, RecordingUpsertResult
 from core.annotation.entity.tier_label import TierLabel
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.inspect_database.entity.table_data import TableData
+from phonlab_project.metadata import MetadataColumn, MetadataTarget
+from phonlab_project.recording import Recording, RecordingUpsertResult
 
 
 class InMemAnnotationRepository(AnnotationRepository):

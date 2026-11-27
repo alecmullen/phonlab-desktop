@@ -9,9 +9,9 @@ from core.annotation.entity.annotation import (
 )
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case import UseCase
-from core.read_tiers.entity.table_format import TierFile
-from core.read_tiers.read_tier_table import read_tier_table
-from core.read_tiers.read_tiers import read_tiers
+from phonlab_project.readers.read_tier_table import read_tier_table
+from phonlab_project.readers.read_tiers import read_tiers
+from phonlab_project.readers.table_format import TierFile
 from res.constants import SAME_NODE_THRESHOLD
 
 

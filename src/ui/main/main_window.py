@@ -16,13 +16,13 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from core.annotation.entity.metadata import MetadataTarget
 from core.project.scan_project_files import (
     is_annotation_file,
     is_audio_file,
     matching_annotation_files,
 )
 from core.settings.app_settings import settings
+from phonlab_project.metadata import MetadataTarget
 from ui.annotation.component.tier_display_dialog import TierDisplayDialog
 from ui.annotation.component.tier_font_dialog import TierFontDialog
 from ui.annotation.component.tier_search_dialog import TierSearchDialog

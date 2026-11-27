@@ -2,19 +2,19 @@ import posixpath
 from dataclasses import replace
 from pathlib import Path
 
-from core.annotation.entity.recording import Recording
-from core.project.entity.project_file import ProjectFile
-from core.project.entity.project_plan import LayoutSource, ProjectPlan
-from core.project_layout.entity.project_layout import ProjectLayout
-from core.project_layout.entity.project_scan import ProjectScan, ScannedFile
-from core.project_layout.filename_template import TemplateError
 from core.project_layout.infer_layout import InferLayout
 from core.project_layout.project_layout_file import LoadProjectLayout
 from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
-from core.read_tiers.entity.table_format import TierFile
-from core.read_tiers.read_elan_info import read_elan_info
-from core.read_tiers.read_srt import read_srt_tiers
+from phonlab_project.layout.filename_template import TemplateError
+from phonlab_project.layout.project_file import ProjectFile
+from phonlab_project.layout.project_layout import ProjectLayout
+from phonlab_project.layout.project_plan import LayoutSource, ProjectPlan
+from phonlab_project.layout.project_scan import ProjectScan, ScannedFile
+from phonlab_project.readers.read_elan_info import read_elan_info
+from phonlab_project.readers.read_srt import read_srt_tiers
+from phonlab_project.readers.table_format import TierFile
+from phonlab_project.recording import Recording
 from res.constants import (
     AUDIO_FILE_SUFFIXES,
     PROJECT_VIDEO_EXTENSIONS,

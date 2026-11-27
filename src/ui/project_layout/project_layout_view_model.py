@@ -1,21 +1,6 @@
 from dataclasses import replace
 from pathlib import Path
 
-from core.project_layout.entity.import_report import (
-    DataFileCandidate,
-    FolderSources,
-    LayoutSuggestion,
-    ResolvedProject,
-)
-from core.project_layout.entity.project_layout import (
-    ChannelRole,
-    DataFileKind,
-    DataFileRole,
-    FolderLevel,
-    ProjectLayout,
-)
-from core.project_layout.entity.project_scan import ProjectScan
-from core.project_layout.filename_template import TemplateError, compile_template
 from core.project_layout.infer_layout import InferLayout
 from core.project_layout.project_layout_file import (
     LoadProjectLayout,
@@ -24,8 +9,23 @@ from core.project_layout.project_layout_file import (
 from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
 from core.project_layout.suggest_talker_names import SuggestTalkerNames
-from core.read_tiers.entity.table_format import ColumnRole, TableFormat, TimeUnit
 from core.read_tiers.preview_annotation_table import PreviewAnnotationTable
+from phonlab_project.layout.filename_template import TemplateError, compile_template
+from phonlab_project.layout.import_report import (
+    DataFileCandidate,
+    FolderSources,
+    LayoutSuggestion,
+    ResolvedProject,
+)
+from phonlab_project.layout.project_layout import (
+    ChannelRole,
+    DataFileKind,
+    DataFileRole,
+    FolderLevel,
+    ProjectLayout,
+)
+from phonlab_project.layout.project_scan import ProjectScan
+from phonlab_project.readers.table_format import ColumnRole, TableFormat, TimeUnit
 from res.constants import (
     ANNOTATION_FORMATS,
     DATA_FILE_MIN_COVERAGE,

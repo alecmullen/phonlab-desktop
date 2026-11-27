@@ -7,12 +7,12 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
-from core.annotation.entity.recording import Recording
 from core.annotation.entity.tier_label import TierLabel
 from data.annotation.entity.annotation import AnnotationEntity
 from data.annotation.entity.annotation_label import AnnotationLabelEntity
 from data.annotation.entity.annotation_type import AnnotationTypeEntity
 from data.annotation.entity.recording_channel import RecordingChannelEntity
+from phonlab_project.recording import Recording
 
 
 def entity_to_annotation(entity: AnnotationEntity) -> Annotation:

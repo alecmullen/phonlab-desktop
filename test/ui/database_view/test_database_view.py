@@ -5,11 +5,11 @@ import pytest
 from pytestqt.qtbot import QtBot
 from support.view_models import make_database_view_model
 
-from core.annotation.entity.metadata import MetadataColumn, MetadataTarget, SqlType
-from core.annotation.entity.recording import Recording
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
+from phonlab_project.metadata import MetadataColumn, MetadataTarget, SqlType
+from phonlab_project.recording import Recording
 from ui.database_view.database_dialog import DatabaseDialog
 from ui.database_view.database_view_model import DatabaseViewModel
 from ui.database_view.state.database_view_state import DatabaseViewState

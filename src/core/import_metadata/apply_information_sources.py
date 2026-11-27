@@ -6,9 +6,9 @@ from core.import_metadata.information_sources_file import (
     resolved_file_name,
 )
 from core.import_metadata.match_metadata import MatchMetadata
-from core.import_metadata.read_metadata_csv import ReadMetadataCsv
 from core.import_words.import_words import ImportWords
 from core.import_words.word_source_file import LoadWordSource
+from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 
 
 class ApplyInformationSources(UseCaseSync[AppliedInformation]):

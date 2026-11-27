@@ -1,11 +1,11 @@
 from collections import Counter
 
-from core.project_layout.entity.import_report import (
+from phonlab_project.layout.import_report import (
     FolderSources,
     SourceFolder,
 )
-from core.project_layout.entity.project_scan import ScannedFile
-from core.project_layout.pairing import AudioIndex, reroot
+from phonlab_project.layout.pairing import AudioIndex, reroot
+from phonlab_project.layout.project_scan import ScannedFile
 
 
 def find_annotation_sources(

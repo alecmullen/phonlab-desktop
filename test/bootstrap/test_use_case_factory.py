@@ -17,7 +17,6 @@ from core.annotation.update_node import UpdateNode
 from core.edit_audio.edit_audio import EditAudio
 from core.import_metadata.import_metadata import ImportMetadata
 from core.import_metadata.match_metadata import MatchMetadata
-from core.import_metadata.read_metadata_csv import ReadMetadataCsv
 from core.import_words.import_words import ImportWords
 from core.import_words.match_words import MatchWords
 from core.import_words.save_unmatched_words import SaveUnmatchedWords
@@ -43,6 +42,7 @@ from core.track_formants.track_formants import TrackFormants
 from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
+from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 
 USE_CASE_TYPES = [
     EditAudio,

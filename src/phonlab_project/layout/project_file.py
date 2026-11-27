@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
-from core.annotation.entity.recording import Recording
-from core.read_tiers.entity.table_format import TierFile
+from phonlab_project.readers.table_format import TierFile
+from phonlab_project.recording import Recording
 
 
 @dataclass(frozen=True)

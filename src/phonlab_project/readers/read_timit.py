@@ -3,7 +3,7 @@ from typing import Any
 
 import soundfile as sf
 
-from core.read_tiers.sibling_file import find_sibling
+from phonlab_project.readers.sibling_file import find_sibling
 from res.constants import TIMIT_DEFAULT_SAMPLE_RATE
 
 

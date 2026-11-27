@@ -4,18 +4,18 @@ from support.audio_files import write_wavs
 from support.textgrid import write_simple_textgrid
 
 from core.annotation.entity.annotation import AnnotationType
-from core.annotation.entity.recording import Recording
 from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.project.add_project_files import AddProjectFiles
-from core.project.entity.project_file import ProjectFile
 from core.project.entity.project_import_result import (
     ImportStage,
     ProjectImportResult,
 )
-from core.read_tiers.entity.table_format import TierFile
+from phonlab_project.layout.project_file import ProjectFile
+from phonlab_project.readers.table_format import TierFile
+from phonlab_project.recording import Recording
 
 
 def make_use_case(

@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 
 import soundfile as sf
 
-from core.project_layout.entity.import_report import ChannelCandidate
-from core.project_layout.entity.project_layout import ChannelRole
-from core.project_layout.entity.project_scan import ScannedFile
-from core.project_layout.pairing import candidate_splits
+from phonlab_project.layout.import_report import ChannelCandidate
+from phonlab_project.layout.pairing import candidate_splits
+from phonlab_project.layout.project_layout import ChannelRole
+from phonlab_project.layout.project_scan import ScannedFile
 from res.constants import CHANNEL_MIN_COVERAGE, CHANNEL_SAMPLE_GROUPS
 
 MAX_EXAMPLES = 3
