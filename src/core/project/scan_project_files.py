@@ -4,6 +4,8 @@ from pathlib import Path
 
 from core.annotation.entity.recording import Recording
 from core.project.entity.project_file import ProjectFile
+from core.project.entity.project_plan import LayoutSource, ProjectPlan
+from core.project_layout.entity.project_layout import ProjectLayout
 from core.project_layout.entity.project_scan import ProjectScan, ScannedFile
 from core.project_layout.filename_template import TemplateError
 from core.project_layout.infer_layout import InferLayout
@@ -49,23 +51,39 @@ def scan_project_files(dir_path: str) -> list[ProjectFile]:
     extra files and talkers attached. The layout saved in the project says where to
     look and how files belong together; a project without one is read the way it
     appears to be organized (a flat folder of sound files and TextGrids, for one)."""
-    scan = ScanProjectTree()(dir_path)
-    layout = LoadProjectLayout()(dir_path)
-    if layout is None:
-        layout = InferLayout()(scan).layout
+    return plan_project(dir_path).files
 
+
+def plan_project(dir_path: str, layout: ProjectLayout | None = None) -> ProjectPlan:
+    """What reading the project in dir_path finds, with nothing written: its recordings
+    (see `scan_project_files`) and what did not fit. The layout is the one given, else
+    the one saved in the project, else one inferred from the files."""
+    scan = ScanProjectTree()(dir_path)
+    suggestion = None
+    if layout is not None:
+        source: LayoutSource = "given"
+    elif (layout := LoadProjectLayout()(dir_path)) is not None:
+        source = "saved"
+    else:
+        suggestion = InferLayout()(scan)
+        layout, source = suggestion.layout, "inferred"
+
+    template_unusable = False
     try:
-        recordings = ResolveRecordings()(scan, layout).recordings
+        resolved = ResolveRecordings()(scan, layout)
     except TemplateError:
         # a template that cannot be used only loses the variables taken from names
         layout = replace(layout, filename_template="")
-        recordings = ResolveRecordings()(scan, layout).recordings
+        resolved = ResolveRecordings()(scan, layout)
+        template_unusable = True
 
-    recordings = [_with_media_and_talkers(recording, scan) for recording in recordings]
+    recordings = [
+        _with_media_and_talkers(recording, scan) for recording in resolved.recordings
+    ]
 
     root = Path(dir_path)
     tables = {role.tier_name: role.table for role in layout.data_files}
-    return [
+    files = [
         ProjectFile(
             recording.file_stem,
             str(root / recording.audio_file),
@@ -81,6 +99,9 @@ def scan_project_files(dir_path: str) -> list[ProjectFile]:
         for recording in recordings
         if recording.audio_file
     ]
+    return ProjectPlan(
+        dir_path, layout, source, files, resolved.report, suggestion, template_unusable
+    )
 
 
 def _with_media_and_talkers(recording: Recording, scan: ProjectScan) -> Recording:
