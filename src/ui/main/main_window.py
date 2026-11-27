@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
 
         self.filters = (
             "Sound files and annotations (*.wav *.WAV *.TextGrid *.textgrid "
-            "*.TEXTGRID *.eaf *.srt)"
+            "*.TEXTGRID *.eaf *.srt *.cha)"
         )
         self.splash = None
         self.progress_dialog: QProgressDialog | None = None
@@ -621,7 +621,7 @@ class MainWindow(QMainWindow):
             self.tr("Choose the annotation files to read again"),
             dir_path,
             self.tr(
-                "Annotation files (*.TextGrid *.textgrid *.eaf *.srt);;All files (*)"
+                "Annotation files (*.TextGrid *.textgrid *.eaf *.srt *.cha);;All files (*)"
             ),
         )
         if len(paths) == 0:

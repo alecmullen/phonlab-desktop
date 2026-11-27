@@ -17,7 +17,7 @@ from phonlab_project.layout.project_layout import ProjectLayout
 from phonlab_project.layout.project_layout_file import save_layout
 from phonlab_project.layout.project_plan import ProjectPlan
 from phonlab_project.readers.read_tier_table import read_tier_table
-from phonlab_project.readers.read_tiers import read_tiers
+from phonlab_project.readers.read_tiers import read_tiers, with_tier_talkers
 from phonlab_project.schema import writing
 from phonlab_project.writer import (
     clear_annotation,
@@ -327,6 +327,8 @@ def _tiers_of(file: ProjectFile) -> list[dict]:
     """The tiers of a recording's annotation: those of its annotation file and a tier for
     each file that holds one"""
     tiers = read_tiers(file.textgrid_path) if file.textgrid_path else []
+    if file.recording is not None:
+        tiers = with_tier_talkers(tiers, file.recording.tier_talkers)
     return tiers + [
         read_tier_table(tier.path, name, file.audio_path, tier.table)
         for name, tier in file.tier_files.items()

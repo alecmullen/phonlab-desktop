@@ -121,8 +121,8 @@ class ProjectLayout:
         Extensions of sound files.
 
     annotation_ext : str or None
-        Extension of the annotation files (`.textgrid`, `.eaf`, `.srt`, `.words`,
-        `.wrd`); None if there are none.
+        Extension of the annotation files (`.textgrid`, `.eaf`, `.srt`, `.cha`,
+        `.words`, `.wrd`); None if there are none.
 
     annotation_dir : str
         Where annotation files are read from, as a folder relative to the project. Empty

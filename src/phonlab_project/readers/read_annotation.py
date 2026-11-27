@@ -16,7 +16,7 @@ def read_annotation(
     """Read the labels of an annotation file, whatever its format, into a DataFrame.
 
     The format is taken from the file's extension (case does not matter):
-    `.TextGrid` (Praat), `.eaf` (ELAN), `.srt` (subtitles), `.words` (Buckeye,
+    `.TextGrid` (Praat), `.eaf` (ELAN), `.srt` (subtitles), `.cha` (CHAT, as TalkBank corpora have), `.words` (Buckeye,
     read with its `.phones` file) and `.wrd` (TIMIT, read with its `.phn` file).
 
     Parameters

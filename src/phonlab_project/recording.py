@@ -43,6 +43,11 @@ class Recording:
         Who the folders and file names say is the talker, kept when the annotation file
         names talkers of its own, which are then `talkers`.
 
+    tier_talkers : dict
+        Tier name -> the talker who made the tier, for annotation files that name only
+        roles, not people (CHAT: the tier `INV` is the talker `INV3` here). A tier that
+        names its own talker keeps it.
+
     talkers : list of str
         Who is in the recording.
 
@@ -69,6 +74,8 @@ class Recording:
     # who the layout (folders and file names) says is the talker; kept when the
     # annotation file names talkers of its own, which are then `talkers`
     target_talker: str | None = None
+    # tier name -> its talker, where the annotation file names roles, not people
+    tier_talkers: dict[str, str] = field(default_factory=dict)
     talkers: list[str] = field(default_factory=list)
     # any other variable taken from the folder or file names (dialect, session...)
     fields: dict[str, str] = field(default_factory=dict)

@@ -81,6 +81,9 @@ class AddProjectFiles(UseCase[ProjectImportResult]):
                     overwrite=replace,
                     tier_files=file.tier_files,
                     audio_path=file.audio_path,
+                    tier_talkers=file.recording.tier_talkers
+                    if file.recording
+                    else None,
                 )
                 imported.append(file.file_stem)
             except ValueError:

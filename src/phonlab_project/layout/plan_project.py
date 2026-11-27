@@ -7,6 +7,7 @@ from phonlab_project.constants import (
     PROJECT_VIDEO_EXTENSIONS,
     SINGLE_FILE_ANNOTATION_SUFFIXES,
 )
+from phonlab_project.layout.chat_speakers import name_chat_speakers
 from phonlab_project.layout.filename_template import TemplateError
 from phonlab_project.layout.infer_layout import infer_layout
 from phonlab_project.layout.project_file import ProjectFile
@@ -69,9 +70,10 @@ def plan_project(dir_path: str, layout: ProjectLayout | None = None) -> ProjectP
         resolved = resolve_recordings(scan, layout)
         template_unusable = True
 
-    recordings = [
-        _with_media_and_talkers(recording, scan) for recording in resolved.recordings
-    ]
+    recordings = name_chat_speakers(
+        [_with_media_and_talkers(recording, scan) for recording in resolved.recordings],
+        dir_path,
+    )
 
     root = Path(dir_path)
     tables = {role.tier_name: role.table for role in layout.data_files}

@@ -409,6 +409,25 @@ What was built, and where it differs from the sketch above:
   taken for a talker named `Note`. Subtitles before the first named talker, or all of them
   when none is named, go to a tier called `subtitles` with no talker. The talkers named
   become the talkers of the recording, as ELAN participants do.
+- **CHAT (.cha) annotations**, the transcripts of TalkBank corpora, become one tier per
+  speaker, named by the speaker's code (`PAR`, `INV`). A main line (`*PAR:`) is an
+  utterance whose time bullet, written between two NAK (0x15) characters as
+  `^U1005_3285^U`, gives its start and end in milliseconds; the labels are in seconds and
+  keep the CHAT codes (`&-um`, `[//]`). Dependent lines (`%mor`, `%gra`, `%wor`) are not
+  read. An utterance with no bullet has no place in time and is left out (about 7% of
+  CORAAL). Aligners pad utterances, so one speaker's can overlap the next by up to half a
+  second; the boundary between them is moved to the middle of the overlap. An utterance
+  inside another by the same speaker (a quotation marker) is kept as it is, so a tier can
+  still have a few overlapping labels.
+  - A CHAT file names roles, not people, so the tiers carry no talker until the project
+    gives one. The speaker `PAR` is the talker the folders and file names give the
+    recording. Every other speaker is a different person in each file, named by the code and
+    a number that counts up through the project's recordings in order: `INV1`, `INV2`,
+    `UID1`... (a code that ends in a digit is joined to its number by `_`). The number
+    depends on the files the project has, so adding a recording that sorts before others
+    renumbers the ones after it; annotations already read keep the names they were given
+    until they are read again. These talkers are the talkers of the recording.
+  - `read_chat_speakers` lists a file's speaker codes without reading its utterances.
 - **Opening a sound file on its own** (File > Open, not in the project) offers the
   TextGrid, ELAN or subtitle file in its folder that is named like it; with several the user
   picks one. A sound file of the project takes its annotation from the project database.

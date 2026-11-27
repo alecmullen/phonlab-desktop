@@ -95,7 +95,7 @@ one recording and tier `word` of another are two rows.
 | `id` | INTEGER | |
 | `annotation_id` | INTEGER | → `recording.id` (the name is older than the table) |
 | `name` | VARCHAR | the tier's name |
-| `talker_id` | INTEGER | **optional**: → `talker.id`; who produced the tier, when its source says (ELAN participant, subtitle talker). The column exists only if some tier has a talker |
+| `talker_id` | INTEGER | **optional**: → `talker.id`; who produced the tier, when its source says (ELAN participant, subtitle talker) or the project works it out (CHAT speaker). The column exists only if some tier has a talker |
 
 ### `annotation_node` (core)
 
@@ -329,7 +329,7 @@ A database with a newer schema version than the package knows is refused.
 ## Reading a single annotation file
 
 `read_annotation` reads a file of any format phonlab reads (`.TextGrid`, `.eaf`, `.srt`,
-Buckeye `.words`, TIMIT `.wrd`) into the same table `Project.labels()` gives, for a
+CHAT `.cha`, Buckeye `.words`, TIMIT `.wrd`) into the same table `Project.labels()` gives, for a
 script that needs the labels of one file (a figure for a paper, say):
 
 ```python

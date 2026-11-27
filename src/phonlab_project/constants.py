@@ -8,7 +8,7 @@ AUDIO_FILE_SUFFIXES = (".wav",)
 TEXTGRID_FILE_SUFFIXES = (".textgrid",)
 
 # Annotation files that can be opened with a single sound file
-SINGLE_FILE_ANNOTATION_SUFFIXES = (*TEXTGRID_FILE_SUFFIXES, ".eaf", ".srt")
+SINGLE_FILE_ANNOTATION_SUFFIXES = (*TEXTGRID_FILE_SUFFIXES, ".eaf", ".srt", ".cha")
 
 SAME_NODE_THRESHOLD = 0.005
 
@@ -23,6 +23,7 @@ ANNOTATION_FORMATS = {
     ".wrd": "timit",
     ".eaf": "elan",
     ".srt": "srt",
+    ".cha": "chat",
 }
 
 # Extensions a format's reader reads itself, so they are not extra data files
@@ -33,6 +34,12 @@ ANNOTATION_COMPANION_EXTENSIONS = {"buckeye": (".phones",), "timit": (".phn",)}
 SRT_TALKER_MAX_LENGTH = 40
 
 SRT_NO_TALKER_TIER = "subtitles"
+
+# CHAT (.cha) files name the speakers by role (`PAR`, `INV`), not by name. The speaker
+# with this code is the talker the folder and file names give the recording; each
+# other speaker is a different person in each file, named by the code and a number
+# that counts up through the project (`INV1`, `INV2`...)
+CHAT_TARGET_CODE = "PAR"
 
 PROJECT_IGNORED_NAMES = ("phonlab.db", "phonlab.toml")
 

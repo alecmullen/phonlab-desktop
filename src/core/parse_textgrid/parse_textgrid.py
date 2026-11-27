@@ -8,7 +8,7 @@ from core.base.use_case import UseCase
 from phonlab_project.constants import SAME_NODE_THRESHOLD
 from phonlab_project.nodes import add_node_time, node_at
 from phonlab_project.readers.read_tier_table import read_tier_table
-from phonlab_project.readers.read_tiers import read_tiers
+from phonlab_project.readers.read_tiers import read_tiers, with_tier_talkers
 from phonlab_project.readers.table_format import TierFile
 
 
@@ -27,6 +27,7 @@ class ParseTextGrid(UseCase[Annotation]):
         overwrite: bool = False,
         tier_files: dict[str, TierFile] | None = None,
         audio_path: str | None = None,
+        tier_talkers: dict[str, str] | None = None,
     ):
         """Replaces any existing content for file_stem only if overwrite is True. The
         files are read before anything in the database is touched, so an unreadable
@@ -35,9 +36,11 @@ class ParseTextGrid(UseCase[Annotation]):
         The annotation is the tiers of the TextGrid (if there is one) and a tier for
         each of `tier_files` (tier name -> a text table of intervals and how to read it),
         read with the help of the length of the audio file `audio_path`. A tier that
-        says who produced it keeps that as its talker."""
+        says who produced it keeps that as its talker; the others get the one
+        `tier_talkers` (tier name -> talker) gives, if any."""
         try:
             tiers = read_tiers(file_path) if file_path else []
+            tiers = with_tier_talkers(tiers, tier_talkers or {})
             tiers += [
                 read_tier_table(tier.path, name, audio_path, tier.table)
                 for name, tier in (tier_files or {}).items()
