@@ -9,7 +9,12 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
-DATABASE_FILENAME = "phonlab.db"
+from phonlab_project.errors import ProjectError
+from phonlab_project.schema import (
+    DATABASE_FILENAME,
+    RECORDING_OPTIONAL_COLUMNS,
+    check_version,
+)
 
 # Columns the schema promises, and those the app adds only when a project has a value
 # for them (see docs/database-schema.md); any other column of a table was added by the
@@ -38,17 +43,13 @@ CORE_COLUMNS = {
     "recording_channel": ("id", "recording_id", "channel", "audio_file", "talker_id"),
 }
 OPTIONAL_COLUMNS = {
-    "recording": ("video_file", "media_offset", "target_talker"),
+    "recording": tuple(RECORDING_OPTIONAL_COLUMNS),
     "annotation_type": ("talker_id",),
 }
 # the times of two labels are the same when they are this close (seconds)
 TIME_TOLERANCE = 1e-9
 
 ColumnKind = Literal["core", "optional", "added"]
-
-
-class ProjectError(Exception):
-    """The project does not have what was asked for, or is not a project database"""
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,10 @@ def open_project(path: str | Path) -> "Project":
 
 class Project:
     """What a project database has, as DataFrames. The database is opened read only,
-    so it is safe to use while the app has it open."""
+    so it is safe to use while the app has it open. `schema_version` is the version of
+    the schema it was made with; a database made by a newer phonlab is refused."""
+
+    schema_version: int
 
     def __init__(self, file: Path):
         self.file = file
@@ -88,6 +92,11 @@ class Project:
             raise ProjectError(
                 f"{file} is not a project database: it has no recordings"
             )
+        try:
+            self.schema_version = check_version(self.connection, file)
+        except ProjectError:
+            self.connection.close()
+            raise
 
     def close(self) -> None:
         self.connection.close()

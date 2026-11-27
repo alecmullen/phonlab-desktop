@@ -235,10 +235,24 @@ columns("talker")                                    # everything, core and adde
 set(columns("talker")) - {"id", "name"}              # what the researcher added
 ```
 
+## The schema version
+
+`PRAGMA user_version` holds the version of the schema, an integer that goes up when a
+change would break a script that knew the older schema (a column renamed or removed, a
+table split). Adding an optional or open column does not change it. The app marks a
+database with the current version when it makes or opens one, and the library does the
+same.
+
+A file with version 0 and the project tables was made before versions were kept and is
+read as version 1. `Project.schema_version` says which a project has. A database whose
+version is newer than the one this phonlab knows is refused (`ProjectError`) for reading
+and for writing: what it has may not be what the code expects.
+
 ## What is not promised yet
 
-- **Version number.** The file does not carry one yet. It should, with SQLite's
-  `PRAGMA user_version`, before other people write scripts against it.
+- **Changes to the schema.** The file carries a version number, kept with SQLite's
+  `PRAGMA user_version` (now 1; see below). Nothing yet changes a database from an
+  older version to a newer one, because there has been no change to make.
 - **Types.** Added columns are `TEXT`, `INTEGER` or `REAL`. A column of numbers read
   from a CSV file that had a stray word in it is `TEXT`; check the type before averaging.
 - **Writing.** Only the app writes to the file. A script that writes can break rules the
@@ -293,5 +307,5 @@ What it does when the project lacks something:
   "talker_id")` to know which.
 
 Not done yet: `Python 3.10` is not checked (phonlab supports it; the prototype avoids
-`typing.Self` but has not been run there), the schema version is not read, and a project
-of tens of thousands of words has not been timed.
+`typing.Self` but has not been run there), and a project of tens of thousands of words
+has not been timed.

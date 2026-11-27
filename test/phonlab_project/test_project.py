@@ -11,6 +11,7 @@ from data.annotation.datasource.annotation_datasource import AnnotationDataSourc
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
 from phonlab_project import Project, ProjectError, open_project
+from phonlab_project.schema import SCHEMA_VERSION
 
 WORDS = ["run", "big", "walk", "red", "jump", "tall"]
 PHONES = {
@@ -122,6 +123,37 @@ def test_another_database_is_not_a_project(tmp_path: Path):
     ).connection.close()
 
     with pytest.raises(ProjectError, match="no recordings"):
+        open_project(tmp_path)
+
+
+def set_version(directory: Path, version: int) -> None:
+    connection = sqlite3.connect(directory / "phonlab.db")
+    connection.execute(f"PRAGMA user_version = {version}")
+    connection.close()
+
+
+def test_a_database_the_app_makes_carries_the_schema_version(tmp_path: Path):
+    make_project(tmp_path)
+
+    with open_project(tmp_path) as project:
+        assert project.schema_version == SCHEMA_VERSION
+        stored = project.connection.execute("PRAGMA user_version").fetchone()[0]
+        assert stored == SCHEMA_VERSION
+
+
+def test_a_database_without_a_version_is_read_as_the_first_version(tmp_path: Path):
+    make_project(tmp_path)
+    set_version(tmp_path, 0)
+
+    with open_project(tmp_path) as project:
+        assert project.schema_version == 1
+
+
+def test_a_database_of_a_newer_schema_is_refused(tmp_path: Path):
+    make_project(tmp_path)
+    set_version(tmp_path, SCHEMA_VERSION + 1)
+
+    with pytest.raises(ProjectError, match="newer"):
         open_project(tmp_path)
 
 

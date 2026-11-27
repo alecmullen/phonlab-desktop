@@ -6,6 +6,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 
 from data.base.base_entity import ON_DEMAND, BaseEntity
+from phonlab_project.schema import SCHEMA_VERSION
 from res.constants import PROJECT_DATABASE_FILENAME
 
 
@@ -42,6 +43,11 @@ class SQLiteDatabase(Database):
                 if not table.info.get(ON_DEMAND)
             ],
         )
+        # Mark a database that has no schema version with the current one, so that
+        # scripts reading the file know what to expect of it
+        with self.engine.begin() as connection:
+            if connection.exec_driver_sql("PRAGMA user_version").scalar() == 0:
+                connection.exec_driver_sql(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self):
         """Close every connection to the database file. The engine reconnects if it is
