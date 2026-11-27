@@ -2,8 +2,8 @@ from typing import Any
 
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case_sync import UseCaseSync
-from core.import_metadata.import_metadata import column_name, convert, infer_sql_type
 from core.import_words.entity.word_table import WordColumnPlan, WordImportResult
+from phonlab_project.columns import column_name, convert, infer_sql_type
 from phonlab_project.metadata import MetadataColumn, SqlType
 from phonlab_project.readers.metadata_table import MetadataTable
 

@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-from res.constants import TEMPLATE_IGNORE_REST
+from phonlab_project.constants import TEMPLATE_IGNORE_REST
 
 REGEX_PREFIX = "re:"
 

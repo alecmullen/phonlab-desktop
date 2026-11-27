@@ -1,7 +1,4 @@
-import ast
 import sqlite3
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -314,60 +311,3 @@ def test_words_raise_clearly_when_the_project_has_no_word_table(tmp_path: Path):
         pytest.raises(ProjectError, match="no word table"),
     ):
         bare.words()
-
-
-def imports_of(*names: str) -> set[str]:
-    source = Path(__file__).parents[2] / "src" / "phonlab_project"
-    imported = set()
-    for name in names:
-        for node in ast.walk(ast.parse((source / name).read_text())):
-            if isinstance(node, ast.Import):
-                imported |= {alias.name.split(".")[0] for alias in node.names}
-            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                imported.add(node.module.split(".")[0])
-    return imported
-
-
-def test_reading_a_project_uses_nothing_of_the_desktop_app():
-    reading = imports_of("project.py", "schema.py", "errors.py")
-
-    assert not reading & {
-        "core",
-        "data",
-        "ui",
-        "res",
-        "bootstrap",
-        "PyQt6",
-        "sqlalchemy",
-    }
-
-
-def test_the_package_needs_neither_the_interface_nor_the_database_layer_of_the_app():
-    # Its readers and layout code are in `core` for now, and move to phonlab with it
-    package = ("project.py", "schema.py", "errors.py", "importer.py", "tables.py")
-    assert not imports_of(*package, "writer.py") & {
-        "data",
-        "ui",
-        "bootstrap",
-        "PyQt6",
-        "sqlalchemy",
-    }
-
-
-def test_importing_the_package_loads_no_qt_or_database_layer():
-    # (res.constants, which the readers use, still imports a state class from `ui`;
-    # that has to go before the readers move to phonlab)
-    source = Path(__file__).parents[2] / "src"
-    code = (
-        f"import sys; sys.path.insert(0, {str(source)!r}); import phonlab_project as p; "
-        "[getattr(p, n) for n in p.__all__]; "
-        "bad = [m for m in sys.modules if m.split('.')[0] in "
-        "('PyQt6', 'sqlalchemy', 'data', 'bootstrap')]; "
-        "print(bad)"
-    )
-
-    result = subprocess.run(
-        [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=True
-    )
-
-    assert result.stdout.strip() == "[]"

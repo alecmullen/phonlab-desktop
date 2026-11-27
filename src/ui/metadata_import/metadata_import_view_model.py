@@ -7,6 +7,7 @@ from core.import_metadata.information_sources_file import (
     stored_file_name,
 )
 from core.import_metadata.match_metadata import MatchMetadata
+from core.import_metadata.read_metadata_csv import ReadMetadataCsv
 from phonlab_project.metadata import MetadataTarget
 from phonlab_project.readers.metadata_table import (
     MetadataColumnPlan,
@@ -14,7 +15,6 @@ from phonlab_project.readers.metadata_table import (
     MetadataMatch,
     MetadataTable,
 )
-from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 from ui.base.view_model import ViewModel
 from ui.metadata_import.state.metadata_import_state import (
     MetadataColumnState,

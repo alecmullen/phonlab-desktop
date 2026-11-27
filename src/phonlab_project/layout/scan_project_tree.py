@@ -1,7 +1,7 @@
 import os
 
+from phonlab_project.constants import PROJECT_IGNORED_NAMES
 from phonlab_project.layout.project_scan import ProjectScan, ScannedFile
-from res.constants import PROJECT_IGNORED_NAMES
 
 
 def scan_project_tree(dir_path: str) -> ProjectScan:

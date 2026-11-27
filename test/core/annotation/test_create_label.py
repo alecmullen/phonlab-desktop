@@ -9,7 +9,7 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
-from res.constants import SAME_NODE_THRESHOLD
+from phonlab_project.constants import SAME_NODE_THRESHOLD
 
 
 def make_annotation(

@@ -1,18 +1,15 @@
-import bisect
-
 from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
-    add_node_time,
-    get_matching_node,
 )
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.base.use_case import UseCase
+from phonlab_project.constants import SAME_NODE_THRESHOLD
+from phonlab_project.nodes import add_node_time, node_at
 from phonlab_project.readers.read_tier_table import read_tier_table
 from phonlab_project.readers.read_tiers import read_tiers
 from phonlab_project.readers.table_format import TierFile
-from res.constants import SAME_NODE_THRESHOLD
 
 
 class ParseTextGridError(ValueError):
@@ -98,13 +95,6 @@ def to_label(
 ) -> AnnotationLabel:
     """The label with the nodes at its times. Times of different tiers that are
     nearly the same share a node, so the node is the one nearest the time"""
-    s_node = _node_at(node_times, node_ids, label[0])
-    e_node = s_node if label[1] is None else _node_at(node_times, node_ids, label[1])
+    s_node = node_at(node_times, node_ids, label[0])
+    e_node = s_node if label[1] is None else node_at(node_times, node_ids, label[1])
     return AnnotationLabel(s_node, e_node, label[2])
-
-
-def _node_at(node_times: list[float], node_ids: list[int], time: float) -> int:
-    node = get_matching_node(node_times, time, node_ids=node_ids)
-    if node is None:
-        node = node_ids[min(bisect.bisect_left(node_times, time), len(node_ids) - 1)]
-    return node

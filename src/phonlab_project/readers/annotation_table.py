@@ -4,6 +4,7 @@ from pathlib import Path
 
 import soundfile as sf
 
+from phonlab_project.constants import TABLE_MAX_HEADER_LINES, TIER_TABLE_DURATION_SLACK
 from phonlab_project.readers.table_format import (
     WHITESPACE,
     ColumnRole,
@@ -11,7 +12,6 @@ from phonlab_project.readers.table_format import (
     TableFormat,
     TimeUnit,
 )
-from res.constants import TABLE_MAX_HEADER_LINES, TIER_TABLE_DURATION_SLACK
 
 
 def read_lines(path: str) -> list[str]:

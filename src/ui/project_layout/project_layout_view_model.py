@@ -10,6 +10,11 @@ from core.project_layout.resolve_recordings import ResolveRecordings
 from core.project_layout.scan_project_tree import ScanProjectTree
 from core.project_layout.suggest_talker_names import SuggestTalkerNames
 from core.read_tiers.preview_annotation_table import PreviewAnnotationTable
+from phonlab_project.constants import (
+    ANNOTATION_FORMATS,
+    DATA_FILE_MIN_COVERAGE,
+    TALKER_FIELD_NAMES,
+)
 from phonlab_project.layout.filename_template import TemplateError, compile_template
 from phonlab_project.layout.import_report import (
     DataFileCandidate,
@@ -26,13 +31,7 @@ from phonlab_project.layout.project_layout import (
 )
 from phonlab_project.layout.project_scan import ProjectScan
 from phonlab_project.readers.table_format import ColumnRole, TableFormat, TimeUnit
-from res.constants import (
-    ANNOTATION_FORMATS,
-    DATA_FILE_MIN_COVERAGE,
-    PROJECT_PREVIEW_ROWS,
-    PROJECT_REPORT_EXAMPLES,
-    TALKER_FIELD_NAMES,
-)
+from res.constants import PROJECT_PREVIEW_ROWS, PROJECT_REPORT_EXAMPLES
 from ui.base.view_model import ViewModel
 from ui.project_layout.state.annotation_table_state import AnnotationTableState
 from ui.project_layout.state.project_layout_state import (

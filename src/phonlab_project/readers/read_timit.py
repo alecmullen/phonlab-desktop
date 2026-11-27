@@ -3,8 +3,8 @@ from typing import Any
 
 import soundfile as sf
 
+from phonlab_project.constants import TIMIT_DEFAULT_SAMPLE_RATE
 from phonlab_project.readers.sibling_file import find_sibling
-from res.constants import TIMIT_DEFAULT_SAMPLE_RATE
 
 
 def read_timit_tiers(words_path: str) -> list[dict[str, Any]]:

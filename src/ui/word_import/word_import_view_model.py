@@ -2,6 +2,7 @@ from pathlib import Path
 
 from core.annotation.list_tier_names import ListTierNames
 from core.import_metadata.information_sources_file import stored_file_name
+from core.import_metadata.read_metadata_csv import ReadMetadataCsv
 from core.import_words.entity.word_table import (
     WordImportResult,
     WordMatch,
@@ -12,7 +13,6 @@ from core.import_words.match_words import MatchWords
 from core.import_words.save_unmatched_words import SaveUnmatchedWords
 from core.import_words.word_source_file import SaveWordSource
 from phonlab_project.readers.metadata_table import MetadataTable
-from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 from res.constants import WORD_EXAMPLE_UNMATCHED
 from ui.base.view_model import ViewModel
 from ui.word_import.state.word_import_state import WordColumnState, WordImportState

@@ -13,7 +13,7 @@ from core.annotation.entity.annotation import (
     AnnotationLabel,
     AnnotationType,
 )
-from res.constants import SAME_NODE_THRESHOLD
+from phonlab_project.constants import SAME_NODE_THRESHOLD
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.state.add_tiers_state import AddTiersAction
 from ui.annotation.state.annotation_label_state import AnnotationLabelState

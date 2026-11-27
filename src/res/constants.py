@@ -9,11 +9,6 @@ TIER_ORDER_KEY = "tier_order"
 TIER_FONTS_KEY = "tier_fonts"
 
 # -- Files --
-# Suffixes are matched case-insensitively, so .wav, .WAV, .Wav, ... all count
-AUDIO_FILE_SUFFIXES = (".wav",)
-TEXTGRID_FILE_SUFFIXES = (".textgrid",)
-# Annotation files that can be opened with a single sound file
-SINGLE_FILE_ANNOTATION_SUFFIXES = (*TEXTGRID_FILE_SUFFIXES, ".eaf", ".srt")
 PROJECT_DATABASE_FILENAME = "phonlab.db"
 
 # -- Mouse --
@@ -164,43 +159,13 @@ TALKER_TINTS = (
 # The font of annotation labels, unless the user chose another for their tier
 LABEL_FONT_FAMILY = "Arial"
 LABEL_FONT_SIZE = 16
-SAME_NODE_THRESHOLD = 0.005
 SAME_NODE_PIXEL_THRESH = 7
 
 # -- Project Import --
-PROJECT_AUDIO_EXTENSIONS = (".wav",)
-PROJECT_VIDEO_EXTENSIONS = (".mp4", ".m4v", ".mov", ".avi", ".mkv", ".webm", ".mpg")
-# Primary annotation extension (casefolded) -> format name
-ANNOTATION_FORMATS = {
-    ".textgrid": "textgrid",
-    ".words": "buckeye",
-    ".wrd": "timit",
-    ".eaf": "elan",
-    ".srt": "srt",
-}
-# Extensions a format's reader reads itself, so they are not extra data files
-ANNOTATION_COMPANION_EXTENSIONS = {"buckeye": (".phones",), "timit": (".phn",)}
-# Subtitles (.srt): the longest a talker's name at the start of one is taken to be, and
-# the tier for subtitles with no talker named
-SRT_TALKER_MAX_LENGTH = 40
-SRT_NO_TALKER_TIER = "subtitles"
-PROJECT_IGNORED_NAMES = ("phonlab.db", "phonlab.toml")
-TALKER_FIELD_NAMES = ("talker", "speaker")
-# In a filename template: allows any characters (or none) that are not kept
-TEMPLATE_IGNORE_REST = "(ignore)"
-DATA_FILE_MIN_COVERAGE = 0.5  # share of recordings that must have a file kind
 PROJECT_PREVIEW_ROWS = 15
-CHANNEL_MIN_COVERAGE = 0.5  # share of audio files that are channel siblings
-CHANNEL_SAMPLE_GROUPS = 3  # groups whose headers are read to tell channels from takes
 PROJECT_REPORT_EXAMPLES = 8
-LAYOUT_TOML_KEY = "import"
-LAYOUT_VERSION = 1
 
 # -- Legacy Annotation Formats --
-TIMIT_DEFAULT_SAMPLE_RATE = 16000
-# a text table of intervals fits its audio file if it ends within this factor of its length
-TIER_TABLE_DURATION_SLACK = 1.1
-TABLE_MAX_HEADER_LINES = 20  # lines to look through for where a table's data begins
 TABLE_PREVIEW_ROWS = 12
 
 # -- Database Inspection --

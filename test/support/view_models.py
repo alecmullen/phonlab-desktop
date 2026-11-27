@@ -37,6 +37,7 @@ from core.import_metadata.information_sources_file import (
     SaveInformationSource,
 )
 from core.import_metadata.match_metadata import MatchMetadata
+from core.import_metadata.read_metadata_csv import ReadMetadataCsv
 from core.import_words.import_words import ImportWords
 from core.import_words.match_words import MatchWords
 from core.import_words.save_unmatched_words import SaveUnmatchedWords
@@ -69,7 +70,6 @@ from core.track_formants.warm_up_formants import WarmUpFormantTracking
 from core.transform_audio.filter_audio import FilterAudio
 from core.transform_audio.prep_audio import PrepAudio
 from phonlab_project.metadata import MetadataTarget
-from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 from ui.annotation.annotation_view_model import AnnotationViewModel
 from ui.annotation.tier_search_view_model import TierSearchViewModel
 from ui.base.dependency_factory import ViewModelFactory

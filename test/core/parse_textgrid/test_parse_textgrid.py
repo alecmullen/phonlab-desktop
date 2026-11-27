@@ -7,8 +7,8 @@ from core.annotation.repository.in_mem_annotation_repository import (
     InMemAnnotationRepository,
 )
 from core.parse_textgrid.parse_textgrid import ParseTextGrid, ParseTextGridError
+from phonlab_project.constants import SAME_NODE_THRESHOLD
 from phonlab_project.readers.table_format import TierFile
-from res.constants import SAME_NODE_THRESHOLD
 
 SIMPLE_TEXTGRID = """File type = "ooTextFile"
 Object class = "TextGrid"

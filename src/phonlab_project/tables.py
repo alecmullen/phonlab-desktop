@@ -9,11 +9,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from core.import_metadata.import_metadata import column_name, convert, infer_sql_type
+from phonlab_project.columns import column_name, convert, infer_sql_type
 from phonlab_project.errors import ProjectError
 from phonlab_project.metadata import SqlType
 from phonlab_project.readers.metadata_table import MetadataTable
-from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
+from phonlab_project.readers.read_metadata_csv import read_metadata_csv
 from phonlab_project.schema import WORD_TABLE, add_column, writing
 
 MAX_LISTED = 50
@@ -155,7 +155,7 @@ def _as_table(table: Table) -> MetadataTable:
             ],
         )
     try:
-        return ReadMetadataCsv()(str(table))
+        return read_metadata_csv(str(table))
     except (OSError, ValueError) as error:
         raise ProjectError(f"Cannot read {table} as a table: {error}") from error
 

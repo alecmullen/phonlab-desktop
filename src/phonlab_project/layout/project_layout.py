@@ -1,11 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from phonlab_project.constants import LAYOUT_VERSION, PROJECT_AUDIO_EXTENSIONS
 from phonlab_project.readers.table_format import TableFormat
-from res.constants import (
-    LAYOUT_VERSION,
-    PROJECT_AUDIO_EXTENSIONS,
-)
 
 
 def is_within(directory: str, folder: str) -> bool:

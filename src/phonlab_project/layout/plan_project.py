@@ -2,6 +2,11 @@ import posixpath
 from dataclasses import replace
 from pathlib import Path
 
+from phonlab_project.constants import (
+    AUDIO_FILE_SUFFIXES,
+    PROJECT_VIDEO_EXTENSIONS,
+    SINGLE_FILE_ANNOTATION_SUFFIXES,
+)
 from phonlab_project.layout.filename_template import TemplateError
 from phonlab_project.layout.infer_layout import infer_layout
 from phonlab_project.layout.project_file import ProjectFile
@@ -15,11 +20,6 @@ from phonlab_project.readers.read_elan_info import read_elan_info
 from phonlab_project.readers.read_srt import read_srt_tiers
 from phonlab_project.readers.table_format import TierFile
 from phonlab_project.recording import Recording
-from res.constants import (
-    AUDIO_FILE_SUFFIXES,
-    PROJECT_VIDEO_EXTENSIONS,
-    SINGLE_FILE_ANNOTATION_SUFFIXES,
-)
 
 
 def is_audio_file(path: str | Path) -> bool:

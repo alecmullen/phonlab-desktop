@@ -2,8 +2,8 @@ import os
 from collections.abc import Iterable
 
 from core.base.use_case_sync import UseCaseSync
+from phonlab_project.constants import SRT_NO_TALKER_TIER
 from phonlab_project.readers.read_tiers import read_tiers
-from res.constants import SRT_NO_TALKER_TIER
 
 SEPARATOR = " - "
 # what tiers are usually called when the name is about content, not a talker

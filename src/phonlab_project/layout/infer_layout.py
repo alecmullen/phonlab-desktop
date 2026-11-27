@@ -1,5 +1,11 @@
 from collections import Counter
 
+from phonlab_project.constants import (
+    ANNOTATION_COMPANION_EXTENSIONS,
+    ANNOTATION_FORMATS,
+    DATA_FILE_MIN_COVERAGE,
+    PROJECT_AUDIO_EXTENSIONS,
+)
 from phonlab_project.layout.annotation_sources import find_annotation_sources
 from phonlab_project.layout.channels import detect_channels, group_audio
 from phonlab_project.layout.import_report import (
@@ -16,12 +22,6 @@ from phonlab_project.layout.project_layout import (
     ProjectLayout,
 )
 from phonlab_project.layout.project_scan import ProjectScan, ScannedFile
-from res.constants import (
-    ANNOTATION_COMPANION_EXTENSIONS,
-    ANNOTATION_FORMATS,
-    DATA_FILE_MIN_COVERAGE,
-    PROJECT_AUDIO_EXTENSIONS,
-)
 
 NAME_PREFIX_TALKER_SHARE = 0.9
 MAX_EXAMPLES = 4

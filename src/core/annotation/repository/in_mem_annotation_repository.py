@@ -5,12 +5,12 @@ from core.annotation.entity.annotation import (
     Annotation,
     AnnotationLabel,
     AnnotationType,
-    get_matching_node,
 )
 from core.annotation.entity.tier_label import TierLabel
 from core.annotation.repository.annotation_repository import AnnotationRepository
 from core.inspect_database.entity.table_data import TableData
 from phonlab_project.metadata import MetadataColumn, MetadataTarget
+from phonlab_project.nodes import get_matching_node
 from phonlab_project.recording import Recording, RecordingUpsertResult
 
 

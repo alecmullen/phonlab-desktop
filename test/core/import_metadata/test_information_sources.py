@@ -13,6 +13,7 @@ from core.import_metadata.information_sources_file import (
     stored_file_name,
 )
 from core.import_metadata.match_metadata import MatchMetadata
+from core.import_metadata.read_metadata_csv import ReadMetadataCsv
 from core.import_words.entity.word_table import WordSource
 from core.import_words.import_words import ImportWords
 from core.import_words.word_source_file import LoadWordSource, SaveWordSource
@@ -22,7 +23,6 @@ from core.project_layout.project_layout_file import (
 )
 from phonlab_project.layout.project_layout import FolderLevel, ProjectLayout
 from phonlab_project.metadata import MetadataTarget
-from phonlab_project.readers.read_metadata_csv import ReadMetadataCsv
 from phonlab_project.recording import Recording
 
 TALKERS = InformationSource(

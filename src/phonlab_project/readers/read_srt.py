@@ -4,7 +4,7 @@ from typing import Any
 
 import srt
 
-from res.constants import SRT_NO_TALKER_TIER, SRT_TALKER_MAX_LENGTH
+from phonlab_project.constants import SRT_NO_TALKER_TIER, SRT_TALKER_MAX_LENGTH
 
 # A talker's name at the start of a subtitle: "Camille: Okay, ..."
 TALKER_PREFIX = re.compile(r"^([^:\s][^:]*?)\s*:(?:\s+|$)")

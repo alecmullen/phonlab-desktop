@@ -8,8 +8,7 @@ import json
 import sqlite3
 from typing import Any
 
-from core.annotation.entity.annotation import add_node_time
-from core.parse_textgrid.parse_textgrid import to_label
+from phonlab_project.nodes import add_node_time, node_at
 from phonlab_project.recording import Recording
 from phonlab_project.schema import (
     CHANNEL_TABLE,
@@ -254,15 +253,25 @@ def write_annotation(
             (recording_id, tier["name"]),
         )
         type_id = cursor.lastrowid
-        labels = (to_label(times, ids, label) for label in tier["labels"])
         connection.executemany(
             "INSERT INTO annotation_label (annotation_type_id, label_text, "
             "start_node_id, end_node_id) VALUES (?, ?, ?, ?)",
-            [(type_id, label.label, label.s_node, label.e_node) for label in labels],
+            [
+                (type_id, text, *_nodes_of(times, ids, begin, end))
+                for begin, end, text in tier["labels"]
+            ],
         )
         if tier.get("talker"):
             talkers[tier["name"]] = tier["talker"]
     _set_tier_talkers(connection, recording_id, talkers)
+
+
+def _nodes_of(
+    times: list[float], ids: list[int], begin: float, end: float | None
+) -> tuple[int, int]:
+    """The nodes a label begins and ends at; a label with no end ends where it begins"""
+    start = node_at(times, ids, begin)
+    return start, start if end is None else node_at(times, ids, end)
 
 
 def _set_tier_talkers(

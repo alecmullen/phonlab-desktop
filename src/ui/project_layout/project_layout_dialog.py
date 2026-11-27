@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from res.constants import ANNOTATION_FORMATS
+from phonlab_project.constants import ANNOTATION_FORMATS
 from ui.project_layout.component.annotation_table_dialog import AnnotationTableDialog
 from ui.project_layout.project_layout_view_model import ProjectLayoutViewModel
 from ui.project_layout.state.project_layout_state import (

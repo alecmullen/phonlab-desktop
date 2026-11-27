@@ -1,3 +1,4 @@
+from phonlab_project.constants import TALKER_FIELD_NAMES
 from phonlab_project.layout.channels import group_audio
 from phonlab_project.layout.duplicate_audio import find_duplicate_audio
 from phonlab_project.layout.filename_template import compile_template
@@ -6,7 +7,6 @@ from phonlab_project.layout.pairing import AudioIndex, reroot
 from phonlab_project.layout.project_layout import DataFileKind, ProjectLayout
 from phonlab_project.layout.project_scan import ProjectScan, ScannedFile
 from phonlab_project.recording import Recording
-from res.constants import TALKER_FIELD_NAMES
 
 
 def resolve_recordings(scan: ProjectScan, layout: ProjectLayout) -> ResolvedProject:

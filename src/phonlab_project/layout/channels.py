@@ -4,11 +4,11 @@ from dataclasses import dataclass, field
 
 import soundfile as sf
 
+from phonlab_project.constants import CHANNEL_MIN_COVERAGE, CHANNEL_SAMPLE_GROUPS
 from phonlab_project.layout.import_report import ChannelCandidate
 from phonlab_project.layout.pairing import candidate_splits
 from phonlab_project.layout.project_layout import ChannelRole
 from phonlab_project.layout.project_scan import ScannedFile
-from res.constants import CHANNEL_MIN_COVERAGE, CHANNEL_SAMPLE_GROUPS
 
 MAX_EXAMPLES = 3
 MAX_CHANNELS = 8
