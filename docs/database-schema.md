@@ -255,12 +255,76 @@ and for writing: what it has may not be what the code expects.
   older version to a newer one, because there has been no change to make.
 - **Types.** Added columns are `TEXT`, `INTEGER` or `REAL`. A column of numbers read
   from a CSV file that had a stray word in it is `TEXT`; check the type before averaging.
-- **Writing.** Only the app writes to the file. A script that writes can break rules the
-  app keeps (nodes shared between tiers, the order of tiers), so read it with
-  `mode=ro`.
+- **Writing.** The app and the functions in "Making and updating a database" below write
+  to the file. A script that writes with SQL of its own can break rules they keep (nodes
+  shared between tiers, the order of tiers), so read the file with `mode=ro`.
 - **Names of core columns.** Some are older than what they mean: `annotation_id` in
   `annotation_type` and `annotation_node` points at a recording. They would be renamed
   together with the first version number.
+
+## Making and updating a database from files
+
+The same package reads the files of a project folder (the readers and the layout of the
+project: folders, file names, channels) and writes the database the app writes. A
+database made this way and one made by the app from the same folder are identical, which
+a test checks table by table.
+
+```python
+from phonlab_project import describe_project, import_project
+
+plan = describe_project("my_corpus")      # reads the folder, writes nothing
+print(plan)                               # layout, counts, and what needs a look
+plan.problems                             # [] when the project reads cleanly
+
+result = import_project("my_corpus")      # makes phonlab.db (and phonlab.toml)
+```
+
+`describe_project` and `import_project` take the folder and, optionally, a `ProjectLayout`.
+The layout used is the one given, else the one in the folder's `phonlab.toml`, else one
+inferred from the files; an inferred or given layout is saved to `phonlab.toml` so the
+folder reads the same way next time. The file is TOML and can be edited by hand.
+
+**What needs a look.** Inference is a guess. `import_project` is `strict` by default: if
+`plan.problems` is not empty (annotation files that belong to no sound file, sound files
+that look like copies or do not fit the filename template, annotation files kept in
+several folders for the same recordings, sound files named like channels that cannot be
+read to check, no sound files at all) it writes nothing and raises `ImportNeedsReview`,
+whose `plan` says what was found. Fix the layout in `phonlab.toml`, or pass
+`strict=False` to import as the layout reads the folder.
+
+**Bringing a database up to date.** Each takes the folder, and none replaces an annotation
+the database has unless asked, because the database is where corrections are kept:
+
+| function | does |
+|---|---|
+| `import_project(folder)` | makes the database if it is missing; adds and updates recordings, removes ones that left the folder and have no annotation, reads annotation files of recordings whose annotation is empty |
+| `add_recordings(folder)` | adds only recordings the database lacks, with their annotations |
+| `update_annotations(folder, recordings=None, overwrite=False)` | reads annotation files of recordings the database has: fills in empty ones; with `overwrite` replaces annotations that exist (all, or the file stems in `recordings`) |
+
+Each returns an `ImportResult`: how many recordings were `created`, `updated`, `removed`,
+which annotations were `read`, which were `kept` as they were, and which files `failed`
+(an unreadable file never stops the others or damages the annotation the database has).
+
+**Talkers and words.** A table (a DataFrame or a CSV file) with a row per talker or word:
+
+```python
+from phonlab_project import import_talkers, import_words
+
+import_talkers("my_corpus", "talkers.csv")             # first column names the talker
+import_words("my_corpus", words_df, tier="word")       # first column has the words
+```
+
+The other columns become columns of the talker table (updated if they are there already)
+or make the word table (replaced each time). Column names are made safe (`Age (years)`
+becomes `Age_years`) and typed `INTEGER`, `REAL` or `TEXT` from their values. Talkers
+match ignoring case; words match as written, with the label text of the tier. The
+`TableImportResult` says how many rows were stored and which rows matched nothing in the
+project and which talkers or words the table lacks (the first 50 of each, and how many
+there are).
+
+**While the app is open.** A write to a database the app is writing at that moment
+raises `ProjectError` rather than waiting; close the project in the app or try again.
+A database with a newer schema version than the package knows is refused.
 
 ## The Python interface (`phonlab_project`)
 

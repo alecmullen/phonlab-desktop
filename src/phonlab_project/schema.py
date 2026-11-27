@@ -16,6 +16,9 @@ DATABASE_FILENAME = "phonlab.db"
 # version 1.
 SCHEMA_VERSION = 1
 
+# how long (seconds) a write waits for a database another program is writing to
+LOCK_TIMEOUT = 2
+
 # Columns of the recording table that are only added when a recording has a value for
 # them, as most projects have none: name -> SQL type
 RECORDING_OPTIONAL_COLUMNS = {
@@ -130,9 +133,9 @@ def table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
 def add_column(
     connection: sqlite3.Connection, table: str, name: str, sql_type: str
 ) -> None:
-    """Add a column to a table if it does not have it (SQLite adds a column to a
-    table that has rows without rewriting it)"""
-    if name not in table_columns(connection, table):
+    """Add a column to a table if it does not have it, ignoring case as SQLite does
+    (SQLite adds a column to a table that has rows without rewriting it)"""
+    if name.casefold() not in {c.casefold() for c in table_columns(connection, table)}:
         connection.execute(f'ALTER TABLE "{table}" ADD COLUMN "{name}" {sql_type}')
 
 
@@ -148,7 +151,7 @@ def writing(path: str | Path, create: bool = False) -> Iterator[sqlite3.Connecti
         file = file / DATABASE_FILENAME
     if not file.exists() and not create:
         raise ProjectError(f"There is no project database at {file}")
-    connection = sqlite3.connect(file, timeout=2)
+    connection = sqlite3.connect(file, timeout=LOCK_TIMEOUT)
     try:
         check_version(connection, file)
         create_tables(connection)
