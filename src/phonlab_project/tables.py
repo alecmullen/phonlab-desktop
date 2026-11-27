@@ -25,13 +25,34 @@ ColumnPlan = tuple[str, str, SqlType]
 
 @dataclass(frozen=True)
 class TableImportResult:
-    """What adding a table did. `rows` is how many rows went into the database (talkers
-    that got values, words stored) and `columns` the names of the columns added or
-    updated (made safe for the database, so they may differ from the table's headers).
-    `unmatched_rows` are the rows that name nothing in the project (talkers the project
-    lacks; words the tier lacks) and `missing` what the project has that the table
-    lacks (talkers; words, most frequent first). Each list shows at most 50, and
-    `n_` says how many there are. `duplicates` is how many rows repeat an earlier one."""
+    """What adding a table of talker or word information did.
+
+    Attributes
+    ----------
+
+    rows : int
+        Rows of the table that went into the database (talkers that got values, words
+        stored).
+
+    columns : list of str
+        The columns added or updated. Names are made safe for the database (`Age (years)`
+        becomes `Age_years`), so they may differ from the table's headers.
+
+    duplicates : int
+        Rows that repeat an earlier one.
+
+    n_unmatched_rows : int
+        How many rows name nothing in the project (talkers it lacks; words the tier
+        lacks).
+
+    unmatched_rows : list of str
+        The first 50 of them.
+
+    n_missing : int
+        How many talkers, or words of the tier, the table lacks.
+
+    missing : list of str
+        The first 50 of them (words, most frequent first)."""
 
     rows: int = 0
     columns: list[str] = field(default_factory=list)
@@ -48,11 +69,45 @@ def import_talkers(
     key: str | None = None,
     columns: list[str] | None = None,
 ) -> TableImportResult:
-    """Add the columns of `table` to the talkers of the project. `key` is the column
-    that names the talker (the first by default; case and surrounding spaces do not
-    matter), `columns` which of the others to add (all by default). A column the
-    database already has is updated; empty cells stay empty. If several rows name a
-    talker the last is used."""
+    """Add what a table says about talkers to the project database.
+
+    The columns of the table become columns of the talker table (`age`, `sex`...). A
+    column the database already has is updated. Empty cells stay empty.
+
+    Parameters
+    ----------
+
+    path : path-like
+        The project folder.
+
+    table : pandas.DataFrame or path-like
+        A DataFrame, or a CSV file (comma, semicolon, tab or bar delimited) whose first
+        row names the columns.
+
+    key : str, optional
+        The column that names the talker. The first by default. Case and surrounding
+        spaces do not matter. If several rows name a talker the last is used.
+
+    columns : list of str, optional
+        Which of the other columns to add. All by default.
+
+    Returns
+    -------
+
+    result : TableImportResult
+        Includes the rows that matched no talker and the talkers the table lacks.
+
+    Raises
+    ------
+
+    ProjectError
+        If the folder has no project database, the table cannot be read, or `key` or a
+        column named is not in it.
+
+    Examples
+    --------
+
+    >>> import_talkers("my_corpus", "talkers.csv")  # doctest: +SKIP"""
     data = _as_table(table)
     key = _key(data, key)
     with writing(path) as connection:
@@ -98,12 +153,47 @@ def import_words(
     key: str | None = None,
     columns: list[str] | None = None,
 ) -> TableImportResult:
-    """Make the word table of the project from `table`: `key` is the column that has
-    the words (the first by default) and the others become columns of the word table.
-    A word table the project already has is replaced. Words are compared with the
-    label text of `tier` as written (the case counts), so the result says which words
-    of the tier the table lacks. An empty cell stays empty, and a word that several
-    rows have is taken from the first."""
+    """Make the project's word table from a table of words and what is known about them.
+
+    The first column has the words and the others become columns of the word table
+    (`pos`, `freq`...), typed `INTEGER`, `REAL` or `TEXT` from their values. A word table
+    the project already has is replaced. `Project.words()` then joins it to the labels
+    of a tier.
+
+    Parameters
+    ----------
+
+    path : path-like
+        The project folder.
+
+    table : pandas.DataFrame or path-like
+        A DataFrame, or a CSV file (comma, semicolon, tab or bar delimited) whose first
+        row names the columns.
+
+    tier : str (default "word")
+        The tier whose labels the words are compared with. They are compared as written,
+        so case counts.
+
+    key : str, optional
+        The column that has the words. The first by default. A word several rows have is
+        taken from the first.
+
+    columns : list of str, optional
+        Which of the other columns to add. All by default.
+
+    Returns
+    -------
+
+    result : TableImportResult
+        Includes the words of the table that the tier lacks and the words of the tier
+        that the table lacks.
+
+    Raises
+    ------
+
+    ProjectError
+        If the folder has no project database, the project has no such tier (nothing
+        is changed), the table cannot be read, or `key` or a column named is not in it."""
     data = _as_table(table)
     key = _key(data, key)
     plans = _plan_columns(data, key, columns, ("id", "word"))

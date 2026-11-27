@@ -3,9 +3,51 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class Recording:
-    """What the project database keeps about one recording, next to its
-    annotation: the files that belong to it and who is in it. Paths are relative
-    to the project directory and use forward slashes."""
+    """What the project database keeps about one recording: its files and who is in it.
+
+    Paths are relative to the project folder and use forward slashes.
+
+    Attributes
+    ----------
+
+    file_stem : str
+        The path of the recording without its extension (`aa1/aa1_01`); what names it in
+        the database.
+
+    audio_file : str or None
+        The sound file. For a recording stored as one file per channel, the first.
+
+    annotation_file : str or None
+        The annotation file.
+
+    tier_files : dict
+        Tier name -> path, for tiers of the annotation kept in files of their own.
+
+    channel_files : dict
+        Channel -> path, for recordings stored as one sound file per channel.
+
+    channel_talkers : dict
+        Channel -> the talker on it.
+
+    data_files : dict
+        Kind of file -> path, for files that go with the recording (a formant track).
+
+    video_file : str or None
+        A video of the recording, if the project has one.
+
+    media_offset : float or None
+        How far, in seconds, the media is offset from the times of the annotation, as an
+        ELAN file says. The times in the database are not changed.
+
+    target_talker : str or None
+        Who the folders and file names say is the talker, kept when the annotation file
+        names talkers of its own, which are then `talkers`.
+
+    talkers : list of str
+        Who is in the recording.
+
+    fields : dict
+        Other variables taken from folder and file names (`dialect`, `session`...)."""
 
     file_stem: str
     # for a recording stored as one file per channel, the first channel's file

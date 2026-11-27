@@ -13,12 +13,44 @@ MAX_EXAMPLES = 3
 
 @dataclass(frozen=True)
 class ProjectPlan:
-    """What reading a project folder with a layout finds, before anything is written:
-    its recordings, how the layout was arrived at, and what did not fit it.
+    """What reading a project folder with a layout finds, before anything is written.
 
-    `layout_source` says whether the layout was given, saved in the project's
-    phonlab.toml, or inferred from the files (the last is a guess; `suggestion` holds
-    the evidence for it)."""
+    Made by `describe_project`; `print(plan)` describes it.
+
+    Attributes
+    ----------
+
+    root : str
+        The project folder.
+
+    layout : ProjectLayout
+        The layout used.
+
+    layout_source : {"given", "saved", "inferred"}
+        Where the layout came from: the one given, the one saved in the folder's
+        `phonlab.toml`, or one guessed from the files.
+
+    files : list
+        The recordings with the paths of their files.
+
+    report : ImportReport
+        Counts of recordings and annotated recordings, and the lists of unpaired sound
+        files and annotation files, copies, and names that do not fit the template.
+
+    suggestion : LayoutSuggestion or None
+        The evidence for an inferred layout.
+
+    template_unusable : bool
+        The layout's filename template could not be used, so no variables were taken
+        from file names.
+
+    recordings : list of Recording
+        The recordings (property).
+
+    problems : list of str
+        What a person should look at before the project is imported (property): things
+        the layout does not account for, or a guessed layout whose guess is not clear.
+        Empty when the project reads cleanly."""
 
     root: str
     layout: ProjectLayout

@@ -12,15 +12,26 @@ def is_within(directory: str, folder: str) -> bool:
 
 @dataclass(frozen=True)
 class FolderLevel:
-    """What the folders at one depth under the project directory represent.
-    An empty `field` means the level is only organizational."""
+    """What the folders at one depth under the project folder represent.
+
+    Attributes
+    ----------
+
+    depth : int
+        1 for the folders in the project folder, 2 for those inside them...
+
+    field : str
+        The variable the folder names are values of (`talker`, `dialect`...). The
+        variable `talker` makes them the talkers of the recordings. Empty if the level
+        is only organizational."""
 
     depth: int
     field: str = ""
 
 
 class DataFileKind(Enum):
-    """What a kind of file that goes with each recording is for"""
+    """What a kind of file that goes with each recording is for: `OTHER`, `TIME_SERIES` (a
+    track such as formants) or `ANNOTATION` (a tier of the recording's annotation)."""
 
     OTHER = "other"
     TIME_SERIES = "time_series"
@@ -29,9 +40,30 @@ class DataFileKind(Enum):
 
 @dataclass(frozen=True)
 class DataFileRole:
-    """A kind of file that goes with each recording: the file named like the audio
-    file plus `suffix`, with extension `ext` (casefolded, with the dot). If it is
-    an annotation, `tier` is the name of the tier it holds."""
+    """A kind of file that goes with each recording.
+
+    The file is named like the sound file plus `suffix`, with extension `ext`.
+
+    Attributes
+    ----------
+
+    name : str
+        What the kind of file is called.
+
+    suffix : str
+        What follows the sound file's name (`_phn`).
+
+    ext : str
+        The extension, in lower case with the dot.
+
+    kind : DataFileKind
+        What the files are for.
+
+    tier : str
+        For an annotation, the name of the tier it holds (the `name` by default).
+
+    table : TableFormat or None
+        For an annotation, how to read the file as a table (None: work it out)."""
 
     name: str
     suffix: str = ""
@@ -52,9 +84,19 @@ class DataFileRole:
 
 @dataclass(frozen=True)
 class ChannelRole:
-    """One channel of a recording stored as a file per channel: the audio file is
-    named like the recording plus `suffix` (e.g. "_L"). `talker` is who is on the
-    channel, if the user said."""
+    """One channel of a recording stored as a sound file for each channel.
+
+    Attributes
+    ----------
+
+    label : str
+        The name of the channel (`L`).
+
+    suffix : str
+        What the file name has after the recording's name (`_L`).
+
+    talker : str
+        Who is on the channel, if known."""
 
     label: str
     suffix: str
@@ -67,8 +109,43 @@ class ChannelRole:
 
 @dataclass(frozen=True)
 class ProjectLayout:
-    """The description of how a project is organized. It is saved in the project's
-    phonlab.toml so that the project can be imported again the same way."""
+    """How a project folder is organized.
+
+    It is saved in the project's `phonlab.toml` (see `save_layout`) so that the project
+    is read the same way each time. The TOML can be edited by hand.
+
+    Attributes
+    ----------
+
+    audio_ext : tuple of str
+        Extensions of sound files.
+
+    annotation_ext : str or None
+        Extension of the annotation files (`.textgrid`, `.eaf`, `.srt`, `.words`,
+        `.wrd`); None if there are none.
+
+    annotation_dir : str
+        Where annotation files are read from, as a folder relative to the project. Empty
+        means anywhere, which is wrong when several folders hold annotations of the same
+        recordings.
+
+    include_unpaired_audio : bool
+        Whether sound files with no annotation are recordings of the project.
+
+    levels : tuple of FolderLevel
+        What the folders at each depth are.
+
+    filename_template : str
+        Takes variables from sound file names, such as `{talker}_{item:d}`.
+
+    data_files : tuple of DataFileRole
+        Other files that go with each recording (formant tracks, tiers in text tables).
+
+    channels : tuple of ChannelRole
+        Empty unless recordings are stored as separate sound files, one per channel.
+
+    version : int
+        The version of the layout format."""
 
     audio_ext: tuple[str, ...] = PROJECT_AUDIO_EXTENSIONS
     annotation_ext: str | None = ".textgrid"

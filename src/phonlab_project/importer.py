@@ -29,10 +29,18 @@ from phonlab_project.writer import (
 
 
 class ImportNeedsReview(ProjectError):
-    """The project has things its layout does not account for, or its layout was
-    guessed and the guess is not clear, so nothing was imported. `plan` is what was
-    found, and `str(plan)` describes it; fix the layout (a `phonlab.toml` in the folder,
-    or the `layout` argument) or import anyway with `strict=False`."""
+    """Raised by `import_project` when the project needs a look before it is imported.
+
+    The project has things its layout does not account for, or its layout was guessed
+    and the guess is not clear, and nothing was imported. It is a `ProjectError`.
+
+    Attributes
+    ----------
+
+    plan : ProjectPlan
+        What was found. `str(plan)` describes it and `plan.problems` lists what needs
+        a look. Fix the layout (a `phonlab.toml` in the folder, or the `layout` argument)
+        or import anyway with `strict=False`."""
 
     def __init__(self, plan: ProjectPlan):
         self.plan = plan
@@ -42,7 +50,32 @@ class ImportNeedsReview(ProjectError):
 
 @dataclass(frozen=True)
 class ImportResult:
-    """What an import did. Recordings are named by file stem."""
+    """What an import did. Recordings are named by their file stem.
+
+    Attributes
+    ----------
+
+    created : int
+        Recordings added to the database.
+
+    updated : int
+        Recordings whose files and talkers were brought up to date.
+
+    removed : int
+        Recordings that left the folder and had no annotation, so were removed.
+
+    read : list of str
+        Recordings whose annotation file was read.
+
+    kept : list of str
+        Recordings that already had an annotation, which was left as it was.
+
+    failed : dict
+        Recording -> why its annotation file could not be read. An unreadable file never
+        stops the others or damages an annotation the database has.
+
+    plan : ProjectPlan
+        What the folder was found to hold."""
 
     created: int = 0  # recordings added to the database
     updated: int = 0  # recordings whose files and talkers were brought up to date
@@ -56,25 +89,90 @@ class ImportResult:
 def describe_project(
     path: str | Path, layout: ProjectLayout | None = None
 ) -> ProjectPlan:
-    """What reading the project folder finds, with nothing written: its recordings,
-    the layout used and where it came from (given, saved in `phonlab.toml`, or
-    inferred), and `problems`, what a person should look at first. `str()` of the
-    result describes it."""
+    """Read a project folder and say what it holds, writing nothing.
+
+    Parameters
+    ----------
+
+    path : path-like
+        The project folder.
+
+    layout : ProjectLayout, optional
+        How the folder is organized. By default the layout saved in the folder's
+        `phonlab.toml` is used, and if there is none one is inferred from the files.
+
+    Returns
+    -------
+
+    plan : ProjectPlan
+        The recordings (`plan.recordings`), the layout and where it came from, and
+        `plan.problems`, what a person should look at before importing. `print(plan)`
+        describes it.
+
+    Raises
+    ------
+
+    ProjectError
+        If `path` is not a folder.
+
+    Examples
+    --------
+
+    >>> plan = describe_project("my_corpus")  # doctest: +SKIP
+    >>> print(plan)  # doctest: +SKIP
+    >>> plan.recordings[0].talkers  # doctest: +SKIP"""
     return plan_project(str(_folder(path)), layout)
 
 
 def import_project(
     path: str | Path, layout: ProjectLayout | None = None, strict: bool = True
 ) -> ImportResult:
-    """Make the project database of a folder (`phonlab.db`), or bring the one it has up
-    to date: every recording of the folder is added or updated, recordings that left it
+    """Make the project database (`phonlab.db`) of a folder, or bring it up to date.
+
+    Every recording of the folder is added or updated, recordings that left the folder
     and have no annotation are removed, and the annotation file of each recording whose
     annotation is empty is read. An annotation the database already has is never
-    replaced, so corrections made in it are kept (see `update_annotations`).
+    replaced, so corrections made in it are kept (see `update_annotations`). A layout that
+    was given or inferred is saved to the folder's `phonlab.toml`, so that the folder is
+    read the same way next time.
 
-    With `strict` (the default) a project whose plan has problems is not imported and
-    `ImportNeedsReview` is raised; otherwise it is imported as the layout reads it. A
-    layout that was given or inferred is saved to the folder's `phonlab.toml`."""
+    Parameters
+    ----------
+
+    path : path-like
+        The project folder.
+
+    layout : ProjectLayout, optional
+        How the folder is organized. By default the layout saved in `phonlab.toml` is
+        used, and if there is none one is inferred from the files.
+
+    strict : bool (default True)
+        Refuse a project whose plan has problems (annotation files that belong to no
+        sound file, sound files that look like copies or do not fit the filename
+        template, an unclear guess at the layout...): nothing is written and
+        `ImportNeedsReview` is raised. If False the project is imported as the layout
+        reads it.
+
+    Returns
+    -------
+
+    result : ImportResult
+
+    Raises
+    ------
+
+    ImportNeedsReview
+        If `strict` and the project has problems.
+
+    ProjectError
+        If `path` is not a folder, the database is in use by another program (the desktop
+        app may have the project open), or it was made by a newer version of phonlab.
+
+    Examples
+    --------
+
+    >>> print(describe_project("my_corpus"))  # doctest: +SKIP
+    >>> import_project("my_corpus")  # doctest: +SKIP"""
     folder = _folder(path)
     plan = plan_project(str(folder), layout)
     if strict and plan.problems:
@@ -95,8 +193,29 @@ def import_project(
 def add_recordings(
     path: str | Path, layout: ProjectLayout | None = None
 ) -> ImportResult:
-    """Add the recordings the folder has and the database lacks, with their annotations.
-    Recordings the database has are not touched."""
+    """Add the recordings a folder has and the database lacks, with their annotations.
+
+    Recordings the database has are not touched.
+
+    Parameters
+    ----------
+
+    path : path-like
+        The project folder, which must have a project database.
+
+    layout : ProjectLayout, optional
+        As for `import_project`.
+
+    Returns
+    -------
+
+    result : ImportResult
+
+    Raises
+    ------
+
+    ProjectError
+        If the folder has no project database, or as for `import_project`."""
     folder = _folder(path)
     plan = plan_project(str(folder), layout)
     with writing(folder) as connection:
@@ -115,11 +234,40 @@ def update_annotations(
     overwrite: bool = False,
     layout: ProjectLayout | None = None,
 ) -> ImportResult:
-    """Read the annotation files of recordings the database has. A recording whose
-    annotation is empty (it had no file before) is filled in. One that has an
-    annotation is left as it is, as the database holds corrections, unless `overwrite`,
-    which replaces it with what the file says now. `recordings` limits this to some
-    recordings (file stems); a stem the database lacks raises ProjectError."""
+    """Read the annotation files of recordings the database has.
+
+    A recording whose annotation is empty (it had no file before) is filled in. One that
+    has an annotation is left as it is, because the database is where corrections are
+    kept, unless `overwrite`.
+
+    Parameters
+    ----------
+
+    path : path-like
+        The project folder, which must have a project database.
+
+    recordings : list of str, optional
+        Only these recordings (file stems). All of them by default.
+
+    overwrite : bool (default False)
+        Replace annotations the database has with what the files say now.
+
+    layout : ProjectLayout, optional
+        As for `import_project`.
+
+    Returns
+    -------
+
+    result : ImportResult
+        `result.read` are the recordings whose annotation was read, `result.kept` those
+        left as they were, and `result.failed` the files that could not be read (the
+        annotation of such a recording is left as it was).
+
+    Raises
+    ------
+
+    ProjectError
+        If a recording named is not in the database, or as for `add_recordings`."""
     folder = _folder(path)
     plan = plan_project(str(folder), layout)
     with writing(folder) as connection:

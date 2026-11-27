@@ -119,8 +119,19 @@ def layout_from_dict(data: dict[str, Any]) -> ProjectLayout:
 
 
 def load_layout(dir_path: str) -> ProjectLayout | None:
-    """The layout saved in the project's phonlab.toml, or None if there is none
-    (or it cannot be understood)"""
+    """Read the layout saved in a project's `phonlab.toml`.
+
+    Parameters
+    ----------
+
+    dir_path : str
+        The project folder.
+
+    Returns
+    -------
+
+    layout : ProjectLayout or None
+        None if there is no `phonlab.toml`, it has no layout, or it cannot be understood."""
     path = Path(dir_path) / TOML_NAME
     try:
         with open(path, "rb") as f:
@@ -134,7 +145,17 @@ def load_layout(dir_path: str) -> ProjectLayout | None:
 
 
 def save_layout(dir_path: str, layout: ProjectLayout) -> None:
-    """Saves the layout in the project's phonlab.toml, keeping its other settings"""
+    """Save a layout in a project's `phonlab.toml`, keeping its other settings.
+
+    The file is TOML and can be edited by hand.
+
+    Parameters
+    ----------
+
+    dir_path : str
+        The project folder.
+
+    layout : ProjectLayout"""
     path = Path(dir_path) / TOML_NAME
     data: dict[str, Any] = {}
     if path.exists():

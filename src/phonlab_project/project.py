@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Literal
+from typing import Literal, Self
 
 import numpy as np
 import pandas as pd
@@ -54,14 +54,59 @@ ColumnKind = Literal["core", "optional", "added"]
 
 @dataclass(frozen=True)
 class Column:
+    """A column of a table of the project database.
+
+    Attributes
+    ----------
+
+    name : str
+        The name of the column.
+
+    type : str
+        The type the database declares for it (`TEXT`, `INTEGER`, `REAL`...).
+
+    kind : {"core", "optional", "added"}
+        `core` columns are always there. `optional` ones are made only when a project
+        has a value for them (a project without video has no `video_file`). `added`
+        ones are the researcher's (the `age` of a talker, the `pos` of a word)."""
+
     name: str
     type: str
     kind: ColumnKind
 
 
 def open_project(path: str | Path) -> "Project":
-    """Open the database of a project, read only. `path` is the project folder or the
-    `phonlab.db` file in it."""
+    """Open the database of a project for reading.
+
+    The database is opened read only, so this is safe to do while the desktop app has
+    the project open.
+
+    Parameters
+    ----------
+
+    path : path-like
+        The project folder, or the `phonlab.db` file in it.
+
+    Returns
+    -------
+
+    project : Project
+        Use it as a context manager (`with open_project(...) as project:`) to have the
+        database closed when you are done, or call `Project.close()`.
+
+    Raises
+    ------
+
+    ProjectError
+        If there is no database at `path`, the file is not a project database, or it
+        was made by a newer version of phonlab than this one.
+
+    Examples
+    --------
+
+    >>> with open_project("my_corpus") as project:  # doctest: +SKIP
+    ...     words = project.words(count="phone")
+    ...     words.groupby("n_phone").t2.count()"""
     file = Path(path)
     if file.is_dir():
         file = file / DATABASE_FILENAME
@@ -71,9 +116,29 @@ def open_project(path: str | Path) -> "Project":
 
 
 class Project:
-    """What a project database has, as DataFrames. The database is opened read only,
-    so it is safe to use while the app has it open. `schema_version` is the version of
-    the schema it was made with; a database made by a newer phonlab is refused."""
+    """The project database (`phonlab.db`) of a project, as DataFrames.
+
+    Made by `open_project`. The database is opened read only. A `Project` is a context
+    manager that closes the database when its block ends.
+
+    Attributes
+    ----------
+
+    file : pathlib.Path
+        The database file.
+
+    connection : sqlite3.Connection
+        The read-only connection, for queries of your own.
+
+    schema_version : int
+        The version of the schema the database was made with.
+
+    Examples
+    --------
+
+    >>> with open_project("my_corpus") as project:  # doctest: +SKIP
+    ...     project.tiers()
+    ...     project.labels(tier="word", talker="Ann")"""
 
     schema_version: int
 
@@ -99,9 +164,10 @@ class Project:
             raise
 
     def close(self) -> None:
+        """Close the database."""
         self.connection.close()
 
-    def __enter__(self) -> "Project":  # noqa: PYI034 - Self needs Python 3.11
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(
@@ -115,7 +181,12 @@ class Project:
     # -- what the project has --
 
     def tables(self) -> list[str]:
-        """The names of the tables of the database"""
+        """The names of the tables of the database.
+
+        Returns
+        -------
+
+        tables : list of str"""
         rows = self.connection.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' "
             "AND name NOT LIKE 'sqlite_%' ORDER BY name"
@@ -123,12 +194,39 @@ class Project:
         return [row[0] for row in rows]
 
     def has_table(self, table: str) -> bool:
+        """Whether the database has a table.
+
+        Parameters
+        ----------
+
+        table : str
+
+        Returns
+        -------
+
+        has : bool"""
         return table in self.tables()
 
     def columns(self, table: str) -> pd.DataFrame:
-        """The columns of a table with their declared type and whether each is `core`
-        (promised), `optional` (made by the app when a project has a value for it) or
-        `added` (by the researcher)"""
+        """The columns of a table, and whether each is one every project has or one added.
+
+        Parameters
+        ----------
+
+        table : str
+            A name from `tables()`.
+
+        Returns
+        -------
+
+        columns : pandas.DataFrame
+            One row per column: `name`, `type` and `kind` (see `Column`).
+
+        Raises
+        ------
+
+        ProjectError
+            If the project has no such table."""
         return pd.DataFrame(
             [
                 {"name": c.name, "type": c.type, "kind": c.kind}
@@ -138,6 +236,22 @@ class Project:
         )
 
     def has_column(self, table: str, column: str) -> bool:
+        """Whether a table has a column; false if there is no such table.
+
+        Use it before using a column that only some projects have (`pos` in the word table,
+        `age` in the talker table).
+
+        Parameters
+        ----------
+
+        table : str
+
+        column : str
+
+        Returns
+        -------
+
+        has : bool"""
         return self.has_table(table) and any(
             c.name == column for c in self._columns(table)
         )
@@ -165,10 +279,23 @@ class Project:
     # -- recordings and talkers --
 
     def recordings(self, fields: bool = True) -> pd.DataFrame:
-        """One row per recording, with every column of the table, the optional and
-        added ones too. With `fields`, the variables taken from folder and file names
-        are columns of their own (`dialect`); one named like a column the table has is
-        called `<name>_field`."""
+        """The recordings of the project.
+
+        Parameters
+        ----------
+
+        fields : bool (default True)
+            Make the variables taken from folder and file names (`dialect`, `session`...)
+            columns of their own. One named like a column the table has is called
+            `<name>_field`. If False the table's `fields` column holds them as JSON text.
+
+        Returns
+        -------
+
+        recordings : pandas.DataFrame
+            One row per recording with every column of the table: `file_stem`, `audio_file`,
+            `annotation_file`, `data_files`, and the optional (`video_file`, `media_offset`,
+            `target_talker`) and added ones the project has."""
         table = self._read("SELECT * FROM recording ORDER BY id")
         table["data_files"] = table["data_files"].map(_from_json)
         parsed = table["fields"].map(_from_json)
@@ -183,12 +310,25 @@ class Project:
         return table
 
     def talkers(self) -> pd.DataFrame:
-        """One row per talker, with every column of the table, the added ones too"""
+        """The talkers of the project.
+
+        Returns
+        -------
+
+        talkers : pandas.DataFrame
+            One row per talker: `id`, `name` and any columns added from a table of talker
+            information (`age`, `sex`...)."""
         return self._read("SELECT * FROM talker ORDER BY id")
 
     def recording_talkers(self) -> pd.DataFrame:
-        """Who is in which recording: `recording` and `talker`, in the order they
-        were recorded"""
+        """Who is in which recording.
+
+        Returns
+        -------
+
+        recording_talkers : pandas.DataFrame
+            `recording` (the file stem) and `talker`, one row for each talker of each
+            recording, in the order they were recorded."""
         return self._read(
             "SELECT r.file_stem AS recording, k.name AS talker "
             "FROM recording_talker AS rt "
@@ -199,8 +339,14 @@ class Project:
     # -- tiers and labels --
 
     def tiers(self) -> pd.DataFrame:
-        """One row per tier of each recording: `recording`, `tier`, the `talker` the
-        tier was made by (empty unless the source file said) and `n_labels`"""
+        """The tiers of the annotations of every recording.
+
+        Returns
+        -------
+
+        tiers : pandas.DataFrame
+            One row per tier of each recording: `recording`, `tier`, `talker` (who made the
+            tier, where the source file said; empty otherwise) and `n_labels`."""
         return self._read(
             f"SELECT r.file_stem AS recording, t.name AS tier, {self._tier_talker()} "
             "AS talker, COUNT(l.id) AS n_labels FROM annotation_type AS t "
@@ -211,7 +357,12 @@ class Project:
         )
 
     def tier_names(self) -> list[str]:
-        """The distinct names of the tiers, in the order they first appear"""
+        """The distinct names of the tiers, in the order they first appear.
+
+        Returns
+        -------
+
+        names : list of str"""
         rows = self.connection.execute(
             "SELECT name FROM annotation_type GROUP BY name ORDER BY MIN(id)"
         )
@@ -223,9 +374,33 @@ class Project:
         talker: str | Sequence[str] | None = None,
         recording: str | Sequence[str] | None = None,
     ) -> pd.DataFrame:
-        """The labels of the project, one row each: `recording`, `tier`, `talker`
-        (that of the tier, empty unless the source file said), `t1` and `t2`
-        (seconds) and `label`. Limited to the tiers, talkers and recordings named."""
+        """The labels of the annotations, one row each.
+
+        Parameters
+        ----------
+
+        tier : str or sequence of str, optional
+            Only the labels of these tiers.
+
+        talker : str or sequence of str, optional
+            Only the labels of tiers made by these talkers.
+
+        recording : str or sequence of str, optional
+            Only the labels of these recordings (file stems).
+
+        Returns
+        -------
+
+        labels : pandas.DataFrame
+            `recording`, `tier`, `talker`, `t1` and `t2` (start and end, seconds) and
+            `label`.
+
+        Raises
+        ------
+
+        ProjectError
+            If a tier, talker or recording named is not in the project (the message lists
+            what is), or a talker is asked for and no tier of the project has one."""
         conditions, parameters = [], []
         for column, wanted in (
             ("t.name", self._known_tiers(tier)),
@@ -251,9 +426,32 @@ class Project:
         )
 
     def count_within(self, outer: str, inner: str) -> pd.DataFrame:
-        """The labels of the tier `outer` with `n_<inner>`, how many labels of the tier
-        `inner` of the same recording lie within each: from its start to its end.
-        (`count_within("word", "phone")` is the number of phones of each word.)"""
+        """The labels of one tier with how many labels of another lie within each.
+
+        `count_within("word", "phone")` gives the number of phones of each word. A label of
+        `inner` is within one of `outer` of the same recording if it begins and ends inside
+        it.
+
+        Parameters
+        ----------
+
+        outer : str
+            The tier whose labels are returned.
+
+        inner : str
+            The tier to count.
+
+        Returns
+        -------
+
+        labels : pandas.DataFrame
+            The labels of `outer`, as `labels()` gives them, and the column `n_<inner>`.
+
+        Raises
+        ------
+
+        ProjectError
+            If either tier is not in the project."""
         outer_labels = self.labels(tier=outer)
         inner_labels = self.labels(tier=inner)
         counts = pd.Series(0, index=outer_labels.index, dtype="int64")
@@ -276,11 +474,39 @@ class Project:
     # -- words --
 
     def words(self, tier: str = "word", count: str | None = None) -> pd.DataFrame:
-        """The labels of a tier joined with the project's word table, which says
-        what the researcher knows about each word (`freq`, `pos`...): the columns of
-        `labels()` and then the table's, empty for a word the table lacks. With
-        `count`, also `n_<count>`: how many labels of that tier each one has within
-        it (`words(count="phone")` gives `n_phone`)."""
+        """The labels of a tier joined with the project's word table.
+
+        The word table (made with `import_words`) says what the researcher knows about each
+        word, such as its frequency and part of speech.
+
+        Parameters
+        ----------
+
+        tier : str (default "word")
+            The tier of words.
+
+        count : str, optional
+            A tier whose labels to count within each word (`count="phone"` adds `n_phone`).
+
+        Returns
+        -------
+
+        words : pandas.DataFrame
+            The columns `labels()` gives, then those of the word table (`freq`, `pos`...),
+            empty for a word the table lacks. Words are matched as written, so case counts.
+
+        Raises
+        ------
+
+        ProjectError
+            If the project has no word table, or no such tier.
+
+        Examples
+        --------
+
+        >>> words = project.words(count="phone")  # doctest: +SKIP
+        >>> words["duration"] = words.t2 - words.t1  # doctest: +SKIP
+        >>> words.groupby(["n_phone", "pos"]).duration.mean()  # doctest: +SKIP"""
         if not self.has_table("word"):
             raise ProjectError(
                 "The project has no word table; add one in the app with "

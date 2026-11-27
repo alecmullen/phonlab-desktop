@@ -5,6 +5,9 @@ WHITESPACE = " "  # as a delimiter: any run of spaces
 
 
 class ColumnRole(Enum):
+    """What a column of a table of labelled intervals is: `UNKNOWN`, `START` (the time a
+    label begins), `END` or `LABEL` (its text)."""
+
     UNKNOWN = "unknown"
     START = "start"  # the time a label begins
     END = "end"  # the time a label ends
@@ -12,6 +15,9 @@ class ColumnRole(Enum):
 
 
 class TimeUnit(Enum):
+    """The unit of the times of a table: `SECONDS`, `MILLISECONDS`, or `AUTO`, whichever
+    makes the times fit the length of the sound."""
+
     AUTO = "auto"  # whichever makes the times fit the length of the audio
     SECONDS = "seconds"
     MILLISECONDS = "milliseconds"
@@ -19,10 +25,23 @@ class TimeUnit(Enum):
 
 @dataclass(frozen=True)
 class TableFormat:
-    """How to read a text file of labelled intervals as a tier: its delimiter (a tab,
-    a comma or WHITESPACE), how many lines come before the first row of data, what each
-    column is, and the unit of its times. With WHITESPACE the last column takes the rest
-    of the line, so that a label may have spaces in it."""
+    """How to read a text file of labelled intervals as a tier.
+
+    Attributes
+    ----------
+
+    delimiter : str
+        A tab, a comma, or `WHITESPACE`, any run of spaces. With `WHITESPACE` the last
+        column takes the rest of the line, so that a label may have spaces in it.
+
+    skip : int
+        How many lines come before the first row of data.
+
+    columns : tuple of ColumnRole
+        What each column is.
+
+    unit : TimeUnit
+        The unit of the times."""
 
     delimiter: str = WHITESPACE
     skip: int = 0

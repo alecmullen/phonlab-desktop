@@ -326,6 +326,33 @@ there are).
 raises `ProjectError` rather than waiting; close the project in the app or try again.
 A database with a newer schema version than the package knows is refused.
 
+## Reading a single annotation file
+
+`read_annotation` reads a file of any format phonlab reads (`.TextGrid`, `.eaf`, `.srt`,
+Buckeye `.words`, TIMIT `.wrd`) into the same table `Project.labels()` gives, for a
+script that needs the labels of one file (a figure for a paper, say):
+
+```python
+from phonlab_project import read_annotation
+
+labels = read_annotation("S24-003.srt")                 # tier, talker, t1, t2, label
+words = read_annotation("s1.TextGrid", tier="word")
+```
+
+`read_tiers` gives the same tiers as a list of dicts, as `phonlab.read_textgrid_with` does.
+
+## The public names
+
+Everything `phonlab_project` offers is in `phonlab_project.__all__`, and each name has a
+docstring in the style of phonlab's own: reading a database (`open_project`, `Project`,
+`Column`), reading a file (`read_annotation`, `read_tiers`), making and updating a
+database (`describe_project`, `import_project`, `add_recordings`, `update_annotations`,
+`import_talkers`, `import_words`, and `ProjectPlan`, `ImportResult`, `TableImportResult`,
+`Recording`), the layout in `phonlab.toml` (`ProjectLayout` and the classes it is made
+of, `load_layout`, `save_layout`) and the errors (`ProjectError`, `ImportNeedsReview`).
+The rest of the package (the readers of each format, the inference of a layout, the
+writing of tables) is not part of what is offered and may change.
+
 ## The Python interface (`phonlab_project`)
 
 `src/phonlab_project` does what the sections above do by hand. It is a prototype of what
