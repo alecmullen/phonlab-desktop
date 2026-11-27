@@ -183,3 +183,47 @@ def test_extra_files_can_be_made_tiers_in_the_dialog(
     columns.click()
 
     assert asked == [0, 0]  # and again when the user asks
+
+
+def test_talker_template_typed_by_the_user_names_the_talkers(
+    qtbot: QtBot, tmp_path: Path
+):
+    make_tree(tmp_path, ["north/ab_01.wav", "south/cd_02.wav"])
+    dialog = make_dialog(qtbot, tmp_path)
+    dialog.view_model.set_level_field(1, "region")
+    dialog.view_model.set_filename_template("{name:2}_{num:d}")
+
+    qtbot.keyClicks(dialog.talker_template_edit, "{region}_{name}_{num}")
+
+    assert "{region}" in dialog.variables_label.text()
+    assert dialog.talker_template_status.text() == ""
+    talkers = {
+        dialog.preview_table.item(row, 1).text()
+        for row in range(dialog.preview_table.rowCount())
+    }
+    assert talkers == {"north_ab_01", "south_cd_02"}
+
+
+def test_talker_template_naming_an_unknown_variable_shows_why_and_disables_import(
+    qtbot: QtBot, tmp_path: Path
+):
+    talker_tree(tmp_path)
+    dialog = make_dialog(qtbot, tmp_path)
+
+    qtbot.keyClicks(dialog.talker_template_edit, "{nothing}")
+
+    assert "{nothing}" in dialog.talker_template_status.text()
+    assert dialog.import_button is not None
+    assert dialog.import_button.isEnabled() is False
+
+
+def test_folder_level_template_is_applied(qtbot: QtBot, tmp_path: Path):
+    make_tree(tmp_path, ["se0-ag2/a.wav"])
+    dialog = make_dialog(qtbot, tmp_path)
+    edits = dialog.levels_group.findChildren(type(dialog.template_edit))
+    split = next(e for e in edits if e.placeholderText().startswith("e.g."))
+
+    split.setText("{session}-{age}")
+    split.editingFinished.emit()
+
+    assert {"session", "age"} <= set(dialog.state.preview_headers)

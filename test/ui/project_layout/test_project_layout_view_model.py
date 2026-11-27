@@ -483,3 +483,105 @@ def test_the_kind_and_tier_of_extra_files_are_saved(tmp_path: Path):
     assert (role.kind, role.tier) == ("annotation", "Phone")
     assert second.needs_review is False
     assert states[-1].n_annotated == 2
+
+
+def coraal_like(root: Path) -> Path:
+    return make_tree(
+        root,
+        [
+            "Audio/ATL/se0-ag2/f_01.wav",
+            "Audio/ATL/se0-ag2/m_02.wav",
+            "Annotation/ATL/se0-ag2/f_01.cha",
+            "Annotation/ATL/se0-ag2/m_02.cha",
+        ],
+    )
+
+
+def name_like_coraal(view_model: ProjectLayoutViewModel) -> None:
+    view_model.set_level_field(2, "region")
+    view_model.set_level_field(3, "")
+    view_model.set_level_template(3, "{session}-{agegroup}")
+    view_model.set_filename_template("{gender}_{num}")
+
+
+def test_a_level_template_splits_folder_names_into_variables(tmp_path: Path):
+    view_model, states = prepared(coraal_like(tmp_path))
+
+    name_like_coraal(view_model)
+
+    state = states[-1]
+    assert state.template_error == ""
+    assert [l.template for l in state.levels] == ["", "", "{session}-{agegroup}"]
+    assert state.variables == ["region", "session", "agegroup", "gender", "num"]
+    assert {"session", "agegroup"} <= set(state.preview_headers)
+
+
+def test_a_talker_template_names_the_talkers_from_levels_and_file_names(
+    tmp_path: Path,
+):
+    view_model, states = prepared(coraal_like(tmp_path))
+    name_like_coraal(view_model)
+
+    view_model.set_talker_template("{region}_{session}_{agegroup}_{gender}_{num}")
+
+    state = states[-1]
+    assert state.talker_template_error == ""
+    assert state.can_import is True
+    assert [row[1] for row in state.preview_rows] == [
+        "ATL_se0_ag2_f_01",
+        "ATL_se0_ag2_m_02",
+    ]
+
+
+def test_a_talker_template_with_a_variable_nothing_gives_is_reported(tmp_path: Path):
+    view_model, states = prepared(coraal_like(tmp_path))
+    name_like_coraal(view_model)
+
+    view_model.set_talker_template("{region}_{nothing}")
+
+    assert "{nothing}" in states[-1].talker_template_error
+    assert "region" in states[-1].talker_template_error
+    assert states[-1].can_import is False
+    with pytest.raises(ValueError):
+        view_model.save_project_layout()
+
+
+def test_a_talker_template_with_unpaired_braces_is_reported(tmp_path: Path):
+    view_model, states = prepared(coraal_like(tmp_path))
+    name_like_coraal(view_model)
+
+    view_model.set_talker_template("{region")
+
+    assert states[-1].talker_template_error != ""
+
+
+def test_a_level_template_that_cannot_be_used_blocks_import(tmp_path: Path):
+    view_model, states = prepared(coraal_like(tmp_path))
+
+    view_model.set_level_template(3, "{oops")
+
+    assert states[-1].template_error.startswith("Folder level 3")
+    assert states[-1].can_import is False
+
+
+def test_the_templates_are_saved_with_the_layout_and_come_back(tmp_path: Path):
+    view_model, _ = prepared(coraal_like(tmp_path))
+    name_like_coraal(view_model)
+    view_model.set_talker_template("{region}_{session}_{agegroup}_{gender}_{num}")
+
+    view_model.save_project_layout()
+    saved = LoadProjectLayout()(str(tmp_path))
+
+    assert saved is not None
+    assert saved.talker_template == "{region}_{session}_{agegroup}_{gender}_{num}"
+    assert saved.levels[2].template == "{session}-{agegroup}"
+
+
+def test_editing_the_meaning_of_a_level_keeps_its_template(tmp_path: Path):
+    view_model, states = prepared(coraal_like(tmp_path))
+    view_model.set_level_template(3, "{session}-{agegroup}")
+
+    view_model.set_level_field(3, "group")
+
+    assert states[-1].levels[2].template == "{session}-{agegroup}"
+    assert states[-1].levels[2].field == "group"

@@ -13,14 +13,18 @@ Making and updating a project database from files
     `import_talkers`, `import_words`, and what they return: `ProjectPlan`,
     `ImportResult`, `TableImportResult`, `Recording`
 
-How a project folder is organized (the contents of `phonlab.toml`)
+How a project folder is organized (the `[import]` section of `phonlab.toml`)
     `ProjectLayout`, `FolderLevel`, `DataFileRole`, `DataFileKind`, `ChannelRole`,
     `TableFormat`, `ColumnRole`, `TimeUnit`, `load_layout`, `save_layout`
+
+What a project says about the corpus as a whole (the `[corpus]` section)
+    `load_corpus`, `save_corpus`, `read_corpus_description`, `Project.corpus`
 
 Errors
     `ProjectError`, `ImportNeedsReview`
 """
 
+from phonlab_project.corpus import load_corpus, read_corpus_description, save_corpus
 from phonlab_project.errors import ProjectError
 from phonlab_project.importer import (
     ImportNeedsReview,
@@ -68,10 +72,13 @@ __all__ = [
     "import_project",
     "import_talkers",
     "import_words",
+    "load_corpus",
     "load_layout",
     "open_project",
     "read_annotation",
+    "read_corpus_description",
     "read_tiers",
+    "save_corpus",
     "save_layout",
     "update_annotations",
 ]

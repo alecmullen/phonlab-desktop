@@ -9,6 +9,7 @@ from typing import Literal, Self
 import numpy as np
 import pandas as pd
 
+from phonlab_project.corpus import CorpusInfo, load_corpus
 from phonlab_project.errors import ProjectError
 from phonlab_project.schema import (
     DATABASE_FILENAME,
@@ -275,6 +276,18 @@ class Project:
             )
             for row in self.connection.execute(f'PRAGMA table_info("{table}")')
         ]
+
+    def corpus(self) -> CorpusInfo:
+        """What the project says about the corpus as a whole.
+
+        Returns
+        -------
+
+        info : dict
+            The `[corpus]` section of the project's `phonlab.toml`: `title`, `creator`
+            (a list when there are several), `doi`... whatever the project gives. Empty
+            if there is none."""
+        return load_corpus(self.file.parent)
 
     # -- recordings and talkers --
 

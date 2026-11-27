@@ -36,6 +36,18 @@ TEMPLATE_HELP = (
     "expression with named groups. A field called talker or speaker names the talker."
 )
 
+TALKER_HELP = (
+    "Build the talker's name from variables the folder levels and file names give. "
+    "Write each as {name} and put anything between them: {region}_{group}_{num} makes "
+    "ATL_se0_f_01 from ATL/se0/f_01.wav. Leave it empty to use the variable called "
+    "talker or speaker as it is."
+)
+
+LEVEL_TEMPLATE_HELP = (
+    "A folder name can be split into variables with a template, such as "
+    "{session}-{age} for se0-ag2."
+)
+
 
 class ProjectLayoutDialog(QDialog):
     """Shows how the project directory looks to Phonlab (what was paired with
@@ -95,6 +107,7 @@ class ProjectLayoutDialog(QDialog):
         self.levels_layout = QVBoxLayout(self.levels_group)
         self.content_layout.addWidget(self.levels_group)
         self._build_filename_group()
+        self._build_talker_group()
         self.roles_group = QGroupBox(self.tr("Other files for each recording"))
         self.roles_layout = QVBoxLayout(self.roles_group)
         self.content_layout.addWidget(self.roles_group)
@@ -189,6 +202,36 @@ class ProjectLayoutDialog(QDialog):
         self.template_status = QLabel()
         self.template_status.setWordWrap(True)
         layout.addWidget(self.template_status)
+        self.content_layout.addWidget(group)
+
+    def _build_talker_group(self):
+        group = QGroupBox(self.tr("Talker names"))
+        layout = QVBoxLayout(group)
+        row = QHBoxLayout()
+        row.addWidget(QLabel(self.tr("Name talkers:")))
+        self.talker_template_edit = QLineEdit()
+        self.talker_template_edit.setPlaceholderText(
+            self.tr("e.g. {region}_{group}_{num}  (leave empty to skip)")
+        )
+        self.talker_template_edit.textEdited.connect(
+            self.view_model.set_talker_template
+        )
+        row.addWidget(self.talker_template_edit, 1)
+        layout.addLayout(row)
+
+        help_label = QLabel(self.tr(TALKER_HELP))
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+        self.variables_label = QLabel()
+        self.variables_label.setWordWrap(True)
+        self.variables_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        layout.addWidget(self.variables_label)
+        self.talker_template_status = QLabel()
+        self.talker_template_status.setWordWrap(True)
+        self.talker_template_status.setStyleSheet("color: #b00020;")
+        layout.addWidget(self.talker_template_status)
         self.content_layout.addWidget(group)
 
     def _build_preview_group(self):
@@ -286,19 +329,21 @@ class ProjectLayoutDialog(QDialog):
         intro = QLabel(
             self.tr(
                 "What do the folders at each level stand for? Name a variable "
-                "(talker, dialect, condition…) or leave it empty to ignore the level."
+                "(talker, dialect, condition…) or leave it empty to ignore the level. "
             )
+            + self.tr(LEVEL_TEMPLATE_HELP)
         )
         intro.setWordWrap(True)
         self.levels_layout.addWidget(intro)
 
-        table = QTableWidget(len(state.levels), 4)
+        table = QTableWidget(len(state.levels), 5)
         table.setHorizontalHeaderLabels(
             [
                 self.tr("Level"),
                 self.tr("Folders"),
                 self.tr("Examples"),
                 self.tr("Meaning"),
+                self.tr("Split into"),
             ]
         )
         table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -319,10 +364,20 @@ class ProjectLayoutDialog(QDialog):
                 )
             )
             table.setCellWidget(row, 3, edit)
+
+            split = QLineEdit(level.template)
+            split.setPlaceholderText(self.tr("e.g. {session}-{age}"))
+            split.editingFinished.connect(
+                lambda depth=level.depth, split=split: (
+                    self.view_model.set_level_template(depth, split.text())
+                )
+            )
+            table.setCellWidget(row, 4, split)
         header = table.horizontalHeader()
         if header is not None:
             header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
             header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         table.setFixedHeight(40 + 32 * len(state.levels))
         self.levels_layout.addWidget(table)
 
@@ -428,6 +483,7 @@ class ProjectLayoutDialog(QDialog):
             self._build_levels(state)
             self._build_roles(state)
             self.template_edit.setText(state.filename_template)
+            self.talker_template_edit.setText(state.talker_template)
 
         self.summary_label.setText(
             self.tr(
@@ -447,6 +503,7 @@ class ProjectLayoutDialog(QDialog):
         self._show_duplicate_audio(state)
         self._show_channels(state)
         self._show_template_status(state)
+        self._show_talker_template(state)
         self._show_preview(state)
 
         if self.import_button is not None:
@@ -554,6 +611,15 @@ class ProjectLayoutDialog(QDialog):
                 self.tr("\n… and {} more").format(more) if more > 0 else "",
             )
         )
+
+    def _show_talker_template(self, state: ProjectLayoutState):
+        self.variables_label.setText(
+            self.tr("Variables: {}").format(
+                ", ".join(f"{{{name}}}" for name in state.variables)
+                or self.tr("none yet; name a folder level or use a file name template")
+            )
+        )
+        self.talker_template_status.setText(state.talker_template_error)
 
     def _show_template_status(self, state: ProjectLayoutState):
         if state.template_error:

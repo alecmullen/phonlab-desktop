@@ -3,13 +3,16 @@ as the folder gains recordings and annotation files.
 
 The folder is read as its layout says (see `describe_project`). The layout is the one
 given, else the one in the folder's `phonlab.toml`, else one inferred from the files; an
-inferred layout is saved to `phonlab.toml` when the database is made, so the project is
-read the same way afterwards."""
+inferred layout is saved to the `[import]` section of `phonlab.toml` when the database is
+made, so the project is read the same way afterwards. The file's `[corpus]` section, what
+the project says about the corpus as a whole, is filled from a corpus description file
+the folder has (see `load_corpus`)."""
 
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from phonlab_project.corpus import adopt_corpus_description
 from phonlab_project.errors import ProjectError
 from phonlab_project.layout.plan_project import plan_project
 from phonlab_project.layout.project_file import ProjectFile
@@ -134,7 +137,9 @@ def import_project(
     annotation is empty is read. An annotation the database already has is never
     replaced, so corrections made in it are kept (see `update_annotations`). A layout that
     was given or inferred is saved to the folder's `phonlab.toml`, so that the folder is
-    read the same way next time.
+    read the same way next time. A corpus description file the folder has (a TalkBank
+    `0metadata.cdc`) is copied into the `[corpus]` section of `phonlab.toml`, unless
+    that section is already there.
 
     Parameters
     ----------
@@ -185,6 +190,7 @@ def import_project(
         result = _read_annotations(connection, plan.files, replace=False)
     if plan.layout_source != "saved":
         save_layout(str(folder), layout or plan.layout)
+    adopt_corpus_description(folder)
     return ImportResult(
         created, updated, removed, result.read, result.kept, result.failed, plan
     )

@@ -388,3 +388,49 @@ def test_a_file_that_cannot_be_read_leaves_the_annotation_as_it_was(tmp_path: Pa
 
     assert list(result.failed) == ["a"] and result.read == []
     assert sql(tmp_path, "SELECT COUNT(*) FROM annotation_label") == [(6,)]
+
+
+CHAT = (
+    "@UTF8\n@Begin\n@Participants:\tINV Investigator, PAR Participant\n"
+    "*INV:\thow are you ? \x15100_900\x15\n*PAR:\tfine . \x151000_1500\x15\n@End\n"
+)
+
+
+def test_chat_files_give_a_tier_for_each_speaker_whose_talker_is_named_from_the_folders(
+    tmp_path: Path,
+):
+    by_app, by_library = tmp_path / "app", tmp_path / "library"
+    layout = ProjectLayout(
+        annotation_ext=".cha",
+        annotation_dir="Annotation",
+        levels=(
+            FolderLevel(1, ""),
+            FolderLevel(2, "region"),
+            FolderLevel(3, "", "{session}-{agegroup}"),
+        ),
+        filename_template="{gender}_{num}",
+        talker_template="{region}_{session}_{agegroup}_{gender}_{num}",
+    )
+    for folder in (by_app, by_library):
+        write_wavs(folder, ["Audio/ATL/se0-ag2/f_01.wav", "Audio/PRV/se0-ag1/m_02.wav"])
+        for stem in ("ATL/se0-ag2/f_01", "PRV/se0-ag1/m_02"):
+            file = folder / "Annotation" / f"{stem}.cha"
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text(CHAT, encoding="utf-8")
+        save_layout(str(folder), layout)
+
+    import_with_the_app(by_app)
+    import_project(by_library)
+
+    assert dump(by_library) == dump(by_app)
+    assert sql(
+        by_library,
+        "SELECT r.file_stem, t.name, k.name FROM annotation_type AS t "
+        "JOIN recording AS r ON r.id = t.annotation_id "
+        "JOIN talker AS k ON k.id = t.talker_id ORDER BY r.id, t.id",
+    ) == [
+        ("Audio/ATL/se0-ag2/f_01", "INV", "INV1"),
+        ("Audio/ATL/se0-ag2/f_01", "PAR", "ATL_se0_ag2_f_01"),
+        ("Audio/PRV/se0-ag1/m_02", "INV", "INV2"),
+        ("Audio/PRV/se0-ag1/m_02", "PAR", "PRV_se0_ag1_m_02"),
+    ]

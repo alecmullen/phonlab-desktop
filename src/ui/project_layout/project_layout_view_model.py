@@ -15,7 +15,6 @@ from phonlab_project.constants import (
     DATA_FILE_MIN_COVERAGE,
     TALKER_FIELD_NAMES,
 )
-from phonlab_project.layout.filename_template import TemplateError, compile_template
 from phonlab_project.layout.import_report import (
     DataFileCandidate,
     FolderSources,
@@ -30,6 +29,11 @@ from phonlab_project.layout.project_layout import (
     ProjectLayout,
 )
 from phonlab_project.layout.project_scan import ProjectScan
+from phonlab_project.layout.template_variables import (
+    layout_variables,
+    talker_template_problem,
+    without_unusable_templates,
+)
 from phonlab_project.readers.table_format import ColumnRole, TableFormat, TimeUnit
 from res.constants import PROJECT_PREVIEW_ROWS, PROJECT_REPORT_EXAMPLES
 from ui.base.view_model import ViewModel
@@ -78,6 +82,7 @@ class ProjectLayoutViewModel(ViewModel):
         self.selected_roles: list[bool] = []
         self.resolved = ResolvedProject()
         self.template_error = ""
+        self.talker_template_error = ""
         # the channels the user may combine into recordings, with talker names
         self.channel_roles: tuple[ChannelRole, ...] = ()
         self.talker_names: list[str] = []
@@ -155,13 +160,30 @@ class ProjectLayoutViewModel(ViewModel):
 
     def set_level_field(self, depth: int, name: str):
         levels = {level.depth: level for level in self.layout.levels}
-        levels[depth] = FolderLevel(depth, name.strip())
+        levels[depth] = replace(
+            levels.get(depth, FolderLevel(depth)), field=name.strip()
+        )
         self._set_layout(
             replace(
                 self.layout,
                 levels=tuple(sorted(levels.values(), key=lambda l: l.depth)),
             )
         )
+
+    def set_level_template(self, depth: int, template: str):
+        levels = {level.depth: level for level in self.layout.levels}
+        levels[depth] = replace(
+            levels.get(depth, FolderLevel(depth)), template=template.strip()
+        )
+        self._set_layout(
+            replace(
+                self.layout,
+                levels=tuple(sorted(levels.values(), key=lambda l: l.depth)),
+            )
+        )
+
+    def set_talker_template(self, template: str):
+        self._set_layout(replace(self.layout, talker_template=template.strip()))
 
     def set_filename_template(self, template: str):
         self._set_layout(replace(self.layout, filename_template=template.strip()))
@@ -416,27 +438,28 @@ class ProjectLayoutViewModel(ViewModel):
     def _resolve(self):
         if self.scan is None:
             return
-        self.template_error = ""
-        layout = self.layout
-        if layout.filename_template:
-            try:
-                compile_template(layout.filename_template)
-            except TemplateError as err:
-                self.template_error = str(err)
-                layout = replace(layout, filename_template="")
+        layout, self.template_error = without_unusable_templates(self.layout)
+        layout = replace(layout, talker_template=self.layout.talker_template)
+        self.talker_template_error = talker_template_problem(layout)
+        if self.talker_template_error:
+            layout = replace(layout, talker_template="")
         self.resolved = self.resolve_recordings(self.scan, layout)
 
     # ------------------------------ result ------------------------------
 
     @property
     def can_import(self) -> bool:
-        return self.template_error == "" and self.resolved.report.n_recordings > 0
+        return (
+            self.template_error == ""
+            and self.talker_template_error == ""
+            and self.resolved.report.n_recordings > 0
+        )
 
     def save_project_layout(self):
         """Saves the layout in the project's phonlab.toml. The project's files are
         then read the way it says when the project database is built or updated."""
-        if self.template_error:
-            raise ValueError(self.template_error)
+        if self.template_error or self.talker_template_error:
+            raise ValueError(self.template_error or self.talker_template_error)
 
         self.save_layout(self.dir_path, self.layout)
         self.has_saved_layout = True
@@ -449,6 +472,7 @@ class ProjectLayoutViewModel(ViewModel):
     def to_state(self) -> ProjectLayoutState:
         report = self.resolved.report
         fields = {level.depth: level.field for level in self.layout.levels}
+        templates = {level.depth: level.template for level in self.layout.levels}
 
         levels = [
             FolderLevelState(
@@ -458,6 +482,7 @@ class ProjectLayoutViewModel(ViewModel):
                 + (" …" if summary.n_values > len(summary.examples) else ""),
                 fields.get(summary.depth, ""),
                 self._level_note(summary.name_prefix_share),
+                templates.get(summary.depth, ""),
             )
             for summary in self.suggestion.levels
         ]
@@ -522,6 +547,9 @@ class ProjectLayoutViewModel(ViewModel):
             levels=levels,
             roles=roles,
             filename_template=self.layout.filename_template,
+            talker_template=self.layout.talker_template,
+            talker_template_error=self.talker_template_error,
+            variables=layout_variables(self.layout),
             template_error=self.template_error,
             n_template_mismatches=len(report.template_mismatches),
             template_mismatch_examples=report.template_mismatches[

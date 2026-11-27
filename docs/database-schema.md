@@ -282,7 +282,15 @@ result = import_project("my_corpus")      # makes phonlab.db (and phonlab.toml)
 `describe_project` and `import_project` take the folder and, optionally, a `ProjectLayout`.
 The layout used is the one given, else the one in the folder's `phonlab.toml`, else one
 inferred from the files; an inferred or given layout is saved to `phonlab.toml` so the
-folder reads the same way next time. The file is TOML and can be edited by hand.
+folder reads the same way next time. The file is TOML and can be edited by hand. Its
+`[import]` section is the layout: folder levels (`[[import.levels]]`, each with a `field`
+and an optional `template` that splits the folder name into variables), the filename
+template (`[import.filename]`), and a talker template (`[import.talker]`) that builds the
+talker's name from those variables (`{region}_{session}_{gender}_{num}`). A `[corpus]`
+section holds what the project says about the corpus as a whole (`title`, `creator`,
+`doi`...); `import_project` fills it from a corpus description file the folder has
+(`0metadata.cdc`) when it is empty, and `open_project(...).corpus()`, `load_corpus` and
+`save_corpus` read and write it.
 
 **What needs a look.** Inference is a guess. `import_project` is `strict` by default: if
 `plan.problems` is not empty (annotation files that belong to no sound file, sound files
@@ -348,8 +356,9 @@ docstring in the style of phonlab's own: reading a database (`open_project`, `Pr
 `Column`), reading a file (`read_annotation`, `read_tiers`), making and updating a
 database (`describe_project`, `import_project`, `add_recordings`, `update_annotations`,
 `import_talkers`, `import_words`, and `ProjectPlan`, `ImportResult`, `TableImportResult`,
-`Recording`), the layout in `phonlab.toml` (`ProjectLayout` and the classes it is made
-of, `load_layout`, `save_layout`) and the errors (`ProjectError`, `ImportNeedsReview`).
+`Recording`), the layout and the corpus description in `phonlab.toml` (`ProjectLayout` and
+the classes it is made of, `load_layout`, `save_layout`, `load_corpus`, `save_corpus`,
+`read_corpus_description`) and the errors (`ProjectError`, `ImportNeedsReview`).
 The rest of the package (the readers of each format, the inference of a layout, the
 writing of tables) is not part of what is offered and may change.
 

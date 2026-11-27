@@ -1,7 +1,12 @@
+import re
+
 from phonlab_project.constants import TALKER_FIELD_NAMES
 from phonlab_project.layout.channels import group_audio
 from phonlab_project.layout.duplicate_audio import find_duplicate_audio
-from phonlab_project.layout.filename_template import compile_template
+from phonlab_project.layout.filename_template import (
+    FilenameTemplate,
+    compile_template,
+)
 from phonlab_project.layout.import_report import ImportReport, ResolvedProject
 from phonlab_project.layout.pairing import AudioIndex, reroot
 from phonlab_project.layout.project_layout import DataFileKind, ProjectLayout
@@ -20,6 +25,12 @@ def resolve_recordings(scan: ProjectScan, layout: ProjectLayout) -> ResolvedProj
         if layout.filename_template.strip() != ""
         else None
     )
+
+    level_templates = {
+        level.depth: compile_template(level.template)
+        for level in layout.levels
+        if level.template.strip() != ""
+    }
 
     audio_files = [f for f in scan.files if f.ext in layout.audio_ext]
     units = group_audio(audio_files, layout.channels)
@@ -91,18 +102,32 @@ def resolve_recordings(scan: ProjectScan, layout: ProjectLayout) -> ResolvedProj
         talkers: list[str] = []
         fields: dict[str, str] = {}
 
+        values: dict[str, str] = {}
+        fits = True
+
         parts = file.dir.split("/") if file.dir else []
         for level in layout.levels:
-            if level.field and level.depth <= len(parts):
-                _add_variable(talkers, fields, level.field, parts[level.depth - 1])
+            if level.depth > len(parts):
+                continue
+            folder = parts[level.depth - 1]
+            if level.field:
+                _add_variable(talkers, fields, values, level.field, folder)
+            level_template = level_templates.get(level.depth)
+            if level_template is not None:
+                fits &= _add_matches(talkers, fields, values, level_template, folder)
 
         if template is not None:
-            pairs = template.match(file.stem)
-            if pairs is None:
-                mismatches.append(file.path)
+            fits &= _add_matches(talkers, fields, values, template, file.stem)
+
+        if layout.talker_template.strip() != "":
+            name = _fill(layout.talker_template, values)
+            if name is None:
+                fits = False
             else:
-                for name, value in pairs:
-                    _add_variable(talkers, fields, name, value)
+                _add_variable(talkers, fields, values, "talker", name)
+
+        if not fits:
+            mismatches.append(file.path)
 
         channel_files = {label: f.path for label, f in unit.channels.items()}
         channel_talkers = {
@@ -111,7 +136,7 @@ def resolve_recordings(scan: ProjectScan, layout: ProjectLayout) -> ResolvedProj
             if role.talker and role.label in channel_files
         }
         for talker in channel_talkers.values():
-            _add_variable(talkers, fields, "talker", talker)
+            _add_variable(talkers, fields, values, "talker", talker)
 
         for name in data_for.get(file.path, {}):
             counts[name] += 1
@@ -144,12 +169,52 @@ def resolve_recordings(scan: ProjectScan, layout: ProjectLayout) -> ResolvedProj
     return ResolvedProject(recordings, report)
 
 
+def _add_matches(
+    talkers: list[str],
+    fields: dict[str, str],
+    values: dict[str, str],
+    template: FilenameTemplate,
+    text: str,
+) -> bool:
+    """Records the variables a template reads from a folder or file name; False if
+    the name does not fit the template"""
+    pairs = template.match(text)
+    if pairs is None:
+        return False
+    for name, value in pairs:
+        _add_variable(talkers, fields, values, name, value)
+    return True
+
+
+def _fill(template: str, values: dict[str, str]) -> str | None:
+    """The talker template with each `{name}` replaced by that variable's value; None
+    if a variable has no value"""
+    missing = False
+
+    def replacement(found: re.Match[str]) -> str:
+        nonlocal missing
+        value = values.get(found.group(1))
+        if value is None:
+            missing = True
+            return ""
+        return value
+
+    name = re.sub(r"\{(\w+)\}", replacement, template)
+    return None if missing else name
+
+
 def _add_variable(
-    talkers: list[str], fields: dict[str, str], name: str, value: str
+    talkers: list[str],
+    fields: dict[str, str],
+    values: dict[str, str],
+    name: str,
+    value: str,
 ) -> None:
     """Records a value taken from a folder or file name: talkers go in the list of
     talkers, anything else in the fields, where a second different value for the
-    same variable is added after a |"""
+    same variable is added after a |. `values` keeps the first value of each variable
+    for the talker template."""
+    values.setdefault(name, value)
     if name.casefold() in TALKER_FIELD_NAMES:
         if value not in talkers:
             talkers.append(value)

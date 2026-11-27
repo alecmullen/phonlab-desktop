@@ -56,6 +56,11 @@ CHANNEL_SAMPLE_GROUPS = 3  # groups whose headers are read to tell channels from
 
 LAYOUT_TOML_KEY = "import"
 
+CORPUS_TOML_KEY = "corpus"
+
+# Files that describe the corpus as a whole (TalkBank's `0metadata.cdc`)
+CORPUS_DESCRIPTION_SUFFIXES = (".cdc",)
+
 LAYOUT_VERSION = 1
 
 TIMIT_DEFAULT_SAMPLE_RATE = 16000

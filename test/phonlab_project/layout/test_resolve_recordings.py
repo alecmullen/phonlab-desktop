@@ -331,3 +331,58 @@ def test_tiers_can_be_the_only_annotation_for_unpaired_audio_to_be_left_out(
     )
 
     assert [r.file_stem for r in result.recordings] == ["a"]
+
+
+CORAAL_LAYOUT = ProjectLayout(
+    annotation_ext=".cha",
+    annotation_dir="Annotation",
+    levels=(
+        FolderLevel(1, ""),
+        FolderLevel(2, "region"),
+        FolderLevel(3, "", "{session}-{agegroup}"),
+    ),
+    filename_template=r"re:(?P<gender>[fm])_(?P<num>\d+)(?:_(?P<take>\d+)|(?P<part>[ab]))?",
+    talker_template="{region}_{session}_{agegroup}_{gender}_{num}",
+)
+
+
+def test_a_talker_is_named_by_joining_variables_from_folders_and_the_file_name(
+    tmp_path: Path,
+):
+    make_tree(
+        tmp_path,
+        [
+            "Audio/ATL/se0-ag2/f_01.wav",
+            "Annotation/ATL/se0-ag2/f_01.cha",
+            "Audio/PRV/se0-ag1/m_02_3.wav",
+            "Audio/DCA/se3-ag4/m_01b.wav",
+        ],
+    )
+
+    recordings = {r.file_stem: r for r in resolve(tmp_path, CORAAL_LAYOUT).recordings}
+
+    atl = recordings["Audio/ATL/se0-ag2/f_01"]
+    assert atl.talkers == ["ATL_se0_ag2_f_01"]
+    assert atl.annotation_file == "Annotation/ATL/se0-ag2/f_01.cha"
+    assert atl.fields == {
+        "region": "ATL",
+        "session": "se0",
+        "agegroup": "ag2",
+        "gender": "f",
+        "num": "01",
+    }
+    assert recordings["Audio/PRV/se0-ag1/m_02_3"].talkers == ["PRV_se0_ag1_m_02"]
+    assert recordings["Audio/PRV/se0-ag1/m_02_3"].fields["take"] == "3"
+    assert recordings["Audio/DCA/se3-ag4/m_01b"].talkers == ["DCA_se3_ag4_m_01"]
+
+
+def test_a_file_that_lacks_a_variable_of_the_talker_template_is_reported(
+    tmp_path: Path,
+):
+    make_tree(tmp_path, ["Audio/ATL/se0-ag2/f_01.wav", "Audio/ATL/other/f_02.wav"])
+
+    result = resolve(tmp_path, CORAAL_LAYOUT)
+
+    assert result.report.template_mismatches == ["Audio/ATL/other/f_02.wav"]
+    other = next(r for r in result.recordings if r.file_stem.endswith("f_02"))
+    assert other.talkers == []

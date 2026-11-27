@@ -23,10 +23,16 @@ class FolderLevel:
     field : str
         The variable the folder names are values of (`talker`, `dialect`...). The
         variable `talker` makes them the talkers of the recordings. Empty if the level
-        is only organizational."""
+        is only organizational.
+
+    template : str
+        Splits the folder name into fields, as a filename template does: `{session}-
+        {agegroup}` reads `se0-ag2` as session `se0` and age group `ag2`. Empty to
+        take the whole name as the value of `field`."""
 
     depth: int
     field: str = ""
+    template: str = ""
 
 
 class DataFileKind(Enum):
@@ -111,8 +117,35 @@ class ChannelRole:
 class ProjectLayout:
     """How a project folder is organized.
 
-    It is saved in the project's `phonlab.toml` (see `save_layout`) so that the project
-    is read the same way each time. The TOML can be edited by hand.
+    It is saved in the `[import]` section of the project's `phonlab.toml` (see
+    `save_layout`) so that the project is read the same way each time. The TOML can be
+    edited by hand:
+
+    .. code-block:: toml
+
+        [import]
+        version = 1
+        audio_ext = [".wav"]
+        annotation_ext = ".cha"
+        annotation_dir = "Annotation"
+        include_unpaired_audio = true
+
+        [[import.levels]]        # one for each depth that means something
+        depth = 2
+        field = "region"
+
+        [[import.levels]]
+        depth = 3
+        field = ""
+        template = "{session}-{agegroup}"
+
+        [import.filename]
+        template = "re:(?P<gender>[fm])_(?P<num>\\d+)"
+
+        [import.talker]
+        template = "{region}_{session}_{agegroup}_{gender}_{num}"
+
+    The section after it, `[corpus]`, is not part of the layout (see `save_corpus`).
 
     Attributes
     ----------
@@ -138,6 +171,12 @@ class ProjectLayout:
     filename_template : str
         Takes variables from sound file names, such as `{talker}_{item:d}`.
 
+    talker_template : str
+        Builds the talker's name from the variables taken from the folder and file
+        names: `{region}_{session}_{agegroup}_{gender}_{num}` names the talker of
+        `ATL/se0-ag2/f_01.wav` `ATL_se0_ag2_f_01`. Empty to use the variables named
+        `talker` as they are.
+
     data_files : tuple of DataFileRole
         Other files that go with each recording (formant tracks, tiers in text tables).
 
@@ -156,6 +195,7 @@ class ProjectLayout:
     include_unpaired_audio: bool = True
     levels: tuple[FolderLevel, ...] = ()
     filename_template: str = ""
+    talker_template: str = ""
     data_files: tuple[DataFileRole, ...] = ()
     # empty unless recordings are stored as separate audio files, one per channel
     channels: tuple[ChannelRole, ...] = ()

@@ -21,8 +21,9 @@ FULL_LAYOUT = ProjectLayout(
     annotation_ext=".words",
     annotation_dir="labels",
     include_unpaired_audio=False,
-    levels=(FolderLevel(1, "dialect"), FolderLevel(2, "talker")),
+    levels=(FolderLevel(1, "dialect"), FolderLevel(2, "group", "{session}-{age}")),
     filename_template="{talker:3}{n:d}",
+    talker_template="{dialect}_{session}_{talker}",
     data_files=(
         DataFileRole("pitch", "_f0", ".txt", DataFileKind.TIME_SERIES),
         DataFileRole(

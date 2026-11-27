@@ -17,6 +17,7 @@ from phonlab_project.layout.project_plan import LayoutSource, ProjectPlan
 from phonlab_project.layout.project_scan import ProjectScan, ScannedFile
 from phonlab_project.layout.resolve_recordings import resolve_recordings
 from phonlab_project.layout.scan_project_tree import scan_project_tree
+from phonlab_project.layout.template_variables import without_unusable_templates
 from phonlab_project.readers.read_elan_info import read_elan_info
 from phonlab_project.readers.read_srt import read_srt_tiers
 from phonlab_project.readers.table_format import TierFile
@@ -66,7 +67,7 @@ def plan_project(dir_path: str, layout: ProjectLayout | None = None) -> ProjectP
         resolved = resolve_recordings(scan, layout)
     except TemplateError:
         # a template that cannot be used only loses the variables taken from names
-        layout = replace(layout, filename_template="")
+        layout, _ = without_unusable_templates(layout)
         resolved = resolve_recordings(scan, layout)
         template_unusable = True
 

@@ -10,6 +10,7 @@ class FolderLevelState(State):
     examples: str
     field: str
     note: str
+    template: str = ""
 
 
 @dataclass
@@ -75,6 +76,10 @@ class ProjectLayoutState(State):
     roles: list[DataFileRoleState] = field(default_factory=list)
 
     filename_template: str = ""
+    # builds the talker's name from the variables the folders and file names give
+    talker_template: str = ""
+    talker_template_error: str = ""
+    variables: list[str] = field(default_factory=list)
     template_error: str = ""
     n_template_mismatches: int = 0
     template_mismatch_examples: list[str] = field(default_factory=list)

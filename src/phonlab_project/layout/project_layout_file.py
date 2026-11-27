@@ -36,6 +36,10 @@ def _table_from_dict(data: dict[str, Any]) -> TableFormat:
 
 
 def layout_to_dict(layout: ProjectLayout) -> dict[str, Any]:
+    """The layout as the `[import]` table of `phonlab.toml`: `levels` (a list of
+    `depth`, `field` and, if there is one, `template`), `filename` (`template`) and
+    `talker` (`template`) are the parts that read folder and file names; see
+    `ProjectLayout` for an example."""
     data: dict[str, Any] = {
         "version": layout.version,
         "audio_ext": list(layout.audio_ext),
@@ -47,10 +51,17 @@ def layout_to_dict(layout: ProjectLayout) -> dict[str, Any]:
         data["annotation_dir"] = layout.annotation_dir
     if layout.levels:
         data["levels"] = [
-            {"depth": level.depth, "field": level.field} for level in layout.levels
+            {
+                "depth": level.depth,
+                "field": level.field,
+                **({"template": level.template} if level.template else {}),
+            }
+            for level in layout.levels
         ]
     if layout.filename_template:
         data["filename"] = {"template": layout.filename_template}
+    if layout.talker_template:
+        data["talker"] = {"template": layout.talker_template}
     if layout.data_files:
         data["data_files"] = [
             {
@@ -89,10 +100,15 @@ def layout_from_dict(data: dict[str, Any]) -> ProjectLayout:
             annotation_dir=str(data.get("annotation_dir", "")),
             include_unpaired_audio=bool(data.get("include_unpaired_audio", True)),
             levels=tuple(
-                FolderLevel(int(level["depth"]), str(level.get("field", "")))
+                FolderLevel(
+                    int(level["depth"]),
+                    str(level.get("field", "")),
+                    str(level.get("template", "")),
+                )
                 for level in data.get("levels", ())
             ),
             filename_template=str(data.get("filename", {}).get("template", "")),
+            talker_template=str(data.get("talker", {}).get("template", "")),
             data_files=tuple(
                 DataFileRole(
                     str(role["name"]),
@@ -147,7 +163,9 @@ def load_layout(dir_path: str) -> ProjectLayout | None:
 def save_layout(dir_path: str, layout: ProjectLayout) -> None:
     """Save a layout in a project's `phonlab.toml`, keeping its other settings.
 
-    The file is TOML and can be edited by hand.
+    The file is TOML and can be edited by hand. The layout is its `[import]` section (see
+    `ProjectLayout` for its keys); other sections, such as `[corpus]` (see `save_corpus`),
+    are left as they are.
 
     Parameters
     ----------

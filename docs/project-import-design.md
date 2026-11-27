@@ -265,12 +265,41 @@ field = "dialect"
 depth = 2
 field = "talker"
 
+[[import.levels]]
+depth = 3
+field = ""
+template = "{session}-{agegroup}"   # optional: splits the folder name into variables
+
 [import.filename]
 template = "{sentence}"
 regex = "(?P<sentence>[A-Z]+\\d+)"
 
+[import.talker]
+# optional: builds the talker's name from the variables the folders and file names give
+template = "{region}_{session}_{agegroup}_{gender}_{num}"
+
 [import.fingerprint]
 # shape clusters and tier signatures captured at import time
+```
+
+The same file has other sections, each written by the part of the program that owns it:
+
+| section | holds | written by |
+|---|---|---|
+| `[import]` | the layout above | the Project Layout dialog, `save_layout` |
+| `[corpus]` | what the project says about the corpus as a whole | `save_corpus`; copied from a corpus description file when there is one |
+| `[[information]]` | CSV files whose columns were added to talkers or recordings | Add New Files |
+| `[words]` | the table of words | Add New Files |
+
+`[corpus]` is a table of names and texts (a list of texts when a name has several values),
+free to edit by hand:
+
+```toml
+[corpus]
+title = "CABank CORAAL Corpus"
+creator = ["Kendall, Tyler", "Farrington, Charlie"]
+language = "eng"
+doi = "10.21415/V68B-VW06"
 ```
 
 ### 4.2 Re-validation
@@ -428,6 +457,22 @@ What was built, and where it differs from the sketch above:
     renumbers the ones after it; annotations already read keep the names they were given
     until they are read again. These talkers are the talkers of the recording.
   - `read_chat_speakers` lists a file's speaker codes without reading its utterances.
+- **Talker names from several parts.** A talker is no longer one folder or one part of a
+  file name. `[import.talker] template` builds the name from any variables the layout
+  reads, `{region}_{session}_{agegroup}_{gender}_{num}`, and a folder level's `template`
+  splits its folder name into variables as the filename template does for file names
+  (`{session}-{agegroup}` reads `se0-ag2`). In CORAAL (`Audio/ATL/se0-ag2/f_01.wav`) that
+  gives the talker `ATL_se0_ag2_f_01`, the `CORAAL.Spkr` of the corpus's `metadata.txt`, so
+  a table of talker information matches it by name. The variables stay available as fields of
+  the recording. A file that lacks a variable the template needs is counted with the
+  names that do not fit. The Project Layout dialog has a "Split into" column in the folder
+  table and a "Talker names" box under the file names; the box lists the variables there are
+  and says which one a template names that nothing gives.
+- **The corpus description.** A file such as TalkBank's `0metadata.cdc` (lines of
+  `Title:<tab>CABank CORAAL Corpus`, a repeated name for several values), in the project
+  folder or a folder directly inside it, is copied into the `[corpus]` section of
+  `phonlab.toml` when the layout is saved or the project is imported, unless the section is
+  already there, so what a person wrote is kept. `Project.corpus()` returns it.
 - **Opening a sound file on its own** (File > Open, not in the project) offers the
   TextGrid, ELAN or subtitle file in its folder that is named like it; with several the user
   picks one. A sound file of the project takes its annotation from the project database.
