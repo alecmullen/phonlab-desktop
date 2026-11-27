@@ -18,16 +18,6 @@ import pytest
 APP_PACKAGES = ("core", "res", "ui", "data", "bootstrap", "PyQt6", "sqlalchemy")
 
 STILL_FROM_THE_APP = {
-    # Written as use-case classes of the app (UseCaseSync); they become plain functions
-    # in the library, and the app keeps thin use cases that call them.
-    "make plain functions, then move": {
-        "core.project.scan_project_files",
-        "core.project_layout.infer_layout",
-        "core.project_layout.project_layout_file",
-        "core.project_layout.resolve_recordings",
-        "core.project_layout.scan_project_tree",
-        "core.base.use_case_sync",
-    },
     # Small pure functions that sit in modules of the app: node sharing (add_node_time,
     # get_matching_node, to_label) and the naming and typing of added columns. They move
     # into the library's writer and tables modules, and the app imports them from there.
@@ -42,6 +32,7 @@ STILL_FROM_THE_APP = {
         "core.annotation.entity.tier_label",
         "core.annotation.repository.annotation_repository",
         "core.base.use_case",
+        "core.base.use_case_sync",
         "core.inspect_database.entity.table_data",
     },
     # Constants of the whole app. The ones the readers and layout use need a module of

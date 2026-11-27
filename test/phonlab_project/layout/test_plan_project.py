@@ -2,9 +2,9 @@ from pathlib import Path
 
 from support.project_tree import make_tree, talker_tree
 
-from core.project.scan_project_files import plan_project
-from core.project_layout.project_layout_file import SaveProjectLayout
+from phonlab_project.layout.plan_project import plan_project
 from phonlab_project.layout.project_layout import FolderLevel, ProjectLayout
+from phonlab_project.layout.project_layout_file import save_layout
 
 
 def test_a_project_that_reads_cleanly_has_no_problems(tmp_path: Path):
@@ -25,7 +25,7 @@ def test_the_layout_comes_from_the_one_given_else_the_saved_one(tmp_path: Path):
     assert plan_project(str(tmp_path), given).layout_source == "given"
     assert plan_project(str(tmp_path), given).recordings[0].fields == {"group": "aa1"}
 
-    SaveProjectLayout()(str(tmp_path), given)
+    save_layout(str(tmp_path), given)
     assert plan_project(str(tmp_path)).layout_source == "saved"
 
 

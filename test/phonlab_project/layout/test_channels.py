@@ -3,16 +3,16 @@ from pathlib import Path
 from support.audio_files import write_wavs
 from support.project_tree import make_tree
 
-from core.project_layout.infer_layout import InferLayout
-from core.project_layout.resolve_recordings import ResolveRecordings
-from core.project_layout.scan_project_tree import ScanProjectTree
 from phonlab_project.layout.channels import detect_channels, group_audio
+from phonlab_project.layout.infer_layout import infer_layout
 from phonlab_project.layout.project_layout import (
     ChannelRole,
     DataFileRole,
     ProjectLayout,
 )
 from phonlab_project.layout.project_scan import ScannedFile
+from phonlab_project.layout.resolve_recordings import resolve_recordings
+from phonlab_project.layout.scan_project_tree import scan_project_tree
 
 LEFT_RIGHT = (ChannelRole("L", "_L"), ChannelRole("R", "_R"))
 
@@ -66,7 +66,7 @@ def test_suffix_matching_ignores_case():
 
 def test_detects_files_differing_by_a_repeating_suffix(tmp_path: Path):
     write_wavs(tmp_path, ["a_L.wav", "a_R.wav", "b_L.wav", "b_R.wav"])
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
     candidate = detect_channels(scan.files, str(tmp_path))
 
@@ -80,14 +80,14 @@ def test_detects_files_differing_by_a_repeating_suffix(tmp_path: Path):
 def test_files_that_differ_in_length_are_takes_not_channels(tmp_path: Path):
     write_wavs(tmp_path, ["a_L.wav"], frames=100)
     write_wavs(tmp_path, ["a_R.wav"], frames=300)
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
     assert detect_channels(scan.files, str(tmp_path)) is None
 
 
 def test_numbered_files_are_offered_only_if_the_headers_show_channels(tmp_path: Path):
     make_tree(tmp_path, ["a_1.wav", "a_2.wav"])  # unreadable
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
     assert detect_channels(scan.files, str(tmp_path)) is None
 
     write_wavs(tmp_path, ["a_1.wav", "a_2.wav"])  # mono and equally long
@@ -98,14 +98,14 @@ def test_numbered_files_are_offered_only_if_the_headers_show_channels(tmp_path: 
 
 def test_many_suffixes_are_items_not_channels(tmp_path: Path):
     write_wavs(tmp_path, [f"a_{n}x.wav" for n in range(12)])
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
     assert detect_channels(scan.files, str(tmp_path)) is None
 
 
 def test_unreadable_audio_leaves_the_question_open(tmp_path: Path):
     make_tree(tmp_path, ["a_L.wav", "a_R.wav"])  # empty files
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
     candidate = detect_channels(scan.files, str(tmp_path))
 
@@ -114,7 +114,7 @@ def test_unreadable_audio_leaves_the_question_open(tmp_path: Path):
 
 def test_a_single_pair_among_many_recordings_is_not_a_pattern(tmp_path: Path):
     write_wavs(tmp_path, ["a_L.wav", "a_R.wav", "c.wav", "d.wav", "e.wav", "f.wav"])
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
     assert detect_channels(scan.files, str(tmp_path)) is None
 
@@ -122,9 +122,9 @@ def test_a_single_pair_among_many_recordings_is_not_a_pattern(tmp_path: Path):
 def test_inference_takes_channels_when_the_headers_show_they_are(tmp_path: Path):
     write_wavs(tmp_path, ["a_L.wav", "a_R.wav", "b_L.wav", "b_R.wav"])
     make_tree(tmp_path, ["a.TextGrid", "b.TextGrid", "a.trk", "b.trk"])
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
-    suggestion = InferLayout()(scan)
+    suggestion = infer_layout(scan)
 
     assert [r.label for r in suggestion.layout.channels] == ["L", "R"]
     assert suggestion.layout.annotation_ext == ".textgrid"
@@ -133,22 +133,22 @@ def test_inference_takes_channels_when_the_headers_show_they_are(tmp_path: Path)
 
 def test_inference_leaves_unclear_channels_to_the_user(tmp_path: Path):
     make_tree(tmp_path, ["a_L.wav", "a_R.wav", "a.TextGrid"])
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
-    suggestion = InferLayout()(scan)
+    suggestion = infer_layout(scan)
 
     assert suggestion.layout.channels == ()
     assert suggestion.channel_candidate is not None
     # the user's answer changes what is found
-    answered = InferLayout()(scan, suggestion.channel_candidate.roles)
+    answered = infer_layout(scan, suggestion.channel_candidate.roles)
     assert answered.layout.annotation_ext == ".textgrid"
 
 
 def test_inference_can_be_told_there_are_no_channels(tmp_path: Path):
     write_wavs(tmp_path, ["a_L.wav", "a_R.wav", "b_L.wav", "b_R.wav"])
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
-    suggestion = InferLayout()(scan, ())
+    suggestion = infer_layout(scan, ())
 
     assert suggestion.layout.channels == ()
 
@@ -163,7 +163,7 @@ def test_channel_recording_gets_its_annotation_data_and_talkers(tmp_path: Path):
         data_files=(DataFileRole("trk", "", ".trk"),),
     )
 
-    result = ResolveRecordings()(ScanProjectTree()(str(tmp_path)), layout)
+    result = resolve_recordings(scan_project_tree(str(tmp_path)), layout)
 
     a, b = result.recordings
     assert a.file_stem == "s/a"
@@ -182,8 +182,8 @@ def test_channel_recording_gets_its_annotation_data_and_talkers(tmp_path: Path):
 def test_channels_without_talker_names_add_no_talkers(tmp_path: Path):
     make_tree(tmp_path, ["a_L.wav", "a_R.wav"])
 
-    [recording] = ResolveRecordings()(
-        ScanProjectTree()(str(tmp_path)), ProjectLayout(channels=LEFT_RIGHT)
+    [recording] = resolve_recordings(
+        scan_project_tree(str(tmp_path)), ProjectLayout(channels=LEFT_RIGHT)
     ).recordings
 
     assert recording.talkers == []
@@ -195,8 +195,8 @@ def test_filename_template_applies_to_the_name_without_the_channel_suffix(
 ):
     make_tree(tmp_path, ["ab01_L.wav", "ab01_R.wav"])
 
-    [recording] = ResolveRecordings()(
-        ScanProjectTree()(str(tmp_path)),
+    [recording] = resolve_recordings(
+        scan_project_tree(str(tmp_path)),
         ProjectLayout(channels=LEFT_RIGHT, filename_template="{talker:2}{n:d}"),
     ).recordings
 
@@ -234,7 +234,7 @@ def test_the_ending_is_not_taken_for_part_of_another_recordings_name():
 
 def test_detects_a_plain_name_next_to_a_name_with_an_ending(tmp_path: Path):
     write_wavs(tmp_path, ["rl001.wav", "rl001_lar.wav", "rl002.wav", "rl002_lar.wav"])
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
     candidate = detect_channels(scan.files, str(tmp_path))
 
@@ -251,9 +251,9 @@ def test_detects_a_plain_name_next_to_a_name_with_an_ending(tmp_path: Path):
 def test_inference_takes_them_as_channels_and_finds_the_rest(tmp_path: Path):
     write_wavs(tmp_path, ["rl001.wav", "rl001_lar.wav", "rl002.wav", "rl002_lar.wav"])
     make_tree(tmp_path, ["rl001.TextGrid", "rl002.TextGrid", "rl001.trk", "rl002.trk"])
-    scan = ScanProjectTree()(str(tmp_path))
+    scan = scan_project_tree(str(tmp_path))
 
-    suggestion = InferLayout()(scan)
+    suggestion = infer_layout(scan)
 
     assert [r.label for r in suggestion.layout.channels] == ["main", "lar"]
     assert suggestion.layout.annotation_ext == ".textgrid"
@@ -266,8 +266,8 @@ def test_resolving_pairs_the_annotation_with_the_plain_name(tmp_path: Path):
         ["rl001.wav", "rl001_lar.wav", "rl001.TextGrid", "rl002.wav", "rl002_lar.wav"],
     )
 
-    result = ResolveRecordings()(
-        ScanProjectTree()(str(tmp_path)), ProjectLayout(channels=PLAIN_AND_LAR)
+    result = resolve_recordings(
+        scan_project_tree(str(tmp_path)), ProjectLayout(channels=PLAIN_AND_LAR)
     )
 
     first, second = result.recordings

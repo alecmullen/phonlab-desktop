@@ -8,7 +8,6 @@ from support.textgrid import textgrid_project, word_and_phone_textgrid
 from core.parse_textgrid.parse_textgrid import ParseTextGrid
 from core.project.add_project_files import AddProjectFiles
 from core.project.scan_project_files import scan_project_files
-from core.project_layout.project_layout_file import LoadProjectLayout, SaveProjectLayout
 from data.annotation.datasource.annotation_datasource import AnnotationDataSource
 from data.annotation.repository.annotation_repository import DataAnnotationRepository
 from data.base.database import SQLiteDatabase
@@ -23,6 +22,7 @@ from phonlab_project import (
     update_annotations,
 )
 from phonlab_project.layout.project_layout import FolderLevel, ProjectLayout
+from phonlab_project.layout.project_layout_file import load_layout, save_layout
 
 SRT = (
     "1\n00:00:00,000 --> 00:00:01,000\nAnn: Hi there\n\n"
@@ -159,7 +159,7 @@ def test_the_layout_that_was_inferred_is_saved_with_the_project(tmp_path: Path):
 
     import_project(tmp_path)
 
-    assert LoadProjectLayout()(str(tmp_path)) is not None
+    assert load_layout(str(tmp_path)) is not None
 
 
 def test_a_layout_that_was_given_is_used_and_saved(tmp_path: Path):
@@ -168,7 +168,7 @@ def test_a_layout_that_was_given_is_used_and_saved(tmp_path: Path):
 
     import_project(tmp_path, layout)
 
-    assert LoadProjectLayout()(str(tmp_path)) == layout
+    assert load_layout(str(tmp_path)) == layout
     with open_project(tmp_path) as project:
         assert set(project.recordings().group) == {"aa1", "bb2"}
 
@@ -176,11 +176,11 @@ def test_a_layout_that_was_given_is_used_and_saved(tmp_path: Path):
 def test_a_layout_the_project_has_saved_is_used_and_left_alone(tmp_path: Path):
     textgrid_project(tmp_path)
     saved = ProjectLayout(levels=(FolderLevel(1, "group"),))
-    SaveProjectLayout()(str(tmp_path), saved)
+    save_layout(str(tmp_path), saved)
 
     import_project(tmp_path)
 
-    assert LoadProjectLayout()(str(tmp_path)) == saved
+    assert load_layout(str(tmp_path)) == saved
     with open_project(tmp_path) as project:
         assert "group" in project.recordings().columns
 

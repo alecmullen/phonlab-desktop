@@ -2,14 +2,14 @@ from pathlib import Path
 
 from support.project_tree import make_tree, talker_tree
 
-from core.project_layout.infer_layout import InferLayout
-from core.project_layout.scan_project_tree import ScanProjectTree
 from phonlab_project.layout.import_report import LayoutSuggestion
+from phonlab_project.layout.infer_layout import infer_layout
 from phonlab_project.layout.project_layout import DataFileRole, FolderLevel
+from phonlab_project.layout.scan_project_tree import scan_project_tree
 
 
 def infer(root: Path) -> LayoutSuggestion:
-    return InferLayout()(ScanProjectTree()(str(root)))
+    return infer_layout(scan_project_tree(str(root)))
 
 
 def test_flat_textgrid_project_needs_no_decisions(tmp_path: Path):

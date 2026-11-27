@@ -2,8 +2,6 @@ from pathlib import Path
 
 from support.project_tree import make_tree, talker_tree, write_audio_like
 
-from core.project_layout.resolve_recordings import ResolveRecordings
-from core.project_layout.scan_project_tree import ScanProjectTree
 from phonlab_project.layout.import_report import ResolvedProject
 from phonlab_project.layout.project_layout import (
     DataFileKind,
@@ -11,10 +9,12 @@ from phonlab_project.layout.project_layout import (
     FolderLevel,
     ProjectLayout,
 )
+from phonlab_project.layout.resolve_recordings import resolve_recordings
+from phonlab_project.layout.scan_project_tree import scan_project_tree
 
 
 def resolve(root: Path, layout: ProjectLayout) -> ResolvedProject:
-    return ResolveRecordings()(ScanProjectTree()(str(root)), layout)
+    return resolve_recordings(scan_project_tree(str(root)), layout)
 
 
 def test_flat_project_pairs_audio_with_annotation(tmp_path: Path):

@@ -2,18 +2,18 @@ from pathlib import Path
 
 import pytest
 
-from core.project_layout.project_layout_file import (
-    LoadProjectLayout,
-    SaveProjectLayout,
-    layout_from_dict,
-    layout_to_dict,
-)
 from phonlab_project.layout.project_layout import (
     ChannelRole,
     DataFileKind,
     DataFileRole,
     FolderLevel,
     ProjectLayout,
+)
+from phonlab_project.layout.project_layout_file import (
+    layout_from_dict,
+    layout_to_dict,
+    load_layout,
+    save_layout,
 )
 from phonlab_project.readers.table_format import ColumnRole, TableFormat, TimeUnit
 
@@ -65,29 +65,29 @@ def test_layout_with_missing_keys_is_rejected():
 
 
 def test_load_returns_none_without_a_toml_or_section(tmp_path: Path):
-    assert LoadProjectLayout()(str(tmp_path)) is None
+    assert load_layout(str(tmp_path)) is None
 
     (tmp_path / "phonlab.toml").write_text("")
 
-    assert LoadProjectLayout()(str(tmp_path)) is None
+    assert load_layout(str(tmp_path)) is None
 
 
 def test_load_returns_none_for_a_broken_toml(tmp_path: Path):
     (tmp_path / "phonlab.toml").write_text("this is [not toml")
 
-    assert LoadProjectLayout()(str(tmp_path)) is None
+    assert load_layout(str(tmp_path)) is None
 
 
 def test_save_then_load_returns_the_same_layout(tmp_path: Path):
-    SaveProjectLayout()(str(tmp_path), FULL_LAYOUT)
+    save_layout(str(tmp_path), FULL_LAYOUT)
 
-    assert LoadProjectLayout()(str(tmp_path)) == FULL_LAYOUT
+    assert load_layout(str(tmp_path)) == FULL_LAYOUT
 
 
 def test_save_keeps_other_settings_in_the_toml(tmp_path: Path):
     (tmp_path / "phonlab.toml").write_text('[other]\nkey = "value"\n')
 
-    SaveProjectLayout()(str(tmp_path), ProjectLayout())
+    save_layout(str(tmp_path), ProjectLayout())
 
     text = (tmp_path / "phonlab.toml").read_text()
     assert 'key = "value"' in text
@@ -95,7 +95,7 @@ def test_save_keeps_other_settings_in_the_toml(tmp_path: Path):
 
 
 def test_save_replaces_an_earlier_layout(tmp_path: Path):
-    SaveProjectLayout()(str(tmp_path), FULL_LAYOUT)
-    SaveProjectLayout()(str(tmp_path), ProjectLayout())
+    save_layout(str(tmp_path), FULL_LAYOUT)
+    save_layout(str(tmp_path), ProjectLayout())
 
-    assert LoadProjectLayout()(str(tmp_path)) == ProjectLayout()
+    assert load_layout(str(tmp_path)) == ProjectLayout()

@@ -10,11 +10,11 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from core.project.scan_project_files import plan_project
-from core.project_layout.project_layout_file import SaveProjectLayout
 from phonlab_project.errors import ProjectError
+from phonlab_project.layout.plan_project import plan_project
 from phonlab_project.layout.project_file import ProjectFile
 from phonlab_project.layout.project_layout import ProjectLayout
+from phonlab_project.layout.project_layout_file import save_layout
 from phonlab_project.layout.project_plan import ProjectPlan
 from phonlab_project.readers.read_tier_table import read_tier_table
 from phonlab_project.readers.read_tiers import read_tiers
@@ -86,7 +86,7 @@ def import_project(
         )
         result = _read_annotations(connection, plan.files, replace=False)
     if plan.layout_source != "saved":
-        SaveProjectLayout()(str(folder), layout or plan.layout)
+        save_layout(str(folder), layout or plan.layout)
     return ImportResult(
         created, updated, removed, result.read, result.kept, result.failed, plan
     )
